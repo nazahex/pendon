@@ -1,0 +1,8 @@
+[package]
+name = "pendon-core"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "Core parsing types and minimal event-driven parser for Pendon"
+
+[dependencies]
