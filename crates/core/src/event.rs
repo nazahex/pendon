@@ -2,9 +2,19 @@
 pub enum NodeKind {
     Document,
     Paragraph,
-    // Skeleton variants for future parsing; currently unused by renderer
     CodeFence,
     Heading,
+    ThematicBreak,
+    BulletList,
+    OrderedList,
+    ListItem,
+    // Inline nodes
+    Emphasis,
+    Strong,
+    InlineCode,
+    Link,
+    Bold,
+    Italic,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +34,11 @@ pub enum Event {
     StartNode(NodeKind),
     EndNode(NodeKind),
     Text(String),
+    // Node attribute attached to the nearest open node
+    Attribute {
+        name: String,
+        value: String,
+    },
     // Non-fatal diagnostic event; does not affect renderer concatenation
     Diagnostic {
         severity: Severity,
