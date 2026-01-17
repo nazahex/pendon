@@ -27,6 +27,7 @@ pub fn parse(input: &str, options: &Options) -> Vec<Event> {
         let mut in_code_fence = false;
         let mut blank_run = 0usize;
         let mut current_line_len = 0usize;
+        let mut just_opened_code_fence = false;
 
         let open_paragraph = |events: &mut Vec<Event>, in_paragraph: &mut bool| {
             if !*in_paragraph {
@@ -43,9 +44,33 @@ pub fn parse(input: &str, options: &Options) -> Vec<Event> {
 
         for tk in tokens {
             match tk {
+                // Treat immediate text after an opening code fence as info string (lang)
+                crate::Token::Text(s) if just_opened_code_fence && current_line_len == 0 => {
+                    let info = s.trim();
+                    if !info.is_empty() {
+                        events.push(Event::Attribute {
+                            name: "lang".to_string(),
+                            value: info.to_string(),
+                        });
+                    }
+                    // do not emit as content, and do not open paragraph
+                    blank_run = 0;
+                }
                 crate::Token::Text(s) => {
                     if s.is_empty() {
                         continue;
+                    }
+                    // Thematic break hint: line composed of 3+ hyphens at start
+                    if current_line_len == 0 {
+                        let trimmed = s.trim();
+                        if trimmed.len() >= 3 && trimmed.chars().all(|c| c == '-') {
+                            events.push(Event::StartNode(NodeKind::ThematicBreak));
+                            events.push(Event::Text(s.to_string()));
+                            events.push(Event::EndNode(NodeKind::ThematicBreak));
+                            blank_run = 0;
+                            current_line_len = current_line_len.saturating_add(s.len());
+                            continue;
+                        }
                     }
                     open_paragraph(&mut events, &mut in_paragraph);
                     current_line_len = current_line_len.saturating_add(s.len());
@@ -59,6 +84,8 @@ pub fn parse(input: &str, options: &Options) -> Vec<Event> {
                         events.push(Event::EndNode(NodeKind::Heading));
                         in_heading = false;
                     }
+                    // reset any one-line state
+                    just_opened_code_fence = false;
                     if let Some(max) = options.max_line_len {
                         if current_line_len > max {
                             events.push(Event::Diagnostic {
@@ -98,7 +125,7 @@ pub fn parse(input: &str, options: &Options) -> Vec<Event> {
                     }
                 }
                 crate::Token::FenceBackticks(n) => {
-                    // Treat as text for now to preserve concatenation
+                    // Code fence markers: toggle node, do not emit backtick text
                     if n >= 3 && current_line_len == 0 {
                         if in_code_fence {
                             events.push(Event::EndNode(NodeKind::CodeFence));
@@ -106,15 +133,25 @@ pub fn parse(input: &str, options: &Options) -> Vec<Event> {
                         } else {
                             events.push(Event::StartNode(NodeKind::CodeFence));
                             in_code_fence = true;
+                            just_opened_code_fence = true;
                         }
+                        // fence line should not open/close paragraph nor add text
+                        blank_run = 0;
+                    } else {
+                        // fallback: treat as literal backticks
+                        open_paragraph(&mut events, &mut in_paragraph);
+                        events.push(Event::Text("`".repeat(n)));
+                        blank_run = 0;
                     }
-                    open_paragraph(&mut events, &mut in_paragraph);
-                    events.push(Event::Text("`".repeat(n)));
-                    blank_run = 0;
                 }
                 crate::Token::Hashes(n) => {
                     if current_line_len == 0 {
                         events.push(Event::StartNode(NodeKind::Heading));
+                        // attach heading level attribute
+                        events.push(Event::Attribute {
+                            name: "level".to_string(),
+                            value: n.to_string(),
+                        });
                         in_heading = true;
                     }
                     open_paragraph(&mut events, &mut in_paragraph);
