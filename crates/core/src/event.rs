@@ -1,13 +1,20 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NodeKind {
     Document,
+    Frontmatter,
     Paragraph,
+    Blockquote,
     CodeFence,
     Heading,
     ThematicBreak,
     BulletList,
     OrderedList,
     ListItem,
+    Table,
+    TableHead,
+    TableBody,
+    TableRow,
+    TableCell,
     // Inline nodes
     Emphasis,
     Strong,
