@@ -142,6 +142,7 @@ fn main() -> ExitCode {
         let mut ev = events;
         for name in pstr.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
             ev = match name {
+                "micomatter" => pendon_plugin_micomatter::process(&ev),
                 "markdown" => pendon_plugin_markdown::process(&ev),
                 "codeblock-syntect" => pendon_plugin_codeblock_syntect::process(&ev),
                 _ => ev,
@@ -336,6 +337,9 @@ fn run_from_config() -> ExitCode {
                             for name in pstr.split(',').map(|s| s.trim()).filter(|s| !s.is_empty())
                             {
                                 match name {
+                                    "micomatter" => {
+                                        events = pendon_plugin_micomatter::process(&events);
+                                    }
                                     "markdown" => {
                                         events = pendon_plugin_markdown::process(&events);
                                     }
