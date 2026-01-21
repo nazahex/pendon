@@ -34,3 +34,27 @@ fn html_nested_lists() {
     assert!(contains("<li>b").eval(&out));
     assert!(contains("<li>c").eval(&out));
 }
+
+#[test]
+fn html_blockquote_and_table() {
+    let input = "> quoted\n> block\n\n| A | B |\n| C | D |\n";
+    let (_code, out, _err) = run_cli(input, &["--plugin", "markdown", "--format", "html"]);
+    assert!(contains("<blockquote>").eval(&out));
+    assert!(contains("quoted").eval(&out));
+    assert!(contains("<table>").eval(&out));
+    assert!(contains("<thead>").eval(&out));
+    assert!(contains("<tbody>").eval(&out));
+    assert!(contains("<th>A</th>").eval(&out));
+    assert!(contains("<td>C</td>").eval(&out));
+}
+
+#[test]
+fn html_ignores_frontmatter_block() {
+    let input = "---\ntitle: \"Demo\"\ndraft: false\n---\n\n# Hello\n";
+    let (_code, out, _err) = run_cli(
+        input,
+        &["--plugin", "micomatter,markdown", "--format", "html"],
+    );
+    assert!(!contains("---").eval(&out));
+    assert!(contains("<h1>Hello</h1>").eval(&out));
+}
