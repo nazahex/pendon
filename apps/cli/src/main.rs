@@ -171,6 +171,7 @@ fn main() -> ExitCode {
                 "micomatter" => pendon_plugin_micomatter::process(&ev),
                 "markdown" => pendon_plugin_markdown::process(&ev),
                 "sectionize" => pendon_plugin_sectionize::process(&ev),
+                "extract-heading" => pendon_plugin_extract_heading::process(&ev),
                 "codeblock-syntect" => pendon_plugin_codeblock_syntect::process(&ev),
                 other => {
                     if let Some(spec) = custom_cache.get(other) {
@@ -425,6 +426,9 @@ fn run_from_config() -> ExitCode {
                                     }
                                     "sectionize" => {
                                         events = pendon_plugin_sectionize::process(&events);
+                                    }
+                                    "extract-heading" => {
+                                        events = pendon_plugin_extract_heading::process(&events);
                                     }
                                     "codeblock-syntect" => {
                                         events = pendon_plugin_codeblock_syntect::process(&events);
