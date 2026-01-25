@@ -3,12 +3,16 @@ use std::io::{self, Read};
 use std::process::ExitCode;
 
 use pendon_core::{parse, Options};
+use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
 use pendon_renderer_json::render_to_string;
+use pendon_renderer_solid::{
+    render_solid_with_hints, ComponentTemplate, ImportEntry, SolidRenderHints,
+};
 use pico_args::Arguments;
 use regex::Regex;
 use serde::Deserialize;
 use serde_json;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -137,23 +141,51 @@ fn main() -> ExitCode {
         },
     );
 
-    // Optional plugin processing (supports comma-separated list)
+    let mut used_custom_specs: Vec<PluginSpec> = Vec::new();
+    let mut custom_cache: HashMap<String, PluginSpec> = HashMap::new();
+
+    // Optional plugin processing (supports comma-separated list and toml:foo.toml entries)
     let events = if let Some(pstr) = args.plugin.as_deref() {
         let mut ev = events;
         for name in pstr.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            if let Some(path) = name.strip_prefix("toml:") {
+                let spec = match custom_cache.get(path) {
+                    Some(existing) => existing.clone(),
+                    None => match load_spec_from_path(path) {
+                        Ok(s) => {
+                            custom_cache.insert(path.to_string(), s.clone());
+                            s
+                        }
+                        Err(msg) => {
+                            eprintln!("Error: {}", msg);
+                            return ExitCode::from(2);
+                        }
+                    },
+                };
+                track_used_spec(&mut used_custom_specs, spec.clone());
+                ev = pendon_plugin_custom::process(&ev, &spec);
+                continue;
+            }
+
             ev = match name {
                 "micomatter" => pendon_plugin_micomatter::process(&ev),
                 "markdown" => pendon_plugin_markdown::process(&ev),
+                "sectionize" => pendon_plugin_sectionize::process(&ev),
                 "codeblock-syntect" => pendon_plugin_codeblock_syntect::process(&ev),
-                _ => ev,
+                other => {
+                    if let Some(spec) = custom_cache.get(other) {
+                        track_used_spec(&mut used_custom_specs, spec.clone());
+                        pendon_plugin_custom::process(&ev, spec)
+                    } else {
+                        ev
+                    }
+                }
             };
         }
         ev
     } else {
         events
     };
-
-    let events = events;
 
     // Determine if any Error diagnostics are present
     let has_error = events.iter().any(|e| match e {
@@ -223,7 +255,15 @@ fn main() -> ExitCode {
             }
         }
         "solid" => {
-            let s = pendon_renderer_solid::render_solid(&events);
+            let hints = if used_custom_specs.is_empty() {
+                None
+            } else {
+                Some(build_solid_hints(&used_custom_specs))
+            };
+            let s = match hints.as_ref() {
+                Some(h) => render_solid_with_hints(&events, Some(h)),
+                None => pendon_renderer_solid::render_solid(&events),
+            };
             println!("{}", s);
             if has_error {
                 ExitCode::from(2)
@@ -255,10 +295,20 @@ struct ConfigTask {
     max_blank_run: Option<usize>,
 }
 
+#[derive(Debug, Deserialize, Default)]
+#[allow(dead_code)]
+struct PluginCustomSection {
+    source: Option<Vec<String>>,
+    order: Option<Vec<String>>,
+    enable_unsafe_hooks: Option<bool>,
+}
+
 #[derive(Debug, Deserialize)]
 struct PendonConfig {
     #[serde(rename = "task")]
     tasks: Vec<ConfigTask>,
+    #[serde(rename = "plugin-custom")]
+    plugin_custom: Option<PluginCustomSection>,
 }
 
 fn run_from_config() -> ExitCode {
@@ -276,6 +326,15 @@ fn run_from_config() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+
+    let custom_registry = match load_custom_registry(cfg.plugin_custom.as_ref()) {
+        Ok(map) => map,
+        Err(msg) => {
+            eprintln!("Error: {}", msg);
+            return ExitCode::from(2);
+        }
+    };
+    let mut custom_cache: HashMap<String, PluginSpec> = HashMap::new();
 
     let theme = pendon_tui::Theme::default();
     if pendon_tui::is_interactive_stderr() {
@@ -333,9 +392,30 @@ fn run_from_config() -> ExitCode {
                             max_blank_run: task.max_blank_run,
                         };
                         let mut events = parse(&input_text, &opts);
+                        let mut used_custom_specs: Vec<PluginSpec> = Vec::new();
                         if let Some(pstr) = task.plugin.as_deref() {
                             for name in pstr.split(',').map(|s| s.trim()).filter(|s| !s.is_empty())
                             {
+                                if let Some(path) = name.strip_prefix("toml:") {
+                                    let spec = match custom_cache.get(path) {
+                                        Some(existing) => existing.clone(),
+                                        None => match load_spec_from_path(path) {
+                                            Ok(s) => {
+                                                custom_cache.insert(path.to_string(), s.clone());
+                                                s
+                                            }
+                                            Err(msg) => {
+                                                eprintln!("Error: {}", msg);
+                                                exit = ExitCode::from(2);
+                                                break;
+                                            }
+                                        },
+                                    };
+                                    track_used_spec(&mut used_custom_specs, spec.clone());
+                                    events = pendon_plugin_custom::process(&events, &spec);
+                                    continue;
+                                }
+
                                 match name {
                                     "micomatter" => {
                                         events = pendon_plugin_micomatter::process(&events);
@@ -343,12 +423,24 @@ fn run_from_config() -> ExitCode {
                                     "markdown" => {
                                         events = pendon_plugin_markdown::process(&events);
                                     }
+                                    "sectionize" => {
+                                        events = pendon_plugin_sectionize::process(&events);
+                                    }
                                     "codeblock-syntect" => {
                                         events = pendon_plugin_codeblock_syntect::process(&events);
                                     }
-                                    _ => {}
+                                    other => {
+                                        if let Some(spec) = custom_registry.get(other) {
+                                            let spec = spec.clone();
+                                            track_used_spec(&mut used_custom_specs, spec.clone());
+                                            events = pendon_plugin_custom::process(&events, &spec);
+                                        }
+                                    }
                                 }
                             }
+                        }
+                        if exit != ExitCode::SUCCESS {
+                            continue;
                         }
                         // CSS options are handled in renderer selection below
                         let pretty = task.pretty.unwrap_or(false);
@@ -364,14 +456,22 @@ fn run_from_config() -> ExitCode {
                                     pendon_renderer_ast::render_ast_to_string(&events)
                                 }
                             }
-                            "html" => {
-                                Ok(if pretty {
-                                    pendon_renderer_html::render_html_pretty(&events)
+                            "html" => Ok(if pretty {
+                                pendon_renderer_html::render_html_pretty(&events)
+                            } else {
+                                pendon_renderer_html::render_html(&events)
+                            }),
+                            "solid" => {
+                                let hints = if used_custom_specs.is_empty() {
+                                    None
                                 } else {
-                                    pendon_renderer_html::render_html(&events)
+                                    Some(build_solid_hints(&used_custom_specs))
+                                };
+                                Ok(match hints.as_ref() {
+                                    Some(h) => render_solid_with_hints(&events, Some(h)),
+                                    None => pendon_renderer_solid::render_solid(&events),
                                 })
                             }
-                            "solid" => Ok(pendon_renderer_solid::render_solid(&events)),
                             other => {
                                 eprintln!("Error: unsupported format in task: {}", other);
                                 exit = ExitCode::from(2);
@@ -541,6 +641,87 @@ fn substitute_output(pattern: &str, vars: &HashMap<String, String>) -> Result<St
         }
     }
     Ok(out)
+}
+
+fn track_used_spec(list: &mut Vec<PluginSpec>, spec: PluginSpec) {
+    if !list.iter().any(|s| s.name == spec.name) {
+        list.push(spec);
+    }
+}
+
+fn build_solid_hints(specs: &[PluginSpec]) -> SolidRenderHints {
+    let mut hints = SolidRenderHints::default();
+    let mut seen_templates: HashSet<(String, Option<String>)> = HashSet::new();
+
+    for spec in specs {
+        if let Some(renderer) = spec.renderer.as_ref().and_then(|r| r.solid.as_ref()) {
+            for val in &renderer.imports {
+                match val {
+                    toml::Value::String(s) => hints.imports.push(ImportEntry::Raw(s.clone())),
+                    toml::Value::Table(tbl) => {
+                        if let Some(module) = tbl.get("module").and_then(|v| v.as_str()) {
+                            let default = tbl
+                                .get("default")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+                            let names = tbl
+                                .get("names")
+                                .and_then(|v| v.as_array())
+                                .map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                        .collect::<Vec<String>>()
+                                })
+                                .unwrap_or_default();
+                            hints.imports.push(ImportEntry::Structured {
+                                module: module.to_string(),
+                                default,
+                                names,
+                            });
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            if let Some(tpl) = &renderer.component_template {
+                let node_type = spec
+                    .ast
+                    .as_ref()
+                    .and_then(|a| a.node.clone())
+                    .unwrap_or_else(|| spec.name.clone());
+                let node_name = spec.ast.as_ref().and_then(|a| a.node_name.clone());
+                let key = (node_type.clone(), node_name.clone());
+                if seen_templates.insert(key) {
+                    hints.templates.push(ComponentTemplate {
+                        node_type,
+                        node_name,
+                        template: tpl.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    hints
+}
+
+fn load_custom_registry(
+    cfg: Option<&PluginCustomSection>,
+) -> Result<HashMap<String, PluginSpec>, String> {
+    let mut map: HashMap<String, PluginSpec> = HashMap::new();
+    let Some(cfg) = cfg else {
+        return Ok(map);
+    };
+    if let Some(sources) = &cfg.source {
+        for src in sources {
+            let plugins = load_index_from_path(src)?;
+            for plugin in plugins {
+                map.insert(plugin.id, plugin.spec);
+            }
+        }
+    }
+    Ok(map)
 }
 
 fn maybe_pretty(s: &str, pretty: bool) -> String {
