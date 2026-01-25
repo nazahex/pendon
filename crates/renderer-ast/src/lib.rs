@@ -120,7 +120,7 @@ pub fn render_ast_to_string(events: &[Event]) -> Result<String, serde_json::Erro
                     _ => {}
                 }
                 stack.push(AstNode {
-                    kind: node_str(kind).to_string(),
+                    kind: kind.name().into_owned(),
                     text: None,
                     children: Vec::new(),
                     attrs: BTreeMap::new(),
@@ -157,15 +157,17 @@ pub fn render_ast_to_string(events: &[Event]) -> Result<String, serde_json::Erro
                     | NodeKind::TableBody
                     | NodeKind::TableRow
                     | NodeKind::TableCell
+                    | NodeKind::Section
                     | NodeKind::Frontmatter => true,
                     NodeKind::Emphasis
                     | NodeKind::Strong
                     | NodeKind::Bold
                     | NodeKind::Italic
                     | NodeKind::InlineCode
-                    | NodeKind::Link => true,
-                    NodeKind::ThematicBreak => true,
-                    NodeKind::Document => true,
+                    | NodeKind::Link
+                    | NodeKind::ThematicBreak
+                    | NodeKind::Document
+                    | NodeKind::Custom(_) => true,
                 };
 
                 if children_only {
@@ -269,7 +271,9 @@ pub fn render_ast_to_string(events: &[Event]) -> Result<String, serde_json::Erro
             | NodeKind::TableBody
             | NodeKind::TableRow
             | NodeKind::TableCell
-            | NodeKind::Frontmatter => true,
+            | NodeKind::Section
+            | NodeKind::Frontmatter
+            | NodeKind::Custom(_) => true,
             NodeKind::Emphasis
             | NodeKind::Strong
             | NodeKind::Bold
@@ -324,32 +328,6 @@ pub fn render_ast_to_string(events: &[Event]) -> Result<String, serde_json::Erro
     serde_json::to_string(&doc)
 }
 
-fn node_str(k: &NodeKind) -> &str {
-    match k {
-        NodeKind::Document => "Document",
-        NodeKind::Frontmatter => "Frontmatter",
-        NodeKind::Paragraph => "Paragraph",
-        NodeKind::Blockquote => "Blockquote",
-        NodeKind::CodeFence => "CodeFence",
-        NodeKind::Heading => "Heading",
-        NodeKind::ThematicBreak => "ThematicBreak",
-        NodeKind::BulletList => "BulletList",
-        NodeKind::OrderedList => "OrderedList",
-        NodeKind::ListItem => "ListItem",
-        NodeKind::Table => "Table",
-        NodeKind::TableHead => "TableHead",
-        NodeKind::TableBody => "TableBody",
-        NodeKind::TableRow => "TableRow",
-        NodeKind::TableCell => "TableCell",
-        NodeKind::Emphasis => "Emphasis",
-        NodeKind::Strong => "Strong",
-        NodeKind::InlineCode => "InlineCode",
-        NodeKind::Link => "Link",
-        NodeKind::Bold => "Bold",
-        NodeKind::Italic => "Italic",
-    }
-}
-
 // Provide a pretty variant that preserves ordering via custom Serialize
 pub fn render_ast_to_string_pretty(events: &[Event]) -> Result<String, serde_json::Error> {
     // Build doc using same logic by reusing render_ast_to_string construction
@@ -399,7 +377,7 @@ pub fn render_ast_to_string_pretty(events: &[Event]) -> Result<String, serde_jso
                         _ => {}
                     }
                     stack.push(AstNode {
-                        kind: node_str(kind).to_string(),
+                        kind: kind.name().into_owned(),
                         text: None,
                         children: Vec::new(),
                         attrs: BTreeMap::new(),
@@ -434,15 +412,17 @@ pub fn render_ast_to_string_pretty(events: &[Event]) -> Result<String, serde_jso
                         | NodeKind::TableBody
                         | NodeKind::TableRow
                         | NodeKind::TableCell
-                        | NodeKind::Frontmatter => true,
+                        | NodeKind::Section
+                        | NodeKind::Frontmatter
+                        | NodeKind::Custom(_) => true,
                         NodeKind::Emphasis
                         | NodeKind::Strong
                         | NodeKind::Bold
                         | NodeKind::Italic
                         | NodeKind::InlineCode
-                        | NodeKind::Link => true,
-                        NodeKind::ThematicBreak => true,
-                        NodeKind::Document => true,
+                        | NodeKind::Link
+                        | NodeKind::ThematicBreak
+                        | NodeKind::Document => true,
                     };
                     if children_only {
                         if !buf.is_empty() {
