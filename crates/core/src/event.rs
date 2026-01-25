@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NodeKind {
     Document,
@@ -15,6 +17,7 @@ pub enum NodeKind {
     TableBody,
     TableRow,
     TableCell,
+    Section,
     // Inline nodes
     Emphasis,
     Strong,
@@ -22,6 +25,38 @@ pub enum NodeKind {
     Link,
     Bold,
     Italic,
+    // Custom node kinds (e.g., Component, user-defined)
+    Custom(String),
+}
+
+impl NodeKind {
+    pub fn name(&self) -> Cow<'_, str> {
+        match self {
+            NodeKind::Document => Cow::Borrowed("Document"),
+            NodeKind::Frontmatter => Cow::Borrowed("Frontmatter"),
+            NodeKind::Paragraph => Cow::Borrowed("Paragraph"),
+            NodeKind::Blockquote => Cow::Borrowed("Blockquote"),
+            NodeKind::CodeFence => Cow::Borrowed("CodeFence"),
+            NodeKind::Heading => Cow::Borrowed("Heading"),
+            NodeKind::ThematicBreak => Cow::Borrowed("ThematicBreak"),
+            NodeKind::BulletList => Cow::Borrowed("BulletList"),
+            NodeKind::OrderedList => Cow::Borrowed("OrderedList"),
+            NodeKind::ListItem => Cow::Borrowed("ListItem"),
+            NodeKind::Table => Cow::Borrowed("Table"),
+            NodeKind::TableHead => Cow::Borrowed("TableHead"),
+            NodeKind::TableBody => Cow::Borrowed("TableBody"),
+            NodeKind::TableRow => Cow::Borrowed("TableRow"),
+            NodeKind::TableCell => Cow::Borrowed("TableCell"),
+            NodeKind::Section => Cow::Borrowed("Section"),
+            NodeKind::Emphasis => Cow::Borrowed("Emphasis"),
+            NodeKind::Strong => Cow::Borrowed("Strong"),
+            NodeKind::InlineCode => Cow::Borrowed("InlineCode"),
+            NodeKind::Link => Cow::Borrowed("Link"),
+            NodeKind::Bold => Cow::Borrowed("Bold"),
+            NodeKind::Italic => Cow::Borrowed("Italic"),
+            NodeKind::Custom(name) => Cow::Owned(name.clone()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
