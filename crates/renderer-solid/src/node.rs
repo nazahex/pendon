@@ -186,6 +186,21 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                     escape_jsx(text, out);
                 }
             }
+            "HtmlBlock" => {
+                if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
+                    out.push_str(text);
+                    out.push('\n');
+                } else {
+                    render_children(v, out, hints);
+                }
+            }
+            "HtmlInline" => {
+                if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
+                    out.push_str(text);
+                } else {
+                    render_children(v, out, hints);
+                }
+            }
             _ => {
                 render_children(v, out, hints);
             }
