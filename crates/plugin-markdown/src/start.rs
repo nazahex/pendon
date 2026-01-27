@@ -25,7 +25,6 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind) {
             if ctx.skip_para_open > 0 {
                 ctx.skip_para_open = ctx.skip_para_open.saturating_sub(1);
             } else {
-                ctx.close_all_lists();
                 ctx.pending_para_start = true;
                 ctx.at_line_start = true;
             }
