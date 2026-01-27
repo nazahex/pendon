@@ -4,6 +4,7 @@ use std::process::ExitCode;
 
 use pendon_core::{parse, Options};
 use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
+use pendon_plugin_markdown::MarkdownOptions;
 use pendon_renderer_json::render_to_string;
 use pendon_renderer_solid::{
     render_solid_with_hints, ComponentTemplate, ImportEntry, SolidRenderHints,
@@ -27,6 +28,7 @@ struct CliArgs {
     max_line_len: Option<usize>,
     max_blank_run: Option<usize>,
     plugin: Option<String>,
+    markdown_allow_html: bool,
 }
 
 fn parse_args() -> Result<CliArgs, String> {
@@ -41,6 +43,7 @@ fn parse_args() -> Result<CliArgs, String> {
     let strict: bool = pargs.contains("--strict");
     let pretty: bool = pargs.contains("--pretty");
     let tui: bool = pargs.contains("--tui");
+    let markdown_allow_html: bool = pargs.contains("--markdown-allow-html");
     let max_doc_bytes: Option<usize> = pargs
         .opt_value_from_str("--max-doc-bytes")
         .map_err(|e| e.to_string())?;
@@ -70,6 +73,7 @@ fn parse_args() -> Result<CliArgs, String> {
         max_line_len,
         max_blank_run,
         plugin,
+        markdown_allow_html,
     })
 }
 
@@ -141,6 +145,10 @@ fn main() -> ExitCode {
         },
     );
 
+    let markdown_opts = MarkdownOptions {
+        allow_html: args.markdown_allow_html,
+    };
+
     let mut used_custom_specs: Vec<PluginSpec> = Vec::new();
     let mut custom_cache: HashMap<String, PluginSpec> = HashMap::new();
 
@@ -169,7 +177,7 @@ fn main() -> ExitCode {
 
             ev = match name {
                 "micomatter" => pendon_plugin_micomatter::process(&ev),
-                "markdown" => pendon_plugin_markdown::process(&ev),
+                "markdown" => pendon_plugin_markdown::process_with_options(&ev, markdown_opts),
                 "sectionize" => pendon_plugin_sectionize::process(&ev),
                 "extract-heading" => pendon_plugin_extract_heading::process(&ev),
                 "codeblock-syntect" => pendon_plugin_codeblock_syntect::process(&ev),
@@ -288,6 +296,7 @@ struct ConfigTask {
     input: String,
     output: String,
     plugin: Option<String>,
+    markdown_allow_html: Option<bool>,
     format: String,
     pretty: Option<bool>,
     strict: Option<bool>,
@@ -351,6 +360,9 @@ fn run_from_config() -> ExitCode {
                 exit = ExitCode::from(2);
                 continue;
             }
+        };
+        let task_markdown_opts = MarkdownOptions {
+            allow_html: task.markdown_allow_html.unwrap_or(false),
         };
         let mut matched = 0usize;
         let mut total_bytes: usize = 0;
@@ -422,7 +434,10 @@ fn run_from_config() -> ExitCode {
                                         events = pendon_plugin_micomatter::process(&events);
                                     }
                                     "markdown" => {
-                                        events = pendon_plugin_markdown::process(&events);
+                                        events = pendon_plugin_markdown::process_with_options(
+                                            &events,
+                                            task_markdown_opts,
+                                        );
                                     }
                                     "sectionize" => {
                                         events = pendon_plugin_sectionize::process(&events);
