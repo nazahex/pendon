@@ -84,12 +84,20 @@ fn crlf_normalized_to_lf() {
 
 #[test]
 fn blank_run_limit_emits_diagnostic_but_preserves_text() {
-    let opts = Options { strict: false, max_doc_bytes: None, max_line_len: None, max_blank_run: Some(1) };
+    let opts = Options {
+        strict: false,
+        max_doc_bytes: None,
+        max_line_len: None,
+        max_blank_run: Some(1),
+    };
     let ev = parse("A\n\n\nB", &opts);
     // Text is preserved fully
     assert_eq!(render_concat(&ev), "A\n\n\nB");
     // One diagnostic when run first exceeds limit
-    let diag_count = ev.iter().filter(|e| matches!(e, Event::Diagnostic { .. })).count();
+    let diag_count = ev
+        .iter()
+        .filter(|e| matches!(e, Event::Diagnostic { .. }))
+        .count();
     assert_eq!(diag_count, 1);
 }
 
@@ -112,7 +120,14 @@ fn leading_and_trailing_blank_lines() {
 fn strict_escalates_blank_run_to_error() {
     let ev = parse(
         "A\n\n\nB",
-        &Options { strict: true, max_doc_bytes: None, max_line_len: None, max_blank_run: Some(1) },
+        &Options {
+            strict: true,
+            max_doc_bytes: None,
+            max_line_len: None,
+            max_blank_run: Some(1),
+        },
     );
-    assert!(ev.iter().any(|e| matches!(e, Event::Diagnostic { severity, .. } if matches!(severity, Severity::Error))));
+    assert!(ev.iter().any(
+        |e| matches!(e, Event::Diagnostic { severity, .. } if matches!(severity, Severity::Error))
+    ));
 }
