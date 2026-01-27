@@ -167,6 +167,21 @@ fn render_node(v: &Value, out: &mut String) {
                     escape_html(text, out);
                 }
             }
+            "HtmlBlock" => {
+                if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
+                    out.push_str(text);
+                    out.push('\n');
+                } else {
+                    render_children(v, out);
+                }
+            }
+            "HtmlInline" => {
+                if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
+                    out.push_str(text);
+                } else {
+                    render_children(v, out);
+                }
+            }
             _ => {
                 render_children(v, out);
             }

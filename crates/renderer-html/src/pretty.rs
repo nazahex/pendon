@@ -236,6 +236,24 @@ fn render_node(v: &Value, out: &mut String, indent: &mut usize) {
                 }
                 out.push('\n');
             }
+            "HtmlBlock" => {
+                pad(out, *indent);
+                if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
+                    out.push_str(text);
+                    out.push('\n');
+                } else {
+                    render_children(v, out, indent);
+                }
+            }
+            "HtmlInline" => {
+                pad(out, *indent);
+                if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
+                    out.push_str(text);
+                } else {
+                    render_children(v, out, indent);
+                }
+                out.push('\n');
+            }
             _ => {
                 render_children(v, out, indent);
             }
