@@ -18,6 +18,7 @@ pub enum NodeKind {
     TableRow,
     TableCell,
     Section,
+    HtmlBlock,
     // Inline nodes
     Emphasis,
     Strong,
@@ -25,6 +26,7 @@ pub enum NodeKind {
     Link,
     Bold,
     Italic,
+    HtmlInline,
     // Custom node kinds (e.g., Component, user-defined)
     Custom(String),
 }
@@ -48,12 +50,14 @@ impl NodeKind {
             NodeKind::TableRow => Cow::Borrowed("TableRow"),
             NodeKind::TableCell => Cow::Borrowed("TableCell"),
             NodeKind::Section => Cow::Borrowed("Section"),
+            NodeKind::HtmlBlock => Cow::Borrowed("HtmlBlock"),
             NodeKind::Emphasis => Cow::Borrowed("Emphasis"),
             NodeKind::Strong => Cow::Borrowed("Strong"),
             NodeKind::InlineCode => Cow::Borrowed("InlineCode"),
             NodeKind::Link => Cow::Borrowed("Link"),
             NodeKind::Bold => Cow::Borrowed("Bold"),
             NodeKind::Italic => Cow::Borrowed("Italic"),
+            NodeKind::HtmlInline => Cow::Borrowed("HtmlInline"),
             NodeKind::Custom(name) => Cow::Owned(name.clone()),
         }
     }
