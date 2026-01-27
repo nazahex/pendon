@@ -2,8 +2,9 @@ use pendon_core::{Event, NodeKind};
 
 use crate::context::ParseContext;
 use crate::helpers::{
-    adjust_blockquote, close_table, emit_inline, emit_table_row, is_table_row, is_table_separator,
-    parse_blockquote_prefix, split_table_cells, start_table,
+    adjust_blockquote, capture_html_block, close_table, emit_html_event, emit_inline,
+    emit_table_row, is_table_row, is_table_separator, parse_blockquote_prefix, split_table_cells,
+    start_table,
 };
 
 pub fn handle(ctx: &mut ParseContext, s: &str) {
@@ -30,11 +31,27 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
     }
 
     let mut line = s.to_string();
+    let original_line = line.clone();
 
     if ctx.at_line_start && !ctx.in_heading && !ctx.in_code_fence {
         let (depth, tail) = parse_blockquote_prefix(&line);
         adjust_blockquote(&mut ctx.out, &mut ctx.blockquote_depth, depth);
-        line = tail.to_string();
+        if depth > 0 {
+            line = tail.to_string();
+        } else {
+            line = original_line;
+        }
+        if ctx.options.allow_html {
+            if let Some(html_line) = capture_html_block(&line) {
+                if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
+                    ctx.emit_end(NodeKind::Paragraph);
+                }
+                emit_html_event(&mut ctx.out, &html_line, NodeKind::HtmlBlock);
+                ctx.pending_para_start = false;
+                ctx.at_line_start = false;
+                return;
+            }
+        }
         let trimmed_for_table = line.trim_start();
 
         if ctx.in_table {
@@ -44,7 +61,12 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                     ctx.at_line_start = false;
                     return;
                 }
-                emit_table_row(trimmed_for_table, ctx.first_table_row, &mut ctx.out);
+                emit_table_row(
+                    trimmed_for_table,
+                    ctx.first_table_row,
+                    &mut ctx.out,
+                    ctx.options,
+                );
                 ctx.first_table_row = false;
                 ctx.at_line_start = false;
                 return;
@@ -64,7 +86,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                     ctx.emit_end(NodeKind::Paragraph);
                 }
                 start_table(&mut ctx.out);
-                emit_table_row(trimmed_for_table, true, &mut ctx.out);
+                emit_table_row(trimmed_for_table, true, &mut ctx.out, ctx.options);
                 ctx.out.push(Event::EndNode(NodeKind::TableHead));
                 ctx.out.push(Event::StartNode(NodeKind::TableBody));
                 ctx.in_table = true;
@@ -81,6 +103,8 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
     if ctx.at_line_start && !ctx.in_heading && !ctx.in_code_fence {
         let indent = line.chars().take_while(|c| *c == ' ').count();
         let line = &line[indent..];
+
+        // Ordered list detection
         let mut chars = line.chars();
         let mut num_str = String::new();
         while let Some(c) = chars.next() {
@@ -90,95 +114,74 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                 break;
             }
         }
-        let consumed;
         if !num_str.is_empty() {
-            consumed = num_str.len();
+            let consumed = num_str.len();
             if let Some(delim) = line.chars().nth(consumed) {
                 if (delim == '.' || delim == ')') && line.chars().nth(consumed + 1) == Some(' ') {
-                    while let Some((_, d)) = ctx.list_stack.last() {
-                        if *d > indent {
-                            let (k, _) = ctx.list_stack.pop().unwrap();
-                            ctx.emit_end(k);
-                        } else {
-                            break;
-                        }
-                    }
+                    ctx.close_lists_above(indent);
                     if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
                         ctx.emit_end(NodeKind::Paragraph);
                     }
-                    if !matches!(ctx.list_stack.last(), Some((NodeKind::OrderedList, d)) if *d == indent)
-                    {
-                        ctx.emit_start(NodeKind::OrderedList);
-                        ctx.list_stack.push((NodeKind::OrderedList, indent));
-                        if let Ok(n) = num_str.parse::<usize>() {
-                            if ctx.ordered_start.is_none() {
-                                ctx.ordered_start = Some(n);
-                                ctx.out.push(Event::Attribute {
-                                    name: "start".to_string(),
-                                    value: n.to_string(),
-                                });
-                            }
+                    let start_num = num_str.parse::<usize>().ok();
+                    let start_attr = if let Some(n) = start_num {
+                        if !ctx.current_list_start_emitted() {
+                            Some(n)
+                        } else {
+                            None
                         }
+                    } else {
+                        None
+                    };
+                    ctx.ensure_list(NodeKind::OrderedList, indent, start_attr);
+                    if start_attr.is_some() {
+                        ctx.mark_current_list_start_emitted();
                     }
-                    if ctx.in_list_item {
-                        ctx.emit_end(NodeKind::ListItem);
-                    }
+                    ctx.start_list_item();
                     ctx.pending_para_start = false;
-                    ctx.emit_start(NodeKind::ListItem);
-                    ctx.in_list_item = true;
                     let tail = &line[(consumed + 2)..];
                     if !tail.is_empty() {
-                        emit_inline(tail, &mut ctx.out);
+                        emit_inline(tail, &mut ctx.out, ctx.options);
                     }
                     ctx.at_line_start = false;
                     return;
                 }
             }
         }
+
+        // Bullet list detection
         if line.starts_with("- ") || line.starts_with("* ") || line.starts_with("+ ") {
-            while let Some((_, d)) = ctx.list_stack.last() {
-                if *d > indent {
-                    let (k, _) = ctx.list_stack.pop().unwrap();
-                    ctx.emit_end(k);
-                } else {
-                    break;
-                }
-            }
+            ctx.close_lists_above(indent);
             if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
                 ctx.emit_end(NodeKind::Paragraph);
             }
-            if !matches!(ctx.list_stack.last(), Some((NodeKind::BulletList, d)) if *d == indent) {
-                ctx.emit_start(NodeKind::BulletList);
-                ctx.list_stack.push((NodeKind::BulletList, indent));
-            }
-            if ctx.in_list_item {
-                ctx.emit_end(NodeKind::ListItem);
-            }
+            ctx.ensure_list(NodeKind::BulletList, indent, None);
+            ctx.start_list_item();
             ctx.pending_para_start = false;
-            ctx.emit_start(NodeKind::ListItem);
-            ctx.in_list_item = true;
             let tail = &line[2..];
             if !tail.is_empty() {
-                emit_inline(tail, &mut ctx.out);
+                emit_inline(tail, &mut ctx.out, ctx.options);
             }
             ctx.at_line_start = false;
             return;
         }
-        if let Some((_kind, _d)) = ctx.list_stack.last() {
-            if !ctx.in_list_item {
-                ctx.emit_start(NodeKind::ListItem);
-                ctx.in_list_item = true;
+
+        // Continuation line inside current list
+        if ctx.list_frames.last().is_some() {
+            ctx.close_lists_above(indent);
+            if ctx.list_frames.last().is_some() {
+                ctx.start_list_item();
+                if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
+                    ctx.emit_end(NodeKind::Paragraph);
+                }
+                let tail = line;
+                if !tail.is_empty() {
+                    emit_inline(tail, &mut ctx.out, ctx.options);
+                }
+                ctx.at_line_start = false;
+                return;
             }
-            if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
-                ctx.emit_end(NodeKind::Paragraph);
-            }
-            let tail = line;
-            if !tail.is_empty() {
-                emit_inline(tail, &mut ctx.out);
-            }
-            ctx.at_line_start = false;
-            return;
         }
+
         if ctx.pending_para_start {
             ctx.emit_start(NodeKind::Paragraph);
             ctx.pending_para_start = false;
@@ -200,15 +203,15 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             }
             ctx.heading_prefix_consumed = true;
         }
-        emit_inline(&line, &mut ctx.out);
+        emit_inline(&line, &mut ctx.out, ctx.options);
     } else if ctx.in_code_fence {
         let trimmed = line.trim();
         if !trimmed.is_empty() && trimmed.chars().all(|c| c == '`') {
             return;
         }
         ctx.out.push(Event::Text(line.clone()));
-    } else if ctx.in_list_item {
-        emit_inline(&line, &mut ctx.out);
+    } else if ctx.in_list_item() {
+        emit_inline(&line, &mut ctx.out, ctx.options);
     } else {
         if ctx.skip_backticks_once {
             let trimmed = line.trim();
@@ -226,7 +229,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             ctx.emit_start(NodeKind::Paragraph);
             ctx.pending_para_start = false;
         }
-        emit_inline(&line, &mut ctx.out);
+        emit_inline(&line, &mut ctx.out, ctx.options);
     }
     ctx.at_line_start = false;
 }
