@@ -1,5 +1,5 @@
-use crate::specs::PluginSpec;
 use crate::processor::{attrs, util};
+use crate::specs::PluginSpec;
 use pendon_core::{Event, NodeKind};
 use std::collections::BTreeMap;
 
