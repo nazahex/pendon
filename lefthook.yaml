@@ -1,0 +1,49 @@
+# === COMMIT MESSAGE ===
+commit-msg:
+  commands:
+    commitlint:
+      run: >
+        command -v bun >/dev/null 2>&1
+        && bun commitlint --edit .git/COMMIT_EDITMSG
+        || npx commitlint --edit .git/COMMIT_EDITMSG
+
+# === PRE-COMMIT ===
+pre-commit:
+  parallel: true
+  commands:
+
+    # Rust
+    rust:
+      glob: "*.rs"
+      run: >
+        cargo fmt
+      stage_fixed: true
+
+    # JS / TS / JSON / CSS (Biome)
+    biome:
+      glob: "*.{cjs,js,mjs,jsx,ts,tsx,json,jsonc,css}"
+      run: >
+        command -v bun >/dev/null 2>&1
+        && bun run biome check --write {staged_files}
+        || npx biome check --write {staged_files}
+      stage_fixed: true
+
+    # Formatting (Markdown / YAML / TOML)
+    dprint:
+      glob: "*.{md,scss,sass,toml,yml,yaml}"
+      run: >
+        command -v bun >/dev/null 2>&1
+        && bun run dprint fmt {staged_files}
+        || dprint fmt {staged_files}
+      stage_fixed: true
+
+# === PRE-PUSH ===
+pre-push:
+  commands:
+
+    # Full CI (single source of truth)
+    ci:
+      run: >
+        command -v bun >/dev/null 2>&1
+        && bun run ci
+        || npm run ci
