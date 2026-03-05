@@ -1,0 +1,12 @@
+[package]
+name = "pendon-plugin-codeblock-syntect"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+pendon-core = { path = "../core" }
+regex = "1"
+syntect = { version = "5", default-features = true, features = ["html"] }
+
+# [build-dependencies]
+# (removed: no build script needed)

@@ -1,0 +1,9 @@
+[package]
+name = "pendon-renderer-ast"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+pendon-core = { path = "../core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

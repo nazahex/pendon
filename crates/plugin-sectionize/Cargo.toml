@@ -1,0 +1,9 @@
+[package]
+name = "pendon-plugin-sectionize"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "Wrap headings into nested sections"
+
+[dependencies]
+pendon-core = { path = "../core" }

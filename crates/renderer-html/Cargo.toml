@@ -1,0 +1,12 @@
+[package]
+name = "pendon-renderer-html"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "Pendon HTML renderer (AST → HTML)"
+
+[dependencies]
+pendon-core = { path = "../core" }
+pendon-renderer-ast = { path = "../renderer-ast" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

@@ -1,0 +1,8 @@
+[package]
+name = "pendon-plugin-markdown"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+ammonia = "3"
+pendon-core = { path = "../core" }
