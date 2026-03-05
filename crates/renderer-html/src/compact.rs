@@ -59,11 +59,24 @@ fn render_node(v: &Value, out: &mut String) {
                 out.push_str("<hr />\n");
             }
             "CodeFence" => {
-                out.push_str("<pre><code>");
+                out.push_str("<pre");
+                let class_attr = attr_str(v, "class");
+                if let Some(class) = class_attr {
+                    out.push(' ');
+                    out.push_str("class=\"");
+                    escape_html(class, out);
+                    out.push_str("\"");
+                }
+                out.push_str("><code>");
                 let raw = attr_str(v, "raw_html");
                 if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
                     if matches!(raw, Some("1")) {
-                        out.push_str(text);
+                        let payload = if let Some(cls) = class_attr {
+                            strip_pre_classes_from_lines(text, cls)
+                        } else {
+                            text.to_string()
+                        };
+                        out.push_str(&payload);
                     } else {
                         escape_html(text, out);
                     }
@@ -203,4 +216,40 @@ fn render_node_text_or_children(v: &Value, out: &mut String) {
     } else {
         render_children(v, out);
     }
+}
+
+fn strip_pre_classes_from_lines(html: &str, pre_classes: &str) -> String {
+    let bases: Vec<&str> = pre_classes
+        .split_whitespace()
+        .filter(|c| !c.is_empty())
+        .collect();
+    if bases.is_empty() {
+        return html.to_string();
+    }
+
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(idx) = rest.find("<p") {
+        out.push_str(&rest[..idx]);
+        rest = &rest[idx..];
+        if let Some(after) = rest.strip_prefix("<p class=\"") {
+            if let Some(end_idx) = after.find('"') {
+                let class_str = &after[..end_idx];
+                let mut classes: Vec<&str> = class_str.split_whitespace().collect();
+                classes.retain(|c| !bases.contains(c));
+                out.push_str("<p");
+                if !classes.is_empty() {
+                    out.push_str(" class=\"");
+                    out.push_str(&classes.join(" "));
+                    out.push('"');
+                }
+                rest = &after[end_idx + 1..];
+                continue;
+            }
+        }
+        out.push_str("<p");
+        rest = &rest[2..];
+    }
+    out.push_str(rest);
+    out
 }
