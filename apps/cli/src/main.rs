@@ -5,6 +5,7 @@ use std::process::ExitCode;
 use pendon_core::{parse, Options};
 use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
 use pendon_plugin_markdown::MarkdownOptions;
+use pendon_plugin_quiz::{process as process_quiz, solid_hints as quiz_solid_hints};
 use pendon_renderer_json::render_to_string;
 use pendon_renderer_solid::{
     render_solid_with_hints, ComponentTemplate, ImportEntry, SolidRenderHints,
@@ -151,10 +152,14 @@ fn main() -> ExitCode {
 
     let mut used_custom_specs: Vec<PluginSpec> = Vec::new();
     let mut custom_cache: HashMap<String, PluginSpec> = HashMap::new();
+    let mut builtin_hints: Vec<SolidRenderHints> = Vec::new();
+    let mut used_quiz = false;
 
     // Optional plugin processing (supports comma-separated list and toml:foo.toml entries)
     let events = if let Some(pstr) = args.plugin.as_deref() {
         let mut ev = events;
+        let mut markdown_ran = false;
+        let mut quiz_pending = false;
         for name in pstr.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
             if let Some(path) = name.strip_prefix("toml:") {
                 let spec = match custom_cache.get(path) {
@@ -177,7 +182,26 @@ fn main() -> ExitCode {
 
             ev = match name {
                 "micomatter" => pendon_plugin_micomatter::process(&ev),
-                "markdown" => pendon_plugin_markdown::process_with_options(&ev, markdown_opts),
+                "quiz" => {
+                    used_quiz = true;
+                    if markdown_ran {
+                        process_quiz(&ev)
+                    } else {
+                        quiz_pending = true;
+                        ev
+                    }
+                }
+                "markdown" => {
+                    let processed =
+                        pendon_plugin_markdown::process_with_options(&ev, markdown_opts);
+                    markdown_ran = true;
+                    if quiz_pending {
+                        quiz_pending = false;
+                        process_quiz(&processed)
+                    } else {
+                        processed
+                    }
+                }
                 "sectionize" => pendon_plugin_sectionize::process(&ev),
                 "extract-heading" => pendon_plugin_extract_heading::process(&ev),
                 "codeblock-syntect" => pendon_plugin_codeblock_syntect::process(&ev),
@@ -191,10 +215,17 @@ fn main() -> ExitCode {
                 }
             };
         }
+        if quiz_pending {
+            ev = process_quiz(&ev);
+        }
         ev
     } else {
         events
     };
+
+    if used_quiz {
+        builtin_hints.push(quiz_solid_hints());
+    }
 
     // Determine if any Error diagnostics are present
     let has_error = events.iter().any(|e| match e {
@@ -264,11 +295,7 @@ fn main() -> ExitCode {
             }
         }
         "solid" => {
-            let hints = if used_custom_specs.is_empty() {
-                None
-            } else {
-                Some(build_solid_hints(&used_custom_specs))
-            };
+            let hints = merge_solid_hints(&used_custom_specs, &builtin_hints);
             let s = match hints.as_ref() {
                 Some(h) => render_solid_with_hints(&events, Some(h)),
                 None => pendon_renderer_solid::render_solid(&events),
@@ -406,6 +433,10 @@ fn run_from_config() -> ExitCode {
                         };
                         let mut events = parse(&input_text, &opts);
                         let mut used_custom_specs: Vec<PluginSpec> = Vec::new();
+                        let mut builtin_hints: Vec<SolidRenderHints> = Vec::new();
+                        let mut used_quiz = false;
+                        let mut markdown_ran = false;
+                        let mut quiz_pending = false;
                         if let Some(pstr) = task.plugin.as_deref() {
                             for name in pstr.split(',').map(|s| s.trim()).filter(|s| !s.is_empty())
                             {
@@ -433,11 +464,27 @@ fn run_from_config() -> ExitCode {
                                     "micomatter" => {
                                         events = pendon_plugin_micomatter::process(&events);
                                     }
+                                    "quiz" => {
+                                        used_quiz = true;
+                                        if let Some(spec) = custom_registry.get("quiz") {
+                                            track_used_spec(&mut used_custom_specs, spec.clone());
+                                        }
+                                        if markdown_ran {
+                                            events = process_quiz(&events);
+                                        } else {
+                                            quiz_pending = true;
+                                        }
+                                    }
                                     "markdown" => {
                                         events = pendon_plugin_markdown::process_with_options(
                                             &events,
                                             task_markdown_opts,
                                         );
+                                        markdown_ran = true;
+                                        if quiz_pending {
+                                            quiz_pending = false;
+                                            events = process_quiz(&events);
+                                        }
                                     }
                                     "sectionize" => {
                                         events = pendon_plugin_sectionize::process(&events);
@@ -457,6 +504,12 @@ fn run_from_config() -> ExitCode {
                                     }
                                 }
                             }
+                        }
+                        if quiz_pending {
+                            events = process_quiz(&events);
+                        }
+                        if used_quiz {
+                            builtin_hints.push(quiz_solid_hints());
                         }
                         if exit != ExitCode::SUCCESS {
                             continue;
@@ -481,11 +534,7 @@ fn run_from_config() -> ExitCode {
                                 pendon_renderer_html::render_html(&events)
                             }),
                             "solid" => {
-                                let hints = if used_custom_specs.is_empty() {
-                                    None
-                                } else {
-                                    Some(build_solid_hints(&used_custom_specs))
-                                };
+                                let hints = merge_solid_hints(&used_custom_specs, &builtin_hints);
                                 Ok(match hints.as_ref() {
                                     Some(h) => render_solid_with_hints(&events, Some(h)),
                                     None => pendon_renderer_solid::render_solid(&events),
@@ -674,9 +723,26 @@ fn build_solid_hints(specs: &[PluginSpec]) -> SolidRenderHints {
 
     for spec in specs {
         if let Some(renderer) = spec.renderer.as_ref().and_then(|r| r.solid.as_ref()) {
+            let node_type = spec
+                .ast
+                .as_ref()
+                .and_then(|a| a.node.clone())
+                .unwrap_or_else(|| spec.name.clone());
+            let node_name = spec.ast.as_ref().and_then(|a| a.node_name.clone());
+            let mut keys: Vec<(String, Option<String>)> =
+                vec![(node_type.clone(), node_name.clone())];
+            // Compatibility bridge: built-in processors may emit node type equal to component name
+            // (e.g. `Quiz`) while custom specs still declare ast.node = "Component".
+            if node_type == "Component" {
+                if let Some(name) = node_name.clone() {
+                    keys.push((name.clone(), Some(name)));
+                }
+            }
+
+            let mut parsed_imports: Vec<ImportEntry> = Vec::new();
             for val in &renderer.imports {
                 match val {
-                    toml::Value::String(s) => hints.imports.push(ImportEntry::Raw(s.clone())),
+                    toml::Value::String(s) => parsed_imports.push(ImportEntry::Raw(s.clone())),
                     toml::Value::Table(tbl) => {
                         if let Some(module) = tbl.get("module").and_then(|v| v.as_str()) {
                             let default = tbl
@@ -692,7 +758,7 @@ fn build_solid_hints(specs: &[PluginSpec]) -> SolidRenderHints {
                                         .collect::<Vec<String>>()
                                 })
                                 .unwrap_or_default();
-                            hints.imports.push(ImportEntry::Structured {
+                            parsed_imports.push(ImportEntry::Structured {
                                 module: module.to_string(),
                                 default,
                                 names,
@@ -704,25 +770,92 @@ fn build_solid_hints(specs: &[PluginSpec]) -> SolidRenderHints {
             }
 
             if let Some(tpl) = &renderer.component_template {
-                let node_type = spec
-                    .ast
-                    .as_ref()
-                    .and_then(|a| a.node.clone())
-                    .unwrap_or_else(|| spec.name.clone());
-                let node_name = spec.ast.as_ref().and_then(|a| a.node_name.clone());
-                let key = (node_type.clone(), node_name.clone());
-                if seen_templates.insert(key) {
-                    hints.templates.push(ComponentTemplate {
-                        node_type,
-                        node_name,
-                        template: tpl.clone(),
-                    });
+                for key in &keys {
+                    if seen_templates.insert(key.clone()) {
+                        hints.templates.push(ComponentTemplate {
+                            node_type: key.0.clone(),
+                            node_name: key.1.clone(),
+                            template: tpl.clone(),
+                        });
+                    }
+                    hints
+                        .template_imports
+                        .entry(key.clone())
+                        .or_default()
+                        .extend(parsed_imports.clone());
                 }
+            } else if spec.matcher.start.is_some() {
+                if !parsed_imports.is_empty() {
+                    if let Some(marker) = spec.matcher.start.clone() {
+                        hints.text_imports.push((marker, parsed_imports));
+                    } else {
+                        hints.global_imports.extend(parsed_imports);
+                    }
+                }
+            } else {
+                hints.global_imports.extend(parsed_imports);
             }
         }
     }
 
     hints
+}
+
+fn merge_solid_hints(
+    custom_specs: &[PluginSpec],
+    builtin_hints: &[SolidRenderHints],
+) -> Option<SolidRenderHints> {
+    let mut merged = SolidRenderHints::default();
+    for hint in builtin_hints {
+        extend_hints(&mut merged, hint);
+    }
+    if !custom_specs.is_empty() {
+        let custom = build_solid_hints(custom_specs);
+        // Custom imports should override built-in imports for the same template key.
+        if !custom.template_imports.is_empty() {
+            let custom_import_keys: HashSet<(String, Option<String>)> =
+                custom.template_imports.keys().cloned().collect();
+            merged
+                .template_imports
+                .retain(|k, _| !custom_import_keys.contains(k));
+        }
+        extend_hints(&mut merged, &custom);
+    }
+    if hints_empty(&merged) {
+        None
+    } else {
+        Some(merged)
+    }
+}
+
+fn extend_hints(target: &mut SolidRenderHints, extra: &SolidRenderHints) {
+    target.global_imports.extend(extra.global_imports.clone());
+    for (key, imports) in &extra.template_imports {
+        target
+            .template_imports
+            .entry(key.clone())
+            .or_default()
+            .extend(imports.clone());
+    }
+    target.text_imports.extend(extra.text_imports.clone());
+
+    for tpl in &extra.templates {
+        let key = (&tpl.node_type, &tpl.node_name, &tpl.template);
+        if !target
+            .templates
+            .iter()
+            .any(|t| (&t.node_type, &t.node_name, &t.template) == key)
+        {
+            target.templates.push(tpl.clone());
+        }
+    }
+}
+
+fn hints_empty(hints: &SolidRenderHints) -> bool {
+    hints.global_imports.is_empty()
+        && hints.template_imports.is_empty()
+        && hints.text_imports.is_empty()
+        && hints.templates.is_empty()
 }
 
 fn load_custom_registry(
