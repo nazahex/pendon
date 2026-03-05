@@ -61,6 +61,12 @@ mod tests {
         None
     }
 
+    fn has_line_break(events: &[Event]) -> bool {
+        events
+            .iter()
+            .any(|ev| matches!(ev, Event::StartNode(NodeKind::HtmlInline)))
+    }
+
     #[test]
     fn html_block_is_emitted_when_allowed() {
         let opts = MarkdownOptions { allow_html: true };
@@ -81,6 +87,20 @@ mod tests {
         assert!(events
             .iter()
             .any(|e| matches!(e, Event::StartNode(NodeKind::HtmlInline))));
+    }
+
+    #[test]
+    fn double_space_line_break_inserts_br() {
+        let opts = MarkdownOptions { allow_html: false };
+        let events = run_markdown("line  \nnext\n", opts);
+        assert!(has_line_break(&events));
+    }
+
+    #[test]
+    fn double_backslash_line_break_inserts_br() {
+        let opts = MarkdownOptions { allow_html: false };
+        let events = run_markdown("line\\\\\nnext\n", opts);
+        assert!(has_line_break(&events));
     }
 
     #[test]

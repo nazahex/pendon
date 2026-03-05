@@ -2,7 +2,7 @@ use pendon_core::{Event, NodeKind};
 
 use crate::MarkdownOptions;
 
-use crate::helpers::{adjust_blockquote, close_table};
+use crate::helpers::{adjust_blockquote, close_table, emit_html_event};
 
 #[derive(Clone, Debug)]
 pub(crate) struct ListFrame {
@@ -29,6 +29,8 @@ pub struct ParseContext {
     pub(crate) in_table: bool,
     pub(crate) first_table_row: bool,
     pub(crate) options: MarkdownOptions,
+    pub(crate) last_line_text: Option<String>,
+    pub(crate) previous_line_blank: bool,
 }
 
 impl ParseContext {
@@ -50,6 +52,8 @@ impl ParseContext {
             in_table: false,
             first_table_row: true,
             options,
+            last_line_text: None,
+            previous_line_blank: false,
         }
     }
 
@@ -119,6 +123,32 @@ impl ParseContext {
         }
     }
 
+    pub fn capture_line_text(&mut self, text: &str) {
+        self.last_line_text = Some(text.to_string());
+    }
+
+    pub fn use_line_break(&mut self) -> bool {
+        if self.in_code_fence || self.in_heading {
+            self.last_line_text = None;
+            return false;
+        }
+        if let Some(line) = self.last_line_text.take() {
+            if line.ends_with("  ") {
+                self.remove_trailing_chars(' ', 2);
+                emit_html_event(&mut self.out, "<br />", NodeKind::HtmlInline);
+                self.previous_line_blank = false;
+                return true;
+            }
+            if line.ends_with("\\\\") {
+                self.remove_trailing_chars('\\', 2);
+                emit_html_event(&mut self.out, "<br />", NodeKind::HtmlInline);
+                self.previous_line_blank = false;
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn ensure_list(&mut self, kind: NodeKind, indent: usize, start: Option<usize>) {
         if let Some(frame) = self.list_frames.last_mut() {
             if frame.indent == indent && frame.kind == kind {
@@ -176,6 +206,22 @@ impl ParseContext {
         });
     }
 
+    fn remove_trailing_chars(&mut self, ch: char, mut count: usize) {
+        let mut idx = self.out.len();
+        while count > 0 && idx > 0 {
+            idx -= 1;
+            if let Event::Text(text) = &mut self.out[idx] {
+                let removed = trim_line_end(text, ch, count);
+                if removed > 0 {
+                    count -= removed;
+                    if text.is_empty() {
+                        self.out.remove(idx);
+                        idx = self.out.len();
+                    }
+                }
+            }
+        }
+    }
     pub fn start_list_item(&mut self) {
         let item_already_open = self.in_list_item();
         if item_already_open {
@@ -209,4 +255,17 @@ impl ParseContext {
             .map(|f| f.item_open)
             .unwrap_or(false)
     }
+}
+
+fn trim_line_end(text: &mut String, ch: char, max: usize) -> usize {
+    let mut removed = 0;
+    while removed < max {
+        if text.ends_with(ch) {
+            text.pop();
+            removed += 1;
+        } else {
+            break;
+        }
+    }
+    removed
 }

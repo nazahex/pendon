@@ -13,28 +13,41 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
     }
 
     if s == "\n" {
+        if ctx.use_line_break() {
+            ctx.at_line_start = true;
+            return;
+        }
         if ctx.in_code_fence {
             if ctx.skip_initial_code_newline {
                 ctx.skip_initial_code_newline = false;
             } else {
                 ctx.out.push(Event::Text("\n".to_string()));
             }
+            ctx.previous_line_blank = false;
             ctx.at_line_start = true;
             return;
         }
         if ctx.in_heading {
+            ctx.previous_line_blank = false;
             ctx.at_line_start = true;
             return;
         }
+        ctx.previous_line_blank = true;
         ctx.at_line_start = true;
         return;
     }
 
+    ctx.capture_line_text(s);
     let mut line = s.to_string();
     let original_line = line.clone();
 
     if ctx.at_line_start && !ctx.in_heading && !ctx.in_code_fence {
+        let previous_line_blank = ctx.previous_line_blank;
+        ctx.previous_line_blank = false;
         let (depth, tail) = parse_blockquote_prefix(&line);
+        if depth > 0 && previous_line_blank && !ctx.list_frames.is_empty() {
+            ctx.close_all_lists();
+        }
         adjust_blockquote(&mut ctx.out, &mut ctx.blockquote_depth, depth);
         if depth > 0 {
             line = tail.to_string();
