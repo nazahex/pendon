@@ -44,13 +44,19 @@ fn extract_frontmatter(events: &[Event]) -> Result<Option<(String, usize)>, Stri
 
     let mut idx = 1usize;
     // Expect opening --- rendered as a thematic break at the very start
-    if !matches!(events.get(idx), Some(Event::StartNode(NodeKind::ThematicBreak))) {
+    if !matches!(
+        events.get(idx),
+        Some(Event::StartNode(NodeKind::ThematicBreak))
+    ) {
         return Ok(None);
     }
     if !matches!(events.get(idx + 1), Some(Event::Text(t)) if t.trim() == "---") {
         return Ok(None);
     }
-    if !matches!(events.get(idx + 2), Some(Event::EndNode(NodeKind::ThematicBreak))) {
+    if !matches!(
+        events.get(idx + 2),
+        Some(Event::EndNode(NodeKind::ThematicBreak))
+    ) {
         return Ok(None);
     }
     idx += 3;
@@ -66,9 +72,14 @@ fn extract_frontmatter(events: &[Event]) -> Result<Option<(String, usize)>, Stri
     let mut content = String::new();
     let mut close_idx: Option<usize> = None;
     while idx + 2 < events.len() {
-        if matches!(events.get(idx), Some(Event::StartNode(NodeKind::ThematicBreak)))
-            && matches!(events.get(idx + 1), Some(Event::Text(t)) if t.trim() == "---")
-            && matches!(events.get(idx + 2), Some(Event::EndNode(NodeKind::ThematicBreak)))
+        if matches!(
+            events.get(idx),
+            Some(Event::StartNode(NodeKind::ThematicBreak))
+        ) && matches!(events.get(idx + 1), Some(Event::Text(t)) if t.trim() == "---")
+            && matches!(
+                events.get(idx + 2),
+                Some(Event::EndNode(NodeKind::ThematicBreak))
+            )
         {
             close_idx = Some(idx);
             break;
@@ -157,7 +168,12 @@ fn validate_key(key: &str) -> Result<(), String> {
     let mut chars = key.chars();
     match chars.next() {
         Some(ch) if ch.is_ascii_alphabetic() || ch == '_' => {}
-        _ => return Err(format!("invalid key '{}': must start with [A-Za-z_]", key.trim())),
+        _ => {
+            return Err(format!(
+                "invalid key '{}': must start with [A-Za-z_]",
+                key.trim()
+            ))
+        }
     }
     for ch in chars {
         if !(ch.is_ascii_alphanumeric() || ch == '_' || ch == '-') {
