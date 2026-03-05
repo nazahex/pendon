@@ -67,7 +67,17 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                 out.push_str("<hr />\n");
             }
             "CodeFence" => {
-                out.push_str("<pre><code>");
+                out.push_str("<pre");
+                if let Some(class) = v
+                    .get("attrs")
+                    .and_then(|a| a.get("class"))
+                    .and_then(|x| x.as_str())
+                {
+                    out.push_str(" class=\"");
+                    escape_jsx(class, out);
+                    out.push_str("\"");
+                }
+                out.push_str("><code>");
                 let raw = v
                     .get("attrs")
                     .and_then(|a| a.get("raw_html"))
