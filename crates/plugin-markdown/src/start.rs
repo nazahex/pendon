@@ -2,6 +2,20 @@ use pendon_core::NodeKind;
 
 use crate::context::ParseContext;
 
+fn is_inline_node(kind: &NodeKind) -> bool {
+    matches!(
+        kind,
+        NodeKind::Emphasis
+            | NodeKind::Strong
+            | NodeKind::InlineCode
+            | NodeKind::Link
+            | NodeKind::Bold
+            | NodeKind::Italic
+            | NodeKind::HtmlInline
+            | NodeKind::Image
+    )
+}
+
 pub fn handle(ctx: &mut ParseContext, kind: &NodeKind) {
     match kind {
         NodeKind::Heading => {
@@ -30,9 +44,11 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind) {
             }
         }
         _ => {
-            ctx.close_blockquotes();
-            ctx.close_all_lists();
-            ctx.close_table_if_open();
+            if !is_inline_node(kind) {
+                ctx.close_blockquotes();
+                ctx.close_all_lists();
+                ctx.close_table_if_open();
+            }
             ctx.emit_start(kind.clone());
         }
     }

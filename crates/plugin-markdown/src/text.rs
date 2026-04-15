@@ -8,11 +8,18 @@ use crate::helpers::{
 };
 
 pub fn handle(ctx: &mut ParseContext, s: &str) {
+    if matches!(ctx.stack.last(), Some(NodeKind::HtmlBlock | NodeKind::HtmlInline)) {
+        ctx.out.push(Event::Text(s.to_string()));
+        ctx.at_line_start = s == "\n";
+        return;
+    }
+
     if matches!(ctx.stack.last(), Some(NodeKind::ThematicBreak)) {
         return;
     }
 
     if s == "\n" {
+        let blank_line = ctx.at_line_start;
         if ctx.use_line_break() {
             ctx.at_line_start = true;
             return;
@@ -31,6 +38,9 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             ctx.previous_line_blank = false;
             ctx.at_line_start = true;
             return;
+        }
+        if blank_line {
+            ctx.close_all_lists();
         }
         ctx.previous_line_blank = true;
         ctx.at_line_start = true;

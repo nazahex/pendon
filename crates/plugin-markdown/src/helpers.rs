@@ -90,6 +90,38 @@ pub fn emit_inline(s: &str, out: &mut Vec<Event>, opts: MarkdownOptions) {
     let bytes: Vec<char> = s.chars().collect();
     let mut i = 0usize;
     while i < bytes.len() {
+        if bytes[i] == '!' && i + 1 < bytes.len() && bytes[i + 1] == '[' {
+            // Keep !![...](...) reserved for plugin-img advanced figure syntax.
+            if i == 0 || bytes[i.saturating_sub(1)] != '!' {
+                if let Some(close_br) = find_next(&bytes, i + 2, ']') {
+                    if close_br + 1 < bytes.len() && bytes[close_br + 1] == '(' {
+                        if let Some(close_par) = find_next(&bytes, close_br + 2, ')') {
+                            let alt: String = bytes[i + 2..close_br].iter().collect();
+                            let raw_target: String = bytes[close_br + 2..close_par].iter().collect();
+                            let (src, title) = parse_target_and_title(&raw_target);
+                            out.push(Event::StartNode(NodeKind::Image));
+                            out.push(Event::Attribute {
+                                name: "alt".to_string(),
+                                value: alt,
+                            });
+                            out.push(Event::Attribute {
+                                name: "src".to_string(),
+                                value: src,
+                            });
+                            if let Some(title) = title {
+                                out.push(Event::Attribute {
+                                    name: "title".to_string(),
+                                    value: title,
+                                });
+                            }
+                            out.push(Event::EndNode(NodeKind::Image));
+                            i = close_par + 1;
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
         if bytes[i] == '`' {
             if let Some(end) = find_next(&bytes, i + 1, '`') {
                 out.push(Event::StartNode(NodeKind::InlineCode));
@@ -114,12 +146,19 @@ pub fn emit_inline(s: &str, out: &mut Vec<Event>, opts: MarkdownOptions) {
                 if close_br + 1 < bytes.len() && bytes[close_br + 1] == '(' {
                     if let Some(close_par) = find_next(&bytes, close_br + 2, ')') {
                         let text: String = bytes[i + 1..close_br].iter().collect();
-                        let url: String = bytes[close_br + 2..close_par].iter().collect();
+                        let raw_target: String = bytes[close_br + 2..close_par].iter().collect();
+                        let (url, title) = parse_target_and_title(&raw_target);
                         out.push(Event::StartNode(NodeKind::Link));
                         out.push(Event::Attribute {
                             name: "href".to_string(),
                             value: url,
                         });
+                        if let Some(title) = title {
+                            out.push(Event::Attribute {
+                                name: "title".to_string(),
+                                value: title,
+                            });
+                        }
                         emit_inline(&text, out, opts);
                         out.push(Event::EndNode(NodeKind::Link));
                         i = close_par + 1;
@@ -170,6 +209,40 @@ pub fn emit_inline(s: &str, out: &mut Vec<Event>, opts: MarkdownOptions) {
         }
         out.push(Event::Text(bytes[i].to_string()));
         i += 1;
+    }
+}
+
+fn parse_target_and_title(raw: &str) -> (String, Option<String>) {
+    let s = raw.trim();
+    if s.len() >= 2 && s.ends_with('"') {
+        let bytes = s.as_bytes();
+        let mut i = bytes.len().saturating_sub(2);
+        loop {
+            if bytes[i] == b'"' && (i == 0 || bytes[i - 1] != b'\\') {
+                if i > 0 && bytes[i - 1].is_ascii_whitespace() {
+                    let dest = s[..i].trim_end();
+                    let title = s[i + 1..s.len() - 1].to_string();
+                    if !dest.is_empty() {
+                        return (strip_angle_brackets(dest), Some(title));
+                    }
+                }
+                break;
+            }
+            if i == 0 {
+                break;
+            }
+            i -= 1;
+        }
+    }
+    (strip_angle_brackets(s), None)
+}
+
+fn strip_angle_brackets(s: &str) -> String {
+    let t = s.trim();
+    if t.len() >= 2 && t.starts_with('<') && t.ends_with('>') {
+        t[1..t.len() - 1].to_string()
+    } else {
+        t.to_string()
     }
 }
 
