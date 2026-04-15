@@ -1,4 +1,4 @@
-# pendon-plugin-micomatter
+# pendon-plugin-micromatter
 
 Micomatter is a safe, YAML-inspired frontmatter parser for Pendon. It accepts a small, predictable subset and emits a `Frontmatter` node with a single `data` attribute containing normalized JSON. Renderers can then expose the data without re-parsing.
 
@@ -24,7 +24,7 @@ tags: ["specification", "metadata", "performance"]
 
 - Detects frontmatter only at the very start of the document, bounded by `---` fences that the core parser emits as `ThematicBreak` nodes.
 - On success, injects a `Frontmatter` node under `Document` with `attrs.data` holding a JSON string.
-- On error (invalid grammar, mixed array types, missing closing fence), emits a `Diagnostic::Error` with a `[micomatter]` prefix and leaves the original events intact.
+- On error (invalid grammar, mixed array types, missing closing fence), emits a `Diagnostic::Error` with a `[micromatter]` prefix and leaves the original events intact.
 - Downstream renderers:
   - AST/JSON: `Frontmatter` node is present with `attrs.data` JSON.
   - Solid: exports `export const frontmatter = {...}` before the component.
@@ -32,26 +32,26 @@ tags: ["specification", "metadata", "performance"]
 
 ## CLI usage
 
-Run micomatter before markdown so the block is stripped and normalized:
+Run micromatter before markdown so the block is stripped and normalized:
 
 ```bash
-pendon --plugin micomatter,markdown --format ast --input ./doc.md
-pendon --plugin micomatter,markdown --format solid --input ./doc.md
+pendon --plugin micromatter,markdown --format ast --input ./doc.md
+pendon --plugin micromatter,markdown --format solid --input ./doc.md
 ```
 
-In `pendon.toml` tasks, list `micomatter` first in `plugin` values:
+In `pendon.toml` tasks, list `micromatter` first in `plugin` values:
 
 ```toml
-plugin = "micomatter,markdown"
+plugin = "micromatter,markdown"
 ```
 
 ## Diagnostics
 
 Typical error messages:
 
-- `[micomatter] missing closing ---`
-- `[micomatter] missing ':' on frontmatter line N`
-- `[micomatter] mixed array types`
-- `[micomatter] unterminated quoted string`
+- `[micromatter] missing closing ---`
+- `[micromatter] missing ':' on frontmatter line N`
+- `[micromatter] mixed array types`
+- `[micromatter] unterminated quoted string`
 
 Use `--strict` to treat these diagnostics as errors for the CLI exit code.

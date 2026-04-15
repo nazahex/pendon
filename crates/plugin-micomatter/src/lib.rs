@@ -27,7 +27,7 @@ pub fn process(events: &[Event]) -> Vec<Event> {
             let mut out = events.to_vec();
             let diag = Event::Diagnostic {
                 severity: Severity::Error,
-                message: format!("[micomatter] {}", msg),
+                message: format!("[micromatter] {}", msg),
                 span: None,
             };
             let insert_at = if out.len() > 1 { 1 } else { 0 };
