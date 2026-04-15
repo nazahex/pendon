@@ -126,7 +126,8 @@ impl AstBuilder {
             | NodeKind::Bold
             | NodeKind::Italic
             | NodeKind::InlineCode
-            | NodeKind::Link => {
+            | NodeKind::Link
+            | NodeKind::HtmlInline => {
                 if let Some(flag) = self.has_inline.last_mut() {
                     *flag = true;
                 }
@@ -293,6 +294,7 @@ impl AstBuilder {
             | NodeKind::Italic
             | NodeKind::InlineCode
             | NodeKind::Link
+            | NodeKind::Image
             | NodeKind::ThematicBreak
             | NodeKind::Document
             | NodeKind::Custom(_) => true,

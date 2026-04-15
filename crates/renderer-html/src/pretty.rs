@@ -234,6 +234,12 @@ fn render_node(v: &Value, out: &mut String, indent: &mut usize) {
                     escape_html(href, out);
                     out.push_str("\"");
                 }
+                if let Some(title) = attr_str(v, "title") {
+                    out.push(' ');
+                    out.push_str("title=\"");
+                    escape_html(title, out);
+                    out.push_str("\"");
+                }
                 out.push('>');
                 out.push('\n');
                 *indent += 1;
@@ -241,6 +247,22 @@ fn render_node(v: &Value, out: &mut String, indent: &mut usize) {
                 *indent -= 1;
                 pad(out, *indent);
                 out.push_str("</a>\n");
+            }
+            "Image" => {
+                pad(out, *indent);
+                out.push_str("<img");
+                let alt = attr_str(v, "alt").unwrap_or("");
+                out.push(' ');
+                out.push_str("alt=\"");
+                escape_html(alt, out);
+                out.push_str("\"");
+                if let Some(src) = attr_str(v, "src") {
+                    out.push(' ');
+                    out.push_str("src=\"");
+                    escape_html(src, out);
+                    out.push_str("\"");
+                }
+                out.push_str(" />\n");
             }
             "Text" => {
                 pad(out, *indent);

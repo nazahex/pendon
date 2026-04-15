@@ -56,4 +56,41 @@ mod tests {
         // ensure regular rendering still succeeds even with trailing text
         assert!(render_ast_to_string(&events).is_ok());
     }
+
+    #[test]
+    fn list_item_keeps_html_inline_in_order() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::OrderedList),
+            Event::StartNode(NodeKind::ListItem),
+            Event::Text("Menekan tombol ".to_string()),
+            Event::StartNode(NodeKind::HtmlInline),
+            Event::Text("<kbd>".to_string()),
+            Event::EndNode(NodeKind::HtmlInline),
+            Event::Text("Tab".to_string()),
+            Event::StartNode(NodeKind::HtmlInline),
+            Event::Text("</kbd>".to_string()),
+            Event::EndNode(NodeKind::HtmlInline),
+            Event::Text(" pada keyboard.".to_string()),
+            Event::EndNode(NodeKind::ListItem),
+            Event::EndNode(NodeKind::OrderedList),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let output = render_ast_to_string(&events).unwrap();
+        let parsed: Value = serde_json::from_str(&output).unwrap();
+        let item = &parsed["children"][0]["children"][0];
+
+        assert!(item.get("text").is_none());
+        assert_eq!(item["children"][0]["type"], "Text");
+        assert_eq!(item["children"][0]["text"], "Menekan tombol ");
+        assert_eq!(item["children"][1]["type"], "HtmlInline");
+        assert_eq!(item["children"][1]["text"], "<kbd>");
+        assert_eq!(item["children"][2]["type"], "Text");
+        assert_eq!(item["children"][2]["text"], "Tab");
+        assert_eq!(item["children"][3]["type"], "HtmlInline");
+        assert_eq!(item["children"][3]["text"], "</kbd>");
+        assert_eq!(item["children"][4]["type"], "Text");
+        assert_eq!(item["children"][4]["text"], " pada keyboard.");
+    }
 }
