@@ -30,9 +30,14 @@ pub fn process(events: &[Event], spec: &PluginSpec) -> Vec<Event> {
 
             if let Some(l) = lang.as_deref() {
                 if detector.is_match(l.trim()) {
-                    let (attrs, diags) = attrs::collect_attrs(spec, None);
+                    let (mut attrs, diags) = attrs::collect_attrs(spec, None);
                     out.extend(diags);
-                    util::emit_component_with_body(spec, &attrs, &body, &mut out);
+                    if matches!(spec.matcher.parse_hint.as_deref(), Some("codefence-viewer")) {
+                        attrs.insert("value".to_string(), minify_inline(&body));
+                        util::emit_component(spec, &attrs, None, &mut out);
+                    } else {
+                        util::emit_component_with_body(spec, &attrs, &body, &mut out);
+                    }
                     i = j;
                     continue;
                 }
@@ -47,4 +52,8 @@ pub fn process(events: &[Event], spec: &PluginSpec) -> Vec<Event> {
         i += 1;
     }
     out
+}
+
+fn minify_inline(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
