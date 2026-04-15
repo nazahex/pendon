@@ -77,19 +77,22 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                     escape_jsx(class, out);
                     out.push_str("\"");
                 }
-                out.push_str("><code>");
                 let raw = v
                     .get("attrs")
                     .and_then(|a| a.get("raw_html"))
                     .and_then(|x| x.as_str());
-                if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
-                    if matches!(raw, Some("1")) {
-                        out.push_str(text);
-                    } else {
+                if matches!(raw, Some("1")) {
+                    let text = v.get("text").and_then(|t| t.as_str()).unwrap_or("");
+                    out.push_str("><code innerHTML={");
+                    out.push_str(&json_string_literal(text));
+                    out.push_str("} /></pre>\n");
+                } else {
+                    out.push_str("><code>");
+                    if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
                         escape_jsx(text, out);
                     }
+                    out.push_str("</code></pre>\n");
                 }
-                out.push_str("</code></pre>\n");
             }
             "BulletList" => {
                 out.push_str("<ul>\n");
@@ -186,10 +189,36 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                         escape_jsx(href, out);
                         out.push_str("\"");
                     }
+                    if let Some(title) = attrs.get("title").and_then(|t| t.as_str()) {
+                        out.push_str(" title=\"");
+                        escape_jsx(title, out);
+                        out.push_str("\"");
+                    }
                 }
                 out.push('>');
                 render_children(v, out, hints);
                 out.push_str("</a>");
+            }
+            "Image" => {
+                out.push_str("<img");
+                let alt = v
+                    .get("attrs")
+                    .and_then(|a| a.get("alt"))
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("");
+                out.push_str(" alt=\"");
+                escape_jsx(alt, out);
+                out.push_str("\"");
+                if let Some(src) = v
+                    .get("attrs")
+                    .and_then(|a| a.get("src"))
+                    .and_then(|x| x.as_str())
+                {
+                    out.push_str(" src=\"");
+                    escape_jsx(src, out);
+                    out.push_str("\"");
+                }
+                out.push_str(" />");
             }
             "Text" => {
                 if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
@@ -255,4 +284,8 @@ fn escape_jsx(s: &str, out: &mut String) {
             _ => out.push(ch),
         }
     }
+}
+
+fn json_string_literal(s: &str) -> String {
+    serde_json::to_string(s).unwrap_or_else(|_| "\"\"".to_string())
 }

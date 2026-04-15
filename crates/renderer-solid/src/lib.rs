@@ -128,6 +128,20 @@ mod tests {
         ]
     }
 
+    fn raw_codefence_events() -> Vec<Event> {
+        vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::CodeFence),
+            Event::Attribute {
+                name: "raw_html".to_string(),
+                value: "1".to_string(),
+            },
+            Event::Text("<p>  <b>x</b></p>".to_string()),
+            Event::EndNode(NodeKind::CodeFence),
+            Event::EndNode(NodeKind::Document),
+        ]
+    }
+
     #[test]
     fn html_block_passes_raw_html() {
         let output = render_solid(&html_block_events());
@@ -138,5 +152,11 @@ mod tests {
     fn html_inline_passes_raw_fragment() {
         let output = render_solid(&html_inline_events());
         assert!(output.contains("<span>inline</span>"));
+    }
+
+    #[test]
+    fn codefence_raw_html_uses_innerhtml_binding() {
+        let output = render_solid(&raw_codefence_events());
+        assert!(output.contains("<pre><code innerHTML={\"<p>  <b>x</b></p>\"} /></pre>"));
     }
 }
