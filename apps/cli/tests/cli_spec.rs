@@ -506,7 +506,7 @@ fn ast_frontmatter_payload_is_exposed() {
 
     let output = cmd
         .arg("--plugin")
-        .arg("micomatter,markdown")
+        .arg("micromatter,markdown")
         .arg("--format")
         .arg("ast")
         .write_stdin(input)
@@ -556,7 +556,7 @@ fn json_renderer_carries_frontmatter_blockquote_and_table() {
 
     let output = cmd
         .arg("--plugin")
-        .arg("micomatter,markdown")
+        .arg("micromatter,markdown")
         .arg("--format")
         .arg("json")
         .write_stdin(input)
@@ -611,4 +611,108 @@ fn json_renderer_carries_frontmatter_blockquote_and_table() {
         .and_then(|t| t.as_str())
         .unwrap_or("");
     assert_eq!(body_text, "1");
+}
+
+#[test]
+fn run_config_vicado_import_override_is_applied() {
+    let dir = tempdir().expect("temp dir");
+    let src_dir = dir.path().join("src");
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir_all(&src_dir).expect("create src dir");
+    std::fs::create_dir_all(&out_dir).expect("create out dir");
+
+    std::fs::write(
+        src_dir.join("basic.md"),
+        "```typescript vicado\nconst x = 1\n```\n",
+    )
+    .expect("write markdown file");
+
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        r#"[[task]]
+input = "./src/[...slug].md"
+output = "./out/[...slug].jsx"
+plugin = "markdown,vicado"
+format = "solid"
+
+[plugin-vicado.renderer.solid]
+
+[[plugin-vicado.renderer.solid.imports]]
+module = "@/components/vicado"
+default = "Vicado"
+"#,
+    )
+    .expect("write config file");
+
+    let mut cmd = cargo_bin_cmd!("pendon");
+    cmd.current_dir(dir.path()).arg("run").assert().success();
+
+    let output = std::fs::read_to_string(out_dir.join("basic.jsx")).expect("read output jsx");
+    assert!(output.contains("import Vicado from \"@/components/vicado\""));
+    assert!(!output.contains("from \"vicado\""));
+}
+
+#[test]
+fn run_config_vicado_uses_default_import_without_override() {
+    let dir = tempdir().expect("temp dir");
+    let src_dir = dir.path().join("src");
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir_all(&src_dir).expect("create src dir");
+    std::fs::create_dir_all(&out_dir).expect("create out dir");
+
+    std::fs::write(
+        src_dir.join("basic.md"),
+        "```typescript vicado\nconst x = 1\n```\n",
+    )
+    .expect("write markdown file");
+
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        r#"[[task]]
+input = "./src/[...slug].md"
+output = "./out/[...slug].jsx"
+plugin = "markdown,vicado"
+format = "solid"
+"#,
+    )
+    .expect("write config file");
+
+    let mut cmd = cargo_bin_cmd!("pendon");
+    cmd.current_dir(dir.path()).arg("run").assert().success();
+
+    let output = std::fs::read_to_string(out_dir.join("basic.jsx")).expect("read output jsx");
+    assert!(output.contains("import {Vicado} from \"vicado\""));
+}
+
+#[test]
+fn run_config_vicado_before_markdown_trims_code_boundaries() {
+    let dir = tempdir().expect("temp dir");
+    let src_dir = dir.path().join("src");
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir_all(&src_dir).expect("create src dir");
+    std::fs::create_dir_all(&out_dir).expect("create out dir");
+
+    std::fs::write(
+        src_dir.join("basic.md"),
+        "```html vicado\n<div>ok</div>\n```\n",
+    )
+    .expect("write markdown file");
+
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        r#"[[task]]
+input = "./src/[...slug].md"
+output = "./out/[...slug].jsx"
+plugin = "vicado,markdown"
+format = "solid"
+"#,
+    )
+    .expect("write config file");
+
+    let mut cmd = cargo_bin_cmd!("pendon");
+    cmd.current_dir(dir.path()).arg("run").assert().success();
+
+    let output = std::fs::read_to_string(out_dir.join("basic.jsx")).expect("read output jsx");
+    assert!(output.contains("code={\"<div>ok</div>\"}"));
+    assert!(!output.contains("code={\"\\n<div>ok</div>\\n\"}"));
 }

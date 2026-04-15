@@ -25,7 +25,7 @@ title: Demo
     let mut cmd = cargo_bin_cmd!("pendon");
     let output = cmd
         .arg("--plugin")
-        .arg("micomatter,markdown,sectionize,extract-heading")
+        .arg("micromatter,markdown,sectionize,extract-heading")
         .arg("--format")
         .arg("solid")
         .write_stdin(input)

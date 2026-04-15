@@ -27,6 +27,7 @@ pub enum NodeKind {
     Bold,
     Italic,
     HtmlInline,
+    Image,
     // Custom node kinds (e.g., Component, user-defined)
     Custom(String),
 }
@@ -58,6 +59,7 @@ impl NodeKind {
             NodeKind::Bold => Cow::Borrowed("Bold"),
             NodeKind::Italic => Cow::Borrowed("Italic"),
             NodeKind::HtmlInline => Cow::Borrowed("HtmlInline"),
+            NodeKind::Image => Cow::Borrowed("Image"),
             NodeKind::Custom(name) => Cow::Owned(name.clone()),
         }
     }

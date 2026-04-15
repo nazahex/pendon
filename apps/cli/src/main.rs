@@ -4,8 +4,12 @@ use std::process::ExitCode;
 
 use pendon_core::{parse, Options};
 use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
+use pendon_plugin_dialog::process as process_dialog;
+use pendon_plugin_img::process as process_img;
 use pendon_plugin_markdown::MarkdownOptions;
 use pendon_plugin_quiz::{process as process_quiz, solid_hints as quiz_solid_hints};
+use pendon_plugin_vicado::{process as process_vicado, solid_hints as vicado_solid_hints};
+use pendon_plugin_wiki::{process_with_options as process_wiki, WikiOptions};
 use pendon_renderer_json::render_to_string;
 use pendon_renderer_solid::{
     render_solid_with_hints, ComponentTemplate, ImportEntry, SolidRenderHints,
@@ -30,6 +34,7 @@ struct CliArgs {
     max_blank_run: Option<usize>,
     plugin: Option<String>,
     markdown_allow_html: bool,
+    wiki_link_prefix: Option<String>,
 }
 
 fn parse_args() -> Result<CliArgs, String> {
@@ -57,6 +62,9 @@ fn parse_args() -> Result<CliArgs, String> {
     let plugin: Option<String> = pargs
         .opt_value_from_str("--plugin")
         .map_err(|e| e.to_string())?;
+    let wiki_link_prefix: Option<String> = pargs
+        .opt_value_from_str("--wiki-link-prefix")
+        .map_err(|e| e.to_string())?;
 
     // Ensure no unexpected free arguments
     let rest = pargs.finish();
@@ -75,6 +83,7 @@ fn parse_args() -> Result<CliArgs, String> {
         max_blank_run,
         plugin,
         markdown_allow_html,
+        wiki_link_prefix,
     })
 }
 
@@ -149,11 +158,15 @@ fn main() -> ExitCode {
     let markdown_opts = MarkdownOptions {
         allow_html: args.markdown_allow_html,
     };
+    let wiki_opts = WikiOptions {
+        link_prefix: args.wiki_link_prefix.clone(),
+    };
 
     let mut used_custom_specs: Vec<PluginSpec> = Vec::new();
     let mut custom_cache: HashMap<String, PluginSpec> = HashMap::new();
     let mut builtin_hints: Vec<SolidRenderHints> = Vec::new();
     let mut used_quiz = false;
+    let mut used_vicado = false;
 
     // Optional plugin processing (supports comma-separated list and toml:foo.toml entries)
     let events = if let Some(pstr) = args.plugin.as_deref() {
@@ -181,7 +194,7 @@ fn main() -> ExitCode {
             }
 
             ev = match name {
-                "micomatter" => pendon_plugin_micomatter::process(&ev),
+                "micromatter" => pendon_plugin_micomatter::process(&ev),
                 "quiz" => {
                     used_quiz = true;
                     if markdown_ran {
@@ -190,6 +203,13 @@ fn main() -> ExitCode {
                         quiz_pending = true;
                         ev
                     }
+                }
+                "dialog" => process_dialog(&ev),
+                "img" => process_img(&ev),
+                "wiki" => process_wiki(&ev, wiki_opts.clone()),
+                "vicado" => {
+                    used_vicado = true;
+                    process_vicado(&ev)
                 }
                 "markdown" => {
                     let processed =
@@ -204,7 +224,7 @@ fn main() -> ExitCode {
                 }
                 "sectionize" => pendon_plugin_sectionize::process(&ev),
                 "extract-heading" => pendon_plugin_extract_heading::process(&ev),
-                "codeblock-syntect" => pendon_plugin_codeblock_syntect::process(&ev),
+                "syntect" => pendon_plugin_codeblock_syntect::process(&ev),
                 other => {
                     if let Some(spec) = custom_cache.get(other) {
                         track_used_spec(&mut used_custom_specs, spec.clone());
@@ -225,6 +245,9 @@ fn main() -> ExitCode {
 
     if used_quiz {
         builtin_hints.push(quiz_solid_hints());
+    }
+    if used_vicado {
+        builtin_hints.push(vicado_solid_hints());
     }
 
     // Determine if any Error diagnostics are present
@@ -324,6 +347,7 @@ struct ConfigTask {
     output: String,
     plugin: Option<String>,
     markdown_allow_html: Option<bool>,
+    wiki_link_prefix: Option<String>,
     format: String,
     pretty: Option<bool>,
     strict: Option<bool>,
@@ -340,12 +364,32 @@ struct PluginCustomSection {
     enable_unsafe_hooks: Option<bool>,
 }
 
+#[derive(Debug, Deserialize, Default)]
+#[allow(dead_code)]
+struct PluginVicadoSolidSection {
+    imports: Option<Vec<toml::Value>>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[allow(dead_code)]
+struct PluginVicadoRendererSection {
+    solid: Option<PluginVicadoSolidSection>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[allow(dead_code)]
+struct PluginVicadoSection {
+    renderer: Option<PluginVicadoRendererSection>,
+}
+
 #[derive(Debug, Deserialize)]
 struct PendonConfig {
     #[serde(rename = "task")]
     tasks: Vec<ConfigTask>,
     #[serde(rename = "plugin-custom")]
     plugin_custom: Option<PluginCustomSection>,
+    #[serde(rename = "plugin-vicado")]
+    plugin_vicado: Option<PluginVicadoSection>,
 }
 
 fn run_from_config() -> ExitCode {
@@ -371,6 +415,7 @@ fn run_from_config() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    let vicado_hints_override = build_vicado_hints_override(cfg.plugin_vicado.as_ref());
     let mut custom_cache: HashMap<String, PluginSpec> = HashMap::new();
 
     let theme = pendon_tui::Theme::default();
@@ -390,6 +435,9 @@ fn run_from_config() -> ExitCode {
         };
         let task_markdown_opts = MarkdownOptions {
             allow_html: task.markdown_allow_html.unwrap_or(false),
+        };
+        let task_wiki_opts = WikiOptions {
+            link_prefix: task.wiki_link_prefix.clone(),
         };
         let mut matched = 0usize;
         let mut total_bytes: usize = 0;
@@ -435,6 +483,7 @@ fn run_from_config() -> ExitCode {
                         let mut used_custom_specs: Vec<PluginSpec> = Vec::new();
                         let mut builtin_hints: Vec<SolidRenderHints> = Vec::new();
                         let mut used_quiz = false;
+                        let mut used_vicado = false;
                         let mut markdown_ran = false;
                         let mut quiz_pending = false;
                         if let Some(pstr) = task.plugin.as_deref() {
@@ -461,7 +510,7 @@ fn run_from_config() -> ExitCode {
                                 }
 
                                 match name {
-                                    "micomatter" => {
+                                    "micromatter" => {
                                         events = pendon_plugin_micomatter::process(&events);
                                     }
                                     "quiz" => {
@@ -474,6 +523,19 @@ fn run_from_config() -> ExitCode {
                                         } else {
                                             quiz_pending = true;
                                         }
+                                    }
+                                    "dialog" => {
+                                        events = process_dialog(&events);
+                                    }
+                                    "img" => {
+                                        events = process_img(&events);
+                                    }
+                                    "wiki" => {
+                                        events = process_wiki(&events, task_wiki_opts.clone());
+                                    }
+                                    "vicado" => {
+                                        used_vicado = true;
+                                        events = process_vicado(&events);
                                     }
                                     "markdown" => {
                                         events = pendon_plugin_markdown::process_with_options(
@@ -492,7 +554,7 @@ fn run_from_config() -> ExitCode {
                                     "extract-heading" => {
                                         events = pendon_plugin_extract_heading::process(&events);
                                     }
-                                    "codeblock-syntect" => {
+                                    "syntect" => {
                                         events = pendon_plugin_codeblock_syntect::process(&events);
                                     }
                                     other => {
@@ -510,6 +572,13 @@ fn run_from_config() -> ExitCode {
                         }
                         if used_quiz {
                             builtin_hints.push(quiz_solid_hints());
+                        }
+                        if used_vicado {
+                            if let Some(override_hints) = vicado_hints_override.as_ref() {
+                                builtin_hints.push(override_hints.clone());
+                            } else {
+                                builtin_hints.push(vicado_solid_hints());
+                            }
                         }
                         if exit != ExitCode::SUCCESS {
                             continue;
@@ -739,35 +808,7 @@ fn build_solid_hints(specs: &[PluginSpec]) -> SolidRenderHints {
                 }
             }
 
-            let mut parsed_imports: Vec<ImportEntry> = Vec::new();
-            for val in &renderer.imports {
-                match val {
-                    toml::Value::String(s) => parsed_imports.push(ImportEntry::Raw(s.clone())),
-                    toml::Value::Table(tbl) => {
-                        if let Some(module) = tbl.get("module").and_then(|v| v.as_str()) {
-                            let default = tbl
-                                .get("default")
-                                .and_then(|v| v.as_str())
-                                .map(|s| s.to_string());
-                            let names = tbl
-                                .get("names")
-                                .and_then(|v| v.as_array())
-                                .map(|arr| {
-                                    arr.iter()
-                                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                                        .collect::<Vec<String>>()
-                                })
-                                .unwrap_or_default();
-                            parsed_imports.push(ImportEntry::Structured {
-                                module: module.to_string(),
-                                default,
-                                names,
-                            });
-                        }
-                    }
-                    _ => {}
-                }
-            }
+            let parsed_imports = parse_import_entries(&renderer.imports);
 
             if let Some(tpl) = &renderer.component_template {
                 for key in &keys {
@@ -799,6 +840,58 @@ fn build_solid_hints(specs: &[PluginSpec]) -> SolidRenderHints {
     }
 
     hints
+}
+
+fn parse_import_entries(imports: &[toml::Value]) -> Vec<ImportEntry> {
+    let mut parsed_imports: Vec<ImportEntry> = Vec::new();
+    for val in imports {
+        match val {
+            toml::Value::String(s) => parsed_imports.push(ImportEntry::Raw(s.clone())),
+            toml::Value::Table(tbl) => {
+                if let Some(module) = tbl.get("module").and_then(|v| v.as_str()) {
+                    let default = tbl
+                        .get("default")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    let names = tbl
+                        .get("names")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                .collect::<Vec<String>>()
+                        })
+                        .unwrap_or_default();
+                    parsed_imports.push(ImportEntry::Structured {
+                        module: module.to_string(),
+                        default,
+                        names,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+    parsed_imports
+}
+
+fn build_vicado_hints_override(cfg: Option<&PluginVicadoSection>) -> Option<SolidRenderHints> {
+    let imports = cfg
+        .and_then(|c| c.renderer.as_ref())
+        .and_then(|r| r.solid.as_ref())
+        .and_then(|s| s.imports.as_ref())
+        .map(|vals| parse_import_entries(vals))
+        .unwrap_or_default();
+
+    if imports.is_empty() {
+        return None;
+    }
+
+    let mut hints = vicado_solid_hints();
+    hints
+        .template_imports
+        .insert(("Vicado".to_string(), Some("Vicado".to_string())), imports);
+    Some(hints)
 }
 
 fn merge_solid_hints(
