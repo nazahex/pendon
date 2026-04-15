@@ -20,7 +20,7 @@ Wraps documents in semantic `Section` nodes driven by heading levels. It normali
 Typical pipeline:
 
 ```bash
-pendon --plugin micomatter,markdown,sectionize --format ast --input ./doc.md
+pendon --plugin micromatter,markdown,sectionize --format ast --input ./doc.md
 ```
 
 Library:

@@ -28,7 +28,7 @@ Builds a nested outline of document headings and injects it as a `Custom("Headin
 Recommended pipeline:
 
 ```bash
-pendon --plugin micomatter,markdown,sectionize,extract-heading --format json --input ./doc.md
+pendon --plugin micromatter,markdown,sectionize,extract-heading --format json --input ./doc.md
 ```
 
 Library:

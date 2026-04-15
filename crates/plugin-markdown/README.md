@@ -23,10 +23,10 @@ let events = process_with_options(&parsed, opts);
 
 ## Usage
 
-CLI (with micomatter frontmatter parser first):
+CLI (with micromatter frontmatter parser first):
 
 ```bash
-pendon --plugin micomatter,markdown --format json --input ./doc.md
+pendon --plugin micromatter,markdown --format json --input ./doc.md
 ```
 
 Library:
