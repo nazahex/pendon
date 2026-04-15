@@ -1,0 +1,11 @@
+[package]
+name = "pendon-plugin-vicado"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "Vicado code fence plugin for Pendon"
+
+[dependencies]
+pendon-core = { path = "../core" }
+pendon-renderer-solid = { path = "../renderer-solid" }
+serde_json = "1"
