@@ -6,6 +6,7 @@ use pendon_core::{parse, Options};
 use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
 use pendon_plugin_dialog::process as process_dialog;
 use pendon_plugin_img::process as process_img;
+use pendon_plugin_latex::process as process_latex;
 use pendon_plugin_markdown::MarkdownOptions;
 use pendon_plugin_quiz::{process as process_quiz, solid_hints as quiz_solid_hints};
 use pendon_plugin_vicado::{process as process_vicado, solid_hints as vicado_solid_hints};
@@ -194,7 +195,7 @@ fn main() -> ExitCode {
             }
 
             ev = match name {
-                "micromatter" => pendon_plugin_micomatter::process(&ev),
+                "micromatter" => pendon_plugin_micromatter::process(&ev),
                 "quiz" => {
                     used_quiz = true;
                     if markdown_ran {
@@ -206,6 +207,7 @@ fn main() -> ExitCode {
                 }
                 "dialog" => process_dialog(&ev),
                 "img" => process_img(&ev),
+                "latex" => process_latex(&ev),
                 "wiki" => process_wiki(&ev, wiki_opts.clone()),
                 "vicado" => {
                     used_vicado = true;
@@ -511,7 +513,7 @@ fn run_from_config() -> ExitCode {
 
                                 match name {
                                     "micromatter" => {
-                                        events = pendon_plugin_micomatter::process(&events);
+                                        events = pendon_plugin_micromatter::process(&events);
                                     }
                                     "quiz" => {
                                         used_quiz = true;
@@ -529,6 +531,9 @@ fn run_from_config() -> ExitCode {
                                     }
                                     "img" => {
                                         events = process_img(&events);
+                                    }
+                                    "latex" => {
+                                        events = process_latex(&events);
                                     }
                                     "wiki" => {
                                         events = process_wiki(&events, task_wiki_opts.clone());
