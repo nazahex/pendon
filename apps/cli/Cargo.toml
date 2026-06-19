@@ -12,8 +12,9 @@ pendon-plugin-custom = { path = "../../crates/plugin-custom" }
 pendon-plugin-dialog = { path = "../../crates/plugin-dialog" }
 pendon-plugin-extract-heading = { path = "../../crates/plugin-extract-heading" }
 pendon-plugin-img = { path = "../../crates/plugin-img" }
+pendon-plugin-latex = { path = "../../crates/plugin-latex" }
 pendon-plugin-markdown = { path = "../../crates/plugin-markdown" }
-pendon-plugin-micomatter = { path = "../../crates/plugin-micomatter" }
+pendon-plugin-micromatter = { path = "../../crates/plugin-micromatter" }
 pendon-plugin-quiz = { path = "../../crates/plugin-quiz" }
 pendon-plugin-sectionize = { path = "../../crates/plugin-sectionize" }
 pendon-plugin-vicado = { path = "../../crates/plugin-vicado" }
