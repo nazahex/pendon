@@ -296,7 +296,11 @@ fn parse_optional_attrs(input: &str) -> (AttrSpec, &str, bool) {
     let mut spec = AttrSpec::default();
 
     if let Some(class_block) = class_block {
-        for token in class_block.split(',').map(|t| t.trim()).filter(|t| !t.is_empty()) {
+        for token in class_block
+            .split(',')
+            .map(|t| t.trim())
+            .filter(|t| !t.is_empty())
+        {
             if let Some(class_name) = token.strip_prefix('.') {
                 if !class_name.is_empty() {
                     spec.classes.push(class_name.to_string());
@@ -433,7 +437,10 @@ fn render_inline_fragment(input: &str) -> String {
     let parsed = parse(input, &Options::default());
     let rendered = pendon_renderer_html::render_html(&process_markdown(&parsed));
     let trimmed = rendered.trim();
-    if let Some(inner) = trimmed.strip_prefix("<p>").and_then(|s| s.strip_suffix("</p>")) {
+    if let Some(inner) = trimmed
+        .strip_prefix("<p>")
+        .and_then(|s| s.strip_suffix("</p>"))
+    {
         return inner.trim().to_string();
     }
     trimmed.to_string()
@@ -496,9 +503,7 @@ mod tests {
 
     #[test]
     fn renders_figure_with_markdown_caption() {
-        let events = paragraph_events(
-            "!![Alt](https://x.test/a.webp) Caption **bold** [link](/x)",
-        );
+        let events = paragraph_events("!![Alt](https://x.test/a.webp) Caption **bold** [link](/x)");
         let out = process(&events);
         let html = out
             .iter()
@@ -510,7 +515,9 @@ mod tests {
 
         assert!(html.contains("<figure>"));
         assert!(html.contains("<img alt=\"Alt\" src=\"https://x.test/a.webp\" />"));
-        assert!(html.contains("<figcaption>Caption <strong>bold</strong> <a href=\"/x\">link</a></figcaption>"));
+        assert!(html.contains(
+            "<figcaption>Caption <strong>bold</strong> <a href=\"/x\">link</a></figcaption>"
+        ));
     }
 
     #[test]
@@ -552,7 +559,8 @@ mod tests {
 
     #[test]
     fn renders_figure_attributes_without_class_block() {
-        let events = paragraph_events("!![Alt](https://x.test/a.webp){foo: \"bar\", --r: \"5deg\"}");
+        let events =
+            paragraph_events("!![Alt](https://x.test/a.webp){foo: \"bar\", --r: \"5deg\"}");
         let out = process(&events);
         let html = out
             .iter()
