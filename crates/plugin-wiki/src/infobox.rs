@@ -15,7 +15,8 @@ pub(crate) fn process_infobox(events: &[Event], options: &WikiOptions) -> Vec<Ev
             if let Some(start_end) = find_matching_end(events, i, NodeKind::Paragraph) {
                 let marker = collect_text(&events[i + 1..start_end]);
                 if let Some(classes) = parse_infobox_start(marker.trim()) {
-                    if let Some((close_start, close_end)) = find_infobox_close(events, start_end + 1)
+                    if let Some((close_start, close_end)) =
+                        find_infobox_close(events, start_end + 1)
                     {
                         let inner = &events[start_end + 1..close_start];
                         let html = render_infobox(inner, classes.as_deref(), options);
@@ -238,7 +239,10 @@ fn parse_inline_div_block(raw: &str) -> Option<(String, String)> {
         }
     }
 
-    if let Some(body) = trimmed.strip_prefix("::").and_then(|s| s.strip_suffix("::")) {
+    if let Some(body) = trimmed
+        .strip_prefix("::")
+        .and_then(|s| s.strip_suffix("::"))
+    {
         return Some((String::new(), body.trim().to_string()));
     }
 
@@ -298,7 +302,10 @@ fn render_fragment(input: &str) -> String {
 }
 
 fn strip_single_paragraph_wrapper(html: &str) -> String {
-    if let Some(inner) = html.strip_prefix("<p>").and_then(|s| s.strip_suffix("</p>")) {
+    if let Some(inner) = html
+        .strip_prefix("<p>")
+        .and_then(|s| s.strip_suffix("</p>"))
+    {
         return inner.trim().to_string();
     }
     html.trim().to_string()
