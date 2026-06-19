@@ -40,7 +40,7 @@ pub(crate) fn emit_wikilink_text(text: &str, out: &mut Vec<Event>, options: &Wik
             out.push(Event::Text(text[cursor..start].to_string()));
         }
         let after_open = start + 2;
-        if let Some(end_rel) = text[after_open..].find("]]" ) {
+        if let Some(end_rel) = text[after_open..].find("]]") {
             let end = after_open + end_rel;
             let raw = text[after_open..end].trim();
             if let Some(link) = parse_wikilink(raw, options) {
@@ -78,7 +78,7 @@ pub(crate) fn rewrite_wikilink_markdown(input: &str, options: &WikiOptions) -> S
         let start = cursor + start_rel;
         out.push_str(&input[cursor..start]);
         let after_open = start + 2;
-        if let Some(end_rel) = input[after_open..].find("]]" ) {
+        if let Some(end_rel) = input[after_open..].find("]]") {
             let end = after_open + end_rel;
             let raw = input[after_open..end].trim();
             if let Some(link) = parse_wikilink(raw, options) {
