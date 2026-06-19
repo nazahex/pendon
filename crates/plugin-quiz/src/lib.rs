@@ -71,8 +71,11 @@ fn find_marker(events: &[Event], start: usize, marker: &str) -> Option<(usize, u
 }
 
 fn build_quiz_component(inner: &[Event]) -> Option<Vec<Event>> {
-    let list_range = find_first_range(inner, |k| {
-        matches!(k, NodeKind::BulletList | NodeKind::OrderedList)
+    // Prioritize list with checkbox items; fallback to first list
+    let list_range = find_checkbox_list_range(inner).or_else(|| {
+        find_first_range(inner, |k| {
+            matches!(k, NodeKind::BulletList | NodeKind::OrderedList)
+        })
     });
     let (feedback_range, feedback) = find_feedback(inner);
 
@@ -138,6 +141,35 @@ where
         i += 1;
     }
     None
+}
+
+fn find_checkbox_list_range(events: &[Event]) -> Option<(usize, usize)> {
+    let mut i = 0usize;
+    while i < events.len() {
+        if let Event::StartNode(kind) = &events[i] {
+            if matches!(kind, NodeKind::BulletList | NodeKind::OrderedList) {
+                if let Some(end) = matching_end(events, i) {
+                    let list_events = &events[i..=end];
+                    if has_checkbox_items(list_events) {
+                        return Some((i, end));
+                    }
+                    i = end + 1;
+                    continue;
+                }
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+fn has_checkbox_items(list_events: &[Event]) -> bool {
+    let text = collect_text(list_events);
+    if let Ok(re) = Regex::new(r"\[[ xX]\]") {
+        re.is_match(&text)
+    } else {
+        false
+    }
 }
 
 fn matching_end(events: &[Event], start_idx: usize) -> Option<usize> {
