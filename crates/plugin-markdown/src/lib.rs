@@ -183,6 +183,22 @@ mod tests {
     }
 
     #[test]
+    fn parses_triple_asterisk_as_nested_strong_emphasis() {
+        let opts = MarkdownOptions::default();
+        let events = run_markdown("Foo ***bar*** baz.\n", opts);
+
+        assert!(events.windows(7).any(|window| {
+            matches!(window[0], Event::StartNode(NodeKind::Strong))
+                && matches!(window[1], Event::StartNode(NodeKind::Emphasis))
+                && matches!(window[2], Event::Text(ref text) if text == "b")
+                && matches!(window[3], Event::Text(ref text) if text == "a")
+                && matches!(window[4], Event::Text(ref text) if text == "r")
+                && matches!(window[5], Event::EndNode(NodeKind::Emphasis))
+                && matches!(window[6], Event::EndNode(NodeKind::Strong))
+        }));
+    }
+
+    #[test]
     fn keeps_inline_link_inside_list_item_for_preprocessed_events() {
         let opts = MarkdownOptions::default();
         let events = vec![

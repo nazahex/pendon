@@ -8,7 +8,10 @@ use crate::helpers::{
 };
 
 pub fn handle(ctx: &mut ParseContext, s: &str) {
-    if matches!(ctx.stack.last(), Some(NodeKind::HtmlBlock | NodeKind::HtmlInline)) {
+    if matches!(
+        ctx.stack.last(),
+        Some(NodeKind::HtmlBlock | NodeKind::HtmlInline)
+    ) {
         ctx.out.push(Event::Text(s.to_string()));
         ctx.at_line_start = s == "\n";
         return;

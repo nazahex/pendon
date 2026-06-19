@@ -97,7 +97,8 @@ pub fn emit_inline(s: &str, out: &mut Vec<Event>, opts: MarkdownOptions) {
                     if close_br + 1 < bytes.len() && bytes[close_br + 1] == '(' {
                         if let Some(close_par) = find_next(&bytes, close_br + 2, ')') {
                             let alt: String = bytes[i + 2..close_br].iter().collect();
-                            let raw_target: String = bytes[close_br + 2..close_par].iter().collect();
+                            let raw_target: String =
+                                bytes[close_br + 2..close_par].iter().collect();
                             let (src, title) = parse_target_and_title(&raw_target);
                             out.push(Event::StartNode(NodeKind::Image));
                             out.push(Event::Attribute {
@@ -167,8 +168,20 @@ pub fn emit_inline(s: &str, out: &mut Vec<Event>, opts: MarkdownOptions) {
                 }
             }
         }
+        if i + 2 < bytes.len() && bytes[i] == '*' && bytes[i + 1] == '*' && bytes[i + 2] == '*' {
+            if let Some(end) = find_delim_run(&bytes, i + 3, '*', 3) {
+                out.push(Event::StartNode(NodeKind::Strong));
+                out.push(Event::StartNode(NodeKind::Emphasis));
+                let content: String = bytes[i + 3..end].iter().collect();
+                emit_inline(&content, out, opts);
+                out.push(Event::EndNode(NodeKind::Emphasis));
+                out.push(Event::EndNode(NodeKind::Strong));
+                i = end + 3;
+                continue;
+            }
+        }
         if i + 1 < bytes.len() && bytes[i] == '*' && bytes[i + 1] == '*' {
-            if let Some(end) = find_delim_pair(&bytes, i + 2, b'*', true) {
+            if let Some(end) = find_delim_run(&bytes, i + 2, '*', 2) {
                 out.push(Event::StartNode(NodeKind::Strong));
                 let content: String = bytes[i + 2..end].iter().collect();
                 emit_inline(&content, out, opts);
@@ -178,7 +191,7 @@ pub fn emit_inline(s: &str, out: &mut Vec<Event>, opts: MarkdownOptions) {
             }
         }
         if i + 1 < bytes.len() && bytes[i] == '_' && bytes[i + 1] == '_' {
-            if let Some(end) = find_delim_pair(&bytes, i + 2, b'_', true) {
+            if let Some(end) = find_delim_run(&bytes, i + 2, '_', 2) {
                 out.push(Event::StartNode(NodeKind::Bold));
                 let content: String = bytes[i + 2..end].iter().collect();
                 emit_inline(&content, out, opts);
@@ -188,7 +201,7 @@ pub fn emit_inline(s: &str, out: &mut Vec<Event>, opts: MarkdownOptions) {
             }
         }
         if bytes[i] == '*' {
-            if let Some(end) = find_next(&bytes, i + 1, '*') {
+            if let Some(end) = find_delim_run(&bytes, i + 1, '*', 1) {
                 out.push(Event::StartNode(NodeKind::Emphasis));
                 let content: String = bytes[i + 1..end].iter().collect();
                 emit_inline(&content, out, opts);
@@ -198,7 +211,7 @@ pub fn emit_inline(s: &str, out: &mut Vec<Event>, opts: MarkdownOptions) {
             }
         }
         if bytes[i] == '_' {
-            if let Some(end) = find_next(&bytes, i + 1, '_') {
+            if let Some(end) = find_delim_run(&bytes, i + 1, '_', 1) {
                 out.push(Event::StartNode(NodeKind::Italic));
                 let content: String = bytes[i + 1..end].iter().collect();
                 emit_inline(&content, out, opts);
@@ -256,18 +269,11 @@ fn find_next(hay: &[char], mut i: usize, ch: char) -> Option<usize> {
     None
 }
 
-fn find_delim_pair(hay: &[char], start: usize, delim: u8, double: bool) -> Option<usize> {
-    let d = delim as char;
+fn find_delim_run(hay: &[char], start: usize, delim: char, width: usize) -> Option<usize> {
     let mut i = start;
-    while i + if double { 1 } else { 0 } < hay.len() {
-        if hay[i] == d {
-            if double {
-                if i + 1 < hay.len() && hay[i + 1] == d {
-                    return Some(i);
-                }
-            } else {
-                return Some(i);
-            }
+    while i + width <= hay.len() {
+        if hay[i..i + width].iter().all(|c| *c == delim) {
+            return Some(i);
         }
         i += 1;
     }

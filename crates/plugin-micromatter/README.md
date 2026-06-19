@@ -1,13 +1,13 @@
 # pendon-plugin-micromatter
 
-Micomatter is a safe, YAML-inspired frontmatter parser for Pendon. It accepts a small, predictable subset and emits a `Frontmatter` node with a single `data` attribute containing normalized JSON. Renderers can then expose the data without re-parsing.
+Micromatter is a frontmatter parser for Pendon that uses full YAML parsing. It emits a `Frontmatter` node with a single `data` attribute containing normalized JSON, so renderers can expose the data without re-parsing.
 
-## Format (flat YAML subset)
+## Format (full YAML)
 
-- Allowed value types: booleans (`true`/`false`), integers, floats, strings (quoted or bare), and homogeneous arrays of those scalars.
-- Not allowed: indentation, nested objects, multiline strings, anchors/aliases, implicit truthy values, date auto-parsing.
-- Comments start with `#` outside quoted strings and are stripped.
-- Arrays must be single-type (e.g., all strings or all numbers); mixed arrays are rejected.
+- Any valid YAML document inside the leading and trailing `---` fences is accepted.
+- Nested mappings, sequences, block scalars, booleans, numbers, nulls, anchors, aliases, and quoted strings are supported by the YAML parser.
+- Parsed YAML is converted to JSON and stored in `attrs.data`.
+- Mapping keys must still be scalar values so they can be represented in JSON.
 
 Example:
 
@@ -50,8 +50,7 @@ plugin = "micromatter,markdown"
 Typical error messages:
 
 - `[micromatter] missing closing ---`
-- `[micromatter] missing ':' on frontmatter line N`
-- `[micromatter] mixed array types`
-- `[micromatter] unterminated quoted string`
+- `[micromatter] invalid YAML frontmatter: ...`
+- `[micromatter] YAML mapping keys must be scalar values`
 
 Use `--strict` to treat these diagnostics as errors for the CLI exit code.
