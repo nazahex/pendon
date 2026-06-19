@@ -12,7 +12,10 @@ pub fn render_inline_markdown(input: &str) -> String {
 }
 
 fn strip_single_paragraph_wrapper(html: &str) -> String {
-    if let Some(inner) = html.strip_prefix("<p>").and_then(|s| s.strip_suffix("</p>")) {
+    if let Some(inner) = html
+        .strip_prefix("<p>")
+        .and_then(|s| s.strip_suffix("</p>"))
+    {
         return inner.trim().to_string();
     }
     html.trim().to_string()

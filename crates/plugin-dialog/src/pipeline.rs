@@ -129,7 +129,9 @@ mod tests {
         ];
 
         let out = process(&events);
-        assert!(!out.iter().any(|ev| matches!(ev, Event::StartNode(NodeKind::HtmlBlock))));
+        assert!(!out
+            .iter()
+            .any(|ev| matches!(ev, Event::StartNode(NodeKind::HtmlBlock))));
     }
 
     #[test]
@@ -143,6 +145,8 @@ mod tests {
         ];
 
         let out = process(&events);
-        assert!(out.iter().any(|ev| matches!(ev, Event::StartNode(NodeKind::HtmlBlock))));
+        assert!(out
+            .iter()
+            .any(|ev| matches!(ev, Event::StartNode(NodeKind::HtmlBlock))));
     }
 }
