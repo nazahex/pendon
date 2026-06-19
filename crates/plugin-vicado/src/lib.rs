@@ -414,8 +414,14 @@ mod tests {
         assert_eq!(spec.language, "typescript");
         assert_eq!(spec.class_name.as_deref(), Some("class class2"));
         assert_eq!(spec.id.as_deref(), Some("root"));
-        assert_eq!(spec.props.get("mount"), Some(&Value::String("visible".to_string())));
-        assert_eq!(spec.props.get("foo"), Some(&Value::String("baz".to_string())));
+        assert_eq!(
+            spec.props.get("mount"),
+            Some(&Value::String("visible".to_string()))
+        );
+        assert_eq!(
+            spec.props.get("foo"),
+            Some(&Value::String("baz".to_string()))
+        );
         assert_eq!(spec.props.get("baz"), Some(&Value::Number(89.into())));
     }
 
