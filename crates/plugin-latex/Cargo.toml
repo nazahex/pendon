@@ -1,0 +1,10 @@
+[package]
+name = "pendon-plugin-latex"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "LaTeX syntax plugin for Pendon using katex rendering"
+
+[dependencies]
+katex = "0.4.6"
+pendon-core = { path = "../core" }
