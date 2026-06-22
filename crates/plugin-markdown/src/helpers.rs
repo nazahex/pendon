@@ -1,5 +1,6 @@
 use pendon_core::{Event, NodeKind};
 
+use crate::math::math_region_end;
 use crate::MarkdownOptions;
 
 pub fn parse_blockquote_prefix(line: &str) -> (usize, &str) {
@@ -90,6 +91,12 @@ pub fn emit_inline(s: &str, out: &mut Vec<Event>, opts: MarkdownOptions) {
     let bytes: Vec<char> = s.chars().collect();
     let mut i = 0usize;
     while i < bytes.len() {
+        if let Some(end) = math_region_end(&bytes, i) {
+            let content: String = bytes[i..end].iter().collect();
+            out.push(Event::Text(content));
+            i = end;
+            continue;
+        }
         if bytes[i] == '!' && i + 1 < bytes.len() && bytes[i + 1] == '[' {
             // Keep !![...](...) reserved for plugin-img advanced figure syntax.
             if i == 0 || bytes[i.saturating_sub(1)] != '!' {

@@ -3,6 +3,7 @@ use pendon_core::Event;
 mod context;
 mod end;
 mod helpers;
+mod math;
 mod start;
 mod text;
 
@@ -261,5 +262,68 @@ mod tests {
         assert_eq!(bullet_starts, 1);
         assert_eq!(bullet_ends, 1);
         assert!(saw_paragraph_after_list);
+    }
+
+    fn has_node(events: &[Event], kind: NodeKind) -> bool {
+        events
+            .iter()
+            .any(|ev| matches!(ev, Event::StartNode(k) if *k == kind))
+    }
+
+    fn text_contains(events: &[Event], needle: &str) -> bool {
+        events
+            .iter()
+            .any(|ev| matches!(ev, Event::Text(t) if t.contains(needle)))
+    }
+
+    #[test]
+    fn preserves_underscores_inside_inline_math() {
+        let opts = MarkdownOptions::default();
+        let events = run_markdown("Variabel $O_{m}$ di sini.\n", opts);
+        assert!(!has_node(&events, NodeKind::Italic));
+        assert!(text_contains(&events, "$O_{m}$"));
+    }
+
+    #[test]
+    fn preserves_asterisks_inside_display_math() {
+        let opts = MarkdownOptions::default();
+        let events = run_markdown("$$f(x) = a * x^{2} + b * x + c$$\n", opts);
+        assert!(!has_node(&events, NodeKind::Emphasis));
+        assert!(text_contains(&events, "a * x"));
+    }
+
+    #[test]
+    fn preserves_backslash_in_multiline_display_math() {
+        let opts = MarkdownOptions::default();
+        let src = "$$\\begin{aligned}\nA &= B \\\\\nC &= D\n\\end{aligned}$$\n";
+        let events = run_markdown(src, opts);
+        assert!(!html_text(&events, NodeKind::HtmlInline).is_some_and(|h| h == "<br />"));
+        assert!(text_contains(&events, "\\\\"));
+    }
+
+    #[test]
+    fn italic_outside_math_still_works() {
+        let opts = MarkdownOptions::default();
+        let events = run_markdown("_garis bawah untuk miring_\n", opts);
+        assert!(has_node(&events, NodeKind::Italic));
+    }
+
+    fn all_text(events: &[Event]) -> String {
+        events
+            .iter()
+            .filter_map(|ev| match ev {
+                Event::Text(t) => Some(t.as_str()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn dollar_amount_is_not_treated_as_math() {
+        let opts = MarkdownOptions::default();
+        let events = run_markdown("Nilai $100 dan $500.\n", opts);
+        let text = all_text(&events);
+        assert!(text.contains("$100"));
+        assert!(text.contains("$500"));
     }
 }

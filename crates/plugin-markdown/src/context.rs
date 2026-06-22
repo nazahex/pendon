@@ -31,6 +31,7 @@ pub struct ParseContext {
     pub(crate) options: MarkdownOptions,
     pub(crate) last_line_text: Option<String>,
     pub(crate) previous_line_blank: bool,
+    pub(crate) display_math_open: bool,
 }
 
 impl ParseContext {
@@ -54,6 +55,7 @@ impl ParseContext {
             options,
             last_line_text: None,
             previous_line_blank: false,
+            display_math_open: false,
         }
     }
 

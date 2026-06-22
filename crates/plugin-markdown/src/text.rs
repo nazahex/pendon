@@ -6,6 +6,16 @@ use crate::helpers::{
     emit_table_row, is_table_row, is_table_separator, parse_blockquote_prefix, split_table_cells,
     start_table,
 };
+use crate::math::toggle_display_math_on_line;
+
+fn emit_line_content(ctx: &mut ParseContext, line: &str) {
+    if ctx.display_math_open {
+        ctx.out.push(Event::Text(line.to_string()));
+    } else {
+        emit_inline(line, &mut ctx.out, ctx.options);
+    }
+    toggle_display_math_on_line(line, &mut ctx.display_math_open);
+}
 
 pub fn handle(ctx: &mut ParseContext, s: &str) {
     if matches!(
@@ -22,6 +32,11 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
     }
 
     if s == "\n" {
+        if ctx.display_math_open {
+            ctx.out.push(Event::Text("\n".to_string()));
+            ctx.at_line_start = true;
+            return;
+        }
         let blank_line = ctx.at_line_start;
         if ctx.use_line_break() {
             ctx.at_line_start = true;
@@ -166,7 +181,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                     ctx.pending_para_start = false;
                     let tail = &line[(consumed + 2)..];
                     if !tail.is_empty() {
-                        emit_inline(tail, &mut ctx.out, ctx.options);
+                        emit_line_content(ctx, tail);
                     }
                     ctx.at_line_start = false;
                     return;
@@ -185,7 +200,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             ctx.pending_para_start = false;
             let tail = &line[2..];
             if !tail.is_empty() {
-                emit_inline(tail, &mut ctx.out, ctx.options);
+                emit_line_content(ctx, tail);
             }
             ctx.at_line_start = false;
             return;
@@ -201,7 +216,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                 }
                 let tail = line;
                 if !tail.is_empty() {
-                    emit_inline(tail, &mut ctx.out, ctx.options);
+                    emit_line_content(ctx, tail);
                 }
                 ctx.at_line_start = false;
                 return;
@@ -229,7 +244,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             }
             ctx.heading_prefix_consumed = true;
         }
-        emit_inline(&line, &mut ctx.out, ctx.options);
+        emit_line_content(ctx, &line);
     } else if ctx.in_code_fence {
         let trimmed = line.trim();
         if !trimmed.is_empty() && trimmed.chars().all(|c| c == '`') {
@@ -237,7 +252,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
         }
         ctx.out.push(Event::Text(line.clone()));
     } else if ctx.in_list_item() {
-        emit_inline(&line, &mut ctx.out, ctx.options);
+        emit_line_content(ctx, &line);
     } else {
         if ctx.skip_backticks_once {
             let trimmed = line.trim();
@@ -255,7 +270,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             ctx.emit_start(NodeKind::Paragraph);
             ctx.pending_para_start = false;
         }
-        emit_inline(&line, &mut ctx.out, ctx.options);
+        emit_line_content(ctx, &line);
     }
     ctx.at_line_start = false;
 }

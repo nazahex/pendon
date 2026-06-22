@@ -1,10 +1,8 @@
 use pendon_core::{Event, NodeKind};
 
 pub fn process(events: &[Event]) -> Vec<Event> {
-    // 1. Merge adjacent text events to handle multiline formula blocks cleanly
     let merged = merge_adjacent_text(events.to_vec());
 
-    // 2. Process math parsing on non-excluded text events
     let mut out = Vec::with_capacity(merged.len());
     let mut exclude_depth: usize = 0;
 
@@ -67,14 +65,12 @@ fn process_text(text: &str, out: &mut Vec<Event>) {
     };
 
     while cursor < len {
-        // Look for escaped dollar sign "\$"
         if chars[cursor] == '\\' && cursor + 1 < len && chars[cursor + 1] == '$' {
             normal_text.push('$');
             cursor += 2;
             continue;
         }
 
-        // Look for block math "$$"
         if cursor + 1 < len && chars[cursor] == '$' && chars[cursor + 1] == '$' {
             let start = cursor;
             let mut end = cursor + 2;
@@ -99,14 +95,16 @@ fn process_text(text: &str, out: &mut Vec<Event>) {
 
                 match katex::render_with_opts(&formula, &opts) {
                     Ok(html) => {
+                        let escaped_html = html.replace('\\', "\\\\").replace('`', "\\`");
+                        let wrapper = format!("<span class=\"latex latex-block\" style=\"display: block;\" innerHTML={{`{}`}}></span>", escaped_html);
                         out.push(Event::StartNode(NodeKind::HtmlBlock));
-                        out.push(Event::Text(html));
+                        out.push(Event::Text(wrapper));
                         out.push(Event::EndNode(NodeKind::HtmlBlock));
                     }
                     Err(err) => {
                         out.push(Event::StartNode(NodeKind::HtmlBlock));
                         out.push(Event::Text(format!(
-                            "<span class=\"katex-error\">{}</span>",
+                            "<span class=\"latex-error\" style=\"display: block;\">{}</span>",
                             err
                         )));
                         out.push(Event::EndNode(NodeKind::HtmlBlock));
@@ -117,7 +115,6 @@ fn process_text(text: &str, out: &mut Vec<Event>) {
             }
         }
 
-        // Look for inline math "$"
         if chars[cursor] == '$' {
             let start = cursor;
             let mut end = cursor + 1;
@@ -147,14 +144,19 @@ fn process_text(text: &str, out: &mut Vec<Event>) {
 
                 match katex::render_with_opts(&formula, &opts) {
                     Ok(html) => {
+                        let escaped_html = html.replace('\\', "\\\\").replace('`', "\\`");
+                        let wrapper = format!(
+                            "<span class=\"latex latex-inline\" innerHTML={{`{}`}}></span>",
+                            escaped_html
+                        );
                         out.push(Event::StartNode(NodeKind::HtmlInline));
-                        out.push(Event::Text(html));
+                        out.push(Event::Text(wrapper));
                         out.push(Event::EndNode(NodeKind::HtmlInline));
                     }
                     Err(err) => {
                         out.push(Event::StartNode(NodeKind::HtmlInline));
                         out.push(Event::Text(format!(
-                            "<span class=\"katex-error\">{}</span>",
+                            "<span class=\"latex-error\">{}</span>",
                             err
                         )));
                         out.push(Event::EndNode(NodeKind::HtmlInline));
@@ -165,7 +167,6 @@ fn process_text(text: &str, out: &mut Vec<Event>) {
             }
         }
 
-        // Otherwise, consume one character as normal text
         normal_text.push(chars[cursor]);
         cursor += 1;
     }
@@ -184,7 +185,7 @@ mod tests {
         assert_eq!(res.len(), 5);
         assert_eq!(res[0], Event::Text("Einstein: ".to_string()));
         assert_eq!(res[1], Event::StartNode(NodeKind::HtmlInline));
-        assert!(matches!(&res[2], Event::Text(h) if h.contains("class=\"katex\"")));
+        assert!(matches!(&res[2], Event::Text(h) if h.contains("innerHTML={`")));
         assert_eq!(res[3], Event::EndNode(NodeKind::HtmlInline));
         assert_eq!(res[4], Event::Text(".".to_string()));
     }
@@ -201,7 +202,7 @@ mod tests {
         let res = process(&events);
         assert_eq!(res.len(), 3);
         assert_eq!(res[0], Event::StartNode(NodeKind::HtmlBlock));
-        assert!(matches!(&res[1], Event::Text(h) if h.contains("class=\"katex-display\"")));
+        assert!(matches!(&res[1], Event::Text(h) if h.contains("innerHTML={`")));
         assert_eq!(res[2], Event::EndNode(NodeKind::HtmlBlock));
     }
 
