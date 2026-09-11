@@ -29,7 +29,14 @@ pub fn process(events: &[Event], spec: &PluginSpec) -> Vec<Event> {
                 continue;
             }
 
+            if !contains_matching_paragraph(&events[start + 1..j], &detector) {
+                out.extend_from_slice(&events[start..j]);
+                i = j;
+                continue;
+            }
+
             let mut k = start + 1;
+            let mut ordinary_blockquote_open = false;
             while k + 1 < j {
                 if matches!(events[k], Event::StartNode(NodeKind::Paragraph)) {
                     let para_start = k;
@@ -48,17 +55,32 @@ pub fn process(events: &[Event], spec: &PluginSpec) -> Vec<Event> {
                     }
 
                     if let Some(caps) = detector.captures(buf.trim()) {
+                        if ordinary_blockquote_open {
+                            out.push(Event::EndNode(NodeKind::Blockquote));
+                            ordinary_blockquote_open = false;
+                        }
                         let (attrs, diags) = attrs::collect_attrs(spec, Some(&caps));
                         out.extend(diags);
                         let cleaned = strip_leading_sigil(&body_events, caps.name("type"));
                         util::emit_component(spec, &attrs, Some(&cleaned), &mut out);
                     } else {
+                        if !ordinary_blockquote_open {
+                            out.push(Event::StartNode(NodeKind::Blockquote));
+                            ordinary_blockquote_open = true;
+                        }
                         out.extend_from_slice(&events[para_start..k]);
                     }
                 } else {
+                    if !ordinary_blockquote_open {
+                        out.push(Event::StartNode(NodeKind::Blockquote));
+                        ordinary_blockquote_open = true;
+                    }
                     out.push(events[k].clone());
                     k += 1;
                 }
+            }
+            if ordinary_blockquote_open {
+                out.push(Event::EndNode(NodeKind::Blockquote));
             }
             i = j;
             continue;
@@ -68,6 +90,27 @@ pub fn process(events: &[Event], spec: &PluginSpec) -> Vec<Event> {
         i += 1;
     }
     out
+}
+
+fn contains_matching_paragraph(events: &[Event], detector: &regex::Regex) -> bool {
+    let mut i = 0usize;
+    while i < events.len() {
+        if matches!(events[i], Event::StartNode(NodeKind::Paragraph)) {
+            let mut text = String::new();
+            i += 1;
+            while i < events.len() && !matches!(events[i], Event::EndNode(NodeKind::Paragraph)) {
+                if let Event::Text(value) = &events[i] {
+                    text.push_str(value);
+                }
+                i += 1;
+            }
+            if detector.is_match(text.trim()) {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
 }
 
 fn strip_leading_sigil(events: &[Event], sigil: Option<Match<'_>>) -> Vec<Event> {
