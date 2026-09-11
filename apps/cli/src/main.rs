@@ -3,6 +3,8 @@ use std::io::{self, Read};
 use std::process::ExitCode;
 
 use pendon_core::{parse, Options};
+use pendon_plugin_anchor::{AnchorCustomNode, AnchorImport, AnchorOptions};
+use pendon_plugin_cite::{CiteCustomNode, CiteImport, CiteOptions, CiteSection};
 use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
 use pendon_plugin_dialog::process as process_dialog;
 use pendon_plugin_img::process as process_img;
@@ -207,6 +209,8 @@ fn main() -> ExitCode {
                 }
                 "dialog" => process_dialog(&ev),
                 "img" => process_img(&ev),
+                "anchor" => pendon_plugin_anchor::process(&ev, &AnchorOptions::default()),
+                "cite" => pendon_plugin_cite::process(&ev, &CiteOptions::default()),
                 "latex" => process_latex(&ev),
                 "wiki" => process_wiki(&ev, wiki_opts.clone()),
                 "vicado" => {
@@ -356,6 +360,46 @@ struct ConfigTask {
     max_doc_bytes: Option<usize>,
     max_line_len: Option<usize>,
     max_blank_run: Option<usize>,
+    cite: Option<CiteTaskConfig>,
+    anchor: Option<AnchorTaskConfig>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct AnchorTaskConfig {
+    custom_node: Option<AnchorCustomNodeConfig>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct AnchorCustomNodeConfig {
+    name: Option<String>,
+    template: Option<String>,
+    imports: Option<Vec<toml::Value>>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct CiteTaskConfig {
+    reference_source: Option<String>,
+    reference_file: Option<String>,
+    prefix: Option<String>,
+    class: Option<String>,
+    id_prefix: Option<String>,
+    custom_node: Option<CiteCustomNodeConfig>,
+    section: Option<CiteSectionConfig>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct CiteCustomNodeConfig {
+    name: Option<String>,
+    template: Option<String>,
+    imports: Option<Vec<toml::Value>>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct CiteSectionConfig {
+    marker: Option<String>,
+    node: Option<String>,
+    template: Option<String>,
+    imports: Option<Vec<toml::Value>>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -486,6 +530,22 @@ fn run_from_config() -> ExitCode {
                         let mut builtin_hints: Vec<SolidRenderHints> = Vec::new();
                         let mut used_quiz = false;
                         let mut used_vicado = false;
+                        let anchor_options = build_anchor_options(task.anchor.as_ref());
+                        let mut anchor_ran = false;
+                        let cite_options = match build_cite_options(
+                            task.cite.as_ref(),
+                            &task.input,
+                            path_str.as_ref(),
+                            Some(&map),
+                        ) {
+                            Ok(options) => options,
+                            Err(message) => {
+                                eprintln!("Error: {}", message);
+                                exit = ExitCode::from(2);
+                                continue;
+                            }
+                        };
+                        let mut cite_ran = false;
                         let mut markdown_ran = false;
                         let mut quiz_pending = false;
                         if let Some(pstr) = task.plugin.as_deref() {
@@ -531,6 +591,16 @@ fn run_from_config() -> ExitCode {
                                     }
                                     "img" => {
                                         events = process_img(&events);
+                                    }
+                                    "anchor" => {
+                                        anchor_ran = true;
+                                        events =
+                                            pendon_plugin_anchor::process(&events, &anchor_options);
+                                    }
+                                    "cite" => {
+                                        cite_ran = true;
+                                        events =
+                                            pendon_plugin_cite::process(&events, &cite_options);
                                     }
                                     "latex" => {
                                         events = process_latex(&events);
@@ -583,6 +653,17 @@ fn run_from_config() -> ExitCode {
                                 builtin_hints.push(override_hints.clone());
                             } else {
                                 builtin_hints.push(vicado_solid_hints());
+                            }
+                        }
+                        if cite_ran {
+                            if let Some(hints) = pendon_plugin_cite::solid_hints(&cite_options) {
+                                builtin_hints.push(hints);
+                            }
+                        }
+                        if anchor_ran {
+                            if let Some(hints) = pendon_plugin_anchor::solid_hints(&anchor_options)
+                            {
+                                builtin_hints.push(hints);
                             }
                         }
                         if exit != ExitCode::SUCCESS {
@@ -783,6 +864,173 @@ fn substitute_output(pattern: &str, vars: &HashMap<String, String>) -> Result<St
         }
     }
     Ok(out)
+}
+
+fn build_cite_options(
+    config: Option<&CiteTaskConfig>,
+    input_pattern: &str,
+    input_path: &str,
+    captures: Option<&HashMap<String, String>>,
+) -> Result<CiteOptions, String> {
+    let Some(config) = config else {
+        return Ok(CiteOptions::default());
+    };
+    let external_references = match config.reference_source.as_deref().unwrap_or("frontmatter") {
+        "frontmatter" | "internal" => None,
+        "external" => {
+            let file = config.reference_file.as_deref().ok_or_else(|| {
+                "cite.reference_file is required for external references".to_string()
+            })?;
+            let captures = captures
+                .ok_or_else(|| format!("cannot resolve cite.reference_file '{}'", input_pattern))?;
+            let mut values = captures.clone();
+            if let Some(slug) = values.get("slug").cloned() {
+                if let Some(chapter) = slug.split('/').next().filter(|part| !part.is_empty()) {
+                    values.insert("chapter_id".to_string(), chapter.to_string());
+                }
+            }
+            let path = substitute_output(file, &values).map_err(|error| {
+                format!(
+                    "cannot resolve cite.reference_file '{}' for '{}': {}",
+                    file, input_path, error
+                )
+            })?;
+            Some(pendon_plugin_cite::load_references(Path::new(&path))?)
+        }
+        source => {
+            return Err(format!(
+            "unsupported cite.reference_source '{}'; expected frontmatter, internal, or external",
+            source
+        ))
+        }
+    };
+    let custom_node = config.custom_node.as_ref().map(|node| CiteCustomNode {
+        name: node.name.clone().unwrap_or_else(|| "Citation".to_string()),
+        template: node.template.clone().unwrap_or_else(|| {
+            "<Citation index={attrs.index} id={attrs.id} loc={attrs.loc} />".to_string()
+        }),
+        imports: node
+            .imports
+            .as_deref()
+            .map(parse_cite_imports)
+            .unwrap_or_default(),
+    });
+    let section = config.section.as_ref().map(|section| {
+        let name = section
+            .node
+            .clone()
+            .unwrap_or_else(|| "CitationSection".to_string());
+        CiteSection {
+            marker: section
+                .marker
+                .clone()
+                .unwrap_or_else(|| "{{ footnote }}".to_string()),
+            name: name.clone(),
+            template: section.template.clone().unwrap_or_else(|| {
+                format!(
+                    "<{name} cites={{frontmatter.cites}} references={{frontmatter.references}} />"
+                )
+            }),
+            imports: section
+                .imports
+                .as_deref()
+                .map(parse_cite_imports)
+                .unwrap_or_default(),
+        }
+    });
+    Ok(CiteOptions {
+        prefix: config
+            .prefix
+            .clone()
+            .unwrap_or_else(|| "citeref-".to_string()),
+        class_name: config
+            .class
+            .clone()
+            .unwrap_or_else(|| "cite-ref".to_string()),
+        id_prefix: config
+            .id_prefix
+            .clone()
+            .unwrap_or_else(|| "cra-".to_string()),
+        custom_node,
+        section,
+        external_references,
+    })
+}
+
+fn build_anchor_options(config: Option<&AnchorTaskConfig>) -> AnchorOptions {
+    let custom_node = config
+        .and_then(|config| config.custom_node.as_ref())
+        .map(|node| AnchorCustomNode {
+            name: node.name.clone().unwrap_or_else(|| "Anchor".to_string()),
+            template: node
+                .template
+                .clone()
+                .unwrap_or_else(|| "<Anchor href=\"{attrs.href}\">{children}</Anchor>".to_string()),
+            imports: node
+                .imports
+                .as_deref()
+                .map(parse_anchor_imports)
+                .unwrap_or_default(),
+        });
+    AnchorOptions { custom_node }
+}
+
+fn parse_anchor_imports(values: &[toml::Value]) -> Vec<AnchorImport> {
+    values
+        .iter()
+        .filter_map(|value| {
+            let table = value.as_table()?;
+            let module = table.get("module")?.as_str()?.to_string();
+            let default = table
+                .get("default")
+                .and_then(|value| value.as_str())
+                .map(str::to_string);
+            let names = table
+                .get("names")
+                .and_then(|value| value.as_array())
+                .map(|values| {
+                    values
+                        .iter()
+                        .filter_map(|value| value.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default();
+            Some(AnchorImport {
+                module,
+                default,
+                names,
+            })
+        })
+        .collect()
+}
+
+fn parse_cite_imports(values: &[toml::Value]) -> Vec<CiteImport> {
+    values
+        .iter()
+        .filter_map(|value| {
+            let table = value.as_table()?;
+            let module = table.get("module")?.as_str()?.to_string();
+            let default = table
+                .get("default")
+                .and_then(|value| value.as_str())
+                .map(str::to_string);
+            let names = table
+                .get("names")
+                .and_then(|value| value.as_array())
+                .map(|values| {
+                    values
+                        .iter()
+                        .filter_map(|value| value.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default();
+            Some(CiteImport {
+                module,
+                default,
+                names,
+            })
+        })
+        .collect()
 }
 
 fn track_used_spec(list: &mut Vec<PluginSpec>, spec: PluginSpec) {
