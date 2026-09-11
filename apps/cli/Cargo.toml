@@ -7,6 +7,8 @@ description = "Pendon CLI"
 
 [dependencies]
 pendon-core = { path = "../../crates/core" }
+pendon-plugin-anchor = { path = "../../crates/plugin-anchor" }
+pendon-plugin-cite = { path = "../../crates/plugin-cite" }
 pendon-plugin-codeblock-syntect = { path = "../../crates/plugin-codeblock-syntect" }
 pendon-plugin-custom = { path = "../../crates/plugin-custom" }
 pendon-plugin-dialog = { path = "../../crates/plugin-dialog" }

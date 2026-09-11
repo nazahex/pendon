@@ -2,8 +2,14 @@
 members = [
   "apps/cli",
   "crates/core",
+  "crates/plugin-anchor",
+  "crates/plugin-cite",
+  "crates/plugin-latex",
+  "crates/plugin-vicado",
+  "crates/plugin-wiki",
   "crates/renderer-json",
   "crates/tui",
+  "tools/scope",
 ]
 resolver = "2"
 
