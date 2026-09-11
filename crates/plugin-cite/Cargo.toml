@@ -1,0 +1,13 @@
+[package]
+name = "pendon-plugin-cite"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "Citation processor for Pendon documents"
+
+[dependencies]
+pendon-core = { path = "../core" }
+pendon-renderer-solid = { path = "../renderer-solid" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
