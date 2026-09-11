@@ -194,6 +194,22 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                         escape_jsx(title, out);
                         out.push_str("\"");
                     }
+                    if let Some(attrs) = attrs.as_object() {
+                        for (name, value) in attrs {
+                            if matches!(name.as_str(), "href" | "title") {
+                                continue;
+                            }
+                            out.push(' ');
+                            out.push_str(name);
+                            out.push_str("=\"");
+                            if let Some(value) = value.as_str() {
+                                escape_jsx(value, out);
+                            } else {
+                                escape_jsx(&value.to_string(), out);
+                            }
+                            out.push_str("\"");
+                        }
+                    }
                 }
                 out.push('>');
                 render_children(v, out, hints);
@@ -227,7 +243,7 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
             }
             "HtmlBlock" => {
                 if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
-                    out.push_str(text);
+                    render_raw_html(text, out);
                     out.push('\n');
                 } else {
                     render_children(v, out, hints);
@@ -235,7 +251,7 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
             }
             "HtmlInline" => {
                 if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
-                    out.push_str(text);
+                    render_raw_html(text, out);
                 } else {
                     render_children(v, out, hints);
                 }
@@ -244,6 +260,18 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                 render_children(v, out, hints);
             }
         }
+    }
+}
+
+fn render_raw_html(text: &str, out: &mut String) {
+    let trimmed = text.trim();
+    if trimmed.starts_with("<!--") && trimmed.ends_with("-->") {
+        let content = &trimmed[4..trimmed.len() - 3];
+        out.push_str("{/*");
+        out.push_str(content);
+        out.push_str("*/}");
+    } else {
+        out.push_str(text);
     }
 }
 

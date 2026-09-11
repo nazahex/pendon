@@ -24,6 +24,18 @@ pub fn render_template(
                 i += "{text}".len();
                 continue;
             }
+            if tpl[i..].starts_with("{frontmatter.") {
+                if let Some(end) = tpl[i + 13..].find('}') {
+                    let key = &tpl[i + 13..i + 13 + end];
+                    if matches!(key, "cites" | "references") {
+                        out.push_str("{frontmatter.");
+                        out.push_str(key);
+                        out.push('}');
+                        i = i + 13 + end + 1;
+                        continue;
+                    }
+                }
+            }
             if tpl[i..].starts_with("{attrs.") {
                 if let Some(end) = tpl[i + 7..].find('}') {
                     let key = &tpl[i + 7..i + 7 + end];

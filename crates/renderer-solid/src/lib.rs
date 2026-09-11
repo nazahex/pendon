@@ -155,6 +155,20 @@ mod tests {
     }
 
     #[test]
+    fn html_comments_use_jsx_comment_syntax() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::HtmlBlock),
+            Event::Text("<!-- comment -->".to_string()),
+            Event::EndNode(NodeKind::HtmlBlock),
+            Event::EndNode(NodeKind::Document),
+        ];
+        let output = render_solid(&events);
+        assert!(output.contains("{/* comment */}"));
+        assert!(!output.contains("<!-- comment -->"));
+    }
+
+    #[test]
     fn codefence_raw_html_uses_innerhtml_binding() {
         let output = render_solid(&raw_codefence_events());
         assert!(output.contains("<pre><code innerHTML={\"<p>  <b>x</b></p>\"} /></pre>"));

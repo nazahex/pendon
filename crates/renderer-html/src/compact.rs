@@ -177,6 +177,22 @@ fn render_node(v: &Value, out: &mut String) {
                     escape_html(title, out);
                     out.push_str("\"");
                 }
+                if let Some(attrs) = v.get("attrs").and_then(|attrs| attrs.as_object()) {
+                    for (name, value) in attrs {
+                        if matches!(name.as_str(), "href" | "title") {
+                            continue;
+                        }
+                        out.push(' ');
+                        out.push_str(name);
+                        out.push_str("=\"");
+                        if let Some(value) = value.as_str() {
+                            escape_html(value, out);
+                        } else {
+                            escape_html(&value.to_string(), out);
+                        }
+                        out.push_str("\"");
+                    }
+                }
                 out.push('>');
                 render_children(v, out);
                 out.push_str("</a>");
