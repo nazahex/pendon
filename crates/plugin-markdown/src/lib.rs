@@ -233,6 +233,17 @@ mod tests {
     }
 
     #[test]
+    fn keeps_leading_inline_link_inside_paragraph() {
+        let opts = MarkdownOptions::default();
+        let events = run_markdown("[foo](/docs) bar\n", opts);
+
+        assert!(events.windows(2).any(|window| {
+            matches!(window[0], Event::StartNode(NodeKind::Paragraph))
+                && matches!(window[1], Event::StartNode(NodeKind::Link))
+        }));
+    }
+
+    #[test]
     fn closes_list_after_blank_line_before_plain_text() {
         let opts = MarkdownOptions::default();
         let events = run_markdown("- Foo\n\nBar\n", opts);

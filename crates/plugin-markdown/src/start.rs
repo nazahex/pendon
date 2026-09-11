@@ -48,6 +48,9 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind) {
                 ctx.close_blockquotes();
                 ctx.close_all_lists();
                 ctx.close_table_if_open();
+            } else if ctx.pending_para_start {
+                ctx.emit_start(NodeKind::Paragraph);
+                ctx.pending_para_start = false;
             }
             ctx.emit_start(kind.clone());
         }
