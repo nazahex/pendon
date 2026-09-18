@@ -2,11 +2,12 @@ use std::fs;
 use std::io::{self, Read};
 use std::process::ExitCode;
 
-use pendon_core::{parse, Options};
+use pendon_core::{parse, Event, NodeKind, Options, Pipeline};
 use pendon_plugin_anchor::{AnchorCustomNode, AnchorImport, AnchorOptions};
 use pendon_plugin_cite::{CiteCustomNode, CiteImport, CiteOptions, CiteSection};
 use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
 use pendon_plugin_dialog::process as process_dialog;
+use pendon_plugin_heading::{process as process_heading, HeadingOptions};
 use pendon_plugin_img::process as process_img;
 use pendon_plugin_latex::process as process_latex;
 use pendon_plugin_markdown::MarkdownOptions;
@@ -208,7 +209,15 @@ fn main() -> ExitCode {
                     }
                 }
                 "dialog" => process_dialog(&ev),
-                "img" => process_img(&ev),
+                "img" => {
+                    let empty_pipeline = pendon_core::Pipeline::default();
+                    process_img(
+                        &ev,
+                        &pendon_plugin_img::ImgOptions::default(),
+                        &empty_pipeline,
+                    )
+                }
+                "heading" => process_heading(&ev, &HeadingOptions::default()),
                 "anchor" => pendon_plugin_anchor::process(&ev, &AnchorOptions::default()),
                 "cite" => pendon_plugin_cite::process(&ev, &CiteOptions::default()),
                 "latex" => process_latex(&ev),
@@ -362,6 +371,8 @@ struct ConfigTask {
     max_blank_run: Option<usize>,
     cite: Option<CiteTaskConfig>,
     anchor: Option<AnchorTaskConfig>,
+    heading: Option<pendon_plugin_heading::HeadingOptions>,
+    img: Option<pendon_plugin_img::ImgOptions>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -488,6 +499,7 @@ fn run_from_config() -> ExitCode {
         let mut matched = 0usize;
         let mut total_bytes: usize = 0;
         let mut unique_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+
         for entry in WalkDir::new(Path::new("."))
             .into_iter()
             .filter_map(|e| e.ok())
@@ -526,31 +538,90 @@ fn run_from_config() -> ExitCode {
                             max_blank_run: task.max_blank_run,
                         };
                         let mut events = parse(&input_text, &opts);
-                        let mut used_custom_specs: Vec<PluginSpec> = Vec::new();
-                        let mut builtin_hints: Vec<SolidRenderHints> = Vec::new();
-                        let mut used_quiz = false;
-                        let mut used_vicado = false;
-                        let anchor_options = build_anchor_options(task.anchor.as_ref());
-                        let mut anchor_ran = false;
+
+                        // --- Run micromatter FIRST if it's in the plugin list ---
+                        // Micromatter parses the --- delimited frontmatter block
+                        // into a Frontmatter node with parsed YAML data.
+                        // We must run it before extracting references for cite.
+                        if let Some(pstr) = task.plugin.as_deref() {
+                            if pstr
+                                .split(',')
+                                .map(|s| s.trim())
+                                .any(|s| s == "micromatter")
+                            {
+                                events = pendon_plugin_micromatter::process(&events);
+                            }
+                        }
+
+                        // --- Now extract frontmatter and build CitationContext ---
                         let cite_options = match build_cite_options(
                             task.cite.as_ref(),
                             &task.input,
                             path_str.as_ref(),
                             Some(&map),
                         ) {
-                            Ok(options) => options,
-                            Err(message) => {
-                                eprintln!("Error: {}", message);
+                            Ok(o) => o,
+                            Err(msg) => {
+                                eprintln!("Error: {}", msg);
                                 exit = ExitCode::from(2);
                                 continue;
                             }
                         };
+                        let frontmatter_data = extract_frontmatter_for_cite(&events);
+                        let front_refs = frontmatter_data
+                            .as_ref()
+                            .and_then(|d| d.get("references"))
+                            .cloned()
+                            .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
+                        let merged_refs = merge_refs_for_context(
+                            &front_refs,
+                            cite_options.external_references.as_ref(),
+                        );
+                        let cite_ctx = pendon_plugin_cite::CitationContext::new(
+                            merged_refs,
+                            cite_options.clone(),
+                        );
+
+                        // Arc<Mutex<>> provides Send + Sync interior mutability
+                        let cite_ctx_shared = std::sync::Arc::new(std::sync::Mutex::new(cite_ctx));
+
+                        // --- Build Inline Pipeline ---
+                        let mut inline_pipeline = Pipeline::new();
+
+                        let cite_for_pipeline = cite_ctx_shared.clone();
+                        inline_pipeline.add(move |ev: Vec<Event>| {
+                            cite_for_pipeline.lock().unwrap().process_events(&ev)
+                        });
+
+                        let wiki_opts = task_wiki_opts.clone();
+                        inline_pipeline.add(move |ev: Vec<Event>| {
+                            pendon_plugin_wiki::process_with_options(&ev, wiki_opts.clone())
+                        });
+
+                        let anchor_opts = build_anchor_options(task.anchor.as_ref());
+                        inline_pipeline.add(move |ev: Vec<Event>| {
+                            pendon_plugin_anchor::process(&ev, &anchor_opts)
+                        });
+
+                        // --- Run remaining plugins ---
+                        let mut used_custom_specs: Vec<PluginSpec> = Vec::new();
+                        let mut builtin_hints: Vec<SolidRenderHints> = Vec::new();
+                        let mut used_quiz = false;
+                        let mut used_vicado = false;
+                        let anchor_options = build_anchor_options(task.anchor.as_ref());
+                        let mut anchor_ran = false;
                         let mut cite_ran = false;
                         let mut markdown_ran = false;
                         let mut quiz_pending = false;
+
                         if let Some(pstr) = task.plugin.as_deref() {
                             for name in pstr.split(',').map(|s| s.trim()).filter(|s| !s.is_empty())
                             {
+                                // Skip micromatter — already ran above
+                                if name == "micromatter" {
+                                    continue;
+                                }
+
                                 if let Some(path) = name.strip_prefix("toml:") {
                                     let spec = match custom_cache.get(path) {
                                         Some(existing) => existing.clone(),
@@ -572,9 +643,6 @@ fn run_from_config() -> ExitCode {
                                 }
 
                                 match name {
-                                    "micromatter" => {
-                                        events = pendon_plugin_micromatter::process(&events);
-                                    }
                                     "quiz" => {
                                         used_quiz = true;
                                         if let Some(spec) = custom_registry.get("quiz") {
@@ -590,7 +658,26 @@ fn run_from_config() -> ExitCode {
                                         events = process_dialog(&events);
                                     }
                                     "img" => {
-                                        events = process_img(&events);
+                                        let img_opts = task.img.clone().unwrap_or_default();
+                                        events = pendon_plugin_img::process(
+                                            &events,
+                                            &img_opts,
+                                            &inline_pipeline,
+                                        );
+                                        if let Some(hints) =
+                                            pendon_plugin_img::solid_hints(&img_opts)
+                                        {
+                                            builtin_hints.push(hints);
+                                        }
+                                    }
+                                    "heading" => {
+                                        let opts = task.heading.clone().unwrap_or_default();
+                                        events = process_heading(&events, &opts);
+                                        if let Some(hints) =
+                                            pendon_plugin_heading::solid_hints(&opts)
+                                        {
+                                            builtin_hints.push(hints);
+                                        }
                                     }
                                     "anchor" => {
                                         anchor_ran = true;
@@ -600,7 +687,7 @@ fn run_from_config() -> ExitCode {
                                     "cite" => {
                                         cite_ran = true;
                                         events =
-                                            pendon_plugin_cite::process(&events, &cite_options);
+                                            cite_ctx_shared.lock().unwrap().process_events(&events);
                                     }
                                     "latex" => {
                                         events = process_latex(&events);
@@ -655,8 +742,41 @@ fn run_from_config() -> ExitCode {
                                 builtin_hints.push(vicado_solid_hints());
                             }
                         }
+                        // Finalize cite: inject updated frontmatter with all accumulated cites
                         if cite_ran {
-                            if let Some(hints) = pendon_plugin_cite::solid_hints(&cite_options) {
+                            let ctx = cite_ctx_shared.lock().unwrap();
+                            let final_cites = ctx.get_cites();
+                            let final_refs = ctx.get_used_references();
+                            let cite_opts_final = ctx.options().clone();
+                            drop(ctx);
+
+                            let diagnostics = cite_ctx_shared.lock().unwrap().drain_diagnostics();
+
+                            if !diagnostics.is_empty() {
+                                let insert_at = events
+                                    .iter()
+                                    .position(|e| matches!(e, Event::StartNode(NodeKind::Document)))
+                                    .map(|i| i + 1)
+                                    .unwrap_or(0);
+                                for (off, diag) in diagnostics.into_iter().enumerate() {
+                                    events.insert(insert_at + off, diag);
+                                }
+                            }
+
+                            // Replace {{ footnote }} markers with Bibliography custom node
+                            events = cite_ctx_shared
+                                .lock()
+                                .unwrap()
+                                .replace_section_markers(&events);
+
+                            pendon_plugin_cite::update_frontmatter_in_events(
+                                &mut events,
+                                &final_cites,
+                                &final_refs,
+                                &cite_opts_final,
+                            );
+
+                            if let Some(hints) = pendon_plugin_cite::solid_hints(&cite_opts_final) {
                                 builtin_hints.push(hints);
                             }
                         }
@@ -955,6 +1075,41 @@ fn build_cite_options(
         section,
         external_references,
     })
+}
+
+fn extract_frontmatter_for_cite(events: &[Event]) -> Option<serde_json::Value> {
+    let mut inside = false;
+    for event in events {
+        match event {
+            pendon_core::Event::StartNode(pendon_core::NodeKind::Frontmatter) => inside = true,
+            pendon_core::Event::EndNode(pendon_core::NodeKind::Frontmatter) => inside = false,
+            pendon_core::Event::Attribute { name, value } if inside && name == "data" => {
+                if let Ok(data) = serde_json::from_str(value) {
+                    return Some(data);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn merge_refs_for_context(
+    front: &serde_json::Value,
+    external: Option<&serde_json::Value>,
+) -> serde_json::Value {
+    let mut merged = serde_json::Map::new();
+    if let Some(map) = external.and_then(serde_json::Value::as_object) {
+        for (k, v) in map {
+            merged.insert(k.clone(), v.clone());
+        }
+    }
+    if let Some(map) = front.as_object() {
+        for (k, v) in map {
+            merged.insert(k.clone(), v.clone());
+        }
+    }
+    serde_json::Value::Object(merged)
 }
 
 fn build_anchor_options(config: Option<&AnchorTaskConfig>) -> AnchorOptions {
