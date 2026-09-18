@@ -1,4 +1,4 @@
-use pendon_core::{extract_id, slugify, Event, NodeKind};
+use pendon_core::{Event, NodeKind};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -16,6 +16,113 @@ struct HeadingCapture {
     level: usize,
     id: Option<String>,
 }
+
+// --- Extras Parser (mirrors plugin-heading) ---
+
+/// Parses [id][.classes]{attrs} from the start of heading text.
+/// Returns (custom_id, consumed_byte_length).
+fn parse_heading_prefix(raw_text: &str) -> (Option<String>, usize) {
+    let chars: Vec<char> = raw_text.chars().collect();
+    let mut cursor = 0;
+    let mut custom_id: Option<String> = None;
+
+    // Skip leading whitespace
+    while cursor < chars.len() && chars[cursor].is_whitespace() {
+        cursor += 1;
+    }
+
+    // Parse first bracket group: [id] or [.class]
+    if cursor < chars.len() && chars[cursor] == '[' {
+        if let Some(close) = find_char(&chars, cursor + 1, ']') {
+            let content: String = chars[cursor + 1..close].iter().collect();
+            let trimmed = content.trim();
+            if !trimmed.is_empty() && !trimmed.starts_with('.') {
+                custom_id = Some(trimmed.to_string());
+            }
+            cursor = close + 1;
+        }
+    }
+
+    // Skip subsequent bracket groups: [.class,.extra]
+    loop {
+        while cursor < chars.len() && chars[cursor].is_whitespace() {
+            cursor += 1;
+        }
+        if cursor >= chars.len() || chars[cursor] != '[' {
+            break;
+        }
+        if let Some(close) = find_char(&chars, cursor + 1, ']') {
+            cursor = close + 1;
+        } else {
+            break;
+        }
+    }
+
+    // Skip curly brace attributes: { key: "val" }
+    while cursor < chars.len() && chars[cursor].is_whitespace() {
+        cursor += 1;
+    }
+    if cursor < chars.len() && chars[cursor] == '{' {
+        if let Some(close) = find_matching_brace(&chars, cursor) {
+            cursor = close + 1;
+        }
+    }
+
+    (custom_id, cursor)
+}
+
+fn find_char(chars: &[char], mut index: usize, wanted: char) -> Option<usize> {
+    while index < chars.len() {
+        if chars[index] == wanted {
+            return Some(index);
+        }
+        index += 1;
+    }
+    None
+}
+
+fn find_matching_brace(chars: &[char], start: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut i = start;
+    while i < chars.len() {
+        match chars[i] {
+            '{' => depth += 1,
+            '}' if depth == 1 => return Some(i),
+            '}' => depth -= 1,
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Generates a URL-safe slug from heading text.
+fn slugify(input: &str) -> String {
+    let mut out = String::new();
+    let mut last_dash = false;
+    for ch in input.chars() {
+        let lower = ch.to_ascii_lowercase();
+        if lower.is_ascii_alphanumeric() {
+            out.push(lower);
+            last_dash = false;
+        } else if matches!(lower, ' ' | '-' | '_' | '.') {
+            if !last_dash && !out.is_empty() {
+                out.push('-');
+                last_dash = true;
+            }
+        }
+    }
+    if out.ends_with('-') {
+        out.pop();
+    }
+    if out.is_empty() {
+        "section".to_string()
+    } else {
+        out
+    }
+}
+
+// --- Main Processor ---
 
 pub fn process(events: &[Event]) -> Vec<Event> {
     let headings = collect_headings(events);
@@ -110,18 +217,21 @@ fn consume_heading(events: &[Event], start_idx: usize) -> (HeadingCapture, usize
         }
     }
 
-    let (clean, inline_id) = extract_id(&text);
-    let final_text = if clean.is_empty() {
+    // Use the same prefix parser as plugin-heading to strip [id][.class]{attrs}
+    let (prefix_id, consumed_len) = parse_heading_prefix(&text);
+    let clean_text = text[consumed_len..].trim().to_string();
+
+    let final_text = if clean_text.is_empty() {
         text.trim().to_string()
     } else {
-        clean
+        clean_text
     };
 
     (
         HeadingCapture {
             text: final_text,
             level,
-            id: heading_id.or(inline_id),
+            id: heading_id.or(prefix_id),
         },
         idx,
     )
