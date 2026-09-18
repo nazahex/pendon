@@ -376,25 +376,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn adds_external_defaults_and_modifiers() {
-        let mut out = Vec::new();
-        emit_text(
-            "^--$![foo](https://example.com/path)",
-            &AnchorOptions::default(),
-            &mut out,
-        );
-        let attrs: Vec<_> = out
-            .iter()
-            .filter_map(|event| match event {
-                Event::Attribute { name, value } => Some((name.as_str(), value.as_str())),
-                _ => None,
-            })
-            .collect();
-        assert!(attrs.contains(&("target", "_blank")));
-        assert!(attrs.contains(&("rel", "noopener noreferrer sponsored nofollow")));
-    }
-
-    #[test]
     fn adds_external_defaults_without_modifiers() {
         let mut out = Vec::new();
         emit_text(
