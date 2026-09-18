@@ -1,0 +1,12 @@
+[package]
+name = "pendon-plugin-heading"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "Heading processing and numbering plugin for Pendon documents"
+
+[dependencies]
+pendon-core = { path = "../core" }
+pendon-renderer-solid = { path = "../renderer-solid" }
+regex = "1"
+serde = { version = "1", features = ["derive"] }
