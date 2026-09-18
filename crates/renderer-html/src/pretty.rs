@@ -53,6 +53,12 @@ fn render_node(v: &Value, out: &mut String, indent: &mut usize) {
                 out.push('<');
                 out.push('h');
                 out.push_str(level);
+                // Emit atribut id jika ada
+                if let Some(id) = attr_str(v, "id") {
+                    out.push_str(" id=\"");
+                    escape_html(id, out);
+                    out.push('"');
+                }
                 out.push('>');
                 out.push('\n');
                 *indent += 1;

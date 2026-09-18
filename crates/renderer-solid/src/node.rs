@@ -42,6 +42,16 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                 out.push('<');
                 out.push('h');
                 out.push_str(level);
+                // Emit atribut id jika ada
+                if let Some(id) = v
+                    .get("attrs")
+                    .and_then(|a| a.get("id"))
+                    .and_then(|i| i.as_str())
+                {
+                    out.push_str(" id=\"");
+                    escape_jsx(id, out);
+                    out.push('"');
+                }
                 out.push('>');
                 render_text_or_children(v, out, hints);
                 out.push_str("</h");

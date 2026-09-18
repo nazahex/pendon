@@ -37,6 +37,12 @@ fn render_node(v: &Value, out: &mut String) {
                 out.push('<');
                 out.push('h');
                 out.push_str(level);
+                // Emit atribut id jika ada
+                if let Some(id) = attr_str(v, "id") {
+                    out.push_str(" id=\"");
+                    escape_html(id, out);
+                    out.push('"');
+                }
                 out.push('>');
                 render_node_text_or_children(v, out);
                 out.push_str("</h");
