@@ -13,6 +13,7 @@ pendon-plugin-codeblock-syntect = { path = "../../crates/plugin-codeblock-syntec
 pendon-plugin-custom = { path = "../../crates/plugin-custom" }
 pendon-plugin-dialog = { path = "../../crates/plugin-dialog" }
 pendon-plugin-extract-heading = { path = "../../crates/plugin-extract-heading" }
+pendon-plugin-heading = { path = "../../crates/plugin-heading" }
 pendon-plugin-img = { path = "../../crates/plugin-img" }
 pendon-plugin-latex = { path = "../../crates/plugin-latex" }
 pendon-plugin-markdown = { path = "../../crates/plugin-markdown" }

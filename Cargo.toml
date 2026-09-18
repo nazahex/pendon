@@ -4,6 +4,7 @@ members = [
   "crates/core",
   "crates/plugin-anchor",
   "crates/plugin-cite",
+  "crates/plugin-heading",
   "crates/plugin-latex",
   "crates/plugin-vicado",
   "crates/plugin-wiki",
