@@ -10,11 +10,13 @@ pub fn process(events: &[Event], spec: &PluginSpec) -> Vec<Event> {
 
     let mut out = Vec::with_capacity(events.len());
     let mut i = 0usize;
+
     while i < events.len() {
         if matches!(events[i], Event::StartNode(NodeKind::Blockquote)) {
             let start = i;
             let mut depth = 1usize;
             let mut j = i + 1;
+
             while j < events.len() && depth > 0 {
                 match &events[j] {
                     Event::StartNode(NodeKind::Blockquote) => depth += 1,
@@ -23,64 +25,62 @@ pub fn process(events: &[Event], spec: &PluginSpec) -> Vec<Event> {
                 }
                 j += 1;
             }
+
             if depth != 0 {
                 out.push(events[i].clone());
                 i += 1;
                 continue;
             }
 
-            if !contains_matching_paragraph(&events[start + 1..j], &detector) {
+            let blockquote_inner = &events[start + 1..j - 1];
+            if !contains_matching_paragraph(blockquote_inner, &detector) {
                 out.extend_from_slice(&events[start..j]);
                 i = j;
                 continue;
             }
 
-            let mut k = start + 1;
-            let mut ordinary_blockquote_open = false;
-            while k + 1 < j {
-                if matches!(events[k], Event::StartNode(NodeKind::Paragraph)) {
-                    let para_start = k;
+            let mut k = 0usize;
+            while k < blockquote_inner.len() {
+                if matches!(blockquote_inner[k], Event::StartNode(NodeKind::Paragraph)) {
                     let mut buf = String::new();
-                    let mut body_events: Vec<Event> = Vec::new();
+                    let mut p_events = Vec::new();
                     k += 1;
-                    while k < j && !matches!(events[k], Event::EndNode(NodeKind::Paragraph)) {
-                        if let Event::Text(t) = &events[k] {
+
+                    while k < blockquote_inner.len()
+                        && !matches!(blockquote_inner[k], Event::EndNode(NodeKind::Paragraph))
+                    {
+                        if let Event::Text(t) = &blockquote_inner[k] {
                             buf.push_str(t);
                         }
-                        body_events.push(events[k].clone());
+                        p_events.push(blockquote_inner[k].clone());
                         k += 1;
                     }
-                    if k < j {
-                        k += 1; // skip paragraph end
+
+                    let has_end = k < blockquote_inner.len()
+                        && matches!(blockquote_inner[k], Event::EndNode(NodeKind::Paragraph));
+                    if has_end {
+                        k += 1;
                     }
 
                     if let Some(caps) = detector.captures(buf.trim()) {
-                        if ordinary_blockquote_open {
-                            out.push(Event::EndNode(NodeKind::Blockquote));
-                            ordinary_blockquote_open = false;
-                        }
                         let (attrs, diags) = attrs::collect_attrs(spec, Some(&caps));
                         out.extend(diags);
-                        let cleaned = strip_leading_sigil(&body_events, caps.name("type"));
+                        let cleaned = strip_leading_sigil(&p_events, caps.name("type"));
                         util::emit_component(spec, &attrs, Some(&cleaned), &mut out);
                     } else {
-                        if !ordinary_blockquote_open {
-                            out.push(Event::StartNode(NodeKind::Blockquote));
-                            ordinary_blockquote_open = true;
+                        out.push(Event::StartNode(NodeKind::Blockquote));
+                        out.push(Event::StartNode(NodeKind::Paragraph));
+                        out.extend(p_events);
+                        if has_end {
+                            out.push(Event::EndNode(NodeKind::Paragraph));
                         }
-                        out.extend_from_slice(&events[para_start..k]);
+                        out.push(Event::EndNode(NodeKind::Blockquote));
                     }
                 } else {
-                    if !ordinary_blockquote_open {
-                        out.push(Event::StartNode(NodeKind::Blockquote));
-                        ordinary_blockquote_open = true;
-                    }
-                    out.push(events[k].clone());
+                    // CRITICAL FIX: Preserve trapped markers (like :::) instead of eating them
+                    out.push(blockquote_inner[k].clone());
                     k += 1;
                 }
-            }
-            if ordinary_blockquote_open {
-                out.push(Event::EndNode(NodeKind::Blockquote));
             }
             i = j;
             continue;
@@ -151,6 +151,5 @@ fn strip_leading_sigil(events: &[Event], sigil: Option<Match<'_>>) -> Vec<Event>
             }
         }
     }
-
     out
 }

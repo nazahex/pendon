@@ -17,57 +17,59 @@ pub fn process(events: &[Event], spec: &PluginSpec) -> Vec<Event> {
     let mut out: Vec<Event> = Vec::with_capacity(events.len() + 4);
     let mut active: Option<ActiveBlock> = None;
 
-    for ev in events.iter() {
+    let mut i = 0usize;
+    while i < events.len() {
+        let ev = &events[i];
+
         if active.is_none() {
             if let Event::Text(line) = ev {
                 if detector.is_match(line.trim()) {
                     let captures = detector.captures(line.trim());
                     let (attrs, diags) = attrs::collect_attrs(spec, captures.as_ref());
                     out.extend(diags);
-                    let mut block = ActiveBlock::new(spec.clone(), attrs);
+                    let block = ActiveBlock::new(spec.clone(), attrs);
+
                     if matches!(out.last(), Some(Event::StartNode(NodeKind::Paragraph))) {
                         out.pop();
-                        block.skip_para_close = true;
                     }
                     active = Some(block);
+                    i += 1;
                     continue;
                 }
             }
             out.push(ev.clone());
+            i += 1;
             continue;
         }
 
         if let Some(block) = active.as_mut() {
             if let Event::Text(line) = ev {
                 if line.trim() == end_marker {
-                    if let Some(idx) = block.last_para_start.take() {
-                        block.inner.truncate(idx);
-                        block.skip_para_close = true;
+                    while matches!(
+                        block.inner.last(),
+                        Some(Event::StartNode(NodeKind::Paragraph))
+                    ) {
+                        block.inner.pop();
                     }
+
                     let mut flushed = active.take().unwrap().finish();
                     out.append(&mut flushed);
+
+                    // Skip the trailing EndNode(Paragraph) to prevent unbalanced JSX tags
+                    let mut next_idx = i + 1;
+                    while next_idx < events.len()
+                        && matches!(events[next_idx], Event::EndNode(NodeKind::Paragraph))
+                    {
+                        next_idx += 1;
+                    }
+                    i = next_idx;
                     continue;
                 }
             }
 
-            match ev {
-                Event::Text(line) => {
-                    block.inner.push(Event::Text(line.clone()));
-                }
-                Event::StartNode(NodeKind::Paragraph) => {
-                    block.last_para_start = Some(block.inner.len());
-                    block.inner.push(ev.clone());
-                }
-                Event::EndNode(NodeKind::Paragraph) => {
-                    if block.skip_para_close {
-                        block.skip_para_close = false;
-                    } else {
-                        block.inner.push(ev.clone());
-                    }
-                }
-                _ => block.inner.push(ev.clone()),
-            }
+            block.inner.push(ev.clone());
         }
+        i += 1;
     }
 
     if let Some(block) = active {
@@ -83,8 +85,6 @@ pub struct ActiveBlock {
     spec: PluginSpec,
     attrs: BTreeMap<String, String>,
     inner: Vec<Event>,
-    skip_para_close: bool,
-    last_para_start: Option<usize>,
 }
 
 impl ActiveBlock {
@@ -93,8 +93,6 @@ impl ActiveBlock {
             spec,
             attrs,
             inner: Vec::new(),
-            skip_para_close: false,
-            last_para_start: None,
         }
     }
 
