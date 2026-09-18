@@ -92,13 +92,15 @@ fn emit_text(text: &str, options: &AnchorOptions, out: &mut Vec<Event>) {
     let chars: Vec<char> = text.chars().collect();
     let mut cursor = 0usize;
     let mut normal = String::new();
+
     while cursor < chars.len() {
-        let start = modifier_start(&chars, cursor).unwrap_or(cursor);
-        if start == cursor || start < chars.len() && chars[start] == '[' {
-            if let Some((end, label, raw_target, extra)) = parse_link(&chars, start) {
-                let modifiers = &chars[cursor..start];
-                let (attrs, warning) = build_attributes(modifiers, &raw_target, extra);
+        let is_image_syntax = chars[cursor] == '[' && cursor > 0 && chars[cursor - 1] == '!';
+
+        if chars[cursor] == '[' && !is_image_syntax {
+            if let Some((end, label, raw_target, extra)) = parse_link(&chars, cursor) {
+                let (attrs, warning) = build_attributes(&raw_target, extra);
                 flush_text(&mut normal, out);
+
                 if let Some(message) = warning {
                     out.push(Event::Diagnostic {
                         severity: Severity::Warning,
@@ -106,64 +108,58 @@ fn emit_text(text: &str, options: &AnchorOptions, out: &mut Vec<Event>) {
                         span: None,
                     });
                 }
+
                 emit_anchor(&label, attrs, options, out);
                 cursor = end;
                 continue;
             }
         }
+
         normal.push(chars[cursor]);
         cursor += 1;
     }
-    flush_text(&mut normal, out);
-}
 
-fn modifier_start(chars: &[char], cursor: usize) -> Option<usize> {
-    let mut i = cursor;
-    while i < chars.len() && matches!(chars[i], '^' | '~' | '!' | '$' | '-' | ';') {
-        i += 1;
-    }
-    if i > cursor {
-        Some(i)
-    } else if chars.get(cursor) == Some(&'[') {
-        Some(cursor)
-    } else {
-        None
-    }
+    flush_text(&mut normal, out);
 }
 
 fn parse_link(chars: &[char], start: usize) -> Option<(usize, String, String, Option<String>)> {
     if chars.get(start) != Some(&'[') {
         return None;
     }
+
     let close_label = find_char(chars, start + 1, ']')?;
     if chars.get(close_label + 1) != Some(&'(') {
         return None;
     }
+
     let close_target = find_matching_paren(chars, close_label + 2)?;
-    let label = chars[start + 1..close_label].iter().collect::<String>();
-    let target = chars[close_label + 2..close_target]
-        .iter()
-        .collect::<String>();
-    let (raw_target, title) = split_target_title(&target);
+    let label: String = chars[start + 1..close_label].iter().collect();
+    let raw_input: String = chars[close_label + 2..close_target].iter().collect();
+
+    let (raw_target, title) = split_target_title(&raw_input);
     let mut end = close_target + 1;
+
     let extra = if chars.get(end) == Some(&'{') {
-        let close_extra = find_char(chars, end + 1, '}')?;
-        let value = chars[end + 1..close_extra].iter().collect::<String>();
-        end = close_extra + 1;
-        Some(value)
+        if let Some(close_extra) = find_char(chars, end + 1, '}') {
+            let value: String = chars[end + 1..close_extra].iter().collect();
+            end = close_extra + 1;
+            Some(value)
+        } else {
+            None
+        }
     } else {
         None
     };
-    let target = if let Some(title) = title {
-        format!("{}\u{0}{}", raw_target, title)
-    } else {
-        raw_target
+
+    let target = match title {
+        Some(t) => format!("{}\u{0}{}", raw_target, t),
+        None => raw_target,
     };
+
     Some((end, label, target, extra))
 }
 
 fn build_attributes(
-    modifiers: &[char],
     encoded_target: &str,
     extra: Option<String>,
 ) -> (BTreeMap<String, String>, Option<String>) {
@@ -171,27 +167,33 @@ fn build_attributes(
         .split_once('\u{0}')
         .map(|(url, title)| (url, Some(title)))
         .unwrap_or((encoded_target, None));
+
     let (url, suffix_modifiers) = strip_url_modifiers(encoded_url);
-    let mut all_modifiers = modifiers.to_vec();
-    all_modifiers.extend(suffix_modifiers.chars());
+    let all_modifiers: Vec<char> = suffix_modifiers.chars().collect();
+
     let mut attrs = BTreeMap::new();
     attrs.insert("href".to_string(), url.clone());
+
     if let Some(title) = title {
         attrs.insert("title".to_string(), title.to_string());
     }
+
     let external = is_external(&url);
     let mut target = if external {
         Some("_blank".to_string())
     } else {
         None
     };
+
     let mut rel = Vec::new();
     if external {
         add_rel(&mut rel, "noopener");
     }
+
     let mut conflict = None;
     let mut explicit_target: Option<&str> = None;
     let mut i = 0usize;
+
     while i < all_modifiers.len() {
         if all_modifiers[i] == '^' {
             if explicit_target == Some("_self") {
@@ -221,6 +223,7 @@ fn build_attributes(
         }
         i += 1;
     }
+
     if let Some(extra) = extra {
         for (key, value) in parse_extra_attrs(&extra) {
             if key == "rel" {
@@ -234,12 +237,15 @@ fn build_attributes(
             }
         }
     }
+
     if let Some(target) = target {
         attrs.insert("target".to_string(), target);
     }
+
     if !rel.is_empty() {
         attrs.insert("rel".to_string(), rel.join(" "));
     }
+
     (attrs, conflict)
 }
 
