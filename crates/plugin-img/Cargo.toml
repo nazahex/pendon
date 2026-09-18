@@ -9,3 +9,5 @@ description = "Advanced image syntax plugin for Pendon"
 pendon-core = { path = "../core" }
 pendon-plugin-markdown = { path = "../plugin-markdown" }
 pendon-renderer-html = { path = "../renderer-html" }
+pendon-renderer-solid = { path = "../renderer-solid" }
+serde = { version = "1", features = ["derive"] }
