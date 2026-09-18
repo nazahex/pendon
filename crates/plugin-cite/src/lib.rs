@@ -6,6 +6,8 @@ use pendon_core::{Event, NodeKind, Severity};
 use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde_json::{Map, Value};
 
+// --- Public Types ---
+
 #[derive(Clone, Debug, Default)]
 pub struct CiteCustomNode {
     pub name: String,
@@ -51,6 +53,179 @@ impl Default for CiteOptions {
     }
 }
 
+/// Extra attributes parsed from [.class,#id]{key: val} syntax after cite args.
+#[derive(Debug, Clone, Default)]
+struct CiteExtraAttrs {
+    classes: Vec<String>,
+    id: Option<String>,
+    data: Vec<(String, String)>,
+    styles: Vec<(String, String)>,
+}
+
+/// Shared citation state that persists across multiple process_calls within
+/// the same document. This allows cite to work correctly in sub-pipelines
+/// (e.g., image captions) while maintaining a global index counter and
+/// identity deduplication map.
+pub struct CitationContext {
+    references: Value,
+    options: CiteOptions,
+    cites: Vec<Value>,
+    identities: HashMap<String, usize>,
+    diagnostics: Vec<Event>,
+}
+
+impl CitationContext {
+    /// Creates a new context from references and options.
+    /// Call this once per document, then use process_events() for each
+    /// event stream (main document, captions, etc.).
+    pub fn new(references: Value, options: CiteOptions) -> Self {
+        Self {
+            references,
+            options,
+            cites: Vec::new(),
+            identities: HashMap::new(),
+            diagnostics: Vec::new(),
+        }
+    }
+
+    /// Processes an event stream, transforming citation syntax into citation nodes.
+    /// Mutates internal state (cites, identities, diagnostics) so subsequent calls
+    /// continue numbering from where the previous call left off.
+    pub fn process_events(&mut self, events: &[Event]) -> Vec<Event> {
+        let mut out = Vec::with_capacity(events.len());
+        let mut excluded = 0usize;
+        let mut in_frontmatter = false;
+
+        for event in events {
+            match event {
+                Event::StartNode(kind) => {
+                    if matches!(
+                        kind,
+                        NodeKind::CodeFence
+                            | NodeKind::InlineCode
+                            | NodeKind::HtmlBlock
+                            | NodeKind::HtmlInline
+                    ) {
+                        excluded += 1;
+                    }
+                    if *kind == NodeKind::Frontmatter {
+                        in_frontmatter = true;
+                    }
+                    out.push(event.clone());
+                }
+                Event::EndNode(kind) => {
+                    if *kind == NodeKind::Frontmatter {
+                        in_frontmatter = false;
+                    }
+                    if matches!(
+                        kind,
+                        NodeKind::CodeFence
+                            | NodeKind::InlineCode
+                            | NodeKind::HtmlBlock
+                            | NodeKind::HtmlInline
+                    ) {
+                        excluded = excluded.saturating_sub(1);
+                    }
+                    out.push(event.clone());
+                }
+                Event::Text(text) if excluded == 0 && !in_frontmatter => {
+                    emit_text(text, self, &mut out);
+                }
+                _ => out.push(event.clone()),
+            }
+        }
+
+        out
+    }
+
+    /// Returns all accumulated cites as a JSON array.
+    pub fn get_cites(&self) -> Value {
+        Value::Array(self.cites.clone())
+    }
+
+    /// Returns only the references that were actually cited.
+    pub fn get_used_references(&self) -> Value {
+        let mut used = Map::new();
+        if let Some(refs) = self.references.as_object() {
+            for cite in &self.cites {
+                if let Some(id) = cite.get("id").and_then(Value::as_str) {
+                    if let Some(reference) = refs.get(id) {
+                        used.insert(id.to_string(), reference.clone());
+                    }
+                }
+            }
+        }
+        if let Some(ext) = self
+            .options
+            .external_references
+            .as_ref()
+            .and_then(Value::as_object)
+        {
+            for cite in &self.cites {
+                if let Some(id) = cite.get("id").and_then(Value::as_str) {
+                    if !used.contains_key(id) {
+                        if let Some(reference) = ext.get(id) {
+                            used.insert(id.to_string(), reference.clone());
+                        }
+                    }
+                }
+            }
+        }
+        Value::Object(used)
+    }
+
+    /// Drains accumulated diagnostics.
+    pub fn drain_diagnostics(&mut self) -> Vec<Event> {
+        std::mem::take(&mut self.diagnostics)
+    }
+
+    /// Returns a reference to the options.
+    pub fn options(&self) -> &CiteOptions {
+        &self.options
+    }
+
+    /// Replaces paragraph nodes containing only the section marker text
+    /// with a custom section node. Call this AFTER all process_events() calls
+    /// are complete, during finalization.
+    pub fn replace_section_markers(&self, events: &[Event]) -> Vec<Event> {
+        let Some(section) = &self.options.section else {
+            return events.to_vec();
+        };
+
+        let mut out = Vec::with_capacity(events.len());
+        let mut i = 0usize;
+        while i < events.len() {
+            if matches!(events.get(i), Some(Event::StartNode(NodeKind::Paragraph))) {
+                let mut end = i + 1;
+                let mut text = String::new();
+                while end < events.len()
+                    && !matches!(events[end], Event::EndNode(NodeKind::Paragraph))
+                {
+                    if let Event::Text(value) = &events[end] {
+                        text.push_str(value);
+                    }
+                    end += 1;
+                }
+                if end < events.len() && text.trim() == section.marker {
+                    out.push(Event::StartNode(NodeKind::Custom(section.name.clone())));
+                    out.push(Event::Attribute {
+                        name: "name".to_string(),
+                        value: section.name.clone(),
+                    });
+                    out.push(Event::EndNode(NodeKind::Custom(section.name.clone())));
+                    i = end + 1;
+                    continue;
+                }
+            }
+            out.push(events[i].clone());
+            i += 1;
+        }
+        out
+    }
+}
+
+// --- Legacy API (backward compatible) ---
+
 pub fn load_references(path: &Path) -> Result<Value, String> {
     let text = fs::read_to_string(path).map_err(|e| {
         format!(
@@ -69,13 +244,9 @@ pub fn load_references(path: &Path) -> Result<Value, String> {
     yaml_to_json(&yaml)
 }
 
+/// Legacy entry point. For new code, prefer CitationContext::new() + process_events().
 pub fn process(events: &[Event], options: &CiteOptions) -> Vec<Event> {
-    let section_events = options
-        .section
-        .as_ref()
-        .map(|section| replace_section_markers(events, section))
-        .unwrap_or_else(|| events.to_vec());
-    let mut frontmatter = extract_frontmatter(&section_events);
+    let frontmatter = extract_frontmatter(events);
     let front_references = frontmatter
         .as_ref()
         .and_then(|data| data.get("references"))
@@ -83,138 +254,26 @@ pub fn process(events: &[Event], options: &CiteOptions) -> Vec<Event> {
         .unwrap_or_else(|| Value::Object(Map::new()));
     let references = merge_references(&front_references, options.external_references.as_ref());
 
-    let mut state = CitationState {
-        references,
-        options,
-        cites: Vec::new(),
-        identities: HashMap::new(),
-        diagnostics: Vec::new(),
-    };
-    let mut out = Vec::with_capacity(events.len() + 8);
-    let mut excluded = 0usize;
-    let mut in_frontmatter = false;
+    let mut ctx = CitationContext::new(references, options.clone());
+    let processed = ctx.process_events(events);
 
-    for event in &section_events {
-        match event {
-            Event::StartNode(kind) => {
-                if matches!(
-                    kind,
-                    NodeKind::CodeFence
-                        | NodeKind::InlineCode
-                        | NodeKind::HtmlBlock
-                        | NodeKind::HtmlInline
-                ) {
-                    excluded += 1;
-                }
-                if *kind == NodeKind::Frontmatter {
-                    in_frontmatter = true;
-                }
-                out.push(event.clone());
-            }
-            Event::EndNode(kind) => {
-                if *kind == NodeKind::Frontmatter {
-                    in_frontmatter = false;
-                }
-                if matches!(
-                    kind,
-                    NodeKind::CodeFence
-                        | NodeKind::InlineCode
-                        | NodeKind::HtmlBlock
-                        | NodeKind::HtmlInline
-                ) {
-                    excluded = excluded.saturating_sub(1);
-                }
-                out.push(event.clone());
-            }
-            Event::Attribute { name, value } if in_frontmatter && name == "data" => {
-                out.push(Event::Attribute {
-                    name: name.clone(),
-                    value: value.clone(),
-                });
-            }
-            Event::Text(text) if excluded == 0 && !in_frontmatter => {
-                emit_text(text, &mut state, &mut out);
-            }
-            _ => out.push(event.clone()),
-        }
-    }
-
-    let cites = std::mem::take(&mut state.cites);
-    let empty_references = Value::Object(Map::new());
-    let mut section_references = options
-        .external_references
-        .as_ref()
-        .map(|external| references_for_cites(&empty_references, external, &cites))
-        .unwrap_or_else(|| state.references.clone());
-    if let Some(mut data) = frontmatter.take() {
-        if let Value::Object(ref mut object) = data {
-            let injected_references = options
-                .external_references
-                .as_ref()
-                .map(|external| references_for_cites(&front_references, external, &cites));
-            object.insert("cites".to_string(), Value::Array(cites));
-            if let Some(references) = injected_references {
-                section_references = references.clone();
-                object.insert("references".to_string(), references);
-            }
-            let stored_cites = object
-                .get("cites")
-                .cloned()
-                .unwrap_or(Value::Array(Vec::new()));
-            annotate_section_nodes(
-                &mut out,
-                options.section.as_ref(),
-                &stored_cites,
-                &section_references,
-            );
-        }
-        replace_frontmatter_data(&mut out, data);
-    } else {
-        let mut data = Map::new();
-        data.insert("cites".to_string(), Value::Array(cites));
-        if options.external_references.is_some() {
-            data.insert("references".to_string(), section_references.clone());
-        }
-        let metadata = serde_json::to_string(&Value::Object(data.clone()))
-            .unwrap_or_else(|_| "{}".to_string());
-        let insert_at = out
-            .iter()
-            .position(|event| matches!(event, Event::StartNode(NodeKind::Document)))
-            .map(|index| index + 1)
-            .unwrap_or(0);
-        out.splice(
-            insert_at..insert_at,
-            [
-                Event::StartNode(NodeKind::Frontmatter),
-                Event::Attribute {
-                    name: "data".to_string(),
-                    value: metadata,
-                },
-                Event::EndNode(NodeKind::Frontmatter),
-            ],
-        );
-        let cites = data
-            .get("cites")
-            .cloned()
-            .unwrap_or(Value::Array(Vec::new()));
-        annotate_section_nodes(
-            &mut out,
-            options.section.as_ref(),
-            &cites,
-            &section_references,
-        );
-    }
-
-    if !state.diagnostics.is_empty() {
+    let diagnostics = ctx.drain_diagnostics();
+    let mut out = processed;
+    if !diagnostics.is_empty() {
         let insert_at = out
             .iter()
             .position(|event| matches!(event, Event::StartNode(NodeKind::Document)))
             .map(|idx| idx + 1)
             .unwrap_or(0);
-        for (offset, diagnostic) in state.diagnostics.into_iter().enumerate() {
+        for (offset, diagnostic) in diagnostics.into_iter().enumerate() {
             out.insert(insert_at + offset, diagnostic);
         }
     }
+
+    let cites = ctx.get_cites();
+    let used_refs = ctx.get_used_references();
+    update_frontmatter_in_events(&mut out, &cites, &used_refs, options);
+
     out
 }
 
@@ -252,116 +311,37 @@ pub fn solid_hints(options: &CiteOptions) -> Option<SolidRenderHints> {
     }
 }
 
-fn replace_section_markers(events: &[Event], section: &CiteSection) -> Vec<Event> {
-    let mut out = Vec::with_capacity(events.len());
-    let mut i = 0usize;
-    while i < events.len() {
-        if matches!(events.get(i), Some(Event::StartNode(NodeKind::Paragraph))) {
-            let mut end = i + 1;
-            let mut text = String::new();
-            while end < events.len() && !matches!(events[end], Event::EndNode(NodeKind::Paragraph))
-            {
-                if let Event::Text(value) = &events[end] {
-                    text.push_str(value);
-                }
-                end += 1;
-            }
-            if end < events.len() && text.trim() == section.marker {
-                out.push(Event::StartNode(NodeKind::Custom(section.name.clone())));
-                out.push(Event::Attribute {
-                    name: "name".to_string(),
-                    value: section.name.clone(),
-                });
-                out.push(Event::EndNode(NodeKind::Custom(section.name.clone())));
-                i = end + 1;
-                continue;
-            }
-        }
-        out.push(events[i].clone());
-        i += 1;
-    }
-    out
-}
+// --- Internal Processing ---
 
-fn annotate_section_nodes(
-    events: &mut Vec<Event>,
-    section: Option<&CiteSection>,
-    cites: &Value,
-    references: &Value,
-) {
-    let Some(section_name) = section.map(|section| section.name.as_str()) else {
-        return;
-    };
-    let cites = serde_json::to_string(cites).unwrap_or_else(|_| "[]".to_string());
-    let references = serde_json::to_string(references).unwrap_or_else(|_| "{}".to_string());
-    let mut i = 0usize;
-    while i < events.len() {
-        let is_section_start = match events.get(i) {
-            Some(Event::StartNode(NodeKind::Custom(name))) => name == section_name,
-            _ => false,
-        };
-        if is_section_start {
-            if let Some(Event::Attribute { name, value }) = events.get(i + 1) {
-                if name == "name" && value == section_name {
-                    events.insert(
-                        i + 2,
-                        Event::Attribute {
-                            name: "cites".to_string(),
-                            value: cites.clone(),
-                        },
-                    );
-                    events.insert(
-                        i + 3,
-                        Event::Attribute {
-                            name: "references".to_string(),
-                            value: references.clone(),
-                        },
-                    );
-                    i += 2;
-                }
-            }
-        }
-        i += 1;
-    }
-}
-
-struct CitationState<'a> {
-    references: Value,
-    options: &'a CiteOptions,
-    cites: Vec<Value>,
-    identities: HashMap<String, usize>,
-    diagnostics: Vec<Event>,
-}
-
-fn emit_text(text: &str, state: &mut CitationState<'_>, out: &mut Vec<Event>) {
+fn emit_text(text: &str, ctx: &mut CitationContext, out: &mut Vec<Event>) {
     let chars: Vec<char> = text.chars().collect();
     let mut cursor = 0usize;
     let mut normal = String::new();
     while cursor < chars.len() {
         if chars[cursor..].starts_with(&['[', '^', '^', ']', '(']) {
-            if let Some((end, id, props)) = parse_citation(&chars, cursor) {
+            if let Some((end, id, props, extra)) = parse_citation(&chars, cursor) {
                 flush_text(&mut normal, out);
-                if reference_exists(&state.references, &id) {
+                if reference_exists(&ctx.references, &id) {
                     let mut citation = Map::new();
                     citation.insert("id".to_string(), Value::String(id.clone()));
                     for (key, value) in props {
                         citation.insert(key, Value::String(value));
                     }
                     let identity = canonical_identity(&citation);
-                    let index = if let Some(index) = state.identities.get(&identity) {
+                    let index = if let Some(index) = ctx.identities.get(&identity) {
                         *index
                     } else {
-                        let index = state.cites.len() + 1;
+                        let index = ctx.cites.len() + 1;
                         citation.insert("index".to_string(), Value::Number(index.into()));
-                        state.cites.push(Value::Object(citation.clone()));
-                        state.identities.insert(identity, index);
+                        ctx.cites.push(Value::Object(citation.clone()));
+                        ctx.identities.insert(identity, index);
                         index
                     };
-                    emit_citation(out, state.options, &citation, index);
+                    emit_citation(out, &ctx.options, &citation, index, &extra);
                 } else {
                     let raw: String = chars[cursor..end].iter().collect();
                     normal.push_str(&raw);
-                    state.diagnostics.push(Event::Diagnostic {
+                    ctx.diagnostics.push(Event::Diagnostic {
                         severity: Severity::Error,
                         message: format!("[cite] reference '{}' was not found", id),
                         span: None,
@@ -382,6 +362,7 @@ fn emit_citation(
     options: &CiteOptions,
     citation: &Map<String, Value>,
     index: usize,
+    extra: &CiteExtraAttrs,
 ) {
     if let Some(custom) = &options.custom_node {
         out.push(Event::StartNode(NodeKind::Custom(custom.name.clone())));
@@ -389,40 +370,109 @@ fn emit_citation(
             name: "name".to_string(),
             value: custom.name.clone(),
         });
+        // Emit core citation attributes
         for (key, value) in citation {
-            if key != "index" || value.is_number() {
-                out.push(Event::Attribute {
-                    name: key.clone(),
-                    value: value_to_string(value),
-                });
-            }
+            out.push(Event::Attribute {
+                name: key.clone(),
+                value: value_to_string(value),
+            });
         }
+        // Emit extra attributes (class, id, data-*, style)
+        emit_extra_attrs(out, extra);
         out.push(Event::EndNode(NodeKind::Custom(custom.name.clone())));
         return;
     }
 
+    // Default HTML rendering with extra class support
     let id = citation
         .get("id")
         .and_then(Value::as_str)
         .unwrap_or_default();
     let target = format!("{}{}-{}", options.prefix, index, id);
     let anchor = format!("{}{}", options.id_prefix, index);
-    let html = format!(
-        "<sup class=\"{}\"><a href=\"#{}\" id=\"{}\">[{}]</a></sup>",
-        escape_html(&options.class_name),
+
+    // Build class list: base class_name + extra classes
+    let mut classes = vec![options.class_name.clone()];
+    classes.extend(extra.classes.iter().cloned());
+    let class_attr = classes.join(" ");
+
+    let mut html = format!(
+        "<sup class=\"{}\"><a href=\"#{}\" id=\"{}\"",
+        escape_html(&class_attr),
         escape_html(&target),
         escape_html(&anchor),
-        index
     );
+
+    // Add extra id if present (appended to anchor id)
+    if let Some(extra_id) = &extra.id {
+        html.push_str(&format!(" data-cite-id=\"{}\"", escape_html(extra_id)));
+    }
+
+    // Add data attributes
+    for (k, v) in &extra.data {
+        html.push_str(&format!(" data-{}=\"{}\"", escape_html(k), escape_html(v)));
+    }
+
+    // Add style attributes
+    if !extra.styles.is_empty() {
+        html.push_str(" style=\"");
+        for (k, v) in &extra.styles {
+            html.push_str(&escape_html(k));
+            html.push(':');
+            html.push_str(&escape_html(v));
+            html.push(';');
+        }
+        html.push('"');
+    }
+
+    html.push_str(&format!(">[{}]</a></sup>", index));
+
     out.push(Event::StartNode(NodeKind::HtmlInline));
     out.push(Event::Text(html));
     out.push(Event::EndNode(NodeKind::HtmlInline));
 }
 
+fn emit_extra_attrs(out: &mut Vec<Event>, extra: &CiteExtraAttrs) {
+    if let Some(id) = &extra.id {
+        out.push(Event::Attribute {
+            name: "id".to_string(),
+            value: id.clone(),
+        });
+    }
+    if !extra.classes.is_empty() {
+        out.push(Event::Attribute {
+            name: "class".to_string(),
+            value: extra.classes.join(" "),
+        });
+    }
+    for (k, v) in &extra.data {
+        out.push(Event::Attribute {
+            name: format!("data-{}", k),
+            value: v.clone(),
+        });
+    }
+    if !extra.styles.is_empty() {
+        let style_str: String = extra
+            .styles
+            .iter()
+            .map(|(k, v)| format!("{}:{};", k, v))
+            .collect();
+        out.push(Event::Attribute {
+            name: "style".to_string(),
+            value: style_str,
+        });
+    }
+}
+
+// --- Parsing Helpers ---
+
+/// Parses [^^]("id", "loc")[.class,#id]{key: val} syntax.
+/// Returns (total_end_position, cite_id, cite_props, extra_attrs).
 fn parse_citation(
     chars: &[char],
     start: usize,
-) -> Option<(usize, String, BTreeMap<String, String>)> {
+) -> Option<(usize, String, BTreeMap<String, String>, CiteExtraAttrs)> {
+    // Parse the cite arguments: [^^]("id", "loc")
     let mut end = start + 5;
     let mut quote = false;
     while end < chars.len() {
@@ -460,7 +510,125 @@ fn parse_citation(
             }
         }
     }
-    Some((end + 1, id, props))
+
+    // Move past the closing ')'
+    let mut cursor = end + 1;
+
+    // Parse optional extra attrs: [.class,#id]{key: val}
+    let extra = parse_cite_extra_attrs(chars, &mut cursor);
+
+    Some((cursor, id, props, extra))
+}
+
+/// Parses [.class,#id]{key: val} after cite arguments.
+/// Advances cursor past consumed characters.
+fn parse_cite_extra_attrs(chars: &[char], cursor: &mut usize) -> CiteExtraAttrs {
+    let mut extra = CiteExtraAttrs::default();
+
+    // Skip whitespace
+    while *cursor < chars.len() && chars[*cursor] == ' ' {
+        *cursor += 1;
+    }
+
+    // Parse optional class/id block: [.class,#id]
+    if *cursor < chars.len() && chars[*cursor] == '[' {
+        if let Some(close_br) = find_char(chars, *cursor + 1, ']') {
+            let block: String = chars[*cursor + 1..close_br].iter().collect();
+            for token in block.split(',').map(|t| t.trim()).filter(|t| !t.is_empty()) {
+                if let Some(class_name) = token.strip_prefix('.') {
+                    if !class_name.is_empty() {
+                        extra.classes.push(class_name.to_string());
+                    }
+                } else if let Some(id) = token.strip_prefix('#') {
+                    if !id.is_empty() {
+                        extra.id = Some(id.to_string());
+                    }
+                }
+            }
+            *cursor = close_br + 1;
+        }
+    }
+
+    // Skip whitespace between blocks
+    while *cursor < chars.len() && chars[*cursor] == ' ' {
+        *cursor += 1;
+    }
+
+    // Parse optional kv block: {key: val, ...}
+    if *cursor < chars.len() && chars[*cursor] == '{' {
+        if let Some(close_curly) = find_char(chars, *cursor + 1, '}') {
+            let kv_block: String = chars[*cursor + 1..close_curly].iter().collect();
+            for pair in split_csv_str(&kv_block) {
+                let Some((k, v)) = pair.split_once(':') else {
+                    continue;
+                };
+                let key = k.trim();
+                let value = unquote_str(v.trim());
+                if key.is_empty() {
+                    continue;
+                }
+                if key.starts_with("--") {
+                    extra.styles.push((key.to_string(), value));
+                } else {
+                    extra.data.push((key.to_string(), value));
+                }
+            }
+            *cursor = close_curly + 1;
+        }
+    }
+
+    extra
+}
+
+fn find_char(chars: &[char], mut index: usize, wanted: char) -> Option<usize> {
+    while index < chars.len() {
+        if chars[index] == wanted {
+            return Some(index);
+        }
+        index += 1;
+    }
+    None
+}
+
+fn split_csv_str(input: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut buf = String::new();
+    let mut quote: Option<char> = None;
+
+    for ch in input.chars() {
+        if ch == '"' || ch == '\'' {
+            if quote == Some(ch) {
+                quote = None;
+            } else if quote.is_none() {
+                quote = Some(ch);
+            }
+            buf.push(ch);
+            continue;
+        }
+        if ch == ',' && quote.is_none() {
+            if !buf.trim().is_empty() {
+                out.push(buf.trim().to_string());
+            }
+            buf.clear();
+            continue;
+        }
+        buf.push(ch);
+    }
+    if !buf.trim().is_empty() {
+        out.push(buf.trim().to_string());
+    }
+    out
+}
+
+fn unquote_str(s: &str) -> String {
+    let bytes = s.as_bytes();
+    if bytes.len() >= 2
+        && ((bytes[0] == b'"' && bytes[bytes.len() - 1] == b'"')
+            || (bytes[0] == b'\'' && bytes[bytes.len() - 1] == b'\''))
+    {
+        return s[1..s.len() - 1].to_string();
+    }
+    s.to_string()
 }
 
 fn split_args(chars: &[char]) -> Vec<String> {
@@ -492,6 +660,8 @@ fn parse_value(value: &str) -> Option<String> {
     }
 }
 
+// --- Frontmatter Helpers ---
+
 fn extract_frontmatter(events: &[Event]) -> Option<Value> {
     let mut inside = false;
     for event in events {
@@ -509,18 +679,58 @@ fn extract_frontmatter(events: &[Event]) -> Option<Value> {
     None
 }
 
-fn replace_frontmatter_data(events: &mut [Event], data: Value) {
-    let serialized = serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string());
+pub fn update_frontmatter_in_events(
+    events: &mut Vec<Event>,
+    cites: &Value,
+    references: &Value,
+    options: &CiteOptions,
+) {
     let mut inside = false;
-    for event in events {
+    let mut found = false;
+    for event in events.iter_mut() {
         match event {
             Event::StartNode(NodeKind::Frontmatter) => inside = true,
             Event::EndNode(NodeKind::Frontmatter) => inside = false,
             Event::Attribute { name, value } if inside && name == "data" => {
-                *value = serialized.clone()
+                if let Ok(mut data) = serde_json::from_str::<Value>(value) {
+                    if let Value::Object(ref mut obj) = data {
+                        obj.insert("cites".to_string(), cites.clone());
+                        if options.external_references.is_some() {
+                            obj.insert("references".to_string(), references.clone());
+                        }
+                    }
+                    *value = serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string());
+                    found = true;
+                }
             }
             _ => {}
         }
+    }
+
+    if !found {
+        let mut data = Map::new();
+        data.insert("cites".to_string(), cites.clone());
+        if options.external_references.is_some() {
+            data.insert("references".to_string(), references.clone());
+        }
+        let metadata =
+            serde_json::to_string(&Value::Object(data)).unwrap_or_else(|_| "{}".to_string());
+        let insert_at = events
+            .iter()
+            .position(|event| matches!(event, Event::StartNode(NodeKind::Document)))
+            .map(|index| index + 1)
+            .unwrap_or(0);
+        events.splice(
+            insert_at..insert_at,
+            [
+                Event::StartNode(NodeKind::Frontmatter),
+                Event::Attribute {
+                    name: "data".to_string(),
+                    value: metadata,
+                },
+                Event::EndNode(NodeKind::Frontmatter),
+            ],
+        );
     }
 }
 
@@ -534,24 +744,6 @@ fn merge_references(front: &Value, external: Option<&Value>) -> Value {
     if let Some(map) = front.as_object() {
         for (key, value) in map {
             merged.insert(key.clone(), value.clone());
-        }
-    }
-    Value::Object(merged)
-}
-
-fn references_for_cites(front: &Value, external: &Value, cites: &[Value]) -> Value {
-    let mut merged = front.as_object().cloned().unwrap_or_default();
-    let Some(external) = external.as_object() else {
-        return Value::Object(merged);
-    };
-    for cite in cites {
-        let Some(id) = cite.get("id").and_then(Value::as_str) else {
-            continue;
-        };
-        if !merged.contains_key(id) {
-            if let Some(reference) = external.get(id) {
-                merged.insert(id.to_string(), reference.clone());
-            }
         }
     }
     Value::Object(merged)
@@ -654,6 +846,37 @@ mod tests {
     }
 
     #[test]
+    fn shared_context_continues_indexing_across_calls() {
+        let references: Value = serde_json::json!({"book": {"title": "Book"}});
+        let options = CiteOptions::default();
+        let mut ctx = CitationContext::new(references, options);
+
+        let events_a = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text(r#"[^^]("book", "p. 1")"#.into()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+        let _out_a = ctx.process_events(&events_a);
+
+        let events_b = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text(r#"[^^]("book", "p. 2")"#.into()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+        let _out_b = ctx.process_events(&events_b);
+
+        let cites = ctx.get_cites();
+        let arr = cites.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0]["index"], 1);
+        assert_eq!(arr[1]["index"], 2);
+    }
+
+    #[test]
     fn renders_custom_node() {
         let mut options = CiteOptions::default();
         options.custom_node = Some(CiteCustomNode {
@@ -662,38 +885,62 @@ mod tests {
             imports: Vec::new(),
         });
         let result = process(&events_with_refs(), &options);
-        assert!(result.iter().any(
-            |event| matches!(event, Event::StartNode(NodeKind::Custom(name)) if name == "Citation")
-        ));
+        assert!(result.iter().any(|event| matches!(
+            event,
+            Event::StartNode(NodeKind::Custom(name)) if name == "Citation"
+        )));
     }
 
     #[test]
-    fn replaces_section_marker_and_exposes_citation_data() {
-        let mut events = events_with_refs();
-        let document_end = events.len() - 1;
-        events.splice(
-            document_end..document_end,
-            [
-                Event::StartNode(NodeKind::Paragraph),
-                Event::Text("{{ footnote }}".into()),
-                Event::EndNode(NodeKind::Paragraph),
-            ],
+    fn parses_extra_attrs_after_cite_args() {
+        let chars: Vec<char> =
+            r#"[^^]("book", "p. 1")[.highlight,.urgent,#my-cite]{ foo: "bar", --color: "red" }"#
+                .chars()
+                .collect();
+        let (end, id, props, extra) = parse_citation(&chars, 0).unwrap();
+        assert_eq!(id, "book");
+        assert_eq!(props.get("loc").map(|s| s.as_str()), Some("p. 1"));
+        assert_eq!(extra.classes, vec!["highlight", "urgent"]);
+        assert_eq!(extra.id, Some("my-cite".to_string()));
+        assert_eq!(extra.data, vec![("foo".to_string(), "bar".to_string())]);
+        assert_eq!(
+            extra.styles,
+            vec![("--color".to_string(), "red".to_string())]
         );
+        assert!(end > 0);
+    }
+
+    #[test]
+    fn emits_extra_attrs_on_custom_node() {
         let mut options = CiteOptions::default();
-        options.section = Some(CiteSection {
-            marker: "{{ footnote }}".into(),
-            name: "Bibliography".into(),
-            template: "<Bibliography cites={attrs.cites} references={attrs.references} />".into(),
+        options.custom_node = Some(CiteCustomNode {
+            name: "Citation".into(),
+            template: "<Citation />".into(),
             imports: Vec::new(),
         });
+
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Frontmatter),
+            Event::Attribute {
+                name: "data".into(),
+                value: r#"{"references":{"book":{"title":"Book"}}}"#.into(),
+            },
+            Event::EndNode(NodeKind::Frontmatter),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text(r#"[^^]("book")[.hero]{ foo: "bar" }"#.into()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+
         let result = process(&events, &options);
-        assert!(result.iter().any(|event| matches!(
-            event,
-            Event::StartNode(NodeKind::Custom(name)) if name == "Bibliography"
+        assert!(result.iter().any(|e| matches!(
+            e,
+            Event::Attribute { name, value } if name == "class" && value == "hero"
         )));
-        assert!(result.iter().any(|event| matches!(
-            event,
-            Event::Attribute { name, value } if name == "cites" && value.contains("book")
+        assert!(result.iter().any(|e| matches!(
+            e,
+            Event::Attribute { name, value } if name == "data-foo" && value == "bar"
         )));
     }
 }
