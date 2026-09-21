@@ -1,3 +1,4 @@
+// text.rs
 use pendon_core::{Event, NodeKind};
 
 use crate::context::ParseContext;
@@ -38,10 +39,17 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             return;
         }
         let blank_line = ctx.at_line_start;
+
         if ctx.use_line_break() {
             ctx.at_line_start = true;
             return;
         }
+
+        // CommonMark Soft Break
+        if !blank_line && matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
+            ctx.out.push(Event::Text("\n".to_string()));
+        }
+
         if ctx.in_code_fence {
             if ctx.skip_initial_code_newline {
                 ctx.skip_initial_code_newline = false;
@@ -53,12 +61,21 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             return;
         }
         if ctx.in_heading {
+            ctx.emit_end(NodeKind::Heading);
+            ctx.in_heading = false;
             ctx.previous_line_blank = false;
             ctx.at_line_start = true;
             return;
         }
         if blank_line {
             ctx.close_all_lists();
+            if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
+                ctx.emit_end(NodeKind::Paragraph);
+            }
+            // close blockquote if the line is completely empty and we are at the start of a new line
+            if ctx.blockquote_depth > 0 {
+                adjust_blockquote(&mut ctx.out, &mut ctx.blockquote_depth, 0);
+            }
         }
         ctx.previous_line_blank = true;
         ctx.at_line_start = true;
@@ -73,15 +90,38 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
         let previous_line_blank = ctx.previous_line_blank;
         ctx.previous_line_blank = false;
         let (depth, tail) = parse_blockquote_prefix(&line);
+
         if depth > 0 && previous_line_blank && !ctx.list_frames.is_empty() {
             ctx.close_all_lists();
         }
+        if depth != ctx.blockquote_depth && ctx.in_table {
+            ctx.close_table_if_open();
+        }
+
+        // sctrict blockquote: only adjust blockquote depth if the detected depth is different from the current depth
         adjust_blockquote(&mut ctx.out, &mut ctx.blockquote_depth, depth);
+
         if depth > 0 {
             line = tail.to_string();
         } else {
             line = original_line;
         }
+
+        // Empty line inside blockquote should close paragraph and lists, but not the blockquote itself
+        if depth > 0 && line.trim().is_empty() {
+            if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
+                ctx.emit_end(NodeKind::Paragraph);
+            }
+            ctx.close_all_lists();
+            if ctx.in_table {
+                close_table(&mut ctx.out, &mut ctx.in_table);
+            }
+            ctx.pending_para_start = true;
+            ctx.previous_line_blank = true;
+            ctx.at_line_start = false;
+            return;
+        }
+
         if ctx.options.allow_html {
             if let Some(html_line) = capture_html_block(&line) {
                 if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
@@ -144,6 +184,78 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
     if ctx.at_line_start && !ctx.in_heading && !ctx.in_code_fence {
         let indent = line.chars().take_while(|c| *c == ' ').count();
         let line = &line[indent..];
+        let trimmed_for_block = line.trim_start();
+
+        // Detect heading atx-style (e.g., # Heading 1)
+        if line.starts_with('#') {
+            let hashes = line.chars().take_while(|&c| c == '#').count();
+            if hashes >= 1 && hashes <= 6 {
+                let after_hashes = line.chars().nth(hashes);
+                if after_hashes == Some(' ') || after_hashes.is_none() {
+                    if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
+                        ctx.emit_end(NodeKind::Paragraph);
+                    }
+                    ctx.emit_start(NodeKind::Heading);
+                    ctx.in_heading = true;
+                    ctx.heading_prefix_consumed = true;
+                    ctx.skip_para_open = ctx.skip_para_open.saturating_add(1);
+                    ctx.skip_para_close = ctx.skip_para_close.saturating_add(1);
+
+                    ctx.out.push(Event::Attribute {
+                        name: "level".to_string(),
+                        value: hashes.to_string(),
+                    });
+
+                    let rest = if after_hashes == Some(' ') {
+                        &line[hashes + 1..]
+                    } else {
+                        ""
+                    };
+                    if !rest.is_empty() {
+                        emit_line_content(ctx, rest);
+                    }
+                    ctx.at_line_start = false;
+                    return;
+                }
+            }
+        }
+
+        // Detect code fence in blockquote
+        if line.starts_with("```") {
+            let fence_count = line.chars().take_while(|&c| c == '`').count();
+            if fence_count >= 3 {
+                if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
+                    ctx.emit_end(NodeKind::Paragraph);
+                }
+                ctx.emit_start(NodeKind::CodeFence);
+                ctx.in_code_fence = true;
+                ctx.skip_initial_code_newline = true;
+                ctx.skip_para_open = ctx.skip_para_open.saturating_add(1);
+                ctx.skip_para_close = ctx.skip_para_close.saturating_add(1);
+
+                let info = line[fence_count..].trim();
+                if !info.is_empty() {
+                    ctx.out.push(Event::Attribute {
+                        name: "lang".to_string(),
+                        value: info.to_string(),
+                    });
+                }
+                ctx.at_line_start = false;
+                return;
+            }
+        }
+
+        // Detect ThematicBreak in blockquote
+        if trimmed_for_block.len() >= 3 && trimmed_for_block.chars().all(|c| c == '-') {
+            if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
+                ctx.emit_end(NodeKind::Paragraph);
+            }
+            ctx.emit_start(NodeKind::ThematicBreak);
+            ctx.out.push(Event::Text(line.to_string()));
+            ctx.emit_end(NodeKind::ThematicBreak);
+            ctx.at_line_start = false;
+            return;
+        }
 
         // Ordered list detection
         let mut chars = line.chars();
@@ -247,7 +359,12 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
         emit_line_content(ctx, &line);
     } else if ctx.in_code_fence {
         let trimmed = line.trim();
-        if !trimmed.is_empty() && trimmed.chars().all(|c| c == '`') {
+        if !trimmed.is_empty() && trimmed.chars().all(|c| c == '`') && trimmed.len() >= 3 {
+            ctx.emit_end(NodeKind::CodeFence);
+            ctx.in_code_fence = false;
+            ctx.skip_initial_code_newline = false;
+            ctx.skip_backticks_once = true;
+            ctx.at_line_start = false;
             return;
         }
         ctx.out.push(Event::Text(line.clone()));
