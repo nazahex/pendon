@@ -1,7 +1,7 @@
 // text.rs
 use pendon_core::{Event, NodeKind};
 
-use crate::context::ParseContext;
+use crate::context::{ListFrame, ParseContext};
 use crate::helpers::{
     adjust_blockquote, capture_html_block, close_table, emit_html_event, emit_inline,
     emit_table_row, is_table_row, is_table_separator, parse_blockquote_prefix, split_table_cells,
@@ -32,6 +32,11 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
         return;
     }
 
+    // Baris yang hanya berisi spasi dianggap sebagai baris kosong (blank line).
+    if s != "\n" && s.trim().is_empty() && !ctx.in_code_fence && !ctx.display_math_open {
+        return;
+    }
+
     if s == "\n" {
         if ctx.display_math_open {
             ctx.out.push(Event::Text("\n".to_string()));
@@ -45,7 +50,6 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             return;
         }
 
-        // CommonMark Soft Break
         if !blank_line && matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
             ctx.out.push(Event::Text("\n".to_string()));
         }
@@ -68,51 +72,138 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             return;
         }
         if blank_line {
-            ctx.close_all_lists();
             if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
                 ctx.emit_end(NodeKind::Paragraph);
             }
-            // close blockquote if the line is completely empty and we are at the start of a new line
             if ctx.blockquote_depth > 0 {
+                // PENTING: Baris kosong di luar blockquote akan mengakhiri blockquote.
+                // Kita HARUS menutup semua list yang ada di dalam blockquote tersebut terlebih dahulu.
+                while let Some(frame) = ctx.list_frames.last() {
+                    if frame.blockquote_depth > 0 {
+                        let popped = ctx.list_frames.pop().unwrap();
+                        if popped.item_open {
+                            ctx.out.push(Event::EndNode(NodeKind::ListItem));
+                        }
+                        ctx.out.push(Event::EndNode(popped.kind));
+                    } else {
+                        break;
+                    }
+                }
                 adjust_blockquote(&mut ctx.out, &mut ctx.blockquote_depth, 0);
             }
+            ctx.previous_line_blank = true;
+        } else {
+            ctx.previous_line_blank = false;
         }
-        ctx.previous_line_blank = true;
         ctx.at_line_start = true;
         return;
     }
 
     ctx.capture_line_text(s);
-    let mut line = s.to_string();
+    let line = s.to_string();
     let original_line = line.clone();
 
     if ctx.at_line_start && !ctx.in_heading && !ctx.in_code_fence {
-        let previous_line_blank = ctx.previous_line_blank;
         ctx.previous_line_blank = false;
-        let (depth, tail) = parse_blockquote_prefix(&line);
 
-        if depth > 0 && previous_line_blank && !ctx.list_frames.is_empty() {
-            ctx.close_all_lists();
+        // PENTING: Hitung spasi SEBELUM blockquote prefix untuk indentasi list yang akurat
+        let spaces_before_quote = line.chars().take_while(|c| *c == ' ').count();
+        let (depth, tail) = parse_blockquote_prefix(&line);
+        let current_line = if depth > 0 {
+            tail.to_string()
+        } else {
+            original_line
+        };
+
+        let spaces_after_quote = current_line.chars().take_while(|c| *c == ' ').count();
+        let stripped_for_marker = &current_line[spaces_after_quote..];
+
+        // Total indentasi = spasi sebelum quote + spasi setelah quote
+        let leading_spaces = spaces_before_quote + spaces_after_quote;
+
+        let mut is_list_marker = false;
+        let mut marker_width = 0;
+        let mut list_kind = NodeKind::Paragraph;
+        let mut start_attr = None;
+
+        let mut chars = stripped_for_marker.chars();
+        let mut num_str = String::new();
+        while let Some(c) = chars.next() {
+            if c.is_ascii_digit() {
+                num_str.push(c);
+            } else {
+                break;
+            }
         }
+        if !num_str.is_empty() {
+            let consumed = num_str.len();
+            if let Some(delim) = stripped_for_marker.chars().nth(consumed) {
+                if (delim == '.' || delim == ')')
+                    && stripped_for_marker.chars().nth(consumed + 1) == Some(' ')
+                {
+                    is_list_marker = true;
+                    marker_width = consumed + 2;
+                    list_kind = NodeKind::OrderedList;
+                    start_attr = num_str.parse::<usize>().ok();
+                }
+            }
+        }
+
+        if !is_list_marker {
+            if stripped_for_marker.starts_with("- ")
+                || stripped_for_marker.starts_with("* ")
+                || stripped_for_marker.starts_with("+ ")
+            {
+                is_list_marker = true;
+                marker_width = 2;
+                list_kind = NodeKind::BulletList;
+            }
+        }
+
+        let content_indent = leading_spaces + marker_width;
+
+        // ATURAN EMAS: Tutup list yang tidak bisa menampung baris ini SECARA EKSPLISIT.
+        // Ini HARUS dilakukan sebelum kita membuka elemen blok lain seperti blockquote.
+        while let Some(frame) = ctx.list_frames.last() {
+            let can_contain = if is_list_marker {
+                leading_spaces == frame.indent || leading_spaces >= frame.content_indent
+            } else {
+                leading_spaces >= frame.content_indent
+            };
+
+            if !can_contain {
+                let popped = ctx.list_frames.pop().unwrap();
+                if popped.item_open {
+                    ctx.out.push(Event::EndNode(NodeKind::ListItem));
+                }
+                ctx.out.push(Event::EndNode(popped.kind));
+            } else {
+                break;
+            }
+        }
+
+        // SEKARANG baru kita sesuaikan blockquote depth
         if depth != ctx.blockquote_depth && ctx.in_table {
             ctx.close_table_if_open();
         }
-
-        // sctrict blockquote: only adjust blockquote depth if the detected depth is different from the current depth
-        adjust_blockquote(&mut ctx.out, &mut ctx.blockquote_depth, depth);
-
-        if depth > 0 {
-            line = tail.to_string();
-        } else {
-            line = original_line;
+        while let Some(frame) = ctx.list_frames.last() {
+            if frame.blockquote_depth > depth {
+                let popped = ctx.list_frames.pop().unwrap();
+                if popped.item_open {
+                    ctx.out.push(Event::EndNode(NodeKind::ListItem));
+                }
+                ctx.out.push(Event::EndNode(popped.kind));
+            } else {
+                break;
+            }
         }
 
-        // Empty line inside blockquote should close paragraph and lists, but not the blockquote itself
-        if depth > 0 && line.trim().is_empty() {
+        adjust_blockquote(&mut ctx.out, &mut ctx.blockquote_depth, depth);
+
+        if depth > 0 && current_line.trim().is_empty() {
             if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
                 ctx.emit_end(NodeKind::Paragraph);
             }
-            ctx.close_all_lists();
             if ctx.in_table {
                 close_table(&mut ctx.out, &mut ctx.in_table);
             }
@@ -122,8 +213,71 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             return;
         }
 
+        if is_list_marker {
+            if ctx.in_table {
+                close_table(&mut ctx.out, &mut ctx.in_table);
+            }
+
+            if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
+                ctx.emit_end(NodeKind::Paragraph);
+            }
+
+            let mut need_new_list = true;
+            if let Some(frame) = ctx.list_frames.last() {
+                if leading_spaces == frame.indent {
+                    if frame.kind == list_kind {
+                        if frame.item_open {
+                            ctx.out.push(Event::EndNode(NodeKind::ListItem));
+                            if let Some(f) = ctx.list_frames.last_mut() {
+                                f.item_open = false;
+                            }
+                        }
+                        need_new_list = false;
+                    } else {
+                        let popped = ctx.list_frames.pop().unwrap();
+                        if popped.item_open {
+                            ctx.out.push(Event::EndNode(NodeKind::ListItem));
+                        }
+                        ctx.out.push(Event::EndNode(popped.kind));
+                    }
+                }
+            }
+
+            if need_new_list {
+                ctx.out.push(Event::StartNode(list_kind.clone()));
+                ctx.stack.push(list_kind.clone());
+                if let (NodeKind::OrderedList, Some(n)) = (&list_kind, start_attr) {
+                    ctx.out.push(Event::Attribute {
+                        name: "start".to_string(),
+                        value: n.to_string(),
+                    });
+                }
+                ctx.list_frames.push(ListFrame {
+                    kind: list_kind.clone(),
+                    indent: leading_spaces,
+                    content_indent,
+                    item_open: false,
+                    blockquote_depth: ctx.blockquote_depth,
+                });
+            }
+
+            ctx.out.push(Event::StartNode(NodeKind::ListItem));
+            ctx.stack.push(NodeKind::ListItem);
+            if let Some(f) = ctx.list_frames.last_mut() {
+                f.item_open = true;
+            }
+
+            ctx.pending_para_start = false;
+            let tail_marker = &stripped_for_marker[marker_width..];
+            if !tail_marker.is_empty() {
+                emit_line_content(ctx, tail_marker);
+            }
+            ctx.at_line_start = false;
+            return;
+        }
+
         if ctx.options.allow_html {
-            if let Some(html_line) = capture_html_block(&line) {
+            if let Some(html_line) = capture_html_block(&current_line) {
                 if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
                     ctx.emit_end(NodeKind::Paragraph);
                 }
@@ -133,7 +287,8 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                 return;
             }
         }
-        let trimmed_for_table = line.trim_start();
+
+        let trimmed_for_table = current_line.trim_start();
 
         if ctx.in_table {
             if is_table_row(trimmed_for_table) {
@@ -176,21 +331,13 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                 return;
             }
         }
-    } else if ctx.in_table {
-        close_table(&mut ctx.out, &mut ctx.in_table);
-        ctx.first_table_row = true;
-    }
 
-    if ctx.at_line_start && !ctx.in_heading && !ctx.in_code_fence {
-        let indent = line.chars().take_while(|c| *c == ' ').count();
-        let line = &line[indent..];
-        let trimmed_for_block = line.trim_start();
+        let trimmed_for_block = stripped_for_marker;
 
-        // Detect heading atx-style (e.g., # Heading 1)
-        if line.starts_with('#') {
-            let hashes = line.chars().take_while(|&c| c == '#').count();
+        if trimmed_for_block.starts_with('#') {
+            let hashes = trimmed_for_block.chars().take_while(|&c| c == '#').count();
             if hashes >= 1 && hashes <= 6 {
-                let after_hashes = line.chars().nth(hashes);
+                let after_hashes = trimmed_for_block.chars().nth(hashes);
                 if after_hashes == Some(' ') || after_hashes.is_none() {
                     if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
                         ctx.emit_end(NodeKind::Paragraph);
@@ -207,7 +354,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                     });
 
                     let rest = if after_hashes == Some(' ') {
-                        &line[hashes + 1..]
+                        &trimmed_for_block[hashes + 1..]
                     } else {
                         ""
                     };
@@ -220,9 +367,8 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             }
         }
 
-        // Detect code fence in blockquote
-        if line.starts_with("```") {
-            let fence_count = line.chars().take_while(|&c| c == '`').count();
+        if trimmed_for_block.starts_with("```") {
+            let fence_count = trimmed_for_block.chars().take_while(|&c| c == '`').count();
             if fence_count >= 3 {
                 if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
                     ctx.emit_end(NodeKind::Paragraph);
@@ -233,7 +379,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                 ctx.skip_para_open = ctx.skip_para_open.saturating_add(1);
                 ctx.skip_para_close = ctx.skip_para_close.saturating_add(1);
 
-                let info = line[fence_count..].trim();
+                let info = trimmed_for_block[fence_count..].trim();
                 if !info.is_empty() {
                     ctx.out.push(Event::Attribute {
                         name: "lang".to_string(),
@@ -245,100 +391,32 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             }
         }
 
-        // Detect ThematicBreak in blockquote
         if trimmed_for_block.len() >= 3 && trimmed_for_block.chars().all(|c| c == '-') {
             if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
                 ctx.emit_end(NodeKind::Paragraph);
             }
             ctx.emit_start(NodeKind::ThematicBreak);
-            ctx.out.push(Event::Text(line.to_string()));
+            ctx.out.push(Event::Text(trimmed_for_block.to_string()));
             ctx.emit_end(NodeKind::ThematicBreak);
             ctx.at_line_start = false;
             return;
         }
 
-        // Ordered list detection
-        let mut chars = line.chars();
-        let mut num_str = String::new();
-        while let Some(c) = chars.next() {
-            if c.is_ascii_digit() {
-                num_str.push(c);
-            } else {
-                break;
-            }
-        }
-        if !num_str.is_empty() {
-            let consumed = num_str.len();
-            if let Some(delim) = line.chars().nth(consumed) {
-                if (delim == '.' || delim == ')') && line.chars().nth(consumed + 1) == Some(' ') {
-                    ctx.close_lists_above(indent);
-                    if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
-                        ctx.emit_end(NodeKind::Paragraph);
-                    }
-                    let start_num = num_str.parse::<usize>().ok();
-                    let start_attr = if let Some(n) = start_num {
-                        if !ctx.current_list_start_emitted() {
-                            Some(n)
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-                    ctx.ensure_list(NodeKind::OrderedList, indent, start_attr);
-                    if start_attr.is_some() {
-                        ctx.mark_current_list_start_emitted();
-                    }
-                    ctx.start_list_item();
-                    ctx.pending_para_start = false;
-                    let tail = &line[(consumed + 2)..];
-                    if !tail.is_empty() {
-                        emit_line_content(ctx, tail);
-                    }
-                    ctx.at_line_start = false;
-                    return;
-                }
-            }
-        }
-
-        // Bullet list detection
-        if line.starts_with("- ") || line.starts_with("* ") || line.starts_with("+ ") {
-            ctx.close_lists_above(indent);
-            if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
-                ctx.emit_end(NodeKind::Paragraph);
-            }
-            ctx.ensure_list(NodeKind::BulletList, indent, None);
-            ctx.start_list_item();
-            ctx.pending_para_start = false;
-            let tail = &line[2..];
-            if !tail.is_empty() {
-                emit_line_content(ctx, tail);
-            }
-            ctx.at_line_start = false;
-            return;
-        }
-
-        // Continuation line inside current list
-        if ctx.list_frames.last().is_some() {
-            ctx.close_lists_above(indent);
-            if ctx.list_frames.last().is_some() {
-                ctx.start_list_item();
-                if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
-                    ctx.emit_end(NodeKind::Paragraph);
-                }
-                let tail = line;
-                if !tail.is_empty() {
-                    emit_line_content(ctx, tail);
-                }
-                ctx.at_line_start = false;
-                return;
-            }
-        }
-
         if ctx.pending_para_start {
-            ctx.emit_start(NodeKind::Paragraph);
+            if !matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
+                ctx.emit_start(NodeKind::Paragraph);
+            }
             ctx.pending_para_start = false;
+        } else if !matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
+            ctx.emit_start(NodeKind::Paragraph);
         }
+        emit_line_content(ctx, trimmed_for_block);
+
+        ctx.at_line_start = false;
+        return;
+    } else if ctx.in_table {
+        close_table(&mut ctx.out, &mut ctx.in_table);
+        ctx.first_table_row = true;
     }
 
     if ctx.in_heading {

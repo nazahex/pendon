@@ -8,8 +8,9 @@ use crate::helpers::{adjust_blockquote, close_table, emit_html_event};
 pub(crate) struct ListFrame {
     pub kind: NodeKind,
     pub indent: usize,
-    pub start_emitted: bool,
+    pub content_indent: usize,
     pub item_open: bool,
+    pub blockquote_depth: usize,
 }
 
 pub struct ParseContext {
@@ -73,12 +74,18 @@ impl ParseContext {
         self.out.push(event.clone());
     }
 
-    pub fn close_all_lists(&mut self) {
-        while let Some(frame) = self.list_frames.pop() {
+    pub fn pop_list(&mut self) {
+        if let Some(frame) = self.list_frames.pop() {
             if frame.item_open {
                 self.emit_end(NodeKind::ListItem);
             }
             self.emit_end(frame.kind);
+        }
+    }
+
+    pub fn close_all_lists(&mut self) {
+        while !self.list_frames.is_empty() {
+            self.pop_list();
         }
     }
 
@@ -110,21 +117,6 @@ impl ParseContext {
         self.out
     }
 
-    pub fn close_lists_above(&mut self, indent: usize) {
-        while self
-            .list_frames
-            .last()
-            .map(|f| f.indent > indent)
-            .unwrap_or(false)
-        {
-            let frame = self.list_frames.pop().unwrap();
-            if frame.item_open {
-                self.emit_end(NodeKind::ListItem);
-            }
-            self.emit_end(frame.kind);
-        }
-    }
-
     pub fn capture_line_text(&mut self, text: &str) {
         self.last_line_text = Some(text.to_string());
     }
@@ -151,63 +143,6 @@ impl ParseContext {
         false
     }
 
-    pub fn ensure_list(&mut self, kind: NodeKind, indent: usize, start: Option<usize>) {
-        if let Some(frame) = self.list_frames.last_mut() {
-            if frame.indent == indent && frame.kind == kind {
-                if let (NodeKind::OrderedList, Some(n)) = (&kind, start) {
-                    if !frame.start_emitted {
-                        self.out.push(Event::Attribute {
-                            name: "start".to_string(),
-                            value: n.to_string(),
-                        });
-                        frame.start_emitted = true;
-                    }
-                }
-                return;
-            }
-            if frame.indent == indent && frame.kind != kind {
-                let popped = self.list_frames.pop().unwrap();
-                if popped.item_open {
-                    self.emit_end(NodeKind::ListItem);
-                }
-                self.emit_end(popped.kind);
-            }
-        }
-
-        if let Some(frame) = self.list_frames.last() {
-            if frame.indent < indent {
-                self.open_list(kind, indent, start);
-                return;
-            }
-        }
-
-        if self
-            .list_frames
-            .last()
-            .map(|f| f.indent > indent)
-            .unwrap_or(false)
-        {
-            self.close_lists_above(indent);
-        }
-        self.open_list(kind, indent, start);
-    }
-
-    fn open_list(&mut self, kind: NodeKind, indent: usize, start: Option<usize>) {
-        self.emit_start(kind.clone());
-        if let (NodeKind::OrderedList, Some(n)) = (kind.clone(), start) {
-            self.out.push(Event::Attribute {
-                name: "start".to_string(),
-                value: n.to_string(),
-            });
-        }
-        self.list_frames.push(ListFrame {
-            kind,
-            indent,
-            start_emitted: start.is_some(),
-            item_open: false,
-        });
-    }
-
     fn remove_trailing_chars(&mut self, ch: char, mut count: usize) {
         let mut idx = self.out.len();
         while count > 0 && idx > 0 {
@@ -222,32 +157,6 @@ impl ParseContext {
                     }
                 }
             }
-        }
-    }
-    pub fn start_list_item(&mut self) {
-        let item_already_open = self.in_list_item();
-        if item_already_open {
-            self.emit_end(NodeKind::ListItem);
-            if let Some(frame) = self.list_frames.last_mut() {
-                frame.item_open = false;
-            }
-        }
-        self.emit_start(NodeKind::ListItem);
-        if let Some(frame) = self.list_frames.last_mut() {
-            frame.item_open = true;
-        }
-    }
-
-    pub fn current_list_start_emitted(&self) -> bool {
-        self.list_frames
-            .last()
-            .map(|f| f.start_emitted)
-            .unwrap_or(false)
-    }
-
-    pub fn mark_current_list_start_emitted(&mut self) {
-        if let Some(frame) = self.list_frames.last_mut() {
-            frame.start_emitted = true;
         }
     }
 

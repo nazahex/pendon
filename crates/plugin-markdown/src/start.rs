@@ -1,3 +1,4 @@
+// start.rs
 use pendon_core::NodeKind;
 
 use crate::context::ParseContext;
@@ -47,8 +48,9 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind) {
                 ctx.skip_para_open = ctx.skip_para_open.saturating_sub(1);
             } else {
                 ctx.pending_para_start = true;
-                ctx.at_line_start = true;
             }
+            // PENTING: Paksa at_line_start = true agar deteksi list marker selalu berjalan
+            ctx.at_line_start = true;
         }
         _ => {
             if !is_inline_node(kind) {
