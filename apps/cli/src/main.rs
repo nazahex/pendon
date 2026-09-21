@@ -12,6 +12,7 @@ use pendon_plugin_img::process as process_img;
 use pendon_plugin_latex::process as process_latex;
 use pendon_plugin_markdown::MarkdownOptions;
 use pendon_plugin_quiz::{process as process_quiz, solid_hints as quiz_solid_hints};
+use pendon_plugin_table::process as process_table;
 use pendon_plugin_vicado::{process as process_vicado, solid_hints as vicado_solid_hints};
 use pendon_plugin_wiki::{process_with_options as process_wiki, WikiOptions};
 use pendon_renderer_json::render_to_string;
@@ -217,6 +218,14 @@ fn main() -> ExitCode {
                         &empty_pipeline,
                     )
                 }
+                "table" => {
+                    let empty_pipeline = pendon_core::Pipeline::default();
+                    process_table(
+                        &ev,
+                        &pendon_plugin_table::TableOptions::default(),
+                        &empty_pipeline,
+                    )
+                }
                 "heading" => process_heading(&ev, &HeadingOptions::default()),
                 "anchor" => pendon_plugin_anchor::process(&ev, &AnchorOptions::default()),
                 "cite" => pendon_plugin_cite::process(&ev, &CiteOptions::default()),
@@ -373,6 +382,7 @@ struct ConfigTask {
     anchor: Option<AnchorTaskConfig>,
     heading: Option<pendon_plugin_heading::HeadingOptions>,
     img: Option<pendon_plugin_img::ImgOptions>,
+    table: Option<TableTaskConfig>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -409,6 +419,26 @@ struct CiteCustomNodeConfig {
 struct CiteSectionConfig {
     marker: Option<String>,
     node: Option<String>,
+    template: Option<String>,
+    imports: Option<Vec<toml::Value>>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct TableTaskConfig {
+    custom_node: Option<TableCustomNodeConfig>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct TableCustomNodeConfig {
+    table: Option<TableComponentConfig>,
+    caption: Option<TableComponentConfig>,
+    row: Option<TableComponentConfig>,
+    cell: Option<TableComponentConfig>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct TableComponentConfig {
+    name: Option<String>,
     template: Option<String>,
     imports: Option<Vec<toml::Value>>,
 }
@@ -588,6 +618,33 @@ fn run_from_config() -> ExitCode {
                         // --- Build Inline Pipeline ---
                         let mut inline_pipeline = Pipeline::new();
 
+                        // 1. PLUGIN IMG HARUS BERJALAN PERTAMA
+                        // plugin-img membutuhkan Paragraph yang utuh (hanya berisi Text event).
+                        // Jika cite/wiki/anchor berjalan lebih dulu, mereka akan memecah Text menjadi inline nodes,
+                        // sehingga plugin-img gagal mendeteksi sintaksis gambar tingkat lanjut.
+                        let img_opts_for_pipeline = task.img.clone().unwrap_or_default();
+
+                        // Buat inner pipeline khusus untuk memproses caption di dalam figure plugin-img
+                        let mut img_inner_pipeline = Pipeline::new();
+                        let cite_inner = cite_ctx_shared.clone();
+                        img_inner_pipeline.add(move |ev: Vec<Event>| {
+                            cite_inner.lock().unwrap().process_events(&ev)
+                        });
+                        let wiki_inner = task_wiki_opts.clone();
+                        img_inner_pipeline.add(move |ev: Vec<Event>| {
+                            pendon_plugin_wiki::process_with_options(&ev, wiki_inner.clone())
+                        });
+                        let anchor_inner = build_anchor_options(task.anchor.as_ref());
+                        img_inner_pipeline.add(move |ev: Vec<Event>| {
+                            pendon_plugin_anchor::process(&ev, &anchor_inner)
+                        });
+
+                        let img_opts_clone = img_opts_for_pipeline.clone();
+                        inline_pipeline.add(move |ev: Vec<Event>| {
+                            pendon_plugin_img::process(&ev, &img_opts_clone, &img_inner_pipeline)
+                        });
+
+                        // 2. Plugin inline lainnya berjalan setelah img
                         let cite_for_pipeline = cite_ctx_shared.clone();
                         inline_pipeline.add(move |ev: Vec<Event>| {
                             cite_for_pipeline.lock().unwrap().process_events(&ev)
@@ -666,6 +723,19 @@ fn run_from_config() -> ExitCode {
                                         );
                                         if let Some(hints) =
                                             pendon_plugin_img::solid_hints(&img_opts)
+                                        {
+                                            builtin_hints.push(hints);
+                                        }
+                                    }
+                                    "table" => {
+                                        let table_opts = build_table_options(task.table.as_ref());
+                                        events = pendon_plugin_table::process(
+                                            &events,
+                                            &table_opts,
+                                            &inline_pipeline,
+                                        );
+                                        if let Some(hints) =
+                                            pendon_plugin_table::solid_hints(&table_opts)
                                         {
                                             builtin_hints.push(hints);
                                         }
@@ -1180,6 +1250,71 @@ fn parse_cite_imports(values: &[toml::Value]) -> Vec<CiteImport> {
                 })
                 .unwrap_or_default();
             Some(CiteImport {
+                module,
+                default,
+                names,
+            })
+        })
+        .collect()
+}
+
+fn build_table_options(config: Option<&TableTaskConfig>) -> pendon_plugin_table::TableOptions {
+    let Some(config) = config else {
+        return pendon_plugin_table::TableOptions::default();
+    };
+
+    let custom_node =
+        config
+            .custom_node
+            .as_ref()
+            .map(|node| pendon_plugin_table::TableCustomNode {
+                table: build_table_component(node.table.as_ref()),
+                caption: build_table_component(node.caption.as_ref()),
+                row: build_table_component(node.row.as_ref()),
+                cell: build_table_component(node.cell.as_ref()),
+            });
+
+    pendon_plugin_table::TableOptions { custom_node }
+}
+
+fn build_table_component(
+    cfg: Option<&TableComponentConfig>,
+) -> Option<pendon_plugin_table::CustomComponent> {
+    let Some(c) = cfg else {
+        return None;
+    };
+    Some(pendon_plugin_table::CustomComponent {
+        name: c.name.clone().unwrap_or_default(),
+        template: c.template.clone().unwrap_or_default(),
+        imports: c
+            .imports
+            .as_deref()
+            .map(parse_table_imports)
+            .unwrap_or_default(),
+    })
+}
+
+fn parse_table_imports(values: &[toml::Value]) -> Vec<pendon_plugin_table::CustomImport> {
+    values
+        .iter()
+        .filter_map(|value| {
+            let table = value.as_table()?;
+            let module = table.get("module")?.as_str()?.to_string();
+            let default = table
+                .get("default")
+                .and_then(|value| value.as_str())
+                .map(str::to_string);
+            let names = table
+                .get("names")
+                .and_then(|value| value.as_array())
+                .map(|values| {
+                    values
+                        .iter()
+                        .filter_map(|value| value.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default();
+            Some(pendon_plugin_table::CustomImport {
                 module,
                 default,
                 names,
