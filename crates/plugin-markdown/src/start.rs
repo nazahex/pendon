@@ -13,14 +13,15 @@ fn is_inline_node(kind: &NodeKind) -> bool {
             | NodeKind::Italic
             | NodeKind::HtmlInline
             | NodeKind::Image
+            | NodeKind::Custom(_)
     )
 }
 
 pub fn handle(ctx: &mut ParseContext, kind: &NodeKind) {
     match kind {
         NodeKind::Heading => {
-            ctx.close_blockquotes();
             ctx.close_all_lists();
+            ctx.close_table_if_open();
             ctx.emit_start(NodeKind::Heading);
             ctx.in_heading = true;
             ctx.heading_prefix_consumed = false;
@@ -29,11 +30,17 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind) {
         }
         NodeKind::CodeFence => {
             ctx.close_all_lists();
+            ctx.close_table_if_open();
             ctx.emit_start(NodeKind::CodeFence);
             ctx.in_code_fence = true;
             ctx.skip_initial_code_newline = true;
             ctx.skip_para_open = ctx.skip_para_open.saturating_add(1);
             ctx.skip_para_close = ctx.skip_para_close.saturating_add(1);
+        }
+        NodeKind::ThematicBreak => {
+            ctx.close_all_lists();
+            ctx.close_table_if_open();
+            ctx.emit_start(NodeKind::ThematicBreak);
         }
         NodeKind::Paragraph => {
             if ctx.skip_para_open > 0 {
