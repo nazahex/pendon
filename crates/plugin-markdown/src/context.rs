@@ -33,6 +33,8 @@ pub struct ParseContext {
     pub(crate) last_line_text: Option<String>,
     pub(crate) previous_line_blank: bool,
     pub(crate) display_math_open: bool,
+    pub(crate) in_html_comment: bool,
+    pub(crate) html_comment_buffer: String,
 }
 
 impl ParseContext {
@@ -57,6 +59,8 @@ impl ParseContext {
             last_line_text: None,
             previous_line_blank: false,
             display_math_open: false,
+            in_html_comment: false,
+            html_comment_buffer: String::new(),
         }
     }
 

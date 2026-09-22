@@ -1,4 +1,3 @@
-// text.rs
 use pendon_core::{Event, NodeKind};
 
 use crate::context::{ListFrame, ParseContext};
@@ -19,6 +18,36 @@ fn emit_line_content(ctx: &mut ParseContext, line: &str) {
 }
 
 pub fn handle(ctx: &mut ParseContext, s: &str) {
+    // Handle multiline HTML comment continuation
+    if ctx.in_html_comment {
+        if s == "\n" {
+            ctx.html_comment_buffer.push('\n');
+            ctx.at_line_start = true;
+            return;
+        }
+
+        if let Some(end_idx) = s.find("-->") {
+            let before_close = &s[..end_idx + 3];
+            ctx.html_comment_buffer.push_str(before_close);
+            emit_html_event(&mut ctx.out, &ctx.html_comment_buffer, NodeKind::HtmlBlock);
+            ctx.html_comment_buffer.clear();
+            ctx.in_html_comment = false;
+
+            let remaining = &s[end_idx + 3..];
+            if !remaining.is_empty() {
+                ctx.at_line_start = false;
+                handle(ctx, remaining);
+            } else {
+                ctx.at_line_start = false;
+            }
+            return;
+        } else {
+            ctx.html_comment_buffer.push_str(s);
+            ctx.at_line_start = false;
+            return;
+        }
+    }
+
     if matches!(
         ctx.stack.last(),
         Some(NodeKind::HtmlBlock | NodeKind::HtmlInline)
@@ -32,7 +61,6 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
         return;
     }
 
-    // Baris yang hanya berisi spasi dianggap sebagai baris kosong (blank line).
     if s != "\n" && s.trim().is_empty() && !ctx.in_code_fence && !ctx.display_math_open {
         return;
     }
@@ -76,8 +104,6 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                 ctx.emit_end(NodeKind::Paragraph);
             }
             if ctx.blockquote_depth > 0 {
-                // PENTING: Baris kosong di luar blockquote akan mengakhiri blockquote.
-                // Kita HARUS menutup semua list yang ada di dalam blockquote tersebut terlebih dahulu.
                 while let Some(frame) = ctx.list_frames.last() {
                     if frame.blockquote_depth > 0 {
                         let popped = ctx.list_frames.pop().unwrap();
@@ -106,7 +132,20 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
     if ctx.at_line_start && !ctx.in_heading && !ctx.in_code_fence {
         ctx.previous_line_blank = false;
 
-        // PENTING: Hitung spasi SEBELUM blockquote prefix untuk indentasi list yang akurat
+        // Check for multiline HTML comment start
+        if ctx.options.allow_html {
+            let trimmed_for_comment = line.trim_start();
+            if trimmed_for_comment.starts_with("<!--") && !trimmed_for_comment.contains("-->") {
+                if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
+                    ctx.emit_end(NodeKind::Paragraph);
+                }
+                ctx.in_html_comment = true;
+                ctx.html_comment_buffer.push_str(&line);
+                ctx.at_line_start = false;
+                return;
+            }
+        }
+
         let spaces_before_quote = line.chars().take_while(|c| *c == ' ').count();
         let (depth, tail) = parse_blockquote_prefix(&line);
         let current_line = if depth > 0 {
@@ -118,7 +157,6 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
         let spaces_after_quote = current_line.chars().take_while(|c| *c == ' ').count();
         let stripped_for_marker = &current_line[spaces_after_quote..];
 
-        // Total indentasi = spasi sebelum quote + spasi setelah quote
         let leading_spaces = spaces_before_quote + spaces_after_quote;
 
         let mut is_list_marker = false;
@@ -162,8 +200,6 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
 
         let content_indent = leading_spaces + marker_width;
 
-        // ATURAN EMAS: Tutup list yang tidak bisa menampung baris ini SECARA EKSPLISIT.
-        // Ini HARUS dilakukan sebelum kita membuka elemen blok lain seperti blockquote.
         while let Some(frame) = ctx.list_frames.last() {
             let can_contain = if is_list_marker {
                 leading_spaces == frame.indent || leading_spaces >= frame.content_indent
@@ -182,7 +218,6 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             }
         }
 
-        // SEKARANG baru kita sesuaikan blockquote depth
         if depth != ctx.blockquote_depth && ctx.in_table {
             ctx.close_table_if_open();
         }
