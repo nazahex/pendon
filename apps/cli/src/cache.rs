@@ -6,12 +6,18 @@ use std::path::Path;
 use std::time::SystemTime;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepInfo {
+    pub path: String,
+    pub hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheFile {
     pub task: String,
     pub input_hash: String,
     pub output_hash: String,
     pub mtime: u64,
-    pub deps: Vec<String>,
+    pub deps: Vec<DepInfo>, // Berubah dari Vec<String> menjadi Vec<DepInfo>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,7 +114,6 @@ pub fn get_file_mtime(path: &Path) -> Result<u64, String> {
     let metadata = fs::metadata(path)
         .map_err(|e| format!("cannot get metadata for {}: {}", path.display(), e))?;
 
-    // FIX: Wrap dengan Ok()
     Ok(metadata
         .modified()
         .map_err(|e| format!("cannot get mtime for {}: {}", path.display(), e))?
@@ -120,11 +125,10 @@ pub fn get_file_mtime(path: &Path) -> Result<u64, String> {
 pub fn should_skip_file(
     cache: &CacheManifest,
     input_path: &str,
-    output_path: &str,
+    _output_path: &str, // we no longer use output_path for cache validation
     task_config_hash: &str,
 ) -> (bool, Vec<String>) {
     let input_path_obj = Path::new(input_path);
-    let output_path_obj = Path::new(output_path);
 
     if !input_path_obj.exists() {
         return (false, vec![]);
@@ -135,11 +139,6 @@ pub fn should_skip_file(
         None => return (false, vec![]),
     };
 
-    if !output_path_obj.exists() {
-        return (false, vec![]);
-    }
-
-    // Check if task config changed
     if let Some(task) = cache.get_task(&cached.task) {
         if task.config_hash != task_config_hash {
             return (false, vec![]);
@@ -148,20 +147,7 @@ pub fn should_skip_file(
         return (false, vec![]);
     }
 
-    let input_mtime = match get_file_mtime(input_path_obj) {
-        Ok(t) => t,
-        Err(_) => return (false, vec![]),
-    };
-    let output_mtime = match get_file_mtime(output_path_obj) {
-        Ok(t) => t,
-        Err(_) => return (false, vec![]),
-    };
-
-    if output_mtime <= input_mtime {
-        return (false, vec![]);
-    }
-
-    // Verify input content hash
+    // Check if the input file's hash has changed
     let current_input_hash = match hash_file(input_path_obj) {
         Ok(h) => h,
         Err(_) => return (false, vec![]),
@@ -171,26 +157,23 @@ pub fn should_skip_file(
         return (false, vec![]);
     }
 
-    // Check dependencies (mtime-based)
+    // Check all hashes of dependencies
     let mut changed_deps = Vec::new();
-    for dep in &cached.deps {
-        let dep_path = Path::new(dep);
+    for cached_dep in &cached.deps {
+        let dep_path = Path::new(&cached_dep.path);
         if !dep_path.exists() {
-            changed_deps.push(dep.clone());
+            changed_deps.push(cached_dep.path.clone());
             continue;
         }
-
-        // FIX: Hapus dep_hash yang tidak digunakan, langsung check mtime
-        let dep_mtime = match get_file_mtime(dep_path) {
-            Ok(t) => t,
+        let current_dep_hash = match hash_file(dep_path) {
+            Ok(h) => h,
             Err(_) => {
-                changed_deps.push(dep.clone());
+                changed_deps.push(cached_dep.path.clone());
                 continue;
             }
         };
-
-        if dep_mtime > output_mtime {
-            changed_deps.push(dep.clone());
+        if current_dep_hash != cached_dep.hash {
+            changed_deps.push(cached_dep.path.clone());
         }
     }
 
@@ -198,6 +181,7 @@ pub fn should_skip_file(
         return (false, changed_deps);
     }
 
+    // Every hash is correct. So we can skip the file.
     (true, vec![])
 }
 
@@ -211,14 +195,31 @@ pub fn create_cache_entry(
     let output_path_obj = Path::new(output_path);
 
     let input_hash = hash_file(input_path_obj)?;
-    let output_hash = hash_file(output_path_obj)?;
-    let mtime = get_file_mtime(input_path_obj)?;
+
+    let output_hash = if output_path_obj.exists() {
+        hash_file(output_path_obj).unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    let mtime = get_file_mtime(input_path_obj).unwrap_or(0);
+
+    // Save hashes of dependencies
+    let mut dep_infos = Vec::new();
+    for dep in deps {
+        let dep_path = Path::new(&dep);
+        if dep_path.exists() {
+            if let Ok(hash) = hash_file(dep_path) {
+                dep_infos.push(DepInfo { path: dep, hash });
+            }
+        }
+    }
 
     Ok(CacheFile {
         task: task_name.to_string(),
         input_hash,
         output_hash,
         mtime,
-        deps,
+        deps: dep_infos,
     })
 }
