@@ -66,8 +66,8 @@ Speakers not present in `charmap` are rendered without class.
 Input:
 
 ```md
-Revan Juan: "Consectetur eu minim *aute* deserunt." _(stage note)_
-Stevano: *(whispering)* "Aliquip occaecat ipsum."\\...\\"Enim velit anim sunt qui mollit."
+Revan Juan: "Consectetur eu minim _aute_ deserunt." _(stage note)_
+Stevano: _(whispering)_ "Aliquip occaecat ipsum."\\...\\"Enim velit anim sunt qui mollit."
 ```
 
 Output (simplified):
@@ -105,11 +105,11 @@ markdown_allow_html = true
 
 - Crate entry point: `process(events: &[Event]) -> Vec<Event>`
 - Internal modules are split by concern:
-	- `pipeline.rs`: block detection and event transformation
-	- `render.rs`: HTML rendering for `<dt>/<dd>` and dialog tokens
-	- `tokenize.rs`: dialog tokenization (`Quote`, `Italic`, `Break`, `Plain`)
-	- `charmap.rs`: frontmatter `charmap` extraction/parsing
-	- `markdown.rs`: inline Markdown fragment rendering helper
+  - `pipeline.rs`: block detection and event transformation
+  - `render.rs`: HTML rendering for `<dt>/<dd>` and dialog tokens
+  - `tokenize.rs`: dialog tokenization (`Quote`, `Italic`, `Break`, `Plain`)
+  - `charmap.rs`: frontmatter `charmap` extraction/parsing
+  - `markdown.rs`: inline Markdown fragment rendering helper
 
 ## License
 

@@ -40,9 +40,9 @@ export const value = 42
 - First token: language (for example `typescript`, `tsx`, `js`, `css`)
 - Second token: must be `vicado`
 - Optional bracket block: classes and id
-: `.class-name` adds class, `#id-name` sets id
+  : `.class-name` adds class, `#id-name` sets id
 - Optional braces block: scalar props
-: supports string, number, and boolean values
+  : supports string, number, and boolean values
 
 ## Recommended Plugin Order
 
