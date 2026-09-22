@@ -19,6 +19,7 @@ pub struct ProcessResult {
     pub success: bool,
     pub bytes_written: usize,
     pub cache_entry: Option<(String, CacheFile)>,
+    pub skipped_write: bool,
 }
 
 pub fn process_single_file(
@@ -41,6 +42,7 @@ pub fn process_single_file(
                 success: false,
                 bytes_written: 0,
                 cache_entry: None,
+                skipped_write: false,
             };
         }
     };
@@ -74,6 +76,7 @@ pub fn process_single_file(
                     success: false,
                     bytes_written: 0,
                     cache_entry: None,
+                    skipped_write: false,
                 };
             }
         };
@@ -153,6 +156,7 @@ pub fn process_single_file(
                                 success: false,
                                 bytes_written: 0,
                                 cache_entry: None,
+                                skipped_write: false,
                             };
                         }
                     },
@@ -327,6 +331,7 @@ pub fn process_single_file(
                 success: false,
                 bytes_written: 0,
                 cache_entry: None,
+                skipped_write: false,
             };
         }
     };
@@ -336,27 +341,42 @@ pub fn process_single_file(
             if let Some(parent) = Path::new(out_path).parent() {
                 let _ = fs::create_dir_all(parent);
             }
-            if let Err(e) = fs::write(out_path, out_str.clone()) {
-                eprintln!("Error: cannot write output '{}': {}", out_path, e);
-                return ProcessResult {
-                    success: false,
-                    bytes_written: 0,
-                    cache_entry: None,
-                };
-            } else {
-                let bytes_written = out_str.len();
 
-                let cache_entry = match create_cache_entry(task_name, path_str, out_path, deps) {
-                    Ok(entry) => Some((path_str.to_string(), entry)),
-                    Err(_) => None,
-                };
-
-                return ProcessResult {
-                    success: true,
-                    bytes_written,
-                    cache_entry,
-                };
+            // CONTENT-AWARE WRITE: check if the content is the same as existing file to avoid unnecessary writes
+            let mut skipped_write = false;
+            if let Ok(existing_content) = fs::read_to_string(out_path) {
+                if existing_content == out_str {
+                    // The content is the same, skip writing to disk, avoid frontend massive hot reload
+                    skipped_write = true;
+                }
             }
+
+            if !skipped_write {
+                if let Err(e) = fs::write(out_path, out_str.clone()) {
+                    eprintln!("Error: cannot write output '{}': {}", out_path, e);
+                    return ProcessResult {
+                        success: false,
+                        bytes_written: 0,
+                        cache_entry: None,
+                        skipped_write: false,
+                    };
+                }
+            }
+
+            let bytes_written = out_str.len();
+
+            // Keep updating the cache entry even if the file was not written to disk
+            let cache_entry = match create_cache_entry(task_name, path_str, out_path, deps) {
+                Ok(entry) => Some((path_str.to_string(), entry)),
+                Err(_) => None,
+            };
+
+            return ProcessResult {
+                success: true,
+                bytes_written,
+                cache_entry,
+                skipped_write,
+            };
         }
         Err(e) => {
             eprintln!("Error: render failed: {}", e);
@@ -364,6 +384,7 @@ pub fn process_single_file(
                 success: false,
                 bytes_written: 0,
                 cache_entry: None,
+                skipped_write: false,
             };
         }
     }

@@ -59,14 +59,16 @@ pub fn run_from_config() -> ExitCode {
     }
 
     let mut exit = ExitCode::SUCCESS;
-    let mut total_skipped = 0usize;
-    let mut total_processed = 0usize;
 
     for (task_idx, task) in cfg.tasks.iter().enumerate() {
         let task_name = task
             .name
             .clone()
             .unwrap_or_else(|| format!("task-{}", task_idx));
+
+        let mut total_skipped = 0usize;
+        let mut total_processed = 0usize;
+        let mut total_skipped_write = 0usize; // track files that were not written
 
         // Hash task config
         let task_config_str = format!(
@@ -199,6 +201,9 @@ pub fn run_from_config() -> ExitCode {
                 }
 
                 total_bytes += result.bytes_written;
+                if result.skipped_write {
+                    total_skipped_write += 1;
+                }
 
                 // Update cache
                 if let Some((path, entry)) = result.cache_entry {
@@ -222,8 +227,11 @@ pub fn run_from_config() -> ExitCode {
             let fmt_text = task.format.as_str();
             let total_text = matched.to_string();
 
-            let cache_text = if total_skipped > 0 {
-                format!("{} cached, {} rebuilt", total_skipped, total_processed)
+            let cache_text = if total_skipped > 0 || total_skipped_write > 0 {
+                format!(
+                    "{} cached, {} rebuilt ({} write-skipped)",
+                    total_skipped, total_processed, total_skipped_write
+                )
             } else {
                 format!("{} processed", total_processed)
             };
