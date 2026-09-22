@@ -1,118 +1,32 @@
-use std::fs;
-use std::io::{self, Read};
 use std::process::ExitCode;
 
-use pendon_core::{parse, Event, NodeKind, Options, Pipeline};
-use pendon_plugin_anchor::{AnchorCustomNode, AnchorImport, AnchorOptions};
-use pendon_plugin_cite::{CiteCustomNode, CiteImport, CiteOptions, CiteSection};
-use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
-use pendon_plugin_dialog::process as process_dialog;
-use pendon_plugin_heading::{process as process_heading, HeadingOptions};
-use pendon_plugin_img::process as process_img;
-use pendon_plugin_latex::process as process_latex;
+use pendon_core::{parse, Options};
+use pendon_plugin_anchor::AnchorOptions;
+use pendon_plugin_cite::CiteOptions;
+use pendon_plugin_img::ImgOptions;
 use pendon_plugin_markdown::MarkdownOptions;
-use pendon_plugin_quiz::{process as process_quiz, solid_hints as quiz_solid_hints};
-use pendon_plugin_table::process as process_table;
-use pendon_plugin_vicado::{process as process_vicado, solid_hints as vicado_solid_hints};
-use pendon_plugin_wiki::{process_with_options as process_wiki, WikiOptions};
+use pendon_plugin_quiz::solid_hints as quiz_solid_hints;
+use pendon_plugin_table::TableOptions;
+use pendon_plugin_vicado::solid_hints as vicado_solid_hints;
+use pendon_plugin_wiki::WikiOptions;
 use pendon_renderer_json::render_to_string;
-use pendon_renderer_solid::{
-    render_solid_with_hints, ComponentTemplate, ImportEntry, SolidRenderHints,
-};
-use pico_args::Arguments;
-use regex::Regex;
-use serde::Deserialize;
-use serde_json;
-use std::collections::{HashMap, HashSet};
-use std::path::Path;
-use walkdir::WalkDir;
+use pendon_renderer_solid::{render_solid_with_hints, SolidRenderHints};
 
-#[derive(Debug, Default)]
-struct CliArgs {
-    input: Option<String>,
-    format: Option<String>,
-    strict: bool,
-    pretty: bool,
-    tui: bool,
-    max_doc_bytes: Option<usize>,
-    max_line_len: Option<usize>,
-    max_blank_run: Option<usize>,
-    plugin: Option<String>,
-    markdown_allow_html: bool,
-    wiki_link_prefix: Option<String>,
-}
+mod cache;
+mod cli;
+mod config;
+mod plugins;
+mod process;
+mod run;
+mod utils;
 
-fn parse_args() -> Result<CliArgs, String> {
-    let mut pargs = Arguments::from_env();
-
-    let input: Option<String> = pargs
-        .opt_value_from_str(["-i", "--input"])
-        .map_err(|e| e.to_string())?;
-    let format: Option<String> = pargs
-        .opt_value_from_str(["-f", "--format"])
-        .map_err(|e| e.to_string())?;
-    let strict: bool = pargs.contains("--strict");
-    let pretty: bool = pargs.contains("--pretty");
-    let tui: bool = pargs.contains("--tui");
-    let markdown_allow_html: bool = pargs.contains("--markdown-allow-html");
-    let max_doc_bytes: Option<usize> = pargs
-        .opt_value_from_str("--max-doc-bytes")
-        .map_err(|e| e.to_string())?;
-    let max_line_len: Option<usize> = pargs
-        .opt_value_from_str("--max-line-len")
-        .map_err(|e| e.to_string())?;
-    let max_blank_run: Option<usize> = pargs
-        .opt_value_from_str("--max-blank-run")
-        .map_err(|e| e.to_string())?;
-    let plugin: Option<String> = pargs
-        .opt_value_from_str("--plugin")
-        .map_err(|e| e.to_string())?;
-    let wiki_link_prefix: Option<String> = pargs
-        .opt_value_from_str("--wiki-link-prefix")
-        .map_err(|e| e.to_string())?;
-
-    // Ensure no unexpected free arguments
-    let rest = pargs.finish();
-    if !rest.is_empty() {
-        return Err(format!("Unexpected arguments: {:?}", rest));
-    }
-
-    Ok(CliArgs {
-        input,
-        format,
-        strict,
-        pretty,
-        tui,
-        max_doc_bytes,
-        max_line_len,
-        max_blank_run,
-        plugin,
-        markdown_allow_html,
-        wiki_link_prefix,
-    })
-}
-
-fn read_input(args: &CliArgs) -> Result<String, String> {
-    if let Some(path) = &args.input {
-        match fs::read_to_string(path) {
-            Ok(s) => Ok(s),
-            Err(e) => Err(format!("cannot read file '{}': {}", path, e)),
-        }
-    } else {
-        let mut buf = String::new();
-        let mut stdin = io::stdin();
-        // Read all of stdin; callers should pipe data when not using --input
-        if let Err(e) = stdin.read_to_string(&mut buf) {
-            return Err(format!("failed to read stdin: {}", e));
-        }
-        Ok(buf)
-    }
-}
+use cli::{parse_args, read_input};
+use plugins::merge_solid_hints;
+use utils::maybe_pretty;
 
 fn main() -> ExitCode {
-    // Subcommand: "run" (config-driven batch); internal tools are separated
     if std::env::args().nth(1).as_deref() == Some("run") {
-        return run_from_config();
+        return run::run_from_config();
     }
 
     let args = match parse_args() {
@@ -123,10 +37,8 @@ fn main() -> ExitCode {
         }
     };
 
-    // Default format is json; other formats can be added later.
     let format = args.format.as_deref().unwrap_or("json");
 
-    // Optional TUI: spinner around input reading when interactive
     let use_tui = args.tui && pendon_tui::is_interactive_stderr();
     let maybe_spinner = if use_tui {
         Some(pendon_tui::widgets::spinner::Spinner::start(
@@ -149,7 +61,6 @@ fn main() -> ExitCode {
         sp.stop();
     }
 
-    // Parse to events (MVP: full text as a single Text event)
     let events = parse(
         &input,
         &Options {
@@ -167,13 +78,13 @@ fn main() -> ExitCode {
         link_prefix: args.wiki_link_prefix.clone(),
     };
 
-    let mut used_custom_specs: Vec<PluginSpec> = Vec::new();
-    let mut custom_cache: HashMap<String, PluginSpec> = HashMap::new();
+    let mut used_custom_specs: Vec<pendon_plugin_custom::PluginSpec> = Vec::new();
+    let mut custom_cache: std::collections::HashMap<String, pendon_plugin_custom::PluginSpec> =
+        std::collections::HashMap::new();
     let mut builtin_hints: Vec<SolidRenderHints> = Vec::new();
     let mut used_quiz = false;
     let mut used_vicado = false;
 
-    // Optional plugin processing (supports comma-separated list and toml:foo.toml entries)
     let events = if let Some(pstr) = args.plugin.as_deref() {
         let mut ev = events;
         let mut markdown_ran = false;
@@ -182,7 +93,7 @@ fn main() -> ExitCode {
             if let Some(path) = name.strip_prefix("toml:") {
                 let spec = match custom_cache.get(path) {
                     Some(existing) => existing.clone(),
-                    None => match load_spec_from_path(path) {
+                    None => match pendon_plugin_custom::load_spec_from_path(path) {
                         Ok(s) => {
                             custom_cache.insert(path.to_string(), s.clone());
                             s
@@ -193,7 +104,7 @@ fn main() -> ExitCode {
                         }
                     },
                 };
-                track_used_spec(&mut used_custom_specs, spec.clone());
+                plugins::track_used_spec(&mut used_custom_specs, spec.clone());
                 ev = pendon_plugin_custom::process(&ev, &spec);
                 continue;
             }
@@ -203,37 +114,32 @@ fn main() -> ExitCode {
                 "quiz" => {
                     used_quiz = true;
                     if markdown_ran {
-                        process_quiz(&ev)
+                        pendon_plugin_quiz::process(&ev)
                     } else {
                         quiz_pending = true;
                         ev
                     }
                 }
-                "dialog" => process_dialog(&ev),
+                "dialog" => pendon_plugin_dialog::process(&ev),
                 "img" => {
                     let empty_pipeline = pendon_core::Pipeline::default();
-                    process_img(
-                        &ev,
-                        &pendon_plugin_img::ImgOptions::default(),
-                        &empty_pipeline,
-                    )
+                    pendon_plugin_img::process(&ev, &ImgOptions::default(), &empty_pipeline)
                 }
                 "table" => {
                     let empty_pipeline = pendon_core::Pipeline::default();
-                    process_table(
-                        &ev,
-                        &pendon_plugin_table::TableOptions::default(),
-                        &empty_pipeline,
-                    )
+                    pendon_plugin_table::process(&ev, &TableOptions::default(), &empty_pipeline)
                 }
-                "heading" => process_heading(&ev, &HeadingOptions::default()),
+                "heading" => pendon_plugin_heading::process(
+                    &ev,
+                    &pendon_plugin_heading::HeadingOptions::default(),
+                ),
                 "anchor" => pendon_plugin_anchor::process(&ev, &AnchorOptions::default()),
                 "cite" => pendon_plugin_cite::process(&ev, &CiteOptions::default()),
-                "latex" => process_latex(&ev),
-                "wiki" => process_wiki(&ev, wiki_opts.clone()),
+                "latex" => pendon_plugin_latex::process(&ev),
+                "wiki" => pendon_plugin_wiki::process_with_options(&ev, wiki_opts.clone()),
                 "vicado" => {
                     used_vicado = true;
-                    process_vicado(&ev)
+                    pendon_plugin_vicado::process(&ev)
                 }
                 "markdown" => {
                     let processed =
@@ -241,7 +147,7 @@ fn main() -> ExitCode {
                     markdown_ran = true;
                     if quiz_pending {
                         quiz_pending = false;
-                        process_quiz(&processed)
+                        pendon_plugin_quiz::process(&processed)
                     } else {
                         processed
                     }
@@ -251,7 +157,7 @@ fn main() -> ExitCode {
                 "syntect" => pendon_plugin_codeblock_syntect::process(&ev),
                 other => {
                     if let Some(spec) = custom_cache.get(other) {
-                        track_used_spec(&mut used_custom_specs, spec.clone());
+                        plugins::track_used_spec(&mut used_custom_specs, spec.clone());
                         pendon_plugin_custom::process(&ev, spec)
                     } else {
                         ev
@@ -260,7 +166,7 @@ fn main() -> ExitCode {
             };
         }
         if quiz_pending {
-            ev = process_quiz(&ev);
+            ev = pendon_plugin_quiz::process(&ev);
         }
         ev
     } else {
@@ -274,7 +180,6 @@ fn main() -> ExitCode {
         builtin_hints.push(vicado_solid_hints());
     }
 
-    // Determine if any Error diagnostics are present
     let has_error = events.iter().any(|e| match e {
         pendon_core::Event::Diagnostic { severity, .. } => {
             matches!(severity, pendon_core::Severity::Error)
@@ -363,1163 +268,3 @@ fn main() -> ExitCode {
         }
     }
 }
-
-#[derive(Debug, Deserialize)]
-struct ConfigTask {
-    name: Option<String>,
-    input: String,
-    output: String,
-    plugin: Option<String>,
-    markdown_allow_html: Option<bool>,
-    wiki_link_prefix: Option<String>,
-    format: String,
-    pretty: Option<bool>,
-    strict: Option<bool>,
-    max_doc_bytes: Option<usize>,
-    max_line_len: Option<usize>,
-    max_blank_run: Option<usize>,
-    cite: Option<CiteTaskConfig>,
-    anchor: Option<AnchorTaskConfig>,
-    heading: Option<pendon_plugin_heading::HeadingOptions>,
-    img: Option<pendon_plugin_img::ImgOptions>,
-    table: Option<TableTaskConfig>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct AnchorTaskConfig {
-    custom_node: Option<AnchorCustomNodeConfig>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct AnchorCustomNodeConfig {
-    name: Option<String>,
-    template: Option<String>,
-    imports: Option<Vec<toml::Value>>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct CiteTaskConfig {
-    reference_source: Option<String>,
-    reference_file: Option<String>,
-    prefix: Option<String>,
-    class: Option<String>,
-    id_prefix: Option<String>,
-    custom_node: Option<CiteCustomNodeConfig>,
-    section: Option<CiteSectionConfig>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct CiteCustomNodeConfig {
-    name: Option<String>,
-    template: Option<String>,
-    imports: Option<Vec<toml::Value>>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct CiteSectionConfig {
-    marker: Option<String>,
-    node: Option<String>,
-    template: Option<String>,
-    imports: Option<Vec<toml::Value>>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct TableTaskConfig {
-    custom_node: Option<TableCustomNodeConfig>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct TableCustomNodeConfig {
-    table: Option<TableComponentConfig>,
-    caption: Option<TableComponentConfig>,
-    row: Option<TableComponentConfig>,
-    cell: Option<TableComponentConfig>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct TableComponentConfig {
-    name: Option<String>,
-    template: Option<String>,
-    imports: Option<Vec<toml::Value>>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-#[allow(dead_code)]
-struct PluginCustomSection {
-    source: Option<Vec<String>>,
-    order: Option<Vec<String>>,
-    enable_unsafe_hooks: Option<bool>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-#[allow(dead_code)]
-struct PluginVicadoSolidSection {
-    imports: Option<Vec<toml::Value>>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-#[allow(dead_code)]
-struct PluginVicadoRendererSection {
-    solid: Option<PluginVicadoSolidSection>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-#[allow(dead_code)]
-struct PluginVicadoSection {
-    renderer: Option<PluginVicadoRendererSection>,
-}
-
-#[derive(Debug, Deserialize)]
-struct PendonConfig {
-    #[serde(rename = "task")]
-    tasks: Vec<ConfigTask>,
-    #[serde(rename = "plugin-custom")]
-    plugin_custom: Option<PluginCustomSection>,
-    #[serde(rename = "plugin-vicado")]
-    plugin_vicado: Option<PluginVicadoSection>,
-}
-
-fn run_from_config() -> ExitCode {
-    let cfg_text = match fs::read_to_string("pendon.toml") {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("Error: cannot read pendon.toml: {}", e);
-            return ExitCode::from(2);
-        }
-    };
-    let cfg: PendonConfig = match toml::from_str(&cfg_text) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Error: invalid pendon.toml: {}", e);
-            return ExitCode::from(2);
-        }
-    };
-
-    let custom_registry = match load_custom_registry(cfg.plugin_custom.as_ref()) {
-        Ok(map) => map,
-        Err(msg) => {
-            eprintln!("Error: {}", msg);
-            return ExitCode::from(2);
-        }
-    };
-    let vicado_hints_override = build_vicado_hints_override(cfg.plugin_vicado.as_ref());
-    let mut custom_cache: HashMap<String, PluginSpec> = HashMap::new();
-
-    let theme = pendon_tui::Theme::default();
-    if pendon_tui::is_interactive_stderr() {
-        pendon_tui::render_status_line("Scanning source files...", theme);
-    }
-
-    let mut exit = ExitCode::SUCCESS;
-    for task in cfg.tasks.iter() {
-        let re = match input_pattern_to_regex(&task.input) {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("Error: invalid input pattern '{}': {}", task.input, e);
-                exit = ExitCode::from(2);
-                continue;
-            }
-        };
-        let task_markdown_opts = MarkdownOptions {
-            allow_html: task.markdown_allow_html.unwrap_or(false),
-        };
-        let task_wiki_opts = WikiOptions {
-            link_prefix: task.wiki_link_prefix.clone(),
-        };
-        let mut matched = 0usize;
-        let mut total_bytes: usize = 0;
-        let mut unique_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
-
-        for entry in WalkDir::new(Path::new("."))
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
-            if !entry.file_type().is_file() {
-                continue;
-            }
-            let path_str = entry.path().to_string_lossy();
-            if let Some(caps) = re.captures(&path_str) {
-                matched += 1;
-                let map = match captures_to_map(&task.input, &caps) {
-                    Ok(m) => m,
-                    Err(e) => {
-                        eprintln!("Error: capture mapping failed: {}", e);
-                        exit = ExitCode::from(2);
-                        continue;
-                    }
-                };
-                if let Some(id) = map.get("id") {
-                    unique_ids.insert(id.clone());
-                }
-                let out_path = match substitute_output(&task.output, &map) {
-                    Ok(p) => p,
-                    Err(e) => {
-                        eprintln!("Error: output substitution failed: {}", e);
-                        exit = ExitCode::from(2);
-                        continue;
-                    }
-                };
-                match fs::read_to_string(entry.path()) {
-                    Ok(input_text) => {
-                        let opts = Options {
-                            strict: task.strict.unwrap_or(false),
-                            max_doc_bytes: task.max_doc_bytes,
-                            max_line_len: task.max_line_len,
-                            max_blank_run: task.max_blank_run,
-                        };
-                        let mut events = parse(&input_text, &opts);
-
-                        // --- Run micromatter FIRST if it's in the plugin list ---
-                        // Micromatter parses the --- delimited frontmatter block
-                        // into a Frontmatter node with parsed YAML data.
-                        // We must run it before extracting references for cite.
-                        if let Some(pstr) = task.plugin.as_deref() {
-                            if pstr
-                                .split(',')
-                                .map(|s| s.trim())
-                                .any(|s| s == "micromatter")
-                            {
-                                events = pendon_plugin_micromatter::process(&events);
-                            }
-                        }
-
-                        // --- Now extract frontmatter and build CitationContext ---
-                        let cite_options = match build_cite_options(
-                            task.cite.as_ref(),
-                            &task.input,
-                            path_str.as_ref(),
-                            Some(&map),
-                        ) {
-                            Ok(o) => o,
-                            Err(msg) => {
-                                eprintln!("Error: {}", msg);
-                                exit = ExitCode::from(2);
-                                continue;
-                            }
-                        };
-                        let frontmatter_data = extract_frontmatter_for_cite(&events);
-                        let front_refs = frontmatter_data
-                            .as_ref()
-                            .and_then(|d| d.get("references"))
-                            .cloned()
-                            .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
-                        let merged_refs = merge_refs_for_context(
-                            &front_refs,
-                            cite_options.external_references.as_ref(),
-                        );
-                        let cite_ctx = pendon_plugin_cite::CitationContext::new(
-                            merged_refs,
-                            cite_options.clone(),
-                        );
-
-                        // Arc<Mutex<>> provides Send + Sync interior mutability
-                        let cite_ctx_shared = std::sync::Arc::new(std::sync::Mutex::new(cite_ctx));
-
-                        // --- Build Inline Pipeline ---
-                        let mut inline_pipeline = Pipeline::new();
-
-                        // 1. PLUGIN IMG HARUS BERJALAN PERTAMA
-                        // plugin-img membutuhkan Paragraph yang utuh (hanya berisi Text event).
-                        // Jika cite/wiki/anchor berjalan lebih dulu, mereka akan memecah Text menjadi inline nodes,
-                        // sehingga plugin-img gagal mendeteksi sintaksis gambar tingkat lanjut.
-                        let img_opts_for_pipeline = task.img.clone().unwrap_or_default();
-
-                        // Buat inner pipeline khusus untuk memproses caption di dalam figure plugin-img
-                        let mut img_inner_pipeline = Pipeline::new();
-                        let cite_inner = cite_ctx_shared.clone();
-                        img_inner_pipeline.add(move |ev: Vec<Event>| {
-                            cite_inner.lock().unwrap().process_events(&ev)
-                        });
-                        let wiki_inner = task_wiki_opts.clone();
-                        img_inner_pipeline.add(move |ev: Vec<Event>| {
-                            pendon_plugin_wiki::process_with_options(&ev, wiki_inner.clone())
-                        });
-                        let anchor_inner = build_anchor_options(task.anchor.as_ref());
-                        img_inner_pipeline.add(move |ev: Vec<Event>| {
-                            pendon_plugin_anchor::process(&ev, &anchor_inner)
-                        });
-
-                        let img_opts_clone = img_opts_for_pipeline.clone();
-                        inline_pipeline.add(move |ev: Vec<Event>| {
-                            pendon_plugin_img::process(&ev, &img_opts_clone, &img_inner_pipeline)
-                        });
-
-                        // 2. Plugin inline lainnya berjalan setelah img
-                        let cite_for_pipeline = cite_ctx_shared.clone();
-                        inline_pipeline.add(move |ev: Vec<Event>| {
-                            cite_for_pipeline.lock().unwrap().process_events(&ev)
-                        });
-
-                        let wiki_opts = task_wiki_opts.clone();
-                        inline_pipeline.add(move |ev: Vec<Event>| {
-                            pendon_plugin_wiki::process_with_options(&ev, wiki_opts.clone())
-                        });
-
-                        let anchor_opts = build_anchor_options(task.anchor.as_ref());
-                        inline_pipeline.add(move |ev: Vec<Event>| {
-                            pendon_plugin_anchor::process(&ev, &anchor_opts)
-                        });
-
-                        // --- Run remaining plugins ---
-                        let mut used_custom_specs: Vec<PluginSpec> = Vec::new();
-                        let mut builtin_hints: Vec<SolidRenderHints> = Vec::new();
-                        let mut used_quiz = false;
-                        let mut used_vicado = false;
-                        let anchor_options = build_anchor_options(task.anchor.as_ref());
-                        let mut anchor_ran = false;
-                        let mut cite_ran = false;
-                        let mut markdown_ran = false;
-                        let mut quiz_pending = false;
-
-                        if let Some(pstr) = task.plugin.as_deref() {
-                            for name in pstr.split(',').map(|s| s.trim()).filter(|s| !s.is_empty())
-                            {
-                                // Skip micromatter — already ran above
-                                if name == "micromatter" {
-                                    continue;
-                                }
-
-                                if let Some(path) = name.strip_prefix("toml:") {
-                                    let spec = match custom_cache.get(path) {
-                                        Some(existing) => existing.clone(),
-                                        None => match load_spec_from_path(path) {
-                                            Ok(s) => {
-                                                custom_cache.insert(path.to_string(), s.clone());
-                                                s
-                                            }
-                                            Err(msg) => {
-                                                eprintln!("Error: {}", msg);
-                                                exit = ExitCode::from(2);
-                                                break;
-                                            }
-                                        },
-                                    };
-                                    track_used_spec(&mut used_custom_specs, spec.clone());
-                                    events = pendon_plugin_custom::process(&events, &spec);
-                                    continue;
-                                }
-
-                                match name {
-                                    "quiz" => {
-                                        used_quiz = true;
-                                        if let Some(spec) = custom_registry.get("quiz") {
-                                            track_used_spec(&mut used_custom_specs, spec.clone());
-                                        }
-                                        if markdown_ran {
-                                            events = process_quiz(&events);
-                                        } else {
-                                            quiz_pending = true;
-                                        }
-                                    }
-                                    "dialog" => {
-                                        events = process_dialog(&events);
-                                    }
-                                    "img" => {
-                                        let img_opts = task.img.clone().unwrap_or_default();
-                                        events = pendon_plugin_img::process(
-                                            &events,
-                                            &img_opts,
-                                            &inline_pipeline,
-                                        );
-                                        if let Some(hints) =
-                                            pendon_plugin_img::solid_hints(&img_opts)
-                                        {
-                                            builtin_hints.push(hints);
-                                        }
-                                    }
-                                    "table" => {
-                                        let table_opts = build_table_options(task.table.as_ref());
-                                        events = pendon_plugin_table::process(
-                                            &events,
-                                            &table_opts,
-                                            &inline_pipeline,
-                                        );
-                                        if let Some(hints) =
-                                            pendon_plugin_table::solid_hints(&table_opts)
-                                        {
-                                            builtin_hints.push(hints);
-                                        }
-                                    }
-                                    "heading" => {
-                                        let opts = task.heading.clone().unwrap_or_default();
-                                        events = process_heading(&events, &opts);
-                                        if let Some(hints) =
-                                            pendon_plugin_heading::solid_hints(&opts)
-                                        {
-                                            builtin_hints.push(hints);
-                                        }
-                                    }
-                                    "anchor" => {
-                                        anchor_ran = true;
-                                        events =
-                                            pendon_plugin_anchor::process(&events, &anchor_options);
-                                    }
-                                    "cite" => {
-                                        cite_ran = true;
-                                        events =
-                                            cite_ctx_shared.lock().unwrap().process_events(&events);
-                                    }
-                                    "latex" => {
-                                        events = process_latex(&events);
-                                    }
-                                    "wiki" => {
-                                        events = process_wiki(&events, task_wiki_opts.clone());
-                                    }
-                                    "vicado" => {
-                                        used_vicado = true;
-                                        events = process_vicado(&events);
-                                    }
-                                    "markdown" => {
-                                        events = pendon_plugin_markdown::process_with_options(
-                                            &events,
-                                            task_markdown_opts,
-                                        );
-                                        markdown_ran = true;
-                                        if quiz_pending {
-                                            quiz_pending = false;
-                                            events = process_quiz(&events);
-                                        }
-                                    }
-                                    "sectionize" => {
-                                        events = pendon_plugin_sectionize::process(&events);
-                                    }
-                                    "extract-heading" => {
-                                        events = pendon_plugin_extract_heading::process(&events);
-                                    }
-                                    "syntect" => {
-                                        events = pendon_plugin_codeblock_syntect::process(&events);
-                                    }
-                                    other => {
-                                        if let Some(spec) = custom_registry.get(other) {
-                                            let spec = spec.clone();
-                                            track_used_spec(&mut used_custom_specs, spec.clone());
-                                            events = pendon_plugin_custom::process(&events, &spec);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if quiz_pending {
-                            events = process_quiz(&events);
-                        }
-                        if used_quiz {
-                            builtin_hints.push(quiz_solid_hints());
-                        }
-                        if used_vicado {
-                            if let Some(override_hints) = vicado_hints_override.as_ref() {
-                                builtin_hints.push(override_hints.clone());
-                            } else {
-                                builtin_hints.push(vicado_solid_hints());
-                            }
-                        }
-                        // Finalize cite: inject updated frontmatter with all accumulated cites
-                        if cite_ran {
-                            let ctx = cite_ctx_shared.lock().unwrap();
-                            let final_cites = ctx.get_cites();
-                            let final_refs = ctx.get_used_references();
-                            let cite_opts_final = ctx.options().clone();
-                            drop(ctx);
-
-                            let diagnostics = cite_ctx_shared.lock().unwrap().drain_diagnostics();
-
-                            if !diagnostics.is_empty() {
-                                let insert_at = events
-                                    .iter()
-                                    .position(|e| matches!(e, Event::StartNode(NodeKind::Document)))
-                                    .map(|i| i + 1)
-                                    .unwrap_or(0);
-                                for (off, diag) in diagnostics.into_iter().enumerate() {
-                                    events.insert(insert_at + off, diag);
-                                }
-                            }
-
-                            // Replace {{ footnote }} markers with Bibliography custom node
-                            events = cite_ctx_shared
-                                .lock()
-                                .unwrap()
-                                .replace_section_markers(&events);
-
-                            pendon_plugin_cite::update_frontmatter_in_events(
-                                &mut events,
-                                &final_cites,
-                                &final_refs,
-                                &cite_opts_final,
-                            );
-
-                            if let Some(hints) = pendon_plugin_cite::solid_hints(&cite_opts_final) {
-                                builtin_hints.push(hints);
-                            }
-                        }
-                        if anchor_ran {
-                            if let Some(hints) = pendon_plugin_anchor::solid_hints(&anchor_options)
-                            {
-                                builtin_hints.push(hints);
-                            }
-                        }
-                        if exit != ExitCode::SUCCESS {
-                            continue;
-                        }
-                        // CSS options are handled in renderer selection below
-                        let pretty = task.pretty.unwrap_or(false);
-                        let rendered = match task.format.as_str() {
-                            "json" => pendon_renderer_json::render_to_string(&events)
-                                .map(|s| maybe_pretty(&s, pretty)),
-                            "events" => pendon_renderer_events::render_events_to_string(&events)
-                                .map(|s| maybe_pretty(&s, pretty)),
-                            "ast" => {
-                                if pretty {
-                                    pendon_renderer_ast::render_ast_to_string_pretty(&events)
-                                } else {
-                                    pendon_renderer_ast::render_ast_to_string(&events)
-                                }
-                            }
-                            "html" => Ok(if pretty {
-                                pendon_renderer_html::render_html_pretty(&events)
-                            } else {
-                                pendon_renderer_html::render_html(&events)
-                            }),
-                            "solid" => {
-                                let hints = merge_solid_hints(&used_custom_specs, &builtin_hints);
-                                Ok(match hints.as_ref() {
-                                    Some(h) => render_solid_with_hints(&events, Some(h)),
-                                    None => pendon_renderer_solid::render_solid(&events),
-                                })
-                            }
-                            other => {
-                                eprintln!("Error: unsupported format in task: {}", other);
-                                exit = ExitCode::from(2);
-                                continue;
-                            }
-                        };
-                        match rendered {
-                            Ok(out_str) => {
-                                if let Some(parent) = Path::new(&out_path).parent() {
-                                    let _ = fs::create_dir_all(parent);
-                                }
-                                if let Err(e) = fs::write(&out_path, out_str.clone()) {
-                                    eprintln!("Error: cannot write output '{}': {}", out_path, e);
-                                    exit = ExitCode::from(2);
-                                } else {
-                                    total_bytes += out_str.len();
-                                }
-                            }
-                            Err(e) => {
-                                eprintln!("Error: render failed: {}", e);
-                                exit = ExitCode::from(2);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("Error: cannot read input file '{}': {}", path_str, e);
-                        exit = ExitCode::from(2);
-                    }
-                }
-            }
-        }
-        if pendon_tui::is_interactive_stderr() {
-            pendon_tui::render_severity_line(
-                pendon_tui::SeverityLine::Info,
-                &format!("Found: {} files", matched),
-                theme,
-            );
-            let size_text = if total_bytes >= 1_048_576 {
-                format!("{:.1} MB", (total_bytes as f64) / 1_048_576.0)
-            } else if total_bytes >= 1024 {
-                format!("{:.1} kB", (total_bytes as f64) / 1024.0)
-            } else {
-                format!("{} B", total_bytes)
-            };
-            let fmt_text = task.format.as_str();
-            let total_text = matched.to_string();
-            if let Some(name) = task.name.as_deref() {
-                let items = [
-                    ("name", name),
-                    ("format", fmt_text),
-                    ("size", size_text.as_str()),
-                    ("total", total_text.as_str()),
-                ];
-                pendon_tui::render_kv_list("› Wrote:", &items, theme);
-            } else {
-                let items = [
-                    ("input", task.input.as_str()),
-                    ("output", task.output.as_str()),
-                    ("format", fmt_text),
-                    ("size", size_text.as_str()),
-                    ("total", total_text.as_str()),
-                ];
-                pendon_tui::render_kv_list("› Wrote:", &items, theme);
-            }
-        }
-    }
-    if pendon_tui::is_interactive_stderr() {
-        pendon_tui::render_severity_line(
-            pendon_tui::SeverityLine::Done,
-            "All tasks completed",
-            theme,
-        );
-    }
-    exit
-}
-
-fn input_pattern_to_regex(pattern: &str) -> Result<Regex, String> {
-    // Convert ./content/[id]/[lang]/[...slug].md to regex capturing groups
-    let mut re = String::from("^");
-    let mut i = 0;
-    let bytes: Vec<char> = pattern.chars().collect();
-    while i < bytes.len() {
-        if bytes[i] == '[' {
-            if let Some(end) = bytes[i + 1..].iter().position(|&c| c == ']') {
-                let end_idx = i + 1 + end;
-                let name: String = bytes[i + 1..end_idx].iter().collect();
-                if name.starts_with("...") {
-                    re.push_str("(.+)");
-                } else {
-                    re.push_str("([^/]+)");
-                }
-                i = end_idx + 1;
-                continue;
-            } else {
-                return Err("unclosed bracket".to_string());
-            }
-        }
-        let ch = bytes[i];
-        match ch {
-            '.' | '+' | '*' | '?' | '^' | '$' | '(' | ')' | '|' | '{' | '}' | '\\' => {
-                re.push('\\');
-                re.push(ch);
-            }
-            _ => re.push(ch),
-        }
-        i += 1;
-    }
-    re.push('$');
-    Regex::new(&re).map_err(|e| e.to_string())
-}
-
-fn captures_to_map(
-    pattern: &str,
-    caps: &regex::Captures,
-) -> Result<HashMap<String, String>, String> {
-    let mut map = HashMap::new();
-    let mut i = 0;
-    let chars: Vec<char> = pattern.chars().collect();
-    let mut group = 1;
-    while i < chars.len() {
-        if chars[i] == '[' {
-            let end = chars[i + 1..]
-                .iter()
-                .position(|&c| c == ']')
-                .ok_or_else(|| "unclosed bracket".to_string())?
-                + i
-                + 1;
-            let name: String = chars[i + 1..end].iter().collect();
-            let val = caps
-                .get(group)
-                .ok_or_else(|| "missing capture".to_string())?
-                .as_str()
-                .to_string();
-            map.insert(name, val);
-            group += 1;
-            i = end + 1;
-        } else {
-            i += 1;
-        }
-    }
-    Ok(map)
-}
-
-fn substitute_output(pattern: &str, vars: &HashMap<String, String>) -> Result<String, String> {
-    let mut out = String::new();
-    let mut i = 0;
-    let chars: Vec<char> = pattern.chars().collect();
-    while i < chars.len() {
-        if chars[i] == '[' {
-            let end = chars[i + 1..]
-                .iter()
-                .position(|&c| c == ']')
-                .ok_or_else(|| "unclosed bracket".to_string())?
-                + i
-                + 1;
-            let name: String = chars[i + 1..end].iter().collect();
-            let key = name.trim_start_matches("...").to_string();
-            let val = vars
-                .get(&name)
-                .or_else(|| vars.get(&key))
-                .ok_or_else(|| format!("missing var {}", name))?;
-            out.push_str(val);
-            i = end + 1;
-        } else {
-            out.push(chars[i]);
-            i += 1;
-        }
-    }
-    Ok(out)
-}
-
-fn build_cite_options(
-    config: Option<&CiteTaskConfig>,
-    input_pattern: &str,
-    input_path: &str,
-    captures: Option<&HashMap<String, String>>,
-) -> Result<CiteOptions, String> {
-    let Some(config) = config else {
-        return Ok(CiteOptions::default());
-    };
-    let external_references = match config.reference_source.as_deref().unwrap_or("frontmatter") {
-        "frontmatter" | "internal" => None,
-        "external" => {
-            let file = config.reference_file.as_deref().ok_or_else(|| {
-                "cite.reference_file is required for external references".to_string()
-            })?;
-            let captures = captures
-                .ok_or_else(|| format!("cannot resolve cite.reference_file '{}'", input_pattern))?;
-            let mut values = captures.clone();
-            if let Some(slug) = values.get("slug").cloned() {
-                if let Some(chapter) = slug.split('/').next().filter(|part| !part.is_empty()) {
-                    values.insert("chapter_id".to_string(), chapter.to_string());
-                }
-            }
-            let path = substitute_output(file, &values).map_err(|error| {
-                format!(
-                    "cannot resolve cite.reference_file '{}' for '{}': {}",
-                    file, input_path, error
-                )
-            })?;
-            Some(pendon_plugin_cite::load_references(Path::new(&path))?)
-        }
-        source => {
-            return Err(format!(
-            "unsupported cite.reference_source '{}'; expected frontmatter, internal, or external",
-            source
-        ))
-        }
-    };
-    let custom_node = config.custom_node.as_ref().map(|node| CiteCustomNode {
-        name: node.name.clone().unwrap_or_else(|| "Citation".to_string()),
-        template: node.template.clone().unwrap_or_else(|| {
-            "<Citation index={attrs.index} id={attrs.id} loc={attrs.loc} />".to_string()
-        }),
-        imports: node
-            .imports
-            .as_deref()
-            .map(parse_cite_imports)
-            .unwrap_or_default(),
-    });
-    let section = config.section.as_ref().map(|section| {
-        let name = section
-            .node
-            .clone()
-            .unwrap_or_else(|| "CitationSection".to_string());
-        CiteSection {
-            marker: section
-                .marker
-                .clone()
-                .unwrap_or_else(|| "{{ footnote }}".to_string()),
-            name: name.clone(),
-            template: section.template.clone().unwrap_or_else(|| {
-                format!(
-                    "<{name} cites={{frontmatter.cites}} references={{frontmatter.references}} />"
-                )
-            }),
-            imports: section
-                .imports
-                .as_deref()
-                .map(parse_cite_imports)
-                .unwrap_or_default(),
-        }
-    });
-    Ok(CiteOptions {
-        prefix: config
-            .prefix
-            .clone()
-            .unwrap_or_else(|| "citeref-".to_string()),
-        class_name: config
-            .class
-            .clone()
-            .unwrap_or_else(|| "cite-ref".to_string()),
-        id_prefix: config
-            .id_prefix
-            .clone()
-            .unwrap_or_else(|| "cra-".to_string()),
-        custom_node,
-        section,
-        external_references,
-    })
-}
-
-fn extract_frontmatter_for_cite(events: &[Event]) -> Option<serde_json::Value> {
-    let mut inside = false;
-    for event in events {
-        match event {
-            pendon_core::Event::StartNode(pendon_core::NodeKind::Frontmatter) => inside = true,
-            pendon_core::Event::EndNode(pendon_core::NodeKind::Frontmatter) => inside = false,
-            pendon_core::Event::Attribute { name, value } if inside && name == "data" => {
-                if let Ok(data) = serde_json::from_str(value) {
-                    return Some(data);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
-fn merge_refs_for_context(
-    front: &serde_json::Value,
-    external: Option<&serde_json::Value>,
-) -> serde_json::Value {
-    let mut merged = serde_json::Map::new();
-    if let Some(map) = external.and_then(serde_json::Value::as_object) {
-        for (k, v) in map {
-            merged.insert(k.clone(), v.clone());
-        }
-    }
-    if let Some(map) = front.as_object() {
-        for (k, v) in map {
-            merged.insert(k.clone(), v.clone());
-        }
-    }
-    serde_json::Value::Object(merged)
-}
-
-fn build_anchor_options(config: Option<&AnchorTaskConfig>) -> AnchorOptions {
-    let custom_node = config
-        .and_then(|config| config.custom_node.as_ref())
-        .map(|node| AnchorCustomNode {
-            name: node.name.clone().unwrap_or_else(|| "Anchor".to_string()),
-            template: node
-                .template
-                .clone()
-                .unwrap_or_else(|| "<Anchor href=\"{attrs.href}\">{children}</Anchor>".to_string()),
-            imports: node
-                .imports
-                .as_deref()
-                .map(parse_anchor_imports)
-                .unwrap_or_default(),
-        });
-    AnchorOptions { custom_node }
-}
-
-fn parse_anchor_imports(values: &[toml::Value]) -> Vec<AnchorImport> {
-    values
-        .iter()
-        .filter_map(|value| {
-            let table = value.as_table()?;
-            let module = table.get("module")?.as_str()?.to_string();
-            let default = table
-                .get("default")
-                .and_then(|value| value.as_str())
-                .map(str::to_string);
-            let names = table
-                .get("names")
-                .and_then(|value| value.as_array())
-                .map(|values| {
-                    values
-                        .iter()
-                        .filter_map(|value| value.as_str().map(str::to_string))
-                        .collect()
-                })
-                .unwrap_or_default();
-            Some(AnchorImport {
-                module,
-                default,
-                names,
-            })
-        })
-        .collect()
-}
-
-fn parse_cite_imports(values: &[toml::Value]) -> Vec<CiteImport> {
-    values
-        .iter()
-        .filter_map(|value| {
-            let table = value.as_table()?;
-            let module = table.get("module")?.as_str()?.to_string();
-            let default = table
-                .get("default")
-                .and_then(|value| value.as_str())
-                .map(str::to_string);
-            let names = table
-                .get("names")
-                .and_then(|value| value.as_array())
-                .map(|values| {
-                    values
-                        .iter()
-                        .filter_map(|value| value.as_str().map(str::to_string))
-                        .collect()
-                })
-                .unwrap_or_default();
-            Some(CiteImport {
-                module,
-                default,
-                names,
-            })
-        })
-        .collect()
-}
-
-fn build_table_options(config: Option<&TableTaskConfig>) -> pendon_plugin_table::TableOptions {
-    let Some(config) = config else {
-        return pendon_plugin_table::TableOptions::default();
-    };
-
-    let custom_node =
-        config
-            .custom_node
-            .as_ref()
-            .map(|node| pendon_plugin_table::TableCustomNode {
-                table: build_table_component(node.table.as_ref()),
-                caption: build_table_component(node.caption.as_ref()),
-                row: build_table_component(node.row.as_ref()),
-                cell: build_table_component(node.cell.as_ref()),
-            });
-
-    pendon_plugin_table::TableOptions { custom_node }
-}
-
-fn build_table_component(
-    cfg: Option<&TableComponentConfig>,
-) -> Option<pendon_plugin_table::CustomComponent> {
-    let Some(c) = cfg else {
-        return None;
-    };
-    Some(pendon_plugin_table::CustomComponent {
-        name: c.name.clone().unwrap_or_default(),
-        template: c.template.clone().unwrap_or_default(),
-        imports: c
-            .imports
-            .as_deref()
-            .map(parse_table_imports)
-            .unwrap_or_default(),
-    })
-}
-
-fn parse_table_imports(values: &[toml::Value]) -> Vec<pendon_plugin_table::CustomImport> {
-    values
-        .iter()
-        .filter_map(|value| {
-            let table = value.as_table()?;
-            let module = table.get("module")?.as_str()?.to_string();
-            let default = table
-                .get("default")
-                .and_then(|value| value.as_str())
-                .map(str::to_string);
-            let names = table
-                .get("names")
-                .and_then(|value| value.as_array())
-                .map(|values| {
-                    values
-                        .iter()
-                        .filter_map(|value| value.as_str().map(str::to_string))
-                        .collect()
-                })
-                .unwrap_or_default();
-            Some(pendon_plugin_table::CustomImport {
-                module,
-                default,
-                names,
-            })
-        })
-        .collect()
-}
-
-fn track_used_spec(list: &mut Vec<PluginSpec>, spec: PluginSpec) {
-    if !list.iter().any(|s| s.name == spec.name) {
-        list.push(spec);
-    }
-}
-
-fn build_solid_hints(specs: &[PluginSpec]) -> SolidRenderHints {
-    let mut hints = SolidRenderHints::default();
-    let mut seen_templates: HashSet<(String, Option<String>)> = HashSet::new();
-
-    for spec in specs {
-        if let Some(renderer) = spec.renderer.as_ref().and_then(|r| r.solid.as_ref()) {
-            let node_type = spec
-                .ast
-                .as_ref()
-                .and_then(|a| a.node.clone())
-                .unwrap_or_else(|| spec.name.clone());
-            let node_name = spec.ast.as_ref().and_then(|a| a.node_name.clone());
-            let mut keys: Vec<(String, Option<String>)> =
-                vec![(node_type.clone(), node_name.clone())];
-            // Compatibility bridge: built-in processors may emit node type equal to component name
-            // (e.g. `Quiz`) while custom specs still declare ast.node = "Component".
-            if node_type == "Component" {
-                if let Some(name) = node_name.clone() {
-                    keys.push((name.clone(), Some(name)));
-                }
-            }
-
-            let parsed_imports = parse_import_entries(&renderer.imports);
-
-            if let Some(tpl) = &renderer.component_template {
-                for key in &keys {
-                    if seen_templates.insert(key.clone()) {
-                        hints.templates.push(ComponentTemplate {
-                            node_type: key.0.clone(),
-                            node_name: key.1.clone(),
-                            template: tpl.clone(),
-                        });
-                    }
-                    hints
-                        .template_imports
-                        .entry(key.clone())
-                        .or_default()
-                        .extend(parsed_imports.clone());
-                }
-            } else if spec.matcher.start.is_some() {
-                if !parsed_imports.is_empty() {
-                    if let Some(marker) = spec.matcher.start.clone() {
-                        hints.text_imports.push((marker, parsed_imports));
-                    } else {
-                        hints.global_imports.extend(parsed_imports);
-                    }
-                }
-            } else {
-                hints.global_imports.extend(parsed_imports);
-            }
-        }
-    }
-
-    hints
-}
-
-fn parse_import_entries(imports: &[toml::Value]) -> Vec<ImportEntry> {
-    let mut parsed_imports: Vec<ImportEntry> = Vec::new();
-    for val in imports {
-        match val {
-            toml::Value::String(s) => parsed_imports.push(ImportEntry::Raw(s.clone())),
-            toml::Value::Table(tbl) => {
-                if let Some(module) = tbl.get("module").and_then(|v| v.as_str()) {
-                    let default = tbl
-                        .get("default")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-                    let names = tbl
-                        .get("names")
-                        .and_then(|v| v.as_array())
-                        .map(|arr| {
-                            arr.iter()
-                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                                .collect::<Vec<String>>()
-                        })
-                        .unwrap_or_default();
-                    parsed_imports.push(ImportEntry::Structured {
-                        module: module.to_string(),
-                        default,
-                        names,
-                    });
-                }
-            }
-            _ => {}
-        }
-    }
-    parsed_imports
-}
-
-fn build_vicado_hints_override(cfg: Option<&PluginVicadoSection>) -> Option<SolidRenderHints> {
-    let imports = cfg
-        .and_then(|c| c.renderer.as_ref())
-        .and_then(|r| r.solid.as_ref())
-        .and_then(|s| s.imports.as_ref())
-        .map(|vals| parse_import_entries(vals))
-        .unwrap_or_default();
-
-    if imports.is_empty() {
-        return None;
-    }
-
-    let mut hints = vicado_solid_hints();
-    hints
-        .template_imports
-        .insert(("Vicado".to_string(), Some("Vicado".to_string())), imports);
-    Some(hints)
-}
-
-fn merge_solid_hints(
-    custom_specs: &[PluginSpec],
-    builtin_hints: &[SolidRenderHints],
-) -> Option<SolidRenderHints> {
-    let mut merged = SolidRenderHints::default();
-    for hint in builtin_hints {
-        extend_hints(&mut merged, hint);
-    }
-    if !custom_specs.is_empty() {
-        let custom = build_solid_hints(custom_specs);
-        // Custom imports should override built-in imports for the same template key.
-        if !custom.template_imports.is_empty() {
-            let custom_import_keys: HashSet<(String, Option<String>)> =
-                custom.template_imports.keys().cloned().collect();
-            merged
-                .template_imports
-                .retain(|k, _| !custom_import_keys.contains(k));
-        }
-        extend_hints(&mut merged, &custom);
-    }
-    if hints_empty(&merged) {
-        None
-    } else {
-        Some(merged)
-    }
-}
-
-fn extend_hints(target: &mut SolidRenderHints, extra: &SolidRenderHints) {
-    target.global_imports.extend(extra.global_imports.clone());
-    for (key, imports) in &extra.template_imports {
-        target
-            .template_imports
-            .entry(key.clone())
-            .or_default()
-            .extend(imports.clone());
-    }
-    target.text_imports.extend(extra.text_imports.clone());
-
-    for tpl in &extra.templates {
-        let key = (&tpl.node_type, &tpl.node_name, &tpl.template);
-        if !target
-            .templates
-            .iter()
-            .any(|t| (&t.node_type, &t.node_name, &t.template) == key)
-        {
-            target.templates.push(tpl.clone());
-        }
-    }
-}
-
-fn hints_empty(hints: &SolidRenderHints) -> bool {
-    hints.global_imports.is_empty()
-        && hints.template_imports.is_empty()
-        && hints.text_imports.is_empty()
-        && hints.templates.is_empty()
-}
-
-fn load_custom_registry(
-    cfg: Option<&PluginCustomSection>,
-) -> Result<HashMap<String, PluginSpec>, String> {
-    let mut map: HashMap<String, PluginSpec> = HashMap::new();
-    let Some(cfg) = cfg else {
-        return Ok(map);
-    };
-    if let Some(sources) = &cfg.source {
-        for src in sources {
-            let plugins = load_index_from_path(src)?;
-            for plugin in plugins {
-                map.insert(plugin.id, plugin.spec);
-            }
-        }
-    }
-    Ok(map)
-}
-
-fn maybe_pretty(s: &str, pretty: bool) -> String {
-    if !pretty {
-        return s.to_string();
-    }
-    match serde_json::from_str::<serde_json::Value>(s) {
-        Ok(v) => serde_json::to_string_pretty(&v).unwrap_or_else(|_| s.to_string()),
-        Err(_) => s.to_string(),
-    }
-}
-
-// CSS injection handled directly in renderer-html functions
