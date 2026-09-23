@@ -72,9 +72,10 @@ pub fn run_from_config() -> ExitCode {
 
         // Hash task config
         let task_config_str = format!(
-            "{}:{}:{}:{}",
+            "{}:{}:{}:{}:{}",
             task.plugin.as_deref().unwrap_or(""),
             task.markdown_allow_html.unwrap_or(false),
+            task.markdown_strip_comments.unwrap_or(false),
             task.wiki_link_prefix.as_deref().unwrap_or(""),
             task.format
         );
@@ -102,6 +103,7 @@ pub fn run_from_config() -> ExitCode {
         };
         let task_markdown_opts = MarkdownOptions {
             allow_html: task.markdown_allow_html.unwrap_or(false),
+            strip_comments: task.markdown_strip_comments.unwrap_or(false),
         };
         let task_wiki_opts = WikiOptions {
             link_prefix: task.wiki_link_prefix.clone(),

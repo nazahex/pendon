@@ -21,15 +21,19 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
     // Handle multiline HTML comment continuation
     if ctx.in_html_comment {
         if s == "\n" {
-            ctx.html_comment_buffer.push('\n');
+            if !ctx.options.strip_comments {
+                ctx.html_comment_buffer.push('\n');
+            }
             ctx.at_line_start = true;
             return;
         }
 
         if let Some(end_idx) = s.find("-->") {
             let before_close = &s[..end_idx + 3];
-            ctx.html_comment_buffer.push_str(before_close);
-            emit_html_event(&mut ctx.out, &ctx.html_comment_buffer, NodeKind::HtmlBlock);
+            if !ctx.options.strip_comments {
+                ctx.html_comment_buffer.push_str(before_close);
+                emit_html_event(&mut ctx.out, &ctx.html_comment_buffer, NodeKind::HtmlBlock);
+            }
             ctx.html_comment_buffer.clear();
             ctx.in_html_comment = false;
 
@@ -42,7 +46,9 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             }
             return;
         } else {
-            ctx.html_comment_buffer.push_str(s);
+            if !ctx.options.strip_comments {
+                ctx.html_comment_buffer.push_str(s);
+            }
             ctx.at_line_start = false;
             return;
         }
@@ -140,7 +146,9 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                     ctx.emit_end(NodeKind::Paragraph);
                 }
                 ctx.in_html_comment = true;
-                ctx.html_comment_buffer.push_str(&line);
+                if !ctx.options.strip_comments {
+                    ctx.html_comment_buffer.push_str(&line);
+                }
                 ctx.at_line_start = false;
                 return;
             }
@@ -311,8 +319,16 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             return;
         }
 
+        // CORRECT POSITION: capture_html_block check AFTER current_line is defined
         if ctx.options.allow_html {
             if let Some(html_line) = capture_html_block(&current_line) {
+                // Check if this is an HTML comment and should be stripped
+                let is_comment = html_line.starts_with("<!--") && html_line.ends_with("-->");
+                if is_comment && ctx.options.strip_comments {
+                    ctx.at_line_start = false;
+                    return;
+                }
+
                 if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
                     ctx.emit_end(NodeKind::Paragraph);
                 }

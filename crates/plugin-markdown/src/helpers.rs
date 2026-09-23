@@ -91,6 +91,24 @@ pub fn emit_inline(s: &str, out: &mut Vec<Event>, opts: MarkdownOptions) {
     let bytes: Vec<char> = s.chars().collect();
     let mut i = 0usize;
     while i < bytes.len() {
+        // Handle inline HTML comments
+        if opts.allow_html
+            && i + 3 < bytes.len()
+            && bytes[i] == '<'
+            && bytes[i + 1] == '!'
+            && bytes[i + 2] == '-'
+            && bytes[i + 3] == '-'
+        {
+            if let Some(end) = find_inline_comment_end(&bytes, i + 4) {
+                if !opts.strip_comments {
+                    let comment: String = bytes[i..end].iter().collect();
+                    emit_html_event(out, &comment, NodeKind::HtmlInline);
+                }
+                i = end;
+                continue;
+            }
+        }
+        // Handle math regions
         if let Some(end) = math_region_end(&bytes, i) {
             let content: String = bytes[i..end].iter().collect();
             out.push(Event::Text(content));
@@ -370,4 +388,15 @@ fn html_like(content: &str) -> bool {
         Some(c) => c.is_ascii_alphabetic(),
         None => false,
     }
+}
+
+fn find_inline_comment_end(hay: &[char], start: usize) -> Option<usize> {
+    let mut i = start;
+    while i + 2 < hay.len() {
+        if hay[i] == '-' && hay[i + 1] == '-' && hay[i + 2] == '>' {
+            return Some(i + 3);
+        }
+        i += 1;
+    }
+    None
 }

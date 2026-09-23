@@ -73,6 +73,7 @@ fn main() -> ExitCode {
 
     let markdown_opts = MarkdownOptions {
         allow_html: args.markdown_allow_html,
+        strip_comments: args.markdown_strip_comments,
     };
     let wiki_opts = WikiOptions {
         link_prefix: args.wiki_link_prefix.clone(),

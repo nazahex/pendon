@@ -7,6 +7,7 @@ pub struct ConfigTask {
     pub output: String,
     pub plugin: Option<String>,
     pub markdown_allow_html: Option<bool>,
+    pub markdown_strip_comments: Option<bool>,
     pub wiki_link_prefix: Option<String>,
     pub format: String,
     pub pretty: Option<bool>,

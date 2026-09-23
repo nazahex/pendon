@@ -16,11 +16,15 @@ pub fn process(events: &[Event]) -> Vec<Event> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MarkdownOptions {
     pub allow_html: bool,
+    pub strip_comments: bool,
 }
 
 impl Default for MarkdownOptions {
     fn default() -> Self {
-        Self { allow_html: false }
+        Self {
+            allow_html: false,
+            strip_comments: false,
+        }
     }
 }
 
@@ -68,9 +72,13 @@ mod tests {
             .any(|ev| matches!(ev, Event::StartNode(NodeKind::HtmlInline)))
     }
 
+    // FIX: Added `..Default::default()` to prevent missing field errors
     #[test]
     fn html_block_is_emitted_when_allowed() {
-        let opts = MarkdownOptions { allow_html: true };
+        let opts = MarkdownOptions {
+            allow_html: true,
+            ..Default::default()
+        };
         let events = run_markdown("<div>ok</div>\n", opts);
         assert!(events
             .iter()
@@ -81,25 +89,37 @@ mod tests {
         );
     }
 
+    // FIX: Added `..Default::default()`
     #[test]
     fn html_inline_is_emitted_inside_text() {
-        let opts = MarkdownOptions { allow_html: true };
+        let opts = MarkdownOptions {
+            allow_html: true,
+            ..Default::default()
+        };
         let events = run_markdown("before <span>inline</span> after\n", opts);
         assert!(events
             .iter()
             .any(|e| matches!(e, Event::StartNode(NodeKind::HtmlInline))));
     }
 
+    // FIX: Added `..Default::default()`
     #[test]
     fn double_space_line_break_inserts_br() {
-        let opts = MarkdownOptions { allow_html: false };
+        let opts = MarkdownOptions {
+            allow_html: false,
+            ..Default::default()
+        };
         let events = run_markdown("line  \nnext\n", opts);
         assert!(has_line_break(&events));
     }
 
+    // FIX: Added `..Default::default()`
     #[test]
     fn double_backslash_line_break_inserts_br() {
-        let opts = MarkdownOptions { allow_html: false };
+        let opts = MarkdownOptions {
+            allow_html: false,
+            ..Default::default()
+        };
         let events = run_markdown("line\\\\\nnext\n", opts);
         assert!(has_line_break(&events));
     }
@@ -336,5 +356,61 @@ mod tests {
         let text = all_text(&events);
         assert!(text.contains("$100"));
         assert!(text.contains("$500"));
+    }
+
+    // =========================================================
+    // NEW TESTS FOR `strip_comments` FEATURE
+    // =========================================================
+
+    #[test]
+    fn preserves_html_comments_when_strip_is_false() {
+        let opts = MarkdownOptions {
+            allow_html: true,
+            strip_comments: false,
+        };
+        let events = run_markdown("<!-- this is a comment -->\n", opts);
+        assert!(has_node(&events, NodeKind::HtmlBlock));
+        assert!(text_contains(&events, "<!-- this is a comment -->"));
+    }
+
+    #[test]
+    fn strips_single_line_html_comment() {
+        let opts = MarkdownOptions {
+            allow_html: true,
+            strip_comments: true,
+        };
+        let events = run_markdown("<!-- this is a comment -->\nParagraph below.\n", opts);
+        assert!(!has_node(&events, NodeKind::HtmlBlock));
+        let text = all_text(&events);
+        assert!(!text.contains("<!--"));
+        assert!(text.contains("Paragraph below."));
+    }
+
+    #[test]
+    fn strips_multiline_html_comment() {
+        let opts = MarkdownOptions {
+            allow_html: true,
+            strip_comments: true,
+        };
+        let src = "<!--\nThis is a\nmultiline comment\n-->\nReal content.\n";
+        let events = run_markdown(src, opts);
+        assert!(!has_node(&events, NodeKind::HtmlBlock));
+        let text = all_text(&events);
+        assert!(!text.contains("multiline comment"));
+        assert!(text.contains("Real content."));
+    }
+
+    #[test]
+    fn strips_inline_html_comment() {
+        let opts = MarkdownOptions {
+            allow_html: true,
+            strip_comments: true,
+        };
+        let events = run_markdown("Some text <!-- inline --> more text.\n", opts);
+        assert!(!has_node(&events, NodeKind::HtmlInline));
+        let text = all_text(&events);
+        assert!(!text.contains("<!--"));
+        assert!(text.contains("Some text"));
+        assert!(text.contains("more text."));
     }
 }

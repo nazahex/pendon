@@ -13,6 +13,7 @@ pub struct CliArgs {
     pub max_blank_run: Option<usize>,
     pub plugin: Option<String>,
     pub markdown_allow_html: bool,
+    pub markdown_strip_comments: bool,
     pub wiki_link_prefix: Option<String>,
 }
 
@@ -31,6 +32,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
     let pretty: bool = pargs.contains("--pretty");
     let tui: bool = pargs.contains("--tui");
     let markdown_allow_html: bool = pargs.contains("--markdown-allow-html");
+    let markdown_strip_comments: bool = pargs.contains("--markdown-strip-comments");
     let max_doc_bytes: Option<usize> = pargs
         .opt_value_from_str("--max-doc-bytes")
         .map_err(|e| e.to_string())?;
@@ -63,6 +65,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         max_blank_run,
         plugin,
         markdown_allow_html,
+        markdown_strip_comments,
         wiki_link_prefix,
     })
 }
