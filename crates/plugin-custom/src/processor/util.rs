@@ -1,7 +1,7 @@
 use crate::specs::PluginSpec;
 use pendon_core::{Event, NodeKind};
 use regex::Regex;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 pub fn resolve_node_kind(spec: &PluginSpec) -> NodeKind {
     if let Some(ast) = &spec.ast {
@@ -55,6 +55,7 @@ pub fn emit_component(
 ) {
     let nk = resolve_node_kind(spec);
     out.push(Event::StartNode(nk.clone()));
+
     if let Some(ast) = &spec.ast {
         if let Some(name) = &ast.node_name {
             out.push(Event::Attribute {
@@ -62,6 +63,10 @@ pub fn emit_component(
                 value: name.clone(),
             });
         }
+
+        // Track which attributes have been explicitly mapped/renamed
+        let mut mapped_keys = HashSet::new();
+
         if let Some(map) = &ast.attrs_map {
             for (from, to) in map.iter() {
                 if let Some(val) = attrs.get(from) {
@@ -69,10 +74,31 @@ pub fn emit_component(
                         name: to.clone(),
                         value: val.clone(),
                     });
+                    mapped_keys.insert(from.clone());
                 }
             }
         }
+
+        // Pass through all remaining attributes that were not explicitly mapped.
+        // This enables the dynamic spread operator in the Solid renderer.
+        for (key, val) in attrs {
+            if !mapped_keys.contains(key) {
+                out.push(Event::Attribute {
+                    name: key.clone(),
+                    value: val.clone(),
+                });
+            }
+        }
+    } else {
+        // If no AST spec is defined, pass all attributes through directly
+        for (key, val) in attrs {
+            out.push(Event::Attribute {
+                name: key.clone(),
+                value: val.clone(),
+            });
+        }
     }
+
     if let Some(children) = children {
         out.extend(children.iter().cloned());
     }

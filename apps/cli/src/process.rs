@@ -162,7 +162,7 @@ pub fn process_single_file(
                     },
                 };
                 track_used_spec(&mut used_custom_specs, spec.clone());
-                events = pendon_plugin_custom::process(&events, &spec);
+                events = pendon_plugin_custom::process(&events, &spec, &inline_pipeline);
                 continue;
             }
 
@@ -237,7 +237,7 @@ pub fn process_single_file(
                     if let Some(spec) = custom_registry.get(other) {
                         let spec = spec.clone();
                         track_used_spec(&mut used_custom_specs, spec.clone());
-                        pendon_plugin_custom::process(&events, &spec)
+                        pendon_plugin_custom::process(&events, &spec, &inline_pipeline)
                     } else {
                         events
                     }

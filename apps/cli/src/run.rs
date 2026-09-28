@@ -1,5 +1,6 @@
 use pendon_plugin_markdown::MarkdownOptions;
 use pendon_plugin_wiki::WikiOptions;
+use pico_args::Arguments;
 use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
@@ -36,10 +37,15 @@ pub fn run_from_config() -> ExitCode {
     };
     let vicado_hints_override = build_vicado_hints_override(cfg.plugin_vicado.as_ref());
 
-    // Parse cache flags from environment
-    let args: Vec<String> = std::env::args().collect();
-    let no_cache = args.iter().any(|arg| arg == "--no-cache");
-    let clean_cache = args.iter().any(|arg| arg == "--clean-cache");
+    // Parse cache flags using pico_args for consistency with the rest of the CLI.
+    let mut pargs = Arguments::from_env();
+    // Consume the binary name and the "run" subcommand safely.
+    let _ = pargs.subcommand();
+
+    let no_cache = pargs.contains("--no-cache");
+    let clean_cache = pargs.contains("--clean-cache");
+    // Ignore existing cache but save the new one at the end.
+    let force_rebuild = pargs.contains(["-F", "--force"]);
 
     if clean_cache {
         if let Err(e) = CacheManifest::clean() {
@@ -47,7 +53,11 @@ pub fn run_from_config() -> ExitCode {
         }
     }
 
-    let mut manifest = if no_cache || clean_cache {
+    // Determine initial cache state based on the provided flags.
+    let mut manifest = if clean_cache {
+        CacheManifest::default()
+    } else if no_cache || force_rebuild {
+        // Start with an empty manifest to force a full rebuild.
         CacheManifest::default()
     } else {
         CacheManifest::load()
@@ -68,7 +78,7 @@ pub fn run_from_config() -> ExitCode {
 
         let mut total_skipped = 0usize;
         let mut total_processed = 0usize;
-        let mut total_skipped_write = 0usize; // track files that were not written
+        let mut total_skipped_write = 0usize;
 
         // Hash task config
         let task_config_str = format!(
@@ -261,7 +271,8 @@ pub fn run_from_config() -> ExitCode {
         }
     }
 
-    // Save cache
+    // Save cache to disk unless --no-cache was explicitly requested.
+    // --force and --clean-cache are allowed to save the new cache state.
     if !no_cache {
         if let Err(e) = manifest.save() {
             eprintln!("Warning: failed to save cache: {}", e);

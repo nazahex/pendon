@@ -1,4 +1,4 @@
-use crate::specs::{AttrType, PluginSpec};
+use crate::specs::{strip_quotes, AttrType, PluginSpec};
 use pendon_core::{Event, Severity};
 use regex::Captures;
 use std::collections::BTreeMap;
@@ -69,9 +69,20 @@ pub fn collect_attrs(
         }
     }
 
+    // Pass through any remaining key-value pairs from the {...} block
+    // that were not explicitly declared in [[attrs]]. This enables the
+    // dynamic spread operator in the Solid renderer.
+    for (k, v) in kv_map {
+        if !out.contains_key(&k) {
+            out.insert(k, strip_quotes(&v));
+        }
+    }
+
     (out, diags)
 }
 
+// Pastikan fungsi parse_keyvals, split_respecting_quotes, dan ingest_kv
+// yang kita perbarui sebelumnya tetap ada di bawah ini.
 fn parse_keyvals(raw: &str) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
     let trimmed = raw
@@ -79,38 +90,68 @@ fn parse_keyvals(raw: &str) -> BTreeMap<String, String> {
         .trim_start_matches('{')
         .trim_end_matches('}')
         .trim();
+
     if trimmed.is_empty() {
         return map;
     }
-    let mut buf = String::new();
-    let mut in_quote = false;
-    let mut escape = false;
-    for ch in trimmed.chars() {
-        if escape {
-            buf.push(ch);
-            escape = false;
-            continue;
-        }
-        if ch == '\\' {
-            escape = true;
-            continue;
-        }
-        if ch == '"' {
-            in_quote = !in_quote;
-            buf.push(ch);
-            continue;
-        }
-        if ch == ',' && !in_quote {
-            ingest_kv(&mut map, &buf);
-            buf.clear();
-            continue;
-        }
-        buf.push(ch);
+
+    // Split by comma, but respect quoted strings to prevent breaking
+    // values that contain commas or special characters.
+    let pairs = split_respecting_quotes(trimmed);
+
+    for pair in pairs {
+        ingest_kv(&mut map, &pair);
     }
-    if !buf.is_empty() {
-        ingest_kv(&mut map, &buf);
-    }
+
     map
+}
+
+/// Splits a string by commas while ignoring commas inside single or double quotes.
+fn split_respecting_quotes(input: &str) -> Vec<String> {
+    let mut result = Vec::new();
+    let mut current = String::new();
+    let mut in_quote: Option<char> = None;
+    let mut escape_next = false;
+
+    for ch in input.chars() {
+        if escape_next {
+            current.push(ch);
+            escape_next = false;
+            continue;
+        }
+
+        match ch {
+            '\\' => {
+                escape_next = true;
+                current.push(ch);
+            }
+            '"' | '\'' => {
+                if in_quote == Some(ch) {
+                    in_quote = None;
+                } else if in_quote.is_none() {
+                    in_quote = Some(ch);
+                }
+                current.push(ch);
+            }
+            ',' if in_quote.is_none() => {
+                let trimmed = current.trim().to_string();
+                if !trimmed.is_empty() {
+                    result.push(trimmed);
+                }
+                current.clear();
+            }
+            _ => {
+                current.push(ch);
+            }
+        }
+    }
+
+    let trimmed = current.trim().to_string();
+    if !trimmed.is_empty() {
+        result.push(trimmed);
+    }
+
+    result
 }
 
 fn ingest_kv(map: &mut BTreeMap<String, String>, raw: &str) {
@@ -118,9 +159,16 @@ fn ingest_kv(map: &mut BTreeMap<String, String>, raw: &str) {
     if trimmed.is_empty() {
         return;
     }
-    let (key, val) = match trimmed.split_once(':') {
-        Some(pair) => pair,
-        None => return,
+
+    // Only split on the FIRST colon to allow colons inside quoted values
+    let Some((key, val)) = trimmed.split_once(':') else {
+        return;
     };
-    map.insert(key.trim().to_string(), val.trim().to_string());
+
+    let clean_key = key.trim().to_string();
+    let clean_val = val.trim().to_string();
+
+    if !clean_key.is_empty() {
+        map.insert(clean_key, clean_val);
+    }
 }

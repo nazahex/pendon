@@ -139,11 +139,27 @@ fn parse_link(chars: &[char], start: usize) -> Option<(usize, String, String, Op
     let (raw_target, title) = split_target_title(&raw_input);
     let mut end = close_target + 1;
 
+    // Extra attributes must be directly attached without spaces.
     let extra = if chars.get(end) == Some(&'{') {
         if let Some(close_extra) = find_char(chars, end + 1, '}') {
             let value: String = chars[end + 1..close_extra].iter().collect();
-            end = close_extra + 1;
-            Some(value)
+
+            // Validate that the block contains at least one valid key-value pair.
+            // This prevents silent deletion of arbitrary text inside curly braces.
+            let mut is_valid_attr_block = false;
+            for part in value.split(',') {
+                if part.split_once(':').is_some() {
+                    is_valid_attr_block = true;
+                    break;
+                }
+            }
+
+            if is_valid_attr_block {
+                end = close_extra + 1;
+                Some(value)
+            } else {
+                None
+            }
         } else {
             None
         }

@@ -317,28 +317,43 @@ fn emit_text(text: &str, ctx: &mut CitationContext, out: &mut Vec<Event>) {
     let chars: Vec<char> = text.chars().collect();
     let mut cursor = 0usize;
     let mut normal = String::new();
+
     while cursor < chars.len() {
         if chars[cursor..].starts_with(&['[', '^', '^', ']', '(']) {
             if let Some((end, id, props, extra)) = parse_citation(&chars, cursor) {
                 flush_text(&mut normal, out);
+
                 if reference_exists(&ctx.references, &id) {
                     let mut citation = Map::new();
                     citation.insert("id".to_string(), Value::String(id.clone()));
                     for (key, value) in props {
                         citation.insert(key, Value::String(value));
                     }
+
+                    // Calculate identity BEFORE inserting index to ensure proper deduplication.
                     let identity = canonical_identity(&citation);
-                    let index = if let Some(index) = ctx.identities.get(&identity) {
-                        *index
+
+                    let index = if let Some(&existing_index) = ctx.identities.get(&identity) {
+                        existing_index
                     } else {
-                        let index = ctx.cites.len() + 1;
-                        citation.insert("index".to_string(), Value::Number(index.into()));
-                        ctx.cites.push(Value::Object(citation.clone()));
-                        ctx.identities.insert(identity, index);
-                        index
+                        let new_index = ctx.cites.len() + 1;
+
+                        // Push to the global cites array with the index included
+                        let mut cite_for_array = citation.clone();
+                        cite_for_array.insert("index".to_string(), Value::Number(new_index.into()));
+                        ctx.cites.push(Value::Object(cite_for_array));
+
+                        ctx.identities.insert(identity, new_index);
+                        new_index
                     };
+
+                    // CRITICAL: Always ensure index is present in the local citation map
+                    // so it gets emitted as an attribute for custom nodes.
+                    citation.insert("index".to_string(), Value::Number(index.into()));
+
                     emit_citation(out, &ctx.options, &citation, index, &extra);
                 } else {
+                    // Reference not found: emit raw syntax as plain text and log diagnostic
                     let raw: String = chars[cursor..end].iter().collect();
                     normal.push_str(&raw);
                     ctx.diagnostics.push(Event::Diagnostic {
@@ -347,13 +362,19 @@ fn emit_text(text: &str, ctx: &mut CitationContext, out: &mut Vec<Event>) {
                         span: None,
                     });
                 }
+
+                // CRITICAL: Always advance cursor past the parsed citation,
+                // regardless of whether the reference existed or not.
                 cursor = end;
                 continue;
             }
         }
+
+        // Fallback: character is not part of a valid citation syntax
         normal.push(chars[cursor]);
         cursor += 1;
     }
+
     flush_text(&mut normal, out);
 }
 
@@ -521,17 +542,26 @@ fn parse_citation(
 }
 
 /// Parses [.class,#id]{key: val} after cite arguments.
-/// Advances cursor past consumed characters.
+/// Extra attributes must be attached directly without spaces. If there is
+/// a space, it separates the citation from subsequent text or other citations.
 fn parse_cite_extra_attrs(chars: &[char], cursor: &mut usize) -> CiteExtraAttrs {
     let mut extra = CiteExtraAttrs::default();
 
-    // Skip whitespace
-    while *cursor < chars.len() && chars[*cursor] == ' ' {
-        *cursor += 1;
-    }
-
     // Parse optional class/id block: [.class,#id]
+    // Must be directly attached to the citation (no leading spaces).
     if *cursor < chars.len() && chars[*cursor] == '[' {
+        // A valid attribute block must start with '.' or '#' immediately after '['.
+        // This prevents accidentally consuming another citation `[^^](...)` or
+        // a standard markdown link `[text](...)`.
+        if *cursor + 1 < chars.len() {
+            let next_char = chars[*cursor + 1];
+            if next_char != '.' && next_char != '#' {
+                return extra;
+            }
+        } else {
+            return extra;
+        }
+
         if let Some(close_br) = find_char(chars, *cursor + 1, ']') {
             let block: String = chars[*cursor + 1..close_br].iter().collect();
             for token in block.split(',').map(|t| t.trim()).filter(|t| !t.is_empty()) {
@@ -549,12 +579,8 @@ fn parse_cite_extra_attrs(chars: &[char], cursor: &mut usize) -> CiteExtraAttrs 
         }
     }
 
-    // Skip whitespace between blocks
-    while *cursor < chars.len() && chars[*cursor] == ' ' {
-        *cursor += 1;
-    }
-
     // Parse optional kv block: {key: val, ...}
+    // Also must be directly attached without spaces.
     if *cursor < chars.len() && chars[*cursor] == '{' {
         if let Some(close_curly) = find_char(chars, *cursor + 1, '}') {
             let kv_block: String = chars[*cursor + 1..close_curly].iter().collect();
