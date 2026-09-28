@@ -6,11 +6,11 @@ mod inline;
 mod util;
 
 use crate::specs::PluginSpec;
-use pendon_core::Event;
+use pendon_core::{Event, Pipeline};
 
-pub fn process(events: &[Event], spec: &PluginSpec) -> Vec<Event> {
+pub fn process(events: &[Event], spec: &PluginSpec, pipeline: &Pipeline) -> Vec<Event> {
     if spec.kind == "inline" {
-        return inline::process(events, spec);
+        return inline::process(events, spec, pipeline);
     }
 
     match spec.matcher.parse_hint.as_deref() {

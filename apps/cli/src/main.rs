@@ -106,7 +106,7 @@ fn main() -> ExitCode {
                     },
                 };
                 plugins::track_used_spec(&mut used_custom_specs, spec.clone());
-                ev = pendon_plugin_custom::process(&ev, &spec);
+                ev = pendon_plugin_custom::process(&ev, &spec, &pendon_core::Pipeline::default());
                 continue;
             }
 
@@ -159,7 +159,7 @@ fn main() -> ExitCode {
                 other => {
                     if let Some(spec) = custom_cache.get(other) {
                         plugins::track_used_spec(&mut used_custom_specs, spec.clone());
-                        pendon_plugin_custom::process(&ev, spec)
+                        pendon_plugin_custom::process(&ev, &spec, &pendon_core::Pipeline::default())
                     } else {
                         ev
                     }
