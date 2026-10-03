@@ -1,3 +1,4 @@
+// plugin-custom/processor/util.rs
 use crate::specs::PluginSpec;
 use pendon_core::{Event, NodeKind};
 use regex::Regex;
@@ -55,6 +56,15 @@ pub fn emit_component(
 ) {
     let nk = resolve_node_kind(spec);
     out.push(Event::StartNode(nk.clone()));
+
+    // Inject hidden metadata so downstream parsers (e.g., plugin-markdown)
+    // can distinguish between inline and block custom components.
+    // This prevents inline plugins from breaking block structure and
+    // block plugins from leaking into surrounding inline contexts.
+    out.push(Event::Attribute {
+        name: "__plugin_kind".to_string(),
+        value: spec.kind.clone(),
+    });
 
     if let Some(ast) = &spec.ast {
         if let Some(name) = &ast.node_name {

@@ -1,4 +1,4 @@
-// processor/blockquote.rs
+// plugin-custom/processor/blockquote.rs
 use crate::processor::{attrs, util};
 use crate::specs::PluginSpec;
 use pendon_core::{Event, NodeKind};
@@ -128,7 +128,152 @@ pub fn process(events: &[Event], spec: &PluginSpec) -> Vec<Event> {
                         // multiple Event::Text nodes (char-by-char emission).
                         let cleaned_p_events =
                             strip_marker_from_events(&inner_events[p_start..end_idx], &new_marker);
-                        component_children.extend(cleaned_p_events);
+
+                        // FIX: Check if the stripped paragraph text starts with a list marker.
+                        // If so, transform it into a list item and merge with any subsequent
+                        // list of the same kind to prevent broken JSX tree structure.
+                        let mut first_text = String::new();
+                        for ev in &cleaned_p_events {
+                            if let Event::Text(t) = ev {
+                                first_text.push_str(t);
+                            }
+                        }
+
+                        let mut list_kind = None;
+                        let mut marker_width = 0;
+                        let mut start_attr = None;
+
+                        let trimmed = first_text.trim_start();
+                        if trimmed.starts_with("- ")
+                            || trimmed.starts_with("* ")
+                            || trimmed.starts_with("+ ")
+                        {
+                            list_kind = Some(NodeKind::BulletList);
+                            marker_width = 2;
+                        } else {
+                            let mut chars = trimmed.chars();
+                            let mut num_str = String::new();
+                            while let Some(c) = chars.next() {
+                                if c.is_ascii_digit() {
+                                    num_str.push(c);
+                                } else {
+                                    break;
+                                }
+                            }
+                            if !num_str.is_empty() {
+                                let consumed = num_str.len();
+                                if let Some(delim) = trimmed.chars().nth(consumed) {
+                                    if (delim == '.' || delim == ')')
+                                        && trimmed.chars().nth(consumed + 1) == Some(' ')
+                                    {
+                                        list_kind = Some(NodeKind::OrderedList);
+                                        marker_width = consumed + 2;
+                                        start_attr = num_str.parse::<usize>().ok();
+                                    }
+                                }
+                            }
+                        }
+
+                        if let Some(kind) = list_kind {
+                            let mut stripped_cleaned_events = Vec::new();
+                            // State machine: 0=leading spaces, 1=marker, 2=trailing space, 3=normal
+                            let mut state = 0;
+                            let mut marker_chars_left = marker_width;
+
+                            for ev in &cleaned_p_events {
+                                match ev {
+                                    Event::StartNode(NodeKind::Paragraph)
+                                    | Event::EndNode(NodeKind::Paragraph) => continue,
+                                    Event::Text(t) => {
+                                        let mut new_text = String::new();
+                                        for c in t.chars() {
+                                            if state == 0 {
+                                                if c == ' ' {
+                                                    continue;
+                                                } else {
+                                                    state = 1;
+                                                }
+                                            }
+
+                                            if state == 1 {
+                                                marker_chars_left -= 1;
+                                                if marker_chars_left == 0 {
+                                                    state = 2;
+                                                }
+                                                continue;
+                                            }
+
+                                            if state == 2 {
+                                                if c == ' ' {
+                                                    state = 3;
+                                                    continue;
+                                                } else {
+                                                    state = 3;
+                                                }
+                                            }
+
+                                            if state == 3 {
+                                                new_text.push(c);
+                                            }
+                                        }
+                                        if !new_text.is_empty() {
+                                            stripped_cleaned_events.push(Event::Text(new_text));
+                                        }
+                                    }
+                                    _ => {
+                                        stripped_cleaned_events.push(ev.clone());
+                                    }
+                                }
+                            }
+
+                            let mut transformed_events = Vec::new();
+                            transformed_events.push(Event::StartNode(kind.clone()));
+                            if let (NodeKind::OrderedList, Some(n)) = (&kind, start_attr) {
+                                transformed_events.push(Event::Attribute {
+                                    name: "start".to_string(),
+                                    value: n.to_string(),
+                                });
+                            }
+                            transformed_events.push(Event::StartNode(NodeKind::ListItem));
+                            transformed_events.extend(stripped_cleaned_events);
+                            transformed_events.push(Event::EndNode(NodeKind::ListItem));
+
+                            let mut next_idx = end_idx;
+                            let mut merged = false;
+                            if next_idx < inner_events.len() {
+                                if let Event::StartNode(next_kind) = &inner_events[next_idx] {
+                                    if *next_kind == kind {
+                                        let mut m = next_idx + 1;
+                                        while m < inner_events.len() {
+                                            if let Event::EndNode(end_kind) = &inner_events[m] {
+                                                if *end_kind == kind {
+                                                    m += 1;
+                                                    break;
+                                                }
+                                            }
+                                            transformed_events.push(inner_events[m].clone());
+                                            m += 1;
+                                        }
+                                        transformed_events.push(Event::EndNode(kind.clone()));
+                                        next_idx = m;
+                                        merged = true;
+                                    }
+                                }
+                            }
+
+                            if !merged {
+                                transformed_events.push(Event::EndNode(kind.clone()));
+                            }
+
+                            component_children.extend(transformed_events);
+                            // FIX: Use continue to skip the unconditional k = end_idx below.
+                            // This prevents double-processing of merged list items which caused
+                            // duplicate lists inside Hint components.
+                            k = next_idx;
+                            continue;
+                        } else {
+                            component_children.extend(cleaned_p_events);
+                        }
                     } else {
                         // Non-matching paragraph: absorb into active component if one exists,
                         // otherwise route to vanilla stream for standard blockquote rendering.

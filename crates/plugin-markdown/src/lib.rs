@@ -1,4 +1,4 @@
-use pendon_core::Event;
+use pendon_core::{Event, NodeKind};
 
 mod context;
 mod end;
@@ -30,13 +30,35 @@ impl Default for MarkdownOptions {
 
 pub fn process_with_options(events: &[Event], opts: MarkdownOptions) -> Vec<Event> {
     let mut ctx = ParseContext::new(events.len(), opts);
-    for ev in events {
+    let mut i = 0;
+    while i < events.len() {
+        let ev = &events[i];
         match ev {
-            Event::StartNode(kind) => start::handle(&mut ctx, kind),
+            Event::StartNode(kind) => {
+                let mut is_block_custom = false;
+                if matches!(kind, NodeKind::Custom(_)) {
+                    // Look ahead untuk mencari atribut __plugin_kind
+                    for j in (i + 1)..events.len() {
+                        match &events[j] {
+                            Event::Attribute { name, value } if name == "__plugin_kind" => {
+                                if value == "block" || value == "codefence" || value == "blockquote"
+                                {
+                                    is_block_custom = true;
+                                }
+                                break;
+                            }
+                            Event::Attribute { .. } => continue,
+                            _ => break,
+                        }
+                    }
+                }
+                start::handle(&mut ctx, kind, is_block_custom);
+            }
             Event::EndNode(kind) => end::handle(&mut ctx, kind),
             Event::Text(s) => text::handle(&mut ctx, s),
             Event::Diagnostic { .. } | Event::Attribute { .. } => ctx.push_event(ev),
         }
+        i += 1;
     }
     ctx.finalize()
 }

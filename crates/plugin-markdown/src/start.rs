@@ -1,4 +1,4 @@
-// start.rs
+// plugin-markdown/start.rs
 use pendon_core::NodeKind;
 
 use crate::context::ParseContext;
@@ -14,11 +14,10 @@ fn is_inline_node(kind: &NodeKind) -> bool {
             | NodeKind::Italic
             | NodeKind::HtmlInline
             | NodeKind::Image
-            | NodeKind::Custom(_)
     )
 }
 
-pub fn handle(ctx: &mut ParseContext, kind: &NodeKind) {
+pub fn handle(ctx: &mut ParseContext, kind: &NodeKind, is_block_custom: bool) {
     match kind {
         NodeKind::Heading => {
             ctx.close_all_lists();
@@ -49,8 +48,19 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind) {
             } else {
                 ctx.pending_para_start = true;
             }
-            // PENTING: Paksa at_line_start = true agar deteksi list marker selalu berjalan
             ctx.at_line_start = true;
+        }
+        // Tangani Custom secara eksplisit berdasarkan metadata __plugin_kind
+        NodeKind::Custom(_) => {
+            if is_block_custom {
+                ctx.close_blockquotes();
+                ctx.close_all_lists();
+                ctx.close_table_if_open();
+            } else if ctx.pending_para_start {
+                ctx.emit_start(NodeKind::Paragraph);
+                ctx.pending_para_start = false;
+            }
+            ctx.emit_start(kind.clone());
         }
         _ => {
             if !is_inline_node(kind) {
