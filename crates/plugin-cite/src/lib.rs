@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use pendon_core::{Event, NodeKind, Severity};
+use pendon_extra::parse_attrs;
 use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde_json::{Map, Value};
 
@@ -398,7 +399,7 @@ fn emit_citation(
                 value: value_to_string(value),
             });
         }
-        // Emit extra attributes (class, id, data-*, style)
+        // Emit extra attributes (class, id, props, style)
         emit_extra_attrs(out, extra);
         out.push(Event::EndNode(NodeKind::Custom(custom.name.clone())));
         return;
@@ -453,10 +454,16 @@ fn emit_citation(
     out.push(Event::EndNode(NodeKind::HtmlInline));
 }
 
+/// Emits extra attributes on a custom component node.
+///
+/// Unlike the default HTML path (which renders arbitrary props as `data-*`
+/// attributes), a custom Solid component receives plain props, so the keys are
+/// passed through verbatim. The extra `#id` is emitted as `cite-id` to keep it
+/// distinguishable from the citation reference `id`.
 fn emit_extra_attrs(out: &mut Vec<Event>, extra: &CiteExtraAttrs) {
     if let Some(id) = &extra.id {
         out.push(Event::Attribute {
-            name: "id".to_string(),
+            name: "cite-id".to_string(),
             value: id.clone(),
         });
     }
@@ -468,7 +475,7 @@ fn emit_extra_attrs(out: &mut Vec<Event>, extra: &CiteExtraAttrs) {
     }
     for (k, v) in &extra.data {
         out.push(Event::Attribute {
-            name: format!("data-{}", k),
+            name: k.clone(),
             value: v.clone(),
         });
     }
@@ -546,115 +553,30 @@ fn parse_citation(
 /// a space, it separates the citation from subsequent text or other citations.
 fn parse_cite_extra_attrs(chars: &[char], cursor: &mut usize) -> CiteExtraAttrs {
     let mut extra = CiteExtraAttrs::default();
+    let source: String = chars[*cursor..].iter().collect();
+    let starts_with_valid_block = source.starts_with('{')
+        || (source.starts_with('[')
+            && source
+                .chars()
+                .nth(1)
+                .is_some_and(|character| character == '.' || character == '#'));
+    if !starts_with_valid_block {
+        return extra;
+    }
 
-    // Parse optional class/id block: [.class,#id]
-    // Must be directly attached to the citation (no leading spaces).
-    if *cursor < chars.len() && chars[*cursor] == '[' {
-        // A valid attribute block must start with '.' or '#' immediately after '['.
-        // This prevents accidentally consuming another citation `[^^](...)` or
-        // a standard markdown link `[text](...)`.
-        if *cursor + 1 < chars.len() {
-            let next_char = chars[*cursor + 1];
-            if next_char != '.' && next_char != '#' {
-                return extra;
-            }
+    let parsed = parse_attrs(&source);
+    let consumed = source.len().saturating_sub(parsed.rest.len());
+    *cursor += source[..consumed].chars().count();
+    extra.id = parsed.attrs.id;
+    extra.classes = parsed.attrs.classes;
+    for (key, value) in parsed.attrs.properties {
+        if key.starts_with("--") {
+            extra.styles.push((key, value));
         } else {
-            return extra;
-        }
-
-        if let Some(close_br) = find_char(chars, *cursor + 1, ']') {
-            let block: String = chars[*cursor + 1..close_br].iter().collect();
-            for token in block.split(',').map(|t| t.trim()).filter(|t| !t.is_empty()) {
-                if let Some(class_name) = token.strip_prefix('.') {
-                    if !class_name.is_empty() {
-                        extra.classes.push(class_name.to_string());
-                    }
-                } else if let Some(id) = token.strip_prefix('#') {
-                    if !id.is_empty() {
-                        extra.id = Some(id.to_string());
-                    }
-                }
-            }
-            *cursor = close_br + 1;
+            extra.data.push((key, value));
         }
     }
-
-    // Parse optional kv block: {key: val, ...}
-    // Also must be directly attached without spaces.
-    if *cursor < chars.len() && chars[*cursor] == '{' {
-        if let Some(close_curly) = find_char(chars, *cursor + 1, '}') {
-            let kv_block: String = chars[*cursor + 1..close_curly].iter().collect();
-            for pair in split_csv_str(&kv_block) {
-                let Some((k, v)) = pair.split_once(':') else {
-                    continue;
-                };
-                let key = k.trim();
-                let value = unquote_str(v.trim());
-                if key.is_empty() {
-                    continue;
-                }
-                if key.starts_with("--") {
-                    extra.styles.push((key.to_string(), value));
-                } else {
-                    extra.data.push((key.to_string(), value));
-                }
-            }
-            *cursor = close_curly + 1;
-        }
-    }
-
     extra
-}
-
-fn find_char(chars: &[char], mut index: usize, wanted: char) -> Option<usize> {
-    while index < chars.len() {
-        if chars[index] == wanted {
-            return Some(index);
-        }
-        index += 1;
-    }
-    None
-}
-
-fn split_csv_str(input: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut buf = String::new();
-    let mut quote: Option<char> = None;
-
-    for ch in input.chars() {
-        if ch == '"' || ch == '\'' {
-            if quote == Some(ch) {
-                quote = None;
-            } else if quote.is_none() {
-                quote = Some(ch);
-            }
-            buf.push(ch);
-            continue;
-        }
-        if ch == ',' && quote.is_none() {
-            if !buf.trim().is_empty() {
-                out.push(buf.trim().to_string());
-            }
-            buf.clear();
-            continue;
-        }
-        buf.push(ch);
-    }
-    if !buf.trim().is_empty() {
-        out.push(buf.trim().to_string());
-    }
-    out
-}
-
-fn unquote_str(s: &str) -> String {
-    let bytes = s.as_bytes();
-    if bytes.len() >= 2
-        && ((bytes[0] == b'"' && bytes[bytes.len() - 1] == b'"')
-            || (bytes[0] == b'\'' && bytes[bytes.len() - 1] == b'\''))
-    {
-        return s[1..s.len() - 1].to_string();
-    }
-    s.to_string()
 }
 
 fn split_args(chars: &[char]) -> Vec<String> {
@@ -966,7 +888,41 @@ mod tests {
         )));
         assert!(result.iter().any(|e| matches!(
             e,
-            Event::Attribute { name, value } if name == "data-foo" && value == "bar"
+            Event::Attribute { name, value } if name == "foo" && value == "bar"
+        )));
+    }
+
+    #[test]
+    fn extra_id_does_not_replace_citation_id_on_custom_node() {
+        let mut options = CiteOptions::default();
+        options.custom_node = Some(CiteCustomNode {
+            name: "Citation".into(),
+            template: "<Citation />".into(),
+            imports: Vec::new(),
+        });
+
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Frontmatter),
+            Event::Attribute {
+                name: "data".into(),
+                value: r#"{"references":{"book":{"title":"Book"}}}"#.into(),
+            },
+            Event::EndNode(NodeKind::Frontmatter),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text(r#"[^^]("book")[#short]"#.into()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let result = process(&events, &options);
+        assert!(result.iter().any(|event| matches!(
+            event,
+            Event::Attribute { name, value } if name == "id" && value == "book"
+        )));
+        assert!(result.iter().any(|event| matches!(
+            event,
+            Event::Attribute { name, value } if name == "cite-id" && value == "short"
         )));
     }
 }

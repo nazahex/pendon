@@ -62,10 +62,18 @@ See [^^]("suryana-2026", "hlm. 123")[.highlight,.urgent,#my-cite]{ foo: "bar", -
 Extra attribute syntax follows the same convention as `plugin-heading` and `plugin-img`:
 
 - `[.class1,.class2,#id]` — classes and optional ID
-- `{ key: "value", --css-var: "value" }` — data attributes and CSS custom properties
+- `{ key: "value", --css-var: "value" }` — extra properties and CSS custom properties
 - Keys starting with `--` become inline style entries
-- All other keys become `data-{key}` attributes
 - Values can be quoted or unquoted
+
+How the remaining keys are emitted depends on the render target:
+
+- **Default HTML** (no `custom_node`): non-`--` keys become `data-{key}`
+  attributes, and `#id` is emitted as `data-cite-id`.
+- **Custom component** (`custom_node`): keys are passed through verbatim as
+  component props (`key={...}`), since Solid components expect plain props
+  without a `data-` prefix. `#id` is emitted as `cite-id` so it stays distinct
+  from the citation reference `id`.
 
 ### Duplicate Deduplication
 
@@ -130,14 +138,15 @@ default = "Citation"
 
 Available template attributes:
 
-| Attribute        | Description                                     |
-| :--------------- | :---------------------------------------------- |
-| `{attrs.index}`  | Global citation index (1-based)                 |
-| `{attrs.id}`     | Reference ID                                    |
-| `{attrs.loc}`    | Location string (if provided)                   |
-| `{attrs.class}`  | Space-separated extra classes                   |
-| `{attrs.data-*}` | Any extra data attributes from `{ key: "val" }` |
-| `{attrs.style}`  | Inline style string from `{ --var: "val" }`     |
+| Attribute         | Description                                                          |
+| :---------------- | :------------------------------------------------------------------- |
+| `{attrs.index}`   | Global citation index (1-based)                                      |
+| `{attrs.id}`      | Reference ID                                                         |
+| `{attrs.loc}`     | Location string (if provided)                                        |
+| `{attrs.class}`   | Space-separated extra classes                                        |
+| `{attrs.cite-id}` | Extra `#id` from the attribute block                                 |
+| `{attrs.<key>}`   | Extra prop passed verbatim (e.g. `{attrs.foo}` for `{ foo: "val" }`) |
+| `{attrs.style}`   | Inline style string from `{ --var: "val" }`                          |
 
 ### Custom Bibliography Section
 
