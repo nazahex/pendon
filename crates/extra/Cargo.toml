@@ -1,0 +1,8 @@
+[package]
+name = "pendon-extra"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "Shared attribute parsing primitives for Pendon plugins"
+
+[dependencies]
