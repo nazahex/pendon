@@ -40,6 +40,16 @@ pub fn tokenize<'a>(input: &'a str) -> Vec<Token<'a>> {
                 if count >= 3 {
                     out.push(Token::FenceBackticks(count));
                 } else {
+                    // A run shorter than three backticks is ordinary text: an
+                    // inline code span can start at column 0. Emitting the run as
+                    // its own token used to split the line, so the inline parser
+                    // saw the opening and the closing backtick in different
+                    // chunks and leaked `` `code` `` literally. Keep the rest of
+                    // the line in the same token instead (mirroring the generic
+                    // text arm).
+                    while i < bytes.len() && !matches!(bytes[i], b'\r' | b'\n') {
+                        i += 1;
+                    }
                     out.push(Token::Text(&input[start..i]));
                 }
                 line_start = false;
