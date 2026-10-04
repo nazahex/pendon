@@ -28,6 +28,11 @@ pub enum NodeKind {
     Italic,
     HtmlInline,
     Image,
+    /// A structured HTML element (`figure`, `figcaption`, `table`, `td`, …)
+    /// emitted as real events instead of a raw HTML string. The tag name is
+    /// carried on the node (as the `name` attribute) so renderers can emit
+    /// `<tag …>children</tag>` and custom components can nest inside it.
+    Element(String),
     // Custom node kinds (e.g., Component, user-defined)
     Custom(String),
 }
@@ -60,6 +65,7 @@ impl NodeKind {
             NodeKind::Italic => Cow::Borrowed("Italic"),
             NodeKind::HtmlInline => Cow::Borrowed("HtmlInline"),
             NodeKind::Image => Cow::Borrowed("Image"),
+            NodeKind::Element(_) => Cow::Borrowed("Element"),
             NodeKind::Custom(name) => Cow::Owned(name.clone()),
         }
     }
@@ -69,6 +75,57 @@ impl NodeKind {
 pub struct Span {
     pub start: usize,
     pub end: usize,
+}
+
+/// Helper for emitting structured HTML elements as events.
+pub fn element_open(tag: &str) -> [Event; 2] {
+    [
+        Event::StartNode(NodeKind::Element(tag.to_string())),
+        Event::Attribute {
+            name: "name".to_string(),
+            value: tag.to_string(),
+        },
+    ]
+}
+
+/// Closing event for a structured HTML element.
+pub fn element_close(tag: &str) -> Event {
+    Event::EndNode(NodeKind::Element(tag.to_string()))
+}
+
+/// A raw markup fragment (a newline, `<br />`, …) that renderers emit verbatim.
+///
+/// Used for the decorative whitespace that separates block level elements: as a
+/// plain `Event::Text` the markdown plugin would swallow it outside of a
+/// paragraph, while `HtmlInline` content is always passed through untouched.
+pub fn raw_inline(text: &str) -> [Event; 3] {
+    [
+        Event::StartNode(NodeKind::HtmlInline),
+        Event::Text(text.to_string()),
+        Event::EndNode(NodeKind::HtmlInline),
+    ]
+}
+
+/// Returns `true` for HTML void elements: tags that never have children and are
+/// rendered self-closing (`<img … />`).
+pub fn is_void_element(tag: &str) -> bool {
+    matches!(
+        tag,
+        "area"
+            | "base"
+            | "br"
+            | "col"
+            | "embed"
+            | "hr"
+            | "img"
+            | "input"
+            | "link"
+            | "meta"
+            | "param"
+            | "source"
+            | "track"
+            | "wbr"
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
