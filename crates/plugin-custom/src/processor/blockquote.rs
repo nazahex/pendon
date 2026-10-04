@@ -391,3 +391,62 @@ fn strip_marker_from_events(events: &[Event], marker_str: &str) -> Vec<Event> {
     }
     cleaned_p_events
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn hint_spec() -> PluginSpec {
+        toml::from_str(
+            r#"
+name = "hint"
+kind = "block"
+
+[matcher]
+start_regex = '^(?P<type>[!?x])\s*(?P<body>.*)$'
+parse_hint = "blockquote-sigil"
+
+[[attrs]]
+name = "type"
+required = true
+
+[ast]
+node = "Component"
+node_name = "Hint"
+attrs_map = { type = "type" }
+"#,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn turns_blockquote_sigil_into_nested_custom_component() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Blockquote),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text("? Enim".into()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Blockquote),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let output = process(&events, &hint_spec());
+
+        assert!(output.iter().any(|event| matches!(
+            event,
+            Event::StartNode(NodeKind::Custom(name)) if name == "Component"
+        )));
+        assert!(output.iter().any(|event| matches!(
+            event,
+            Event::Attribute { name, value } if name == "name" && value == "Hint"
+        )));
+        assert!(!output
+            .iter()
+            .any(|event| matches!(event, Event::StartNode(NodeKind::Blockquote))));
+        assert!(output.iter().any(|event| matches!(
+            event,
+            Event::Text(text) if text == "Enim"
+        )));
+    }
+}

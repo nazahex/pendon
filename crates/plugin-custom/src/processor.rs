@@ -6,11 +6,23 @@ mod inline;
 mod util;
 
 use crate::specs::PluginSpec;
-use pendon_core::{Event, Pipeline};
+use pendon_core::{Event, InlinePipeline, Pipeline};
 
 pub fn process(events: &[Event], spec: &PluginSpec, pipeline: &Pipeline) -> Vec<Event> {
+    process_with_context(events, spec, pipeline, &mut ())
+}
+
+pub fn process_with_context<C, P>(
+    events: &[Event],
+    spec: &PluginSpec,
+    pipeline: &P,
+    context: &mut C,
+) -> Vec<Event>
+where
+    P: InlinePipeline<C>,
+{
     if spec.kind == "inline" {
-        return inline::process(events, spec, pipeline);
+        return inline::process_with_context(events, spec, pipeline, context);
     }
 
     match spec.matcher.parse_hint.as_deref() {
