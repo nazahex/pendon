@@ -1,4 +1,5 @@
 use pendon_core::{Event, NodeKind};
+use pendon_extra::parse_property_block;
 use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -149,8 +150,16 @@ fn parse_heading_extras(raw_text: &str) -> (Option<String>, BTreeMap<String, Str
     if cursor < chars.len() && chars[cursor] == '{' {
         if let Some(close) = find_matching_brace(&chars, cursor) {
             let content: String = chars[cursor + 1..close].iter().collect();
-            attrs = parse_kv_attrs(&content);
+            attrs = parse_property_block(&format!("{{{content}}}"))
+                .map(|(parsed, _)| parsed.properties.into_iter().collect())
+                .unwrap_or_default();
             cursor = close + 1;
+            // The whitespace separating the attribute block from the heading
+            // text belongs to the block, not to the title (otherwise the
+            // auto-number prefix produces a double space).
+            while cursor < chars.len() && matches!(chars[cursor], ' ' | '\t') {
+                cursor += 1;
+            }
         }
     }
 
@@ -170,27 +179,6 @@ fn parse_class_tokens(input: &str, out: &mut Vec<String>) {
             out.push(token.to_string());
         }
     }
-}
-
-/// Parses key: value pairs from inside curly braces.
-/// Supports quoted strings and unquoted values (numbers, booleans).
-fn parse_kv_attrs(input: &str) -> BTreeMap<String, String> {
-    let mut map = BTreeMap::new();
-    for part in input.split(',') {
-        let Some((key, value)) = part.split_once(':') else {
-            continue;
-        };
-        let key = key.trim().to_string();
-        let value = value
-            .trim()
-            .trim_matches('"')
-            .trim_matches('\'')
-            .to_string();
-        if !key.is_empty() {
-            map.insert(key, value);
-        }
-    }
-    map
 }
 
 fn find_char(chars: &[char], mut index: usize, wanted: char) -> Option<usize> {
@@ -253,8 +241,20 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
                 end_idx += 1;
             }
 
-            // 2. Parse all extras: [id][.classes]{attrs} from the beginning of raw text
-            let (custom_id, extra_attrs, consumed_len) = parse_heading_extras(&raw_text);
+            // Core preserves the Markdown marker as text; remove it before
+            // parsing heading extras and computing the displayed title.
+            let marker_len = raw_text
+                .chars()
+                .take_while(|character| *character == '#')
+                .count();
+            let marker_len = if marker_len == heading_level {
+                marker_len + usize::from(raw_text.as_bytes().get(marker_len) == Some(&b' '))
+            } else {
+                0
+            };
+            let (custom_id, extra_attrs, extras_len) =
+                parse_heading_extras(&raw_text[marker_len..]);
+            let consumed_len = marker_len + extras_len;
 
             // 3. Strip the entire extras prefix from Text events
             if consumed_len > 0 {

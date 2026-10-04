@@ -7,6 +7,7 @@ description = "Heading processing and numbering plugin for Pendon documents"
 
 [dependencies]
 pendon-core = { path = "../core" }
+pendon-extra = { path = "../extra" }
 pendon-renderer-solid = { path = "../renderer-solid" }
 regex = "1"
 serde = { version = "1", features = ["derive"] }
