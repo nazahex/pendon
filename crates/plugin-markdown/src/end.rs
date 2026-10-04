@@ -6,12 +6,16 @@ use crate::context::ParseContext;
 pub fn handle(ctx: &mut ParseContext, kind: &NodeKind) {
     match kind {
         NodeKind::Heading => {
-            ctx.emit_end(NodeKind::Heading);
-            ctx.in_heading = false;
+            if ctx.in_heading {
+                ctx.emit_end(NodeKind::Heading);
+                ctx.in_heading = false;
+                ctx.heading_prefix_from_input = false;
+            }
         }
         NodeKind::CodeFence => {
             ctx.emit_end(NodeKind::CodeFence);
             ctx.in_code_fence = false;
+            ctx.code_fence_indent = 0;
             ctx.skip_initial_code_newline = false;
             ctx.skip_backticks_once = true;
         }
@@ -54,6 +58,7 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind) {
                     NodeKind::CodeFence => {
                         ctx.emit_end(NodeKind::CodeFence);
                         ctx.in_code_fence = false;
+                        ctx.code_fence_indent = 0;
                         ctx.skip_initial_code_newline = false;
                         ctx.skip_backticks_once = true;
                     }

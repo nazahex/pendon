@@ -17,6 +17,27 @@ fn emit_line_content(ctx: &mut ParseContext, line: &str) {
     toggle_display_math_on_line(line, &mut ctx.display_math_open);
 }
 
+/// Strips a leading `#…` heading marker (plus at most one separating space) from
+/// a chunk that carries both the marker and the heading text.
+fn strip_heading_prefix(s: &str) -> Option<&str> {
+    let hashes = s.chars().take_while(|&c| c == '#').count();
+    if hashes == 0 {
+        return None;
+    }
+    let rest = &s[hashes..];
+    Some(rest.strip_prefix(' ').unwrap_or(rest))
+}
+
+/// Removes up to `indent` leading spaces from a fenced-code content line, as
+/// CommonMark does for a fence that is itself indented.
+fn strip_fence_indent(line: &str, indent: usize) -> String {
+    if indent == 0 {
+        return line.to_string();
+    }
+    let spaces = line.chars().take_while(|c| *c == ' ').count();
+    line[spaces.min(indent)..].to_string()
+}
+
 pub fn handle(ctx: &mut ParseContext, s: &str) {
     // Handle multiline HTML comment continuation
     if ctx.in_html_comment {
@@ -61,6 +82,37 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
         ctx.out.push(Event::Text(s.to_string()));
         ctx.at_line_start = s == "\n";
         return;
+    }
+
+    // Structured element subtrees (figure, table, td, …) already contain fully
+    // rendered children: never re-lex their text.
+    if ctx.is_in_element_context() {
+        ctx.out.push(Event::Text(s.to_string()));
+        ctx.at_line_start = s == "\n";
+        return;
+    }
+
+    if ctx.in_heading && ctx.heading_prefix_from_input {
+        // The core parser emits the marker as one chunk per hash run
+        // (`Text("#")`, `Text("##")`, …), followed by the separating space and
+        // then the heading text, so the whole run has to be consumed for every
+        // level. Only accepting a single `#` leaked the marker of every `##`+
+        // heading into the rendered text.
+        if !s.is_empty() && s.chars().all(|c| c == '#') {
+            return;
+        }
+        if s == " " {
+            ctx.heading_prefix_from_input = false;
+            return;
+        }
+        ctx.heading_prefix_from_input = false;
+        // A chunk may also carry the marker and the text together ("## Title").
+        if let Some(rest) = strip_heading_prefix(s) {
+            if !rest.is_empty() {
+                handle(ctx, rest);
+            }
+            return;
+        }
     }
 
     if matches!(ctx.stack.last(), Some(NodeKind::ThematicBreak)) {
@@ -440,6 +492,9 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                 }
                 ctx.emit_start(NodeKind::CodeFence);
                 ctx.in_code_fence = true;
+                // Raw indentation of the fence marker: content lines are raw too,
+                // so this is the exact amount CommonMark removes from them.
+                ctx.code_fence_indent = line.chars().take_while(|c| *c == ' ').count();
                 ctx.skip_initial_code_newline = true;
                 ctx.skip_para_open = ctx.skip_para_open.saturating_add(1);
                 ctx.skip_para_close = ctx.skip_para_close.saturating_add(1);
@@ -505,12 +560,19 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
         if !trimmed.is_empty() && trimmed.chars().all(|c| c == '`') && trimmed.len() >= 3 {
             ctx.emit_end(NodeKind::CodeFence);
             ctx.in_code_fence = false;
+            ctx.code_fence_indent = 0;
             ctx.skip_initial_code_newline = false;
             ctx.skip_backticks_once = true;
             ctx.at_line_start = false;
             return;
         }
-        ctx.out.push(Event::Text(line.clone()));
+        // An indented fence (inside a list item, for example) removes up to its
+        // own indentation from every content line, so the code keeps only the
+        // indentation that is meaningful inside the fence.
+        ctx.out.push(Event::Text(strip_fence_indent(
+            &line,
+            ctx.code_fence_indent,
+        )));
     } else if ctx.in_list_item() {
         emit_line_content(ctx, &line);
     } else {

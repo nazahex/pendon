@@ -88,6 +88,63 @@ mod tests {
         None
     }
 
+    #[test]
+    fn structured_heading_events_are_balanced() {
+        let events = run_markdown("# Plain\n", MarkdownOptions::default());
+        assert!(pendon_core::validate_events(&events).is_empty());
+    }
+
+    /// Collects the text of the first heading, ignoring its attributes.
+    fn heading_text(events: &[Event]) -> Option<String> {
+        let mut iter = events.iter();
+        while let Some(event) = iter.next() {
+            if matches!(event, Event::StartNode(NodeKind::Heading)) {
+                let mut text = String::new();
+                for event in iter.by_ref() {
+                    match event {
+                        Event::EndNode(NodeKind::Heading) => return Some(text),
+                        Event::Text(chunk) => text.push_str(chunk),
+                        _ => {}
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// The core parser emits the `#` run as its own chunk, so the marker has to
+    /// be consumed for every level: only `#` used to be recognised, which leaked
+    /// the `##` of every deeper heading into the rendered text.
+    #[test]
+    fn heading_marker_is_stripped_for_every_level() {
+        let cases = [
+            ("# One\n", "One"),
+            ("## Two\n", "Two"),
+            ("###### Six\n", "Six"),
+        ];
+        for (source, expected) in cases {
+            let events = run_markdown(source, MarkdownOptions::default());
+
+            let levels: Vec<&String> = events
+                .iter()
+                .filter_map(|event| match event {
+                    Event::Attribute { name, value } if name == "level" => Some(value),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(
+                levels.len(),
+                1,
+                "exactly one level attribute for {source:?}: {levels:?}"
+            );
+            let hashes = source.chars().take_while(|&c| c == '#').count().to_string();
+            assert_eq!(levels[0], &hashes, "level attribute for {source:?}");
+
+            let text = heading_text(&events).expect("heading text");
+            assert_eq!(text.trim(), expected, "marker leaked for {source:?}");
+        }
+    }
+
     fn has_line_break(events: &[Event]) -> bool {
         events
             .iter()
@@ -434,5 +491,62 @@ mod tests {
         assert!(!text.contains("<!--"));
         assert!(text.contains("Some text"));
         assert!(text.contains("more text."));
+    }
+
+    /// Concatenated text of the first `kind` subtree.
+    fn node_text(events: &[Event], kind: NodeKind) -> String {
+        let mut out = String::new();
+        let mut inside = false;
+        let mut depth = 0usize;
+        for event in events {
+            match event {
+                Event::StartNode(k) if *k == kind && !inside => {
+                    inside = true;
+                    depth = 0;
+                }
+                Event::EndNode(k) if *k == kind && inside && depth == 0 => inside = false,
+                Event::StartNode(_) if inside => depth += 1,
+                Event::EndNode(_) if inside && depth > 0 => depth -= 1,
+                Event::Text(t) if inside => out.push_str(t),
+                _ => {}
+            }
+        }
+        out
+    }
+
+    /// A code span may start at column 0. The lexer used to split the leading
+    /// backtick run into its own token, which left the literal backticks in the
+    /// output (and affected every table cell that starts with a code span,
+    /// because a cell is parsed as its own document).
+    #[test]
+    fn inline_code_at_line_start_is_parsed() {
+        let events = run_markdown("`code` starts the line.\n", MarkdownOptions::default());
+        assert!(has_node(&events, NodeKind::InlineCode));
+        assert_eq!(node_text(&events, NodeKind::InlineCode), "code");
+        let text = all_text(&events);
+        assert!(!text.contains('`'), "backticks leaked: {text}");
+        assert!(text.contains("starts the line."));
+    }
+
+    /// An indented fence (the fence of a list item) removes up to its own
+    /// indentation from every content line, as CommonMark requires.
+    #[test]
+    fn indented_fence_content_is_dedented() {
+        let src = "- item\n\n  ```sh\n  echo hi\n    echo indented\n  ```\n";
+        let events = run_markdown(src, MarkdownOptions::default());
+        assert!(has_node(&events, NodeKind::CodeFence));
+        assert_eq!(
+            node_text(&events, NodeKind::CodeFence),
+            "echo hi\n  echo indented\n"
+        );
+    }
+
+    /// Root-level fences keep their content untouched (the fence indentation is
+    /// zero, so nothing is removed).
+    #[test]
+    fn root_fence_content_keeps_indentation() {
+        let src = "```sh\n  echo hi\n```\n";
+        let events = run_markdown(src, MarkdownOptions::default());
+        assert_eq!(node_text(&events, NodeKind::CodeFence), "  echo hi\n");
     }
 }

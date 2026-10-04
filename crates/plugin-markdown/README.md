@@ -43,4 +43,10 @@ let normalized = process(&parsed);
 
 - Tables: first pipe row becomes `TableHead` until a separator row of dashes, then `TableBody` rows follow.
 - Lists: ordered lists emit a `start` attribute on the first item when numbering begins at a value other than 1.
+- Inline code is recognised when the span opens at column 0 (a paragraph or a table cell that starts with `` `code` ``).
+- An indented fence (the fence of a list item, for example) removes up to its own indentation from every content line, so fenced code inside a list keeps only the indentation it declares.
 - HTML passthrough is deliberately opt-in to keep Markdown safe by default.
+
+## Known gaps
+
+- Fenced code blocks inside blockquotes (``> ```lang``) are not supported: the `>` prefix is kept as fence content and the closing fence is not detected, so the rest of the document is swallowed by the fence.

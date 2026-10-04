@@ -24,7 +24,8 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind, is_block_custom: bool) {
             ctx.close_table_if_open();
             ctx.emit_start(NodeKind::Heading);
             ctx.in_heading = true;
-            ctx.heading_prefix_consumed = false;
+            ctx.heading_prefix_consumed = true;
+            ctx.heading_prefix_from_input = true;
             ctx.skip_para_open = ctx.skip_para_open.saturating_add(1);
             ctx.skip_para_close = ctx.skip_para_close.saturating_add(1);
         }
@@ -33,6 +34,9 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind, is_block_custom: bool) {
             ctx.close_table_if_open();
             ctx.emit_start(NodeKind::CodeFence);
             ctx.in_code_fence = true;
+            // A fence that reaches `plugin-markdown` as a `CodeFence` node starts
+            // at column 0; indented fences are detected on the raw line instead.
+            ctx.code_fence_indent = 0;
             ctx.skip_initial_code_newline = true;
             ctx.skip_para_open = ctx.skip_para_open.saturating_add(1);
             ctx.skip_para_close = ctx.skip_para_close.saturating_add(1);
@@ -50,6 +54,16 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind, is_block_custom: bool) {
             }
             ctx.at_line_start = true;
         }
+        // Structured HTML element containers emitted by the img/table plugins.
+        // Their children are already rendered events (including custom
+        // components), so the whole subtree is passed through verbatim.
+        NodeKind::Element(_) => {
+            if ctx.pending_para_start {
+                ctx.emit_start(NodeKind::Paragraph);
+                ctx.pending_para_start = false;
+            }
+            ctx.emit_start_element(kind.clone());
+        }
         // Handle Custom nodes explicitly based on __plugin_kind metadata
         NodeKind::Custom(_) => {
             if is_block_custom {
@@ -64,6 +78,9 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind, is_block_custom: bool) {
                 }
                 // Mark as inline-only context to prevent block-level parsing inside it
                 ctx.emit_start_inline_custom(kind.clone());
+                // An inline node continues the current line; without this the
+                // node's own text would be mistaken for the start of a new line.
+                ctx.at_line_start = false;
             }
         }
         _ => {
@@ -71,9 +88,15 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind, is_block_custom: bool) {
                 ctx.close_blockquotes();
                 ctx.close_all_lists();
                 ctx.close_table_if_open();
-            } else if ctx.pending_para_start {
-                ctx.emit_start(NodeKind::Paragraph);
-                ctx.pending_para_start = false;
+            } else {
+                if ctx.pending_para_start {
+                    ctx.emit_start(NodeKind::Paragraph);
+                    ctx.pending_para_start = false;
+                }
+                // Inline nodes never begin a source line. Leaving the flag set
+                // made the deferred line-begin handling wrap e.g. a link label
+                // in a spurious `<p>` inside the `<a>`.
+                ctx.at_line_start = false;
             }
             ctx.emit_start(kind.clone());
         }

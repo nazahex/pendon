@@ -45,8 +45,21 @@ pub fn is_table_row(line: &str) -> bool {
     if !(trimmed.starts_with('|') || trimmed.contains(" | ")) {
         return false;
     }
+    if !trimmed.starts_with('|') && contains_wiki_pipe(trimmed) {
+        return false;
+    }
     let cells = split_table_cells(trimmed);
     cells.len() >= 2
+}
+
+fn contains_wiki_pipe(line: &str) -> bool {
+    let Some(open) = line.find("[[") else {
+        return false;
+    };
+    let Some(close) = line[open + 2..].find("]]") else {
+        return false;
+    };
+    line[open + 2..open + 2 + close].contains('|')
 }
 
 pub fn start_table(out: &mut Vec<Event>) {

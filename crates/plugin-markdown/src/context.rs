@@ -18,9 +18,17 @@ pub struct ParseContext {
     pub(crate) stack: Vec<NodeKind>,
     // Parallel stack to safely track inline custom contexts without desyncing
     pub(crate) stack_is_inline_custom: Vec<bool>,
+    // Parallel stack marking structured HTML element subtrees (`figure`,
+    // `table`, …) whose children are already fully processed.
+    pub(crate) stack_is_element: Vec<bool>,
     pub(crate) in_heading: bool,
     pub(crate) heading_prefix_consumed: bool,
+    pub(crate) heading_prefix_from_input: bool,
     pub(crate) in_code_fence: bool,
+    /// Leading indentation of the opening fence line. CommonMark removes up to
+    /// this many spaces from every content line, so code inside an indented
+    /// fence (a list item, for example) keeps its relative layout.
+    pub(crate) code_fence_indent: usize,
     pub(crate) skip_initial_code_newline: bool,
     pub(crate) skip_backticks_once: bool,
     pub(crate) skip_para_open: usize,
@@ -45,9 +53,12 @@ impl ParseContext {
             out: Vec::with_capacity(capacity),
             stack: Vec::new(),
             stack_is_inline_custom: Vec::new(),
+            stack_is_element: Vec::new(),
             in_heading: false,
             heading_prefix_consumed: false,
+            heading_prefix_from_input: false,
             in_code_fence: false,
+            code_fence_indent: 0,
             skip_initial_code_newline: false,
             skip_backticks_once: false,
             skip_para_open: 0,
@@ -71,6 +82,7 @@ impl ParseContext {
         self.out.push(Event::StartNode(kind.clone()));
         self.stack.push(kind);
         self.stack_is_inline_custom.push(false);
+        self.stack_is_element.push(false);
     }
 
     // Specifically marks the node as an inline-only container (e.g., Figcaption)
@@ -78,17 +90,33 @@ impl ParseContext {
         self.out.push(Event::StartNode(kind.clone()));
         self.stack.push(kind);
         self.stack_is_inline_custom.push(true);
+        self.stack_is_element.push(false);
+    }
+
+    // Marks a structured HTML element container whose children are already
+    // rendered events and must be passed through verbatim.
+    pub fn emit_start_element(&mut self, kind: NodeKind) {
+        self.out.push(Event::StartNode(kind.clone()));
+        self.stack.push(kind);
+        self.stack_is_inline_custom.push(false);
+        self.stack_is_element.push(true);
     }
 
     pub fn emit_end(&mut self, kind: NodeKind) {
         self.out.push(Event::EndNode(kind.clone()));
         let _ = self.stack.pop();
         let _ = self.stack_is_inline_custom.pop();
+        let _ = self.stack_is_element.pop();
     }
 
     // Checks if we are currently inside any inline custom container
     pub fn is_in_inline_context(&self) -> bool {
         self.stack_is_inline_custom.iter().any(|&b| b)
+    }
+
+    // Checks if we are currently inside a structured HTML element subtree.
+    pub fn is_in_element_context(&self) -> bool {
+        self.stack_is_element.iter().any(|&b| b)
     }
 
     pub fn push_event(&mut self, event: &Event) {
