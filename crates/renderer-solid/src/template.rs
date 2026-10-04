@@ -139,7 +139,7 @@ fn generate_spread_attrs(map: &Map<String, Value>, used_keys: &BTreeSet<String>)
     let mut parts = Vec::new();
     for (key, val) in map {
         // Skip internal/special keys used by the AST renderer
-        if key == "name" {
+        if key == "name" || key.starts_with("__") {
             continue;
         }
         // Skip keys that are already explicitly bound via {attrs.X} in the template

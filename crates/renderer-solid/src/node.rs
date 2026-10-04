@@ -1,3 +1,4 @@
+// node.rs
 use serde_json::Value;
 
 use crate::{imports::SolidRenderHints, template};
@@ -42,16 +43,7 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                 out.push('<');
                 out.push('h');
                 out.push_str(level);
-                // Emit atribut id jika ada
-                if let Some(id) = v
-                    .get("attrs")
-                    .and_then(|a| a.get("id"))
-                    .and_then(|i| i.as_str())
-                {
-                    out.push_str(" id=\"");
-                    escape_jsx(id, out);
-                    out.push('"');
-                }
+                render_attrs(v, out, &["level"]);
                 out.push('>');
                 render_text_or_children(v, out, hints);
                 out.push_str("</h");
@@ -60,15 +52,7 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
             }
             "Section" => {
                 out.push_str("<section");
-                if let Some(id) = v
-                    .get("attrs")
-                    .and_then(|a| a.get("id"))
-                    .and_then(|l| l.as_str())
-                {
-                    out.push_str(" id=\"");
-                    escape_jsx(id, out);
-                    out.push_str("\"");
-                }
+                render_attrs(v, out, &[]);
                 out.push_str(">\n");
                 render_children(v, out, hints);
                 out.push_str("</section>\n");
@@ -78,15 +62,7 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
             }
             "CodeFence" => {
                 out.push_str("<pre");
-                if let Some(class) = v
-                    .get("attrs")
-                    .and_then(|a| a.get("class"))
-                    .and_then(|x| x.as_str())
-                {
-                    out.push_str(" class=\"");
-                    escape_jsx(class, out);
-                    out.push_str("\"");
-                }
+                render_attrs(v, out, &["raw_html"]);
                 let raw = v
                     .get("attrs")
                     .and_then(|a| a.get("raw_html"))
@@ -193,59 +169,17 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
             }
             "Link" => {
                 out.push_str("<a");
-                if let Some(attrs) = v.get("attrs") {
-                    if let Some(href) = attrs.get("href").and_then(|h| h.as_str()) {
-                        out.push_str(" href=\"");
-                        escape_jsx(href, out);
-                        out.push_str("\"");
-                    }
-                    if let Some(title) = attrs.get("title").and_then(|t| t.as_str()) {
-                        out.push_str(" title=\"");
-                        escape_jsx(title, out);
-                        out.push_str("\"");
-                    }
-                    if let Some(attrs) = attrs.as_object() {
-                        for (name, value) in attrs {
-                            if matches!(name.as_str(), "href" | "title") {
-                                continue;
-                            }
-                            out.push(' ');
-                            out.push_str(name);
-                            out.push_str("=\"");
-                            if let Some(value) = value.as_str() {
-                                escape_jsx(value, out);
-                            } else {
-                                escape_jsx(&value.to_string(), out);
-                            }
-                            out.push_str("\"");
-                        }
-                    }
-                }
+                render_attrs(v, out, &[]);
                 out.push('>');
                 render_children(v, out, hints);
                 out.push_str("</a>");
             }
             "Image" => {
                 out.push_str("<img");
-                let alt = v
-                    .get("attrs")
-                    .and_then(|a| a.get("alt"))
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("");
-                out.push_str(" alt=\"");
-                escape_jsx(alt, out);
-                out.push_str("\"");
-                if let Some(src) = v
-                    .get("attrs")
-                    .and_then(|a| a.get("src"))
-                    .and_then(|x| x.as_str())
-                {
-                    out.push_str(" src=\"");
-                    escape_jsx(src, out);
-                    out.push_str("\"");
-                }
+                render_attrs(v, out, &[]);
                 out.push_str(" />");
             }
+            "Element" => render_element(v, out, hints),
             "Text" => {
                 if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
                     escape_jsx(text, out);
@@ -273,10 +207,42 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
     }
 }
 
+/// Renders a structured `Element` node as a real JSX element, so custom
+/// components nested in its children (e.g. `<Cite/>` inside a `<figcaption>`)
+/// keep working. The tag name is carried in the `name` attribute.
+fn render_element(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>) {
+    let tag = v
+        .get("attrs")
+        .and_then(|a| a.get("name"))
+        .and_then(|n| n.as_str());
+
+    let Some(tag) = tag else {
+        render_children(v, out, hints);
+        return;
+    };
+
+    out.push('<');
+    out.push_str(tag);
+    render_attrs(v, out, &[]);
+
+    if pendon_core::is_void_element(tag) {
+        out.push_str(" />");
+        return;
+    }
+
+    out.push('>');
+    render_children(v, out, hints);
+    out.push_str("</");
+    out.push_str(tag);
+    out.push('>');
+}
+
+/// Renders raw HTML content. Converts HTML comments to JSX comment syntax
+/// while passing through other HTML tags unchanged.
 fn render_raw_html(text: &str, out: &mut String) {
     let trimmed = text.trim();
     if trimmed.starts_with("<!--") && trimmed.ends_with("-->") {
-        let content = &trimmed[4..trimmed.len() - 3];
+        let content = &trimmed[4..trimmed.len().saturating_sub(3)];
         out.push_str("{/*");
         out.push_str(content);
         out.push_str("*/}");
@@ -311,6 +277,29 @@ fn render_text_or_children(v: &Value, out: &mut String, hints: Option<&SolidRend
     }
 }
 
+fn render_attrs(v: &Value, out: &mut String, skipped: &[&str]) {
+    let Some(attrs) = v.get("attrs").and_then(Value::as_object) else {
+        return;
+    };
+
+    for (name, value) in attrs {
+        if name == "name" || skipped.contains(&name.as_str()) {
+            continue;
+        }
+        out.push(' ');
+        out.push_str(name);
+        out.push_str("=\"");
+        match value {
+            Value::String(value) => escape_jsx(value, out),
+            value => escape_jsx(&value.to_string(), out),
+        }
+        out.push('"');
+    }
+}
+
+/// Escapes special characters for safe rendering in JSX text nodes and attributes.
+/// Curly braces are escaped to HTML entities to prevent SolidJS from treating
+/// them as JSX expression containers (e.g., `{p}` would cause a ReferenceError).
 fn escape_jsx(s: &str, out: &mut String) {
     for ch in s.chars() {
         match ch {
@@ -319,11 +308,15 @@ fn escape_jsx(s: &str, out: &mut String) {
             '>' => out.push_str("&gt;"),
             '"' => out.push_str("&quot;"),
             '\'' => out.push_str("&#39;"),
+            '{' => out.push_str("&#123;"),
+            '}' => out.push_str("&#125;"),
             _ => out.push(ch),
         }
     }
 }
 
+/// Wraps a string in JSON quotes with proper escaping for use inside
+/// JSX curly brace expressions (e.g., innerHTML bindings).
 fn json_string_literal(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_else(|_| "\"\"".to_string())
 }
