@@ -93,6 +93,27 @@ Inject granular attributes directly into specific cells or entire rows.
 - **Cell attributes** are placed inside the cell, separated by a space.
 - **Row attributes** are placed at the very end of the row, optionally prefixed with a dash `-`.
 
+### Multi-Line Cells
+
+Cells are authored on a single source line, so a literal `\n` escape expands into a real line break before the cell content is parsed. This is how block content — lists, multiple paragraphs — is expressed inside one cell.
+
+```md
+| Prioritas | Rencana                      |
+| --------- | ---------------------------- |
+| Tinggi    | - Rilis v1.0\n- Migrasi data |
+```
+
+That cell renders as a real list instead of literal text:
+
+```html
+<td>
+  <ul>
+    <li>Rilis v1.0</li>
+    <li>Migrasi data</li>
+  </ul>
+</td>
+```
+
 ### Table Footer
 
 Separate the footer rows from the body using a strict delimiter line.
@@ -148,6 +169,7 @@ The plugin uses **bracket-depth tracking** to ensure that pipe characters `|` in
 ## Behavioral Notes
 
 - The plugin only intercepts **root-level paragraphs**. Tables nested inside blockquotes or lists will fall back to standard Markdown parsing.
+- A literal `\n` inside a cell is expanded into a real line break before the cell is parsed, so one cell can hold several lines of block content (see **Multi-Line Cells**).
 - If the delimiter row is missing or malformed, the plugin **silently aborts** and lets the standard Markdown parser handle it as a GFM table.
 - Empty attributes (e.g., `colspan="1"`) are automatically stripped from the AST to keep the JSX output clean.
 - Style entries starting with `--` in attribute blocks are automatically merged into a single `style` string.

@@ -269,7 +269,7 @@ fn parse_body_cells(cells: &[String], _expected_cols: usize) -> Option<(AttrSpec
             }
             let (attrs, content) = parse_attr_block(text);
             if content.trim().is_empty()
-                && (!attrs.classes.is_empty() || !attrs.extra.is_empty() || attrs.id.is_some())
+                && (!attrs.classes.is_empty() || !attrs.properties.is_empty() || attrs.id.is_some())
             {
                 row_attrs = attrs;
                 continue;
@@ -318,7 +318,12 @@ fn parse_cell_content(text: &str) -> Option<CellSpec> {
 
     if let Some(start) = attr_start {
         let (parsed_attrs, rest) = parse_attr_block(&text[start..]);
-        if rest.trim().is_empty() {
+        // Only treat the trailing block as attributes when it actually carries
+        // an id, class, or property. A bare `{foo}` / `[]` is literal text.
+        let has_attrs = parsed_attrs.id.is_some()
+            || !parsed_attrs.classes.is_empty()
+            || !parsed_attrs.properties.is_empty();
+        if has_attrs && rest.trim().is_empty() {
             attrs = parsed_attrs;
             let mut c = text[..start].to_string();
             if c.ends_with('-') || c.ends_with(' ') {
@@ -427,4 +432,32 @@ fn find_matching_end(events: &[Event], start_idx: usize, kind: NodeKind) -> Opti
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keeps_bare_braces_as_literal_text() {
+        let cell = parse_cell_content("{foo}").unwrap();
+        assert_eq!(cell.text, "{foo}");
+        assert!(cell.attrs.properties.is_empty());
+        assert!(cell.attrs.classes.is_empty());
+        assert!(cell.attrs.id.is_none());
+    }
+
+    #[test]
+    fn still_strips_valid_attribute_blocks() {
+        let cell = parse_cell_content("[.text-red]").unwrap();
+        assert_eq!(cell.text, "");
+        assert_eq!(cell.attrs.classes, vec!["text-red".to_string()]);
+
+        let cell = parse_cell_content("Nilai { rox: \"rox\" }").unwrap();
+        assert_eq!(cell.text, "Nilai");
+        assert_eq!(
+            cell.attrs.properties,
+            vec![("rox".to_string(), "rox".to_string())]
+        );
+    }
 }

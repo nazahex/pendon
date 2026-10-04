@@ -7,7 +7,7 @@ description = "Advanced table syntax plugin for Pendon"
 
 [dependencies]
 pendon-core = { path = "../core" }
+pendon-extra = { path = "../extra" }
 pendon-plugin-markdown = { path = "../plugin-markdown" }
-pendon-renderer-html = { path = "../renderer-html" }
 pendon-renderer-solid = { path = "../renderer-solid" }
 serde = { version = "1", features = ["derive"] }

@@ -1,9 +1,9 @@
 use crate::attrs::AttrSpec;
 use crate::grid::{process_grid, ProcessedRow};
 use crate::parser::{Align, TableBlock};
+use crate::render::render_inline_events;
 use crate::{CustomComponent, TableOptions};
-use pendon_core::{parse, Event, NodeKind, Options, Pipeline};
-use pendon_plugin_markdown::process as process_markdown;
+use pendon_core::{Event, InlinePipeline, NodeKind, Pipeline};
 use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
 
 pub fn emit_custom_table(
@@ -12,6 +12,30 @@ pub fn emit_custom_table(
     inline_pipeline: &Pipeline,
     out: &mut Vec<Event>,
 ) {
+    emit_custom_table_inner(table_block, options, inline_pipeline, &mut (), out);
+}
+
+pub fn emit_custom_table_with_context<C, P>(
+    table_block: &TableBlock,
+    options: &TableOptions,
+    inline_pipeline: &P,
+    context: &mut C,
+    out: &mut Vec<Event>,
+) where
+    P: InlinePipeline<C>,
+{
+    emit_custom_table_inner(table_block, options, inline_pipeline, context, out);
+}
+
+fn emit_custom_table_inner<C, P>(
+    table_block: &TableBlock,
+    options: &TableOptions,
+    inline_pipeline: &P,
+    context: &mut C,
+    out: &mut Vec<Event>,
+) where
+    P: InlinePipeline<C>,
+{
     let custom = match options.custom_node.as_ref() {
         Some(c) => c,
         None => return,
@@ -35,7 +59,13 @@ pub fn emit_custom_table(
             emit_attr_spec(&caption.attrs, out);
         }
 
-        emit_caption_node(&table_block.caption, &custom.caption, inline_pipeline, out);
+        emit_caption_node(
+            &table_block.caption,
+            &custom.caption,
+            inline_pipeline,
+            context,
+            out,
+        );
 
         out.push(Event::Text("<thead>\n".to_string()));
         emit_thead_node(
@@ -43,13 +73,21 @@ pub fn emit_custom_table(
             &custom.row,
             &custom.cell,
             inline_pipeline,
+            context,
             out,
         );
         out.push(Event::Text("</thead>\n".to_string()));
 
         if !body_rows.is_empty() {
             out.push(Event::Text("<tbody>\n".to_string()));
-            emit_tbody_node(&body_rows, &custom.row, &custom.cell, inline_pipeline, out);
+            emit_tbody_node(
+                &body_rows,
+                &custom.row,
+                &custom.cell,
+                inline_pipeline,
+                context,
+                out,
+            );
             out.push(Event::Text("</tbody>\n".to_string()));
         }
 
@@ -60,6 +98,7 @@ pub fn emit_custom_table(
                 &custom.row,
                 &custom.cell,
                 inline_pipeline,
+                context,
                 out,
             );
             out.push(Event::Text("</tfoot>\n".to_string()));
@@ -69,12 +108,15 @@ pub fn emit_custom_table(
     }
 }
 
-fn emit_caption_node(
+fn emit_caption_node<C>(
     caption: &Option<crate::parser::CaptionSpec>,
     custom: &Option<CustomComponent>,
-    inline_pipeline: &Pipeline,
+    inline_pipeline: &impl InlinePipeline<C>,
+    context: &mut C,
     out: &mut Vec<Event>,
-) {
+) where
+    C: Sized,
+{
     let Some(caption_spec) = caption else {
         return;
     };
@@ -90,19 +132,22 @@ fn emit_caption_node(
     });
     emit_attr_spec(&caption_spec.attrs, out);
 
-    for ev in render_inline_events(&caption_spec.text, inline_pipeline) {
+    for ev in render_inline_events(&caption_spec.text, inline_pipeline, context) {
         out.push(ev);
     }
     out.push(Event::EndNode(node_kind));
 }
 
-fn emit_thead_node(
+fn emit_thead_node<C>(
     columns: &[crate::parser::ColumnSpec],
     row_custom: &Option<CustomComponent>,
     cell_custom: &Option<CustomComponent>,
-    inline_pipeline: &Pipeline,
+    inline_pipeline: &impl InlinePipeline<C>,
+    context: &mut C,
     out: &mut Vec<Event>,
-) {
+) where
+    C: Sized,
+{
     let Some(row_comp) = row_custom else {
         return;
     };
@@ -134,7 +179,7 @@ fn emit_thead_node(
             out,
         );
 
-        for ev in render_inline_events(&col_spec.header_text, inline_pipeline) {
+        for ev in render_inline_events(&col_spec.header_text, inline_pipeline, context) {
             out.push(ev);
         }
         out.push(Event::EndNode(cell_kind));
@@ -142,13 +187,16 @@ fn emit_thead_node(
     out.push(Event::EndNode(row_kind));
 }
 
-fn emit_tbody_node(
+fn emit_tbody_node<C>(
     rows: &[ProcessedRow],
     row_custom: &Option<CustomComponent>,
     cell_custom: &Option<CustomComponent>,
-    inline_pipeline: &Pipeline,
+    inline_pipeline: &impl InlinePipeline<C>,
+    context: &mut C,
     out: &mut Vec<Event>,
-) {
+) where
+    C: Sized,
+{
     let Some(row_comp) = row_custom else {
         return;
     };
@@ -182,7 +230,7 @@ fn emit_tbody_node(
                 out,
             );
 
-            for ev in render_inline_events(&cell.text, inline_pipeline) {
+            for ev in render_inline_events(&cell.text, inline_pipeline, context) {
                 out.push(ev);
             }
             out.push(Event::EndNode(cell_kind));
@@ -191,14 +239,17 @@ fn emit_tbody_node(
     }
 }
 
-fn emit_tfoot_node(
+fn emit_tfoot_node<C>(
     rows: &[ProcessedRow],
     row_custom: &Option<CustomComponent>,
     cell_custom: &Option<CustomComponent>,
-    inline_pipeline: &Pipeline,
+    inline_pipeline: &impl InlinePipeline<C>,
+    context: &mut C,
     out: &mut Vec<Event>,
-) {
-    emit_tbody_node(rows, row_custom, cell_custom, inline_pipeline, out);
+) where
+    C: Sized,
+{
+    emit_tbody_node(rows, row_custom, cell_custom, inline_pipeline, context, out);
 }
 
 fn emit_attr_spec(attrs: &AttrSpec, out: &mut Vec<Event>) {
@@ -214,7 +265,7 @@ fn emit_attr_spec(attrs: &AttrSpec, out: &mut Vec<Event>) {
             value: attrs.classes.join(" "),
         });
     }
-    for (k, v) in &attrs.extra {
+    for (k, v) in &attrs.properties {
         out.push(Event::Attribute {
             name: k.clone(),
             value: v.clone(),
@@ -245,7 +296,7 @@ fn emit_cell_attrs(
     }
 
     // Extra attrs (bukan style)
-    for (k, v) in &attrs.extra {
+    for (k, v) in &attrs.properties {
         if k.starts_with("--") {
             continue;
         }
@@ -289,7 +340,7 @@ fn emit_cell_attrs(
 
     // Style entries
     let mut styles = Vec::new();
-    for (k, v) in &attrs.extra {
+    for (k, v) in &attrs.properties {
         if k.starts_with("--") {
             styles.push(format!("{}:{}", k, v));
         }
@@ -309,25 +360,6 @@ fn align_to_string(align: Align) -> String {
         Align::Right => "right".to_string(),
         Align::None => String::new(),
     }
-}
-
-fn render_inline_events(text: &str, inline_pipeline: &Pipeline) -> Vec<Event> {
-    if text.trim().is_empty() {
-        return Vec::new();
-    }
-    let parsed = parse(text, &Options::default());
-    let processed = inline_pipeline.run(parsed);
-    let processed = process_markdown(&processed);
-
-    let mut out = Vec::new();
-    for ev in processed {
-        match &ev {
-            Event::StartNode(NodeKind::Document) | Event::EndNode(NodeKind::Document) => {}
-            Event::StartNode(NodeKind::Paragraph) | Event::EndNode(NodeKind::Paragraph) => {}
-            _ => out.push(ev),
-        }
-    }
-    out
 }
 
 pub fn solid_hints(options: &TableOptions) -> Option<SolidRenderHints> {
