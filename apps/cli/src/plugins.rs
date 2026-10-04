@@ -1,6 +1,9 @@
+use pendon_core::{ContextPipeline, Event};
+use pendon_extra::SolidImportSpec;
 use pendon_plugin_anchor::{AnchorCustomNode, AnchorImport, AnchorOptions};
-use pendon_plugin_cite::{CiteCustomNode, CiteImport, CiteOptions, CiteSection};
-use pendon_plugin_custom::{load_index_from_path, PluginSpec};
+use pendon_plugin_cite::{CitationContext, CiteCustomNode, CiteImport, CiteOptions, CiteSection};
+use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
+use pendon_plugin_img::ImgOptions;
 use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -10,6 +13,166 @@ use crate::config::{
     TableComponentConfig, TableTaskConfig,
 };
 use crate::utils::substitute_output;
+
+#[derive(Clone)]
+pub struct DocumentContext {
+    citation: std::sync::Arc<std::sync::Mutex<CitationContext>>,
+}
+
+impl DocumentContext {
+    pub fn new(citation: CitationContext) -> Self {
+        Self {
+            citation: std::sync::Arc::new(std::sync::Mutex::new(citation)),
+        }
+    }
+
+    pub fn process_citations(&self, events: &[Event]) -> Vec<Event> {
+        self.citation.lock().unwrap().process_events(events)
+    }
+
+    pub fn finalize_citations(&self, events: &[Event]) -> (Vec<Event>, Vec<Event>) {
+        let mut citation = self.citation.lock().unwrap();
+        let cites = citation.get_cites();
+        let references = citation.get_used_references();
+        let options = citation.options().clone();
+        let diagnostics = citation.drain_diagnostics();
+        let events = citation.replace_section_markers(events);
+        drop(citation);
+
+        let mut events = events;
+        pendon_plugin_cite::update_frontmatter_in_events(
+            &mut events,
+            &cites,
+            &references,
+            &options,
+        );
+        (events, diagnostics)
+    }
+}
+
+pub fn build_context_inline_pipeline(
+    img_options: ImgOptions,
+    wiki_options: pendon_plugin_wiki::WikiOptions,
+    anchor_options: AnchorOptions,
+    latex_options: Option<pendon_plugin_latex::LatexOptions>,
+    enabled_plugins: &HashSet<&str>,
+) -> ContextPipeline<DocumentContext> {
+    let mut pipeline = ContextPipeline::new();
+    let mut image_pipeline = ContextPipeline::new();
+
+    if enabled_plugins.contains("cite") {
+        image_pipeline.add(|context: &mut DocumentContext, events: Vec<Event>| {
+            context.process_citations(&events)
+        });
+    }
+    if enabled_plugins.contains("wiki") {
+        let options = wiki_options.clone();
+        image_pipeline.add(move |_: &mut DocumentContext, events: Vec<Event>| {
+            pendon_plugin_wiki::process_with_options(&events, options.clone())
+        });
+    }
+    if enabled_plugins.contains("anchor") {
+        let options = anchor_options.clone();
+        image_pipeline.add(move |_: &mut DocumentContext, events: Vec<Event>| {
+            pendon_plugin_anchor::process(&events, &options)
+        });
+    }
+    if let Some(options) = latex_options {
+        image_pipeline.add_after_markdown(move |_: &mut DocumentContext, events: Vec<Event>| {
+            pendon_plugin_latex::process_with_options(&events, &options)
+        });
+    }
+
+    if enabled_plugins.contains("img") {
+        pipeline.add(move |context: &mut DocumentContext, events: Vec<Event>| {
+            pendon_plugin_img::process_with_context(&events, &img_options, &image_pipeline, context)
+        });
+    }
+    if enabled_plugins.contains("cite") {
+        pipeline.add(|context: &mut DocumentContext, events: Vec<Event>| {
+            context.process_citations(&events)
+        });
+    }
+    if enabled_plugins.contains("wiki") {
+        let options = wiki_options.clone();
+        pipeline.add(move |_: &mut DocumentContext, events: Vec<Event>| {
+            pendon_plugin_wiki::process_with_options(&events, options.clone())
+        });
+    }
+    if enabled_plugins.contains("anchor") {
+        pipeline.add(move |_: &mut DocumentContext, events: Vec<Event>| {
+            pendon_plugin_anchor::process(&events, &anchor_options)
+        });
+    }
+    if let Some(options) = latex_options {
+        pipeline.add_after_markdown(move |_: &mut DocumentContext, events: Vec<Event>| {
+            pendon_plugin_latex::process_with_options(&events, &options)
+        });
+    }
+
+    pipeline
+}
+
+pub fn process_stateless_plugin(
+    name: &str,
+    events: &[Event],
+    wiki_options: &pendon_plugin_wiki::WikiOptions,
+    latex_options: Option<&pendon_plugin_latex::LatexOptions>,
+) -> Option<Vec<Event>> {
+    Some(match name {
+        "dialog" => pendon_plugin_dialog::process_with_options(
+            events,
+            &pendon_plugin_dialog::DialogOptions {
+                latex: latex_options.copied(),
+            },
+        ),
+        "latex" => match latex_options {
+            Some(options) => pendon_plugin_latex::process_with_options(events, options),
+            None => events.to_vec(),
+        },
+        "wiki" => pendon_plugin_wiki::process_with_options(events, wiki_options.clone()),
+        "sectionize" => pendon_plugin_sectionize::process(events),
+        "extract-heading" => pendon_plugin_extract_heading::process(events),
+        "syntect" => pendon_plugin_codeblock_syntect::process(events),
+        _ => return None,
+    })
+}
+
+/// Maps a task output format to the math rendering target. Only `solid` needs
+/// the JSX `innerHTML={...}` form; every other format gets plain HTML.
+pub fn latex_target_for_format(format: &str) -> pendon_plugin_latex::LatexTarget {
+    if format == "solid" {
+        pendon_plugin_latex::LatexTarget::Solid
+    } else {
+        pendon_plugin_latex::LatexTarget::Html
+    }
+}
+
+pub fn plugin_names<'a>(plugins: Option<&'a str>) -> Vec<&'a str> {
+    plugins
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .collect()
+}
+
+pub fn has_plugin(plugins: Option<&str>, name: &str) -> bool {
+    plugin_names(plugins).contains(&name)
+}
+
+pub fn load_custom_spec(
+    path: &str,
+    cache: &mut HashMap<String, PluginSpec>,
+) -> Result<PluginSpec, String> {
+    if let Some(spec) = cache.get(path) {
+        return Ok(spec.clone());
+    }
+
+    let spec = load_spec_from_path(path)?;
+    cache.insert(path.to_string(), spec.clone());
+    Ok(spec)
+}
 
 pub fn build_cite_options(
     config: Option<&CiteTaskConfig>,
@@ -121,59 +284,23 @@ pub fn build_anchor_options(config: Option<&AnchorTaskConfig>) -> AnchorOptions 
 }
 
 fn parse_anchor_imports(values: &[toml::Value]) -> Vec<AnchorImport> {
-    values
-        .iter()
-        .filter_map(|value| {
-            let table = value.as_table()?;
-            let module = table.get("module")?.as_str()?.to_string();
-            let default = table
-                .get("default")
-                .and_then(|value| value.as_str())
-                .map(str::to_string);
-            let names = table
-                .get("names")
-                .and_then(|value| value.as_array())
-                .map(|values| {
-                    values
-                        .iter()
-                        .filter_map(|value| value.as_str().map(str::to_string))
-                        .collect()
-                })
-                .unwrap_or_default();
-            Some(AnchorImport {
-                module,
-                default,
-                names,
-            })
+    parse_solid_imports(values)
+        .into_iter()
+        .map(|import| AnchorImport {
+            module: import.module,
+            default: import.default,
+            names: import.names,
         })
         .collect()
 }
 
 fn parse_cite_imports(values: &[toml::Value]) -> Vec<CiteImport> {
-    values
-        .iter()
-        .filter_map(|value| {
-            let table = value.as_table()?;
-            let module = table.get("module")?.as_str()?.to_string();
-            let default = table
-                .get("default")
-                .and_then(|value| value.as_str())
-                .map(str::to_string);
-            let names = table
-                .get("names")
-                .and_then(|value| value.as_array())
-                .map(|values| {
-                    values
-                        .iter()
-                        .filter_map(|value| value.as_str().map(str::to_string))
-                        .collect()
-                })
-                .unwrap_or_default();
-            Some(CiteImport {
-                module,
-                default,
-                names,
-            })
+    parse_solid_imports(values)
+        .into_iter()
+        .map(|import| CiteImport {
+            module: import.module,
+            default: import.default,
+            names: import.names,
         })
         .collect()
 }
@@ -215,6 +342,17 @@ fn build_table_component(
 }
 
 fn parse_table_imports(values: &[toml::Value]) -> Vec<pendon_plugin_table::CustomImport> {
+    parse_solid_imports(values)
+        .into_iter()
+        .map(|import| pendon_plugin_table::CustomImport {
+            module: import.module,
+            default: import.default,
+            names: import.names,
+        })
+        .collect()
+}
+
+fn parse_solid_imports(values: &[toml::Value]) -> Vec<SolidImportSpec> {
     values
         .iter()
         .filter_map(|value| {
@@ -222,19 +360,19 @@ fn parse_table_imports(values: &[toml::Value]) -> Vec<pendon_plugin_table::Custo
             let module = table.get("module")?.as_str()?.to_string();
             let default = table
                 .get("default")
-                .and_then(|value| value.as_str())
+                .and_then(toml::Value::as_str)
                 .map(str::to_string);
             let names = table
                 .get("names")
-                .and_then(|value| value.as_array())
+                .and_then(toml::Value::as_array)
                 .map(|values| {
                     values
                         .iter()
                         .filter_map(|value| value.as_str().map(str::to_string))
-                        .collect::<Vec<String>>()
+                        .collect()
                 })
                 .unwrap_or_default();
-            Some(pendon_plugin_table::CustomImport {
+            Some(SolidImportSpec {
                 module,
                 default,
                 names,

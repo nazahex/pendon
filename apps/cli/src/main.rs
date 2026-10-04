@@ -3,10 +3,8 @@ use std::process::ExitCode;
 use pendon_core::{parse, Options};
 use pendon_plugin_anchor::AnchorOptions;
 use pendon_plugin_cite::CiteOptions;
-use pendon_plugin_img::ImgOptions;
 use pendon_plugin_markdown::MarkdownOptions;
 use pendon_plugin_quiz::solid_hints as quiz_solid_hints;
-use pendon_plugin_table::TableOptions;
 use pendon_plugin_vicado::solid_hints as vicado_solid_hints;
 use pendon_plugin_wiki::WikiOptions;
 use pendon_renderer_json::render_to_string;
@@ -21,8 +19,11 @@ mod run;
 mod utils;
 
 use cli::{parse_args, read_input};
-use plugins::merge_solid_hints;
-use utils::maybe_pretty;
+use plugins::{
+    build_anchor_options, build_context_inline_pipeline, load_custom_spec, merge_solid_hints,
+    plugin_names, DocumentContext,
+};
+use utils::{extract_frontmatter_for_cite, maybe_pretty, merge_refs_for_context};
 
 fn main() -> ExitCode {
     if std::env::args().nth(1).as_deref() == Some("run") {
@@ -61,7 +62,7 @@ fn main() -> ExitCode {
         sp.stop();
     }
 
-    let events = parse(
+    let mut events = parse(
         &input,
         &Options {
             strict: args.strict,
@@ -71,13 +72,48 @@ fn main() -> ExitCode {
         },
     );
 
+    if let Some(plugins) = args.plugin.as_deref() {
+        if plugins::has_plugin(Some(plugins), "micromatter") {
+            events = pendon_plugin_micromatter::process(&events);
+        }
+    }
+
     let markdown_opts = MarkdownOptions {
         allow_html: args.markdown_allow_html,
         strip_comments: args.markdown_strip_comments,
     };
+    let enabled_plugins: std::collections::HashSet<&str> =
+        plugin_names(args.plugin.as_deref()).into_iter().collect();
+    let latex_options = if enabled_plugins.contains("latex") {
+        Some(pendon_plugin_latex::LatexOptions {
+            target: plugins::latex_target_for_format(format),
+        })
+    } else {
+        None
+    };
     let wiki_opts = WikiOptions {
         link_prefix: args.wiki_link_prefix.clone(),
+        latex: latex_options,
     };
+
+    let frontmatter = extract_frontmatter_for_cite(&events);
+    let references = frontmatter
+        .as_ref()
+        .and_then(|data| data.get("references"))
+        .cloned()
+        .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
+    let references = merge_refs_for_context(&references, None);
+    let mut document_context = DocumentContext::new(pendon_plugin_cite::CitationContext::new(
+        references,
+        CiteOptions::default(),
+    ));
+    let inline_pipeline = build_context_inline_pipeline(
+        pendon_plugin_img::ImgOptions::default(),
+        wiki_opts.clone(),
+        build_anchor_options(None),
+        latex_options,
+        &enabled_plugins,
+    );
 
     let mut used_custom_specs: Vec<pendon_plugin_custom::PluginSpec> = Vec::new();
     let mut custom_cache: std::collections::HashMap<String, pendon_plugin_custom::PluginSpec> =
@@ -90,23 +126,32 @@ fn main() -> ExitCode {
         let mut ev = events;
         let mut markdown_ran = false;
         let mut quiz_pending = false;
-        for name in pstr.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        for name in plugin_names(Some(pstr)) {
+            if name == "micromatter" {
+                continue;
+            }
             if let Some(path) = name.strip_prefix("toml:") {
-                let spec = match custom_cache.get(path) {
-                    Some(existing) => existing.clone(),
-                    None => match pendon_plugin_custom::load_spec_from_path(path) {
-                        Ok(s) => {
-                            custom_cache.insert(path.to_string(), s.clone());
-                            s
-                        }
-                        Err(msg) => {
-                            eprintln!("Error: {}", msg);
-                            return ExitCode::from(2);
-                        }
-                    },
+                let spec = match load_custom_spec(path, &mut custom_cache) {
+                    Ok(spec) => spec,
+                    Err(msg) => {
+                        eprintln!("Error: {}", msg);
+                        return ExitCode::from(2);
+                    }
                 };
                 plugins::track_used_spec(&mut used_custom_specs, spec.clone());
-                ev = pendon_plugin_custom::process(&ev, &spec, &pendon_core::Pipeline::default());
+                ev = pendon_plugin_custom::process_with_context(
+                    &ev,
+                    &spec,
+                    &inline_pipeline,
+                    &mut document_context,
+                );
+                continue;
+            }
+
+            if let Some(processed) =
+                plugins::process_stateless_plugin(name, &ev, &wiki_opts, latex_options.as_ref())
+            {
+                ev = processed;
                 continue;
             }
 
@@ -121,23 +166,24 @@ fn main() -> ExitCode {
                         ev
                     }
                 }
-                "dialog" => pendon_plugin_dialog::process(&ev),
-                "img" => {
-                    let empty_pipeline = pendon_core::Pipeline::default();
-                    pendon_plugin_img::process(&ev, &ImgOptions::default(), &empty_pipeline)
-                }
-                "table" => {
-                    let empty_pipeline = pendon_core::Pipeline::default();
-                    pendon_plugin_table::process(&ev, &TableOptions::default(), &empty_pipeline)
-                }
+                "img" => pendon_plugin_img::process_with_context(
+                    &ev,
+                    &pendon_plugin_img::ImgOptions::default(),
+                    &inline_pipeline,
+                    &mut document_context,
+                ),
+                "table" => pendon_plugin_table::process_with_context(
+                    &ev,
+                    &pendon_plugin_table::TableOptions::default(),
+                    &inline_pipeline,
+                    &mut document_context,
+                ),
                 "heading" => pendon_plugin_heading::process(
                     &ev,
                     &pendon_plugin_heading::HeadingOptions::default(),
                 ),
                 "anchor" => pendon_plugin_anchor::process(&ev, &AnchorOptions::default()),
-                "cite" => pendon_plugin_cite::process(&ev, &CiteOptions::default()),
-                "latex" => pendon_plugin_latex::process(&ev),
-                "wiki" => pendon_plugin_wiki::process_with_options(&ev, wiki_opts.clone()),
+                "cite" => document_context.process_citations(&ev),
                 "vicado" => {
                     used_vicado = true;
                     pendon_plugin_vicado::process(&ev)
@@ -153,13 +199,15 @@ fn main() -> ExitCode {
                         processed
                     }
                 }
-                "sectionize" => pendon_plugin_sectionize::process(&ev),
-                "extract-heading" => pendon_plugin_extract_heading::process(&ev),
-                "syntect" => pendon_plugin_codeblock_syntect::process(&ev),
                 other => {
                     if let Some(spec) = custom_cache.get(other) {
                         plugins::track_used_spec(&mut used_custom_specs, spec.clone());
-                        pendon_plugin_custom::process(&ev, &spec, &pendon_core::Pipeline::default())
+                        pendon_plugin_custom::process_with_context(
+                            &ev,
+                            &spec,
+                            &inline_pipeline,
+                            &mut document_context,
+                        )
                     } else {
                         ev
                     }
@@ -170,6 +218,15 @@ fn main() -> ExitCode {
             ev = pendon_plugin_quiz::process(&ev);
         }
         ev
+    } else {
+        events
+    };
+
+    let events = if enabled_plugins.contains("cite") {
+        let (events, cite_diagnostics) = document_context.finalize_citations(&events);
+        let mut events = events;
+        events.extend(cite_diagnostics);
+        events
     } else {
         events
     };

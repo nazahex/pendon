@@ -1,17 +1,18 @@
-use pendon_core::{Event, NodeKind, Options, Pipeline};
+use pendon_core::{Event, NodeKind, Options};
 use pendon_plugin_custom::PluginSpec;
 use pendon_plugin_markdown::MarkdownOptions;
 use pendon_plugin_wiki::WikiOptions;
 use pendon_renderer_solid::{render_solid_with_hints, SolidRenderHints};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 
 use crate::cache::{create_cache_entry, CacheFile};
 use crate::config::ConfigTask;
 use crate::plugins::{
-    build_anchor_options, build_cite_options, build_table_options, merge_solid_hints,
-    track_used_spec,
+    build_anchor_options, build_cite_options, build_context_inline_pipeline, build_table_options,
+    has_plugin, latex_target_for_format, load_custom_spec, merge_solid_hints, plugin_names,
+    process_stateless_plugin, track_used_spec, DocumentContext,
 };
 use crate::utils::{extract_frontmatter_for_cite, maybe_pretty, merge_refs_for_context};
 
@@ -57,11 +58,7 @@ pub fn process_single_file(
 
     // Run micromatter FIRST if it's in the plugin list
     if let Some(pstr) = task.plugin.as_deref() {
-        if pstr
-            .split(',')
-            .map(|s| s.trim())
-            .any(|s| s == "micromatter")
-        {
+        if has_plugin(Some(pstr), "micromatter") {
             events = pendon_plugin_micromatter::process(&events);
         }
     }
@@ -88,41 +85,28 @@ pub fn process_single_file(
         .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
     let merged_refs =
         merge_refs_for_context(&front_refs, cite_options.external_references.as_ref());
-    let cite_ctx = pendon_plugin_cite::CitationContext::new(merged_refs, cite_options.clone());
+    let mut document_context = DocumentContext::new(pendon_plugin_cite::CitationContext::new(
+        merged_refs,
+        cite_options.clone(),
+    ));
 
-    let cite_ctx_shared = std::sync::Arc::new(std::sync::Mutex::new(cite_ctx));
+    let enabled_plugins: HashSet<&str> = plugin_names(task.plugin.as_deref()).into_iter().collect();
 
-    // Build Inline Pipeline
-    let mut inline_pipeline = Pipeline::new();
+    let latex_options = if enabled_plugins.contains("latex") {
+        Some(pendon_plugin_latex::LatexOptions {
+            target: latex_target_for_format(&task.format),
+        })
+    } else {
+        None
+    };
 
-    let img_opts_for_pipeline = task.img.clone().unwrap_or_default();
-
-    let mut img_inner_pipeline = Pipeline::new();
-    let cite_inner = cite_ctx_shared.clone();
-    img_inner_pipeline.add(move |ev: Vec<Event>| cite_inner.lock().unwrap().process_events(&ev));
-    let wiki_inner = task_wiki_opts.clone();
-    img_inner_pipeline.add(move |ev: Vec<Event>| {
-        pendon_plugin_wiki::process_with_options(&ev, wiki_inner.clone())
-    });
-    let anchor_inner = build_anchor_options(task.anchor.as_ref());
-    img_inner_pipeline.add(move |ev: Vec<Event>| pendon_plugin_anchor::process(&ev, &anchor_inner));
-
-    let img_opts_clone = img_opts_for_pipeline.clone();
-    inline_pipeline.add(move |ev: Vec<Event>| {
-        pendon_plugin_img::process(&ev, &img_opts_clone, &img_inner_pipeline)
-    });
-
-    let cite_for_pipeline = cite_ctx_shared.clone();
-    inline_pipeline
-        .add(move |ev: Vec<Event>| cite_for_pipeline.lock().unwrap().process_events(&ev));
-
-    let wiki_opts = task_wiki_opts.clone();
-    inline_pipeline.add(move |ev: Vec<Event>| {
-        pendon_plugin_wiki::process_with_options(&ev, wiki_opts.clone())
-    });
-
-    let anchor_opts = build_anchor_options(task.anchor.as_ref());
-    inline_pipeline.add(move |ev: Vec<Event>| pendon_plugin_anchor::process(&ev, &anchor_opts));
+    let inline_pipeline = build_context_inline_pipeline(
+        task.img.clone().unwrap_or_default(),
+        task_wiki_opts.clone(),
+        build_anchor_options(task.anchor.as_ref()),
+        latex_options,
+        &enabled_plugins,
+    );
 
     // Run remaining plugins
     let mut used_custom_specs: Vec<PluginSpec> = Vec::new();
@@ -137,32 +121,38 @@ pub fn process_single_file(
     let mut custom_cache: HashMap<String, PluginSpec> = HashMap::new();
 
     if let Some(pstr) = task.plugin.as_deref() {
-        for name in pstr.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        for name in plugin_names(Some(pstr)) {
             if name == "micromatter" {
                 continue;
             }
 
             if let Some(path) = name.strip_prefix("toml:") {
-                let spec = match custom_cache.get(path) {
-                    Some(existing) => existing.clone(),
-                    None => match pendon_plugin_custom::load_spec_from_path(path) {
-                        Ok(s) => {
-                            custom_cache.insert(path.to_string(), s.clone());
-                            s
-                        }
-                        Err(msg) => {
-                            eprintln!("Error: {}", msg);
-                            return ProcessResult {
-                                success: false,
-                                bytes_written: 0,
-                                cache_entry: None,
-                                skipped_write: false,
-                            };
-                        }
-                    },
+                let spec = match load_custom_spec(path, &mut custom_cache) {
+                    Ok(spec) => spec,
+                    Err(msg) => {
+                        eprintln!("Error: {}", msg);
+                        return ProcessResult {
+                            success: false,
+                            bytes_written: 0,
+                            cache_entry: None,
+                            skipped_write: false,
+                        };
+                    }
                 };
                 track_used_spec(&mut used_custom_specs, spec.clone());
-                events = pendon_plugin_custom::process(&events, &spec, &inline_pipeline);
+                events = pendon_plugin_custom::process_with_context(
+                    &events,
+                    &spec,
+                    &inline_pipeline,
+                    &mut document_context,
+                );
+                continue;
+            }
+
+            if let Some(processed) =
+                process_stateless_plugin(name, &events, &task_wiki_opts, latex_options.as_ref())
+            {
+                events = processed;
                 continue;
             }
 
@@ -179,10 +169,14 @@ pub fn process_single_file(
                         events
                     }
                 }
-                "dialog" => pendon_plugin_dialog::process(&events),
                 "img" => {
                     let img_opts = task.img.clone().unwrap_or_default();
-                    let result = pendon_plugin_img::process(&events, &img_opts, &inline_pipeline);
+                    let result = pendon_plugin_img::process_with_context(
+                        &events,
+                        &img_opts,
+                        &inline_pipeline,
+                        &mut document_context,
+                    );
                     if let Some(hints) = pendon_plugin_img::solid_hints(&img_opts) {
                         builtin_hints.push(hints);
                     }
@@ -190,8 +184,12 @@ pub fn process_single_file(
                 }
                 "table" => {
                     let table_opts = build_table_options(task.table.as_ref());
-                    let result =
-                        pendon_plugin_table::process(&events, &table_opts, &inline_pipeline);
+                    let result = pendon_plugin_table::process_with_context(
+                        &events,
+                        &table_opts,
+                        &inline_pipeline,
+                        &mut document_context,
+                    );
                     if let Some(hints) = pendon_plugin_table::solid_hints(&table_opts) {
                         builtin_hints.push(hints);
                     }
@@ -211,10 +209,8 @@ pub fn process_single_file(
                 }
                 "cite" => {
                     cite_ran = true;
-                    cite_ctx_shared.lock().unwrap().process_events(&events)
+                    document_context.process_citations(&events)
                 }
-                "latex" => pendon_plugin_latex::process(&events),
-                "wiki" => pendon_plugin_wiki::process_with_options(&events, task_wiki_opts.clone()),
                 "vicado" => {
                     used_vicado = true;
                     pendon_plugin_vicado::process(&events)
@@ -230,14 +226,16 @@ pub fn process_single_file(
                         result
                     }
                 }
-                "sectionize" => pendon_plugin_sectionize::process(&events),
-                "extract-heading" => pendon_plugin_extract_heading::process(&events),
-                "syntect" => pendon_plugin_codeblock_syntect::process(&events),
                 other => {
                     if let Some(spec) = custom_registry.get(other) {
                         let spec = spec.clone();
                         track_used_spec(&mut used_custom_specs, spec.clone());
-                        pendon_plugin_custom::process(&events, &spec, &inline_pipeline)
+                        pendon_plugin_custom::process_with_context(
+                            &events,
+                            &spec,
+                            &inline_pipeline,
+                            &mut document_context,
+                        )
                     } else {
                         events
                     }
@@ -260,13 +258,8 @@ pub fn process_single_file(
     }
     // Finalize cite
     if cite_ran {
-        let ctx = cite_ctx_shared.lock().unwrap();
-        let final_cites = ctx.get_cites();
-        let final_refs = ctx.get_used_references();
-        let cite_opts_final = ctx.options().clone();
-        drop(ctx);
-
-        let diagnostics = cite_ctx_shared.lock().unwrap().drain_diagnostics();
+        let (processed_events, diagnostics) = document_context.finalize_citations(&events);
+        events = processed_events;
 
         if !diagnostics.is_empty() {
             let insert_at = events
@@ -279,19 +272,7 @@ pub fn process_single_file(
             }
         }
 
-        events = cite_ctx_shared
-            .lock()
-            .unwrap()
-            .replace_section_markers(&events);
-
-        pendon_plugin_cite::update_frontmatter_in_events(
-            &mut events,
-            &final_cites,
-            &final_refs,
-            &cite_opts_final,
-        );
-
-        if let Some(hints) = pendon_plugin_cite::solid_hints(&cite_opts_final) {
+        if let Some(hints) = pendon_plugin_cite::solid_hints(&cite_options) {
             builtin_hints.push(hints);
         }
     }

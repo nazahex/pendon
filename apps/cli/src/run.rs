@@ -117,6 +117,13 @@ pub fn run_from_config() -> ExitCode {
         };
         let task_wiki_opts = WikiOptions {
             link_prefix: task.wiki_link_prefix.clone(),
+            latex: if crate::plugins::has_plugin(task.plugin.as_deref(), "latex") {
+                Some(pendon_plugin_latex::LatexOptions {
+                    target: crate::plugins::latex_target_for_format(&task.format),
+                })
+            } else {
+                None
+            },
         };
         let mut matched = 0usize;
         let mut total_bytes: usize = 0;
