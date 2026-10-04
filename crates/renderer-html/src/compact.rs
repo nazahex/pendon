@@ -2,7 +2,7 @@ use pendon_core::Event;
 use serde_json::Value;
 
 use crate::events_to_ast_value;
-use crate::utils::{attr_bool, attr_str, children, escape_html};
+use crate::utils::{attr_bool, attr_str, children, escape_html, render_attrs_except};
 
 pub fn render_html(events: &[Event]) -> String {
     let ast = events_to_ast_value(events);
@@ -219,6 +219,24 @@ fn render_node(v: &Value, out: &mut String) {
                 }
 
                 out.push_str(" />");
+            }
+            "Element" => {
+                if let Some(tag) = attr_str(v, "name") {
+                    out.push('<');
+                    out.push_str(tag);
+                    render_attrs_except(v, out, &["name"]);
+                    if pendon_core::is_void_element(tag) {
+                        out.push_str(" />");
+                    } else {
+                        out.push('>');
+                        render_children(v, out);
+                        out.push_str("</");
+                        out.push_str(tag);
+                        out.push('>');
+                    }
+                } else {
+                    render_children(v, out);
+                }
             }
             "Text" => {
                 if let Some(text) = v.get("text").and_then(|t| t.as_str()) {

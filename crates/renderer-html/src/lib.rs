@@ -62,6 +62,38 @@ mod tests {
     }
 
     #[test]
+    fn escapes_literal_braces_as_entities() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text("a {foo} b".to_string()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+        let output = render_html(&events);
+        assert!(output.contains("&#123;foo&#125;"), "output = {output}");
+        assert!(!output.contains("{foo}"), "output = {output}");
+    }
+
+    #[test]
+    fn leaves_raw_html_braces_untouched() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::StartNode(NodeKind::HtmlInline),
+            Event::Text("<span innerHTML={`{literal}`}></span>".to_string()),
+            Event::EndNode(NodeKind::HtmlInline),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+        let output = render_html(&events);
+        assert!(
+            output.contains("<span innerHTML={`{literal}`}></span>"),
+            "output = {output}"
+        );
+    }
+
+    #[test]
     fn html_block_passes_through_in_compact_mode() {
         let output = render_html(&html_block_events());
         assert!(output.contains("<div>raw</div>"), "output = {output}");
