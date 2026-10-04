@@ -1,6 +1,25 @@
 use pendon_core::{Event, NodeKind};
 
+/// Output target for rendered math. `Solid` emits a JSX `innerHTML={...}`
+/// expression (required so MathML keeps its namespace when Solid claims the
+/// markup), while `Html` emits plain, valid HTML.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LatexTarget {
+    #[default]
+    Solid,
+    Html,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LatexOptions {
+    pub target: LatexTarget,
+}
+
 pub fn process(events: &[Event]) -> Vec<Event> {
+    process_with_options(events, &LatexOptions::default())
+}
+
+pub fn process_with_options(events: &[Event], options: &LatexOptions) -> Vec<Event> {
     let merged = merge_adjacent_text(events.to_vec());
 
     let mut out = Vec::with_capacity(merged.len());
@@ -23,7 +42,7 @@ pub fn process(events: &[Event]) -> Vec<Event> {
                 out.push(ev);
             }
             Event::Text(text) if exclude_depth == 0 => {
-                process_text(text, &mut out);
+                process_text(text, &mut out, options);
             }
             _ => {
                 out.push(ev);
@@ -32,6 +51,29 @@ pub fn process(events: &[Event]) -> Vec<Event> {
     }
 
     out
+}
+
+/// Wraps rendered KaTeX HTML for the requested target.
+///
+/// `Solid` needs `innerHTML={...}` so the browser's HTML parser assigns the
+/// correct (MathML) namespace and so literal `{`/`}` inside the annotation text
+/// are not parsed as JSX expressions. `Html` just embeds the markup directly.
+fn wrap_math(class: &str, style: Option<&str>, katex_html: &str, target: LatexTarget) -> String {
+    match target {
+        LatexTarget::Solid => {
+            let escaped = katex_html.replace('\\', "\\\\").replace('`', "\\`");
+            match style {
+                Some(style) => format!(
+                    "<span class=\"{class}\" style=\"{style}\" innerHTML={{`{escaped}`}}></span>"
+                ),
+                None => format!("<span class=\"{class}\" innerHTML={{`{escaped}`}}></span>"),
+            }
+        }
+        LatexTarget::Html => match style {
+            Some(style) => format!("<span class=\"{class}\" style=\"{style}\">{katex_html}</span>"),
+            None => format!("<span class=\"{class}\">{katex_html}</span>"),
+        },
+    }
 }
 
 fn merge_adjacent_text(events: Vec<Event>) -> Vec<Event> {
@@ -51,7 +93,7 @@ fn merge_adjacent_text(events: Vec<Event>) -> Vec<Event> {
     out
 }
 
-fn process_text(text: &str, out: &mut Vec<Event>) {
+fn process_text(text: &str, out: &mut Vec<Event>, options: &LatexOptions) {
     let mut cursor = 0;
     let chars: Vec<char> = text.chars().collect();
     let len = chars.len();
@@ -95,8 +137,12 @@ fn process_text(text: &str, out: &mut Vec<Event>) {
 
                 match katex::render_with_opts(&formula, &opts) {
                     Ok(html) => {
-                        let escaped_html = html.replace('\\', "\\\\").replace('`', "\\`");
-                        let wrapper = format!("<span class=\"latex latex-block\" style=\"display: block;\" innerHTML={{`{}`}}></span>", escaped_html);
+                        let wrapper = wrap_math(
+                            "latex latex-block",
+                            Some("display: block;"),
+                            &html,
+                            options.target,
+                        );
                         out.push(Event::StartNode(NodeKind::HtmlBlock));
                         out.push(Event::Text(wrapper));
                         out.push(Event::EndNode(NodeKind::HtmlBlock));
@@ -144,11 +190,7 @@ fn process_text(text: &str, out: &mut Vec<Event>) {
 
                 match katex::render_with_opts(&formula, &opts) {
                     Ok(html) => {
-                        let escaped_html = html.replace('\\', "\\\\").replace('`', "\\`");
-                        let wrapper = format!(
-                            "<span class=\"latex latex-inline\" innerHTML={{`{}`}}></span>",
-                            escaped_html
-                        );
+                        let wrapper = wrap_math("latex latex-inline", None, &html, options.target);
                         out.push(Event::StartNode(NodeKind::HtmlInline));
                         out.push(Event::Text(wrapper));
                         out.push(Event::EndNode(NodeKind::HtmlInline));
@@ -212,5 +254,34 @@ mod tests {
         let res = process(&events);
         assert_eq!(res.len(), 1);
         assert_eq!(res[0], Event::Text("I have $5 and $10.".to_string()));
+    }
+
+    #[test]
+    fn html_target_emits_plain_markup() {
+        let events = vec![Event::Text("Einstein: $E = mc^2$.".to_string())];
+        let options = LatexOptions {
+            target: LatexTarget::Html,
+        };
+        let res = process_with_options(&events, &options);
+
+        assert_eq!(res.len(), 5);
+        assert_eq!(res[1], Event::StartNode(NodeKind::HtmlInline));
+        match &res[2] {
+            Event::Text(html) => {
+                assert!(html.starts_with("<span class=\"latex latex-inline\">"));
+                assert!(html.ends_with("</span>"));
+                assert!(!html.contains("innerHTML"));
+                assert!(!html.contains("`"));
+            }
+            other => panic!("expected text, got {:?}", other),
+        }
+        assert_eq!(res[3], Event::EndNode(NodeKind::HtmlInline));
+    }
+
+    #[test]
+    fn solid_target_is_the_default() {
+        let events = vec![Event::Text("$x$".to_string())];
+        let res = process(&events);
+        assert!(matches!(&res[1], Event::Text(h) if h.contains("innerHTML={`")));
     }
 }
