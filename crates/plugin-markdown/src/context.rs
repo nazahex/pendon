@@ -16,6 +16,8 @@ pub(crate) struct ListFrame {
 pub struct ParseContext {
     pub(crate) out: Vec<Event>,
     pub(crate) stack: Vec<NodeKind>,
+    // Parallel stack to safely track inline custom contexts without desyncing
+    pub(crate) stack_is_inline_custom: Vec<bool>,
     pub(crate) in_heading: bool,
     pub(crate) heading_prefix_consumed: bool,
     pub(crate) in_code_fence: bool,
@@ -42,6 +44,7 @@ impl ParseContext {
         Self {
             out: Vec::with_capacity(capacity),
             stack: Vec::new(),
+            stack_is_inline_custom: Vec::new(),
             in_heading: false,
             heading_prefix_consumed: false,
             in_code_fence: false,
@@ -67,11 +70,25 @@ impl ParseContext {
     pub fn emit_start(&mut self, kind: NodeKind) {
         self.out.push(Event::StartNode(kind.clone()));
         self.stack.push(kind);
+        self.stack_is_inline_custom.push(false);
+    }
+
+    // Specifically marks the node as an inline-only container (e.g., Figcaption)
+    pub fn emit_start_inline_custom(&mut self, kind: NodeKind) {
+        self.out.push(Event::StartNode(kind.clone()));
+        self.stack.push(kind);
+        self.stack_is_inline_custom.push(true);
     }
 
     pub fn emit_end(&mut self, kind: NodeKind) {
         self.out.push(Event::EndNode(kind.clone()));
         let _ = self.stack.pop();
+        let _ = self.stack_is_inline_custom.pop();
+    }
+
+    // Checks if we are currently inside any inline custom container
+    pub fn is_in_inline_context(&self) -> bool {
+        self.stack_is_inline_custom.iter().any(|&b| b)
     }
 
     pub fn push_event(&mut self, event: &Event) {

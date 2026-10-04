@@ -50,17 +50,21 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind, is_block_custom: bool) {
             }
             ctx.at_line_start = true;
         }
-        // Tangani Custom secara eksplisit berdasarkan metadata __plugin_kind
+        // Handle Custom nodes explicitly based on __plugin_kind metadata
         NodeKind::Custom(_) => {
             if is_block_custom {
                 ctx.close_blockquotes();
                 ctx.close_all_lists();
                 ctx.close_table_if_open();
-            } else if ctx.pending_para_start {
-                ctx.emit_start(NodeKind::Paragraph);
-                ctx.pending_para_start = false;
+                ctx.emit_start(kind.clone());
+            } else {
+                if ctx.pending_para_start {
+                    ctx.emit_start(NodeKind::Paragraph);
+                    ctx.pending_para_start = false;
+                }
+                // Mark as inline-only context to prevent block-level parsing inside it
+                ctx.emit_start_inline_custom(kind.clone());
             }
-            ctx.emit_start(kind.clone());
         }
         _ => {
             if !is_inline_node(kind) {

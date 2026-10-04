@@ -67,6 +67,20 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
         return;
     }
 
+    if ctx.is_in_inline_context() {
+        if s == "\n" {
+            ctx.out.push(Event::Text("\n".to_string()));
+            ctx.at_line_start = true;
+            return;
+        }
+        if s != "\n" && s.trim().is_empty() && !ctx.display_math_open {
+            return;
+        }
+        emit_line_content(ctx, s);
+        ctx.at_line_start = false;
+        return;
+    }
+
     if s != "\n" && s.trim().is_empty() && !ctx.in_code_fence && !ctx.display_math_open {
         return;
     }
