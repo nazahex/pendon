@@ -2,11 +2,12 @@
 
 Advanced image syntax plugin for Pendon.
 
-`pendon-plugin-img` extends standard Markdown image syntax with a compact single-line form that supports figure output, behavior flags, dimensions, custom attributes, and rich figcaptions. It integrates with the shared inline pipeline so captions can contain wiki links, citations, and anchor-processed links.
+`pendon-plugin-img` extends standard Markdown image syntax with a compact single-line form that supports figure output, behavior flags, dimensions, custom attributes, and rich figcaptions. It integrates with the shared inline pipeline so captions can contain wiki links, citations, and anchor-processed links. Advanced images work both as standalone blocks and embedded inline within paragraph text.
 
 ## What This Plugin Does
 
 - Transforms advanced image syntax into structured AST nodes or raw HTML blocks
+- Handles advanced images as standalone blocks **and** inline within paragraph text
 - Supports three container modes: `<figure>`, `<div>`, `<p>`, or bare `<img>`
 - Renders figcaptions with **full inline markdown** including bold, italic, links, wiki links, and citations
 - Supports custom Solid components via `ImgCustomNode` configuration
@@ -143,6 +144,26 @@ Output:
 <div data-section="hero"><img width="300" decoding="async" alt="Alt" src="https://example.com/image.webp" /></div>
 ```
 
+### 5. Inline Advanced Images
+
+An advanced image can be embedded inside a paragraph alongside other text. It is
+transformed in place, so the surrounding text is preserved:
+
+```md
+Ad ex tempor !?~[Alt](https://example.com/image.webp)[.foo]{con: "jux"} consectetur.
+```
+
+Default HTML output:
+
+```html
+<p>Ad ex tempor <img decoding="async" loading="lazy" alt="Alt" class="foo" data-con="jux" src="https://example.com/image.webp" /> consectetur.</p>
+```
+
+Only bare (`<img>`) markers are eligible for inline transformation. Figure (`!!`)
+and container (`p!`, `d!`) markers stay block-level and require their own
+paragraph/line. A plain `![alt](src)` with neither marker modifiers nor an
+attribute block is left untouched for `plugin-markdown` to handle.
+
 ## Attribute Block Format
 
 The attribute block has two independent parts:
@@ -160,7 +181,10 @@ The attribute block has two independent parts:
 **Key/value section** (`{...}`):
 
 - Keys starting with `--` → inline style entries (`style="--var:value;"`)
-- All other keys → `data-{key}="value"` attributes
+- All other keys → `data-{key}="value"` attributes in the default HTML output
+- With a `custom_node`, all other keys are passed through verbatim as component
+  props (`key={...}`) instead, since Solid components expect plain props without
+  a `data-` prefix
 - Comma-separated, quoted or unquoted values accepted
 
 Both sections are optional and can appear independently.
@@ -181,20 +205,20 @@ default = "AdvancedImage"
 
 ### Available Template Attributes
 
-| Attribute                | Description                                   |
-| :----------------------- | :-------------------------------------------- |
-| `{attrs.src}`            | Image source URL                              |
-| `{attrs.alt}`            | Alt text                                      |
-| `{attrs.container}`      | Container type: `"figure"`, `"p"`, or `"div"` |
-| `{attrs.lazy}`           | `"1"` if lazy loading is enabled              |
-| `{attrs.async_decoding}` | `"1"` if async decoding is enabled            |
-| `{attrs.width}`          | Explicit width (string)                       |
-| `{attrs.height}`         | Explicit height (string)                      |
-| `{attrs.id}`             | Custom ID from `#id`                          |
-| `{attrs.class}`          | Space-separated class list                    |
-| `{attrs.data-*}`         | Any extra data attributes                     |
-| `{attrs.style}`          | Inline style string                           |
-| `{children}`             | Rendered caption content (inline JSX nodes)   |
+| Attribute                | Description                                                        |
+| :----------------------- | :----------------------------------------------------------------- |
+| `{attrs.src}`            | Image source URL                                                   |
+| `{attrs.alt}`            | Alt text                                                           |
+| `{attrs.container}`      | Container type: `"figure"`, `"p"`, or `"div"`                      |
+| `{attrs.lazy}`           | `"1"` if lazy loading is enabled                                   |
+| `{attrs.async_decoding}` | `"1"` if async decoding is enabled                                 |
+| `{attrs.width}`          | Explicit width (string)                                            |
+| `{attrs.height}`         | Explicit height (string)                                           |
+| `{attrs.id}`             | Custom ID from `#id`                                               |
+| `{attrs.class}`          | Space-separated class list                                         |
+| `{attrs.<key>}`          | Extra prop passed verbatim (e.g. `{attrs.foo}` for `{foo: "val"}`) |
+| `{attrs.style}`          | Inline style string                                                |
+| `{children}`             | Rendered caption content (inline JSX nodes)                        |
 
 ### Caption as Children
 
@@ -242,17 +266,21 @@ let events = pendon_plugin_img::process(&events, &img_opts, &pipeline);
 
 ## Behavioral Notes
 
-- This plugin only transforms paragraph content that is **plain text** and fits on a **single line**
-- Multi-line paragraphs are ignored — the original content is preserved
+- A paragraph whose entire (trimmed) content is a single advanced image is transformed as a block and emitted as an `HtmlBlock` (or a `Custom(name)` node when a custom component is configured)
+- Advanced images embedded inline inside paragraph text are transformed in place and emitted as `HtmlInline` (or a `Custom(name)` node)
+- Only **plain-text** paragraph content is scanned; paragraphs that already contain inline nodes are left untouched
+- Multi-line paragraphs are scanned line by line for inline images
 - Figure captions support full inline markdown; single-image mode does not accept trailing caption text
 - The marker parser is intentionally strict: invalid markers or malformed dimensions cause the line to be skipped (no transform, no error)
-- When no custom node is configured, output is emitted as `HtmlBlock` events containing raw HTML strings
+- When no custom node is configured, output is emitted as raw HTML strings (`HtmlBlock`/`HtmlInline` events)
 - When a custom node is configured, output is emitted as `Custom(name)` nodes with structured attributes and inline children
 
 ## Scope and Limitations
 
 - Marker parser accepts only: `!`, `?`, `~`, `w<digits>`, `h<digits>`, `p`, `d`
 - Invalid marker combinations (e.g., `p!!` mixing explicit container with figure) are rejected
+- Inline transformation only applies to bare `<img>` markers; figure (`!!`) and container (`p!`, `d!`) markers remain block-level
+- A bare `![alt](src)` with no marker modifiers and no attribute block is skipped so `plugin-markdown` can handle it normally
 - Attribute block parsing requires well-formed `[...]` and `{...}` blocks; malformed blocks are silently skipped
 - Caption inline pipeline uses default options for wiki, cite, and anchor — per-task configuration for these plugins inside captions is not yet supported
 - This plugin does not handle responsive images, srcset, or picture elements — use a custom component for those patterns
