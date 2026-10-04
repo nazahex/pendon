@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use pendon_core::{Event, NodeKind, Severity};
+use pendon_extra::{parse_attrs, ExtraAttrs};
 use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
 
 #[derive(Clone, Debug, Default)]
@@ -122,7 +123,7 @@ fn emit_text(text: &str, options: &AnchorOptions, out: &mut Vec<Event>) {
     flush_text(&mut normal, out);
 }
 
-fn parse_link(chars: &[char], start: usize) -> Option<(usize, String, String, Option<String>)> {
+fn parse_link(chars: &[char], start: usize) -> Option<(usize, String, String, Option<ExtraAttrs>)> {
     if chars.get(start) != Some(&'[') {
         return None;
     }
@@ -139,33 +140,9 @@ fn parse_link(chars: &[char], start: usize) -> Option<(usize, String, String, Op
     let (raw_target, title) = split_target_title(&raw_input);
     let mut end = close_target + 1;
 
-    // Extra attributes must be directly attached without spaces.
-    let extra = if chars.get(end) == Some(&'{') {
-        if let Some(close_extra) = find_char(chars, end + 1, '}') {
-            let value: String = chars[end + 1..close_extra].iter().collect();
-
-            // Validate that the block contains at least one valid key-value pair.
-            // This prevents silent deletion of arbitrary text inside curly braces.
-            let mut is_valid_attr_block = false;
-            for part in value.split(',') {
-                if part.split_once(':').is_some() {
-                    is_valid_attr_block = true;
-                    break;
-                }
-            }
-
-            if is_valid_attr_block {
-                end = close_extra + 1;
-                Some(value)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+    // Extra attributes must be directly attached without spaces. Accepts both
+    // the `{key: val}` form and the `[.class,#id]{key: val}` form.
+    let extra = parse_link_extra_attrs(chars, &mut end);
 
     let target = match title {
         Some(t) => format!("{}\u{0}{}", raw_target, t),
@@ -177,7 +154,7 @@ fn parse_link(chars: &[char], start: usize) -> Option<(usize, String, String, Op
 
 fn build_attributes(
     encoded_target: &str,
-    extra: Option<String>,
+    extra: Option<ExtraAttrs>,
 ) -> (BTreeMap<String, String>, Option<String>) {
     let (encoded_url, title) = encoded_target
         .split_once('\u{0}')
@@ -241,7 +218,13 @@ fn build_attributes(
     }
 
     if let Some(extra) = extra {
-        for (key, value) in parse_extra_attrs(&extra) {
+        if let Some(id) = extra.id {
+            attrs.insert("id".to_string(), id);
+        }
+        if !extra.classes.is_empty() {
+            attrs.insert("class".to_string(), extra.classes.join(" "));
+        }
+        for (key, value) in extra.properties {
             if key == "rel" {
                 for token in value.split_whitespace() {
                     add_rel(&mut rel, token);
@@ -313,23 +296,32 @@ fn emit_anchor(
     out.push(Event::EndNode(node));
 }
 
-fn parse_extra_attrs(input: &str) -> BTreeMap<String, String> {
-    let mut attrs = BTreeMap::new();
-    for part in input.split(',') {
-        let Some((key, value)) = part.split_once(':') else {
-            continue;
-        };
-        let key = key.trim().to_string();
-        let value = value
-            .trim()
-            .trim_matches('"')
-            .trim_matches('\'')
-            .to_string();
-        if !key.is_empty() {
-            attrs.insert(key, value);
-        }
+/// Parses an adjacent `[.class,#id]{key: val}` (or `{key: val}`) block after a
+/// link target. Returns `None` when nothing valid is attached, preserving
+/// surrounding text (e.g. a following markdown link).
+fn parse_link_extra_attrs(chars: &[char], end: &mut usize) -> Option<ExtraAttrs> {
+    let source: String = chars[*end..].iter().collect();
+    let starts_with_block = source.starts_with('{')
+        || (source.starts_with('[')
+            && source
+                .chars()
+                .nth(1)
+                .is_some_and(|character| character == '.' || character == '#'));
+    if !starts_with_block {
+        return None;
     }
-    attrs
+
+    let parsed = parse_attrs(&source);
+    let has_content = parsed.attrs.id.is_some()
+        || !parsed.attrs.classes.is_empty()
+        || !parsed.attrs.properties.is_empty();
+    if !parsed.had_attrs || !has_content {
+        return None;
+    }
+
+    let consumed = source.len().saturating_sub(parsed.rest.len());
+    *end += source[..consumed].chars().count();
+    Some(parsed.attrs)
 }
 
 fn split_target_title(input: &str) -> (String, Option<String>) {
@@ -408,6 +400,47 @@ mod tests {
             .collect();
         assert!(attrs.contains(&("target", "_blank")));
         assert!(attrs.contains(&("rel", "noopener")));
+    }
+
+    #[test]
+    fn parses_bracket_and_brace_extra_attrs() {
+        let mut out = Vec::new();
+        emit_text(
+            "[foo](/docs)[.bax,#rew]{zo: \"kong\"}",
+            &AnchorOptions::default(),
+            &mut out,
+        );
+        let attrs: Vec<_> = out
+            .iter()
+            .filter_map(|event| match event {
+                Event::Attribute { name, value } => Some((name.as_str(), value.as_str())),
+                _ => None,
+            })
+            .collect();
+        assert!(attrs.contains(&("class", "bax")));
+        assert!(attrs.contains(&("id", "rew")));
+        assert!(attrs.contains(&("zo", "kong")));
+
+        let leftover: String = out
+            .iter()
+            .filter_map(|event| match event {
+                Event::Text(text) => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(!leftover.contains("[.bax]"));
+        assert!(!leftover.contains("kong"));
+    }
+
+    #[test]
+    fn does_not_swallow_following_link() {
+        let mut out = Vec::new();
+        emit_text("[a](/a)[b](/b)", &AnchorOptions::default(), &mut out);
+        let links = out
+            .iter()
+            .filter(|event| matches!(event, Event::StartNode(NodeKind::Link)))
+            .count();
+        assert_eq!(links, 2);
     }
 
     #[test]
