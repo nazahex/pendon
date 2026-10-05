@@ -1,0 +1,22 @@
+[[task]]
+name = "Golden 08"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "micromatter,table,markdown"
+format = "solid"
+
+[[task.table.custom.table]]
+type = ["tableA"]
+name = "TableAB"
+imports = "import { TableAB } from '@comp/content/Table'"
+template = "<TableAB type={\"{attrs.type}\"} {...attrs}>{children}</TableAB>"
+
+[[task.table.custom.table]]
+name = "TableDefault"
+imports = "import { TableDefault } from '@comp/content/Table'"
+template = "<TableDefault {...attrs}>{children}</TableDefault>"
+
+[task.table.custom.caption]
+name = "TableCaption"
+imports = "import { TableCaption } from '@comp/content/Table'"
+template = "<TableCaption {...attrs}>{children}</TableCaption>"

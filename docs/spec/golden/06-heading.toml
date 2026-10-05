@@ -1,0 +1,21 @@
+[[task]]
+name = "Golden 06"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "micromatter,heading,markdown"
+format = "solid"
+
+[task.heading]
+auto_number = true
+number_style = "nested-number"
+
+[[task.heading.custom]]
+type = ["headingX", "headingY"]
+name = "HeadingXY"
+imports = "import { HeadingXY } from '@comp/content/Heading'"
+template = "<HeadingXY level={\"{attrs.level}\"} type={\"{attrs.type}\"} number={\"{attrs.number}\"} {...attrs}>{children}</HeadingXY>"
+
+[[task.heading.custom]]
+name = "HeadingDefault"
+imports = "import { HeadingDefault } from '@comp/content/Heading'"
+template = "<HeadingDefault {...attrs}>{children}</HeadingDefault>"

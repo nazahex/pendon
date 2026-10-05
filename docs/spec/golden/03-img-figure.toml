@@ -1,0 +1,16 @@
+[[task]]
+name = "Golden 03"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "micromatter,img,markdown"
+format = "solid"
+
+[task.img.custom.img]
+name = "AdvancedImage"
+imports = "import AdvancedImage from '@comp/content/AdvancedImage'"
+template = "<AdvancedImage {...attrs}>{children}</AdvancedImage>"
+
+[task.img.custom.figure]
+name = "Figure"
+imports = "import Figure from '@comp/content/Figure'"
+template = "<Figure {...attrs}>{children}</Figure>"

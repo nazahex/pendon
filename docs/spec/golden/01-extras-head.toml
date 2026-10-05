@@ -1,0 +1,6 @@
+[[task]]
+name = "Golden 01"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "anchor,markdown"
+format = "solid"

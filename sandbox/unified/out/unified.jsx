@@ -83,7 +83,7 @@ proident est qui magna non elit quis eiusmod dolore.
 </HeadingDefault><p>Unchanged apart from the adjacent extras head; <code>href</code> is produced by the plugin
 and is never overridable (§7.5).
 </p>
-<p><a class="link" href="/wiki/Anim_Esta_(Officia)" title="Anim Esta (Officia)">Anim</a> and <a href="/wiki/Wireless" title="Wireless">Wireless</a>.
+<p><a class="link" href="/wiki/Anim_Esta_(Officia)" title="Anim Esta (Officia)" type="wikiX">Anim</a> and <a href="/wiki/Wireless" title="Wireless">Wireless</a>.
 </p>
 <HeadingDefault id={"table"} level={2} number={7} raw_title={"Table"}>Table
 </HeadingDefault><p>The §8 declaration line carries the <code>&lt;table&gt;</code> extras and the head

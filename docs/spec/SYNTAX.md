@@ -785,6 +785,11 @@ the existing `assert_cmd` style (`apps/cli/tests/custom_spec.rs`,
   `tests/extras_spec.rs` (one case per rule of §4–§6, including the §5.1 worked
   example) land green in Phase 0 and are the primary gate for the foundation.
 
+Status: fixtures **01–09** are frozen and green
+(`cargo test -p pendon --test syntax_spec`, none ignored), 17–20 are covered by
+the unit tests of the renderer/CLI crates (§17), and 10–16 wait for the Phase 3
+plugins.
+
 ### 16.3 Minimum fixture list
 
 | #  | Fixture                   | Covers                                                            |
@@ -939,6 +944,29 @@ Not yet wired: `task.wiki.custom.anchor` / `task.wiki.custom.infobox` (the wiki
 plugin emits no custom node yet and `ConfigTask` does not read those keys), the
 `marker` / `directive` / `list` / `blockquote` layers (their plugins land in
 Phase 3). `sandbox/unified` therefore configures only the plugins that exist.
+
+### 17.4 Golden fixtures
+
+`docs/spec/golden/` holds fixtures **01–09** — `extras-head`, `extras-literal`,
+`img-figure`, `anchor`, `cite`, `heading`, `wiki`, `table-decl`, `table-layers`
+— each with the input markdown, the task config that renders it and the frozen
+`.jsx` output. `apps/cli/tests/syntax_spec.rs` copies the fixture into a temp
+project, runs `pendon run -F` and compares the output byte for byte, so the
+fixtures also cover config loading and the CLI path, not just the parsers.
+
+**No fixture is `#[ignore]`d**, which closes the Phase 1 gate (01–07) and the
+Phase 2 table gate (08–09). Fixtures 10–16 stay open until the Phase 3 plugins
+(`marker`, `directive`, `list`, `blockquote`) exist; 17–20 are pinned by unit
+tests inside the crates they exercise (§17.0/§17.1).
+
+Two fixture findings worth keeping in mind when reading the goldens:
+
+- A `Link` node produced by the core lexer inside the extras head is rebuilt by
+  `plugin-table` before the table is parsed, so a long `("title")` in the
+  declaration line still works (fixture 08).
+- The cite head's prop form is `loc=value` (not `loc: value`), the same key the
+  extras use, so both fill the same `loc` slot with the head winning
+  (fixture 05).
 
 ## 18. Acceptance criteria
 

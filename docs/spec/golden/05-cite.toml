@@ -1,0 +1,14 @@
+[[task]]
+name = "Golden 05"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "micromatter,cite,markdown"
+format = "solid"
+
+[task.cite]
+reference_source = "internal"
+
+[task.cite.custom]
+name = "Cite"
+imports = "import { Cite } from '@comp/content/Cite'"
+template = "<Cite reference={frontmatter.references[\"{attrs.id}\"]} {...attrs} />"

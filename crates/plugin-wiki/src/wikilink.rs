@@ -101,6 +101,19 @@ fn emit_wikilink_extras(head: Option<&ExtrasHead>, out: &mut Vec<Event>) {
     };
     let attrs = to_attributes(head, &ExtrasOptions::default());
     emit_attr_warnings("wiki", &attrs, out);
+
+    // §11 rule 3: the marker is the routing key of the instance; it is carried
+    // as a `type` attribute so a `{attrs.type}` template can read it back. An
+    // explicit `type:` prop keeps its own value.
+    if let Some(marker) = &head.type_marker {
+        if !attrs.has("type") {
+            out.push(Event::Attribute {
+                name: "type".to_string(),
+                value: marker.clone(),
+            });
+        }
+    }
+
     for (key, value) in &attrs.items {
         if WIKI_OWNED_KEYS.contains(&key.as_str()) {
             out.push(warning_event(
@@ -276,6 +289,17 @@ mod tests {
             .any(|event| matches!(event, Event::AttributeFlag { name } if name == "isFoo")));
         // The head is consumed and the label survives.
         assert_eq!(text_of(&out), "Anim trailing");
+    }
+
+    /// §11 rule 3: the marker rides along as a `type` attribute, and an explicit
+    /// `type:` prop keeps its own value.
+    #[test]
+    fn marker_is_carried_as_a_type_attribute() {
+        let out = events_of("[[Anim]]@@wikiA{.x}");
+        assert_eq!(attr(&out, "type").as_deref(), Some("wikiA"));
+
+        let out = events_of("[[Anim]]@@wikiB{type: \"prop\"}");
+        assert_eq!(attr(&out, "type").as_deref(), Some("prop"));
     }
 
     #[test]
