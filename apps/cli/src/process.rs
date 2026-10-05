@@ -10,9 +10,9 @@ use std::path::Path;
 use crate::cache::{create_cache_entry, CacheFile};
 use crate::config::ConfigTask;
 use crate::plugins::{
-    build_anchor_options, build_cite_options, build_context_inline_pipeline, build_table_options,
-    has_plugin, latex_target_for_format, load_custom_spec, merge_solid_hints, plugin_names,
-    process_stateless_plugin, track_used_spec, DocumentContext,
+    build_anchor_options, build_cite_options, build_context_inline_pipeline, build_heading_options,
+    build_img_options, build_table_options, has_plugin, latex_target_for_format, load_custom_spec,
+    merge_solid_hints, plugin_names, process_stateless_plugin, track_used_spec, DocumentContext,
 };
 use crate::utils::{extract_frontmatter_for_cite, maybe_pretty, merge_refs_for_context};
 
@@ -100,8 +100,21 @@ pub fn process_single_file(
         None
     };
 
+    let img_options = match build_img_options(task.img.as_ref()) {
+        Ok(o) => o,
+        Err(msg) => {
+            eprintln!("Error: {}", msg);
+            return ProcessResult {
+                success: false,
+                bytes_written: 0,
+                cache_entry: None,
+                skipped_write: false,
+            };
+        }
+    };
+
     let inline_pipeline = build_context_inline_pipeline(
-        task.img.clone().unwrap_or_default(),
+        img_options.clone(),
         task_wiki_opts.clone(),
         build_anchor_options(task.anchor.as_ref()),
         latex_options,
@@ -170,14 +183,14 @@ pub fn process_single_file(
                     }
                 }
                 "img" => {
-                    let img_opts = task.img.clone().unwrap_or_default();
+                    let img_opts = &img_options;
                     let result = pendon_plugin_img::process_with_context(
                         &events,
                         &img_opts,
                         &inline_pipeline,
                         &mut document_context,
                     );
-                    if let Some(hints) = pendon_plugin_img::solid_hints(&img_opts) {
+                    if let Some(hints) = pendon_plugin_img::solid_hints(img_opts) {
                         builtin_hints.push(hints);
                     }
                     result
@@ -196,7 +209,18 @@ pub fn process_single_file(
                     result
                 }
                 "heading" => {
-                    let opts = task.heading.clone().unwrap_or_default();
+                    let opts = match build_heading_options(task.heading.as_ref()) {
+                        Ok(o) => o,
+                        Err(msg) => {
+                            eprintln!("Error: {}", msg);
+                            return ProcessResult {
+                                success: false,
+                                bytes_written: 0,
+                                cache_entry: None,
+                                skipped_write: false,
+                            };
+                        }
+                    };
                     let result = pendon_plugin_heading::process(&events, &opts);
                     if let Some(hints) = pendon_plugin_heading::solid_hints(&opts) {
                         builtin_hints.push(hints);

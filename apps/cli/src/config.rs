@@ -17,9 +17,35 @@ pub struct ConfigTask {
     pub max_blank_run: Option<usize>,
     pub cite: Option<CiteTaskConfig>,
     pub anchor: Option<AnchorTaskConfig>,
-    pub heading: Option<pendon_plugin_heading::HeadingOptions>,
-    pub img: Option<pendon_plugin_img::ImgOptions>,
+    pub heading: Option<HeadingTaskConfig>,
+    pub img: Option<ImgTaskConfig>,
     pub table: Option<TableTaskConfig>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct ImgTaskConfig {
+    pub custom_node: Option<ImgCustomNodeConfig>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct ImgCustomNodeConfig {
+    pub name: Option<String>,
+    pub template: Option<String>,
+    pub imports: Option<Vec<toml::Value>>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct HeadingTaskConfig {
+    pub auto_number: Option<bool>,
+    pub number_style: Option<pendon_plugin_heading::NumberStyle>,
+    pub custom_node: Option<HeadingCustomNodeConfig>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct HeadingCustomNodeConfig {
+    pub name: Option<String>,
+    pub template: Option<String>,
+    pub imports: Option<Vec<toml::Value>>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -67,8 +93,13 @@ pub struct TableTaskConfig {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct TableCustomNodeConfig {
+    /// Imports shared by every configured component below.
+    pub imports: Option<Vec<toml::Value>>,
     pub table: Option<TableComponentConfig>,
     pub caption: Option<TableComponentConfig>,
+    pub thead: Option<TableComponentConfig>,
+    pub tbody: Option<TableComponentConfig>,
+    pub tfoot: Option<TableComponentConfig>,
     pub row: Option<TableComponentConfig>,
     pub cell: Option<TableComponentConfig>,
 }

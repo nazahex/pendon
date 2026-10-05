@@ -1,16 +1,16 @@
 use pendon_core::{ContextPipeline, Event};
-use pendon_extra::SolidImportSpec;
-use pendon_plugin_anchor::{AnchorCustomNode, AnchorImport, AnchorOptions};
-use pendon_plugin_cite::{CitationContext, CiteCustomNode, CiteImport, CiteOptions, CiteSection};
+use pendon_plugin_anchor::{AnchorCustomNode, AnchorOptions};
+use pendon_plugin_cite::{CitationContext, CiteCustomNode, CiteOptions, CiteSection};
 use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
-use pendon_plugin_img::ImgOptions;
+use pendon_plugin_heading::{HeadingCustomNode, HeadingOptions};
+use pendon_plugin_img::{ImgCustomNode, ImgOptions};
 use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::config::{
-    AnchorTaskConfig, CiteTaskConfig, PluginCustomSection, PluginVicadoSection,
-    TableComponentConfig, TableTaskConfig,
+    AnchorTaskConfig, CiteTaskConfig, HeadingTaskConfig, ImgTaskConfig, PluginCustomSection,
+    PluginVicadoSection, TableComponentConfig, TableTaskConfig,
 };
 use crate::utils::substitute_output;
 
@@ -220,7 +220,7 @@ pub fn build_cite_options(
         imports: node
             .imports
             .as_deref()
-            .map(parse_cite_imports)
+            .map(parse_import_entries)
             .unwrap_or_default(),
     });
     let section = config.section.as_ref().map(|section| {
@@ -242,7 +242,7 @@ pub fn build_cite_options(
             imports: section
                 .imports
                 .as_deref()
-                .map(parse_cite_imports)
+                .map(parse_import_entries)
                 .unwrap_or_default(),
         }
     });
@@ -277,32 +277,10 @@ pub fn build_anchor_options(config: Option<&AnchorTaskConfig>) -> AnchorOptions 
             imports: node
                 .imports
                 .as_deref()
-                .map(parse_anchor_imports)
+                .map(parse_import_entries)
                 .unwrap_or_default(),
         });
     AnchorOptions { custom_node }
-}
-
-fn parse_anchor_imports(values: &[toml::Value]) -> Vec<AnchorImport> {
-    parse_solid_imports(values)
-        .into_iter()
-        .map(|import| AnchorImport {
-            module: import.module,
-            default: import.default,
-            names: import.names,
-        })
-        .collect()
-}
-
-fn parse_cite_imports(values: &[toml::Value]) -> Vec<CiteImport> {
-    parse_solid_imports(values)
-        .into_iter()
-        .map(|import| CiteImport {
-            module: import.module,
-            default: import.default,
-            names: import.names,
-        })
-        .collect()
 }
 
 pub fn build_table_options(config: Option<&TableTaskConfig>) -> pendon_plugin_table::TableOptions {
@@ -315,8 +293,16 @@ pub fn build_table_options(config: Option<&TableTaskConfig>) -> pendon_plugin_ta
             .custom_node
             .as_ref()
             .map(|node| pendon_plugin_table::TableCustomNode {
+                imports: node
+                    .imports
+                    .as_deref()
+                    .map(parse_import_entries)
+                    .unwrap_or_default(),
                 table: build_table_component(node.table.as_ref()),
                 caption: build_table_component(node.caption.as_ref()),
+                thead: build_table_component(node.thead.as_ref()),
+                tbody: build_table_component(node.tbody.as_ref()),
+                tfoot: build_table_component(node.tfoot.as_ref()),
                 row: build_table_component(node.row.as_ref()),
                 cell: build_table_component(node.cell.as_ref()),
             });
@@ -327,58 +313,65 @@ pub fn build_table_options(config: Option<&TableTaskConfig>) -> pendon_plugin_ta
 fn build_table_component(
     cfg: Option<&TableComponentConfig>,
 ) -> Option<pendon_plugin_table::CustomComponent> {
-    let Some(c) = cfg else {
-        return None;
-    };
+    let c = cfg?;
     Some(pendon_plugin_table::CustomComponent {
         name: c.name.clone().unwrap_or_default(),
         template: c.template.clone().unwrap_or_default(),
         imports: c
             .imports
             .as_deref()
-            .map(parse_table_imports)
+            .map(parse_import_entries)
             .unwrap_or_default(),
     })
 }
 
-fn parse_table_imports(values: &[toml::Value]) -> Vec<pendon_plugin_table::CustomImport> {
-    parse_solid_imports(values)
-        .into_iter()
-        .map(|import| pendon_plugin_table::CustomImport {
-            module: import.module,
-            default: import.default,
-            names: import.names,
-        })
-        .collect()
+pub fn build_img_options(config: Option<&ImgTaskConfig>) -> Result<ImgOptions, String> {
+    let Some(config) = config else {
+        return Ok(ImgOptions::default());
+    };
+    let custom_node = match config.custom_node.as_ref() {
+        None => None,
+        Some(node) => Some(ImgCustomNode {
+            name: require(node.name.as_ref(), "img.custom_node.name")?,
+            template: require(node.template.as_ref(), "img.custom_node.template")?,
+            imports: node
+                .imports
+                .as_deref()
+                .map(parse_import_entries)
+                .unwrap_or_default(),
+        }),
+    };
+    Ok(ImgOptions { custom_node })
 }
 
-fn parse_solid_imports(values: &[toml::Value]) -> Vec<SolidImportSpec> {
-    values
-        .iter()
-        .filter_map(|value| {
-            let table = value.as_table()?;
-            let module = table.get("module")?.as_str()?.to_string();
-            let default = table
-                .get("default")
-                .and_then(toml::Value::as_str)
-                .map(str::to_string);
-            let names = table
-                .get("names")
-                .and_then(toml::Value::as_array)
-                .map(|values| {
-                    values
-                        .iter()
-                        .filter_map(|value| value.as_str().map(str::to_string))
-                        .collect()
-                })
-                .unwrap_or_default();
-            Some(SolidImportSpec {
-                module,
-                default,
-                names,
-            })
-        })
-        .collect()
+pub fn build_heading_options(config: Option<&HeadingTaskConfig>) -> Result<HeadingOptions, String> {
+    let Some(config) = config else {
+        return Ok(HeadingOptions::default());
+    };
+    let custom_node = match config.custom_node.as_ref() {
+        None => None,
+        Some(node) => Some(HeadingCustomNode {
+            name: require(node.name.as_ref(), "heading.custom_node.name")?,
+            template: require(node.template.as_ref(), "heading.custom_node.template")?,
+            imports: node
+                .imports
+                .as_deref()
+                .map(parse_import_entries)
+                .unwrap_or_default(),
+        }),
+    };
+    Ok(HeadingOptions {
+        auto_number: config.auto_number.unwrap_or_default(),
+        number_style: config.number_style.clone().unwrap_or_default(),
+        custom_node,
+    })
+}
+
+/// Reads a required field from a task component config.
+fn require(value: Option<&String>, key: &str) -> Result<String, String> {
+    value
+        .cloned()
+        .ok_or_else(|| format!("{key} is required when a custom node is configured"))
 }
 
 pub fn track_used_spec(list: &mut Vec<PluginSpec>, spec: PluginSpec) {
@@ -441,6 +434,9 @@ pub fn build_solid_hints(specs: &[PluginSpec]) -> SolidRenderHints {
     hints
 }
 
+/// The single parser for task-level `imports` arrays. Every entry is either a
+/// raw import line (`"import X from 'y'"`) or a structured
+/// `{ module, default, names }` table — one syntax for every plugin.
 fn parse_import_entries(imports: &[toml::Value]) -> Vec<ImportEntry> {
     let mut parsed_imports: Vec<ImportEntry> = Vec::new();
     for val in imports {
@@ -565,4 +561,134 @@ pub fn load_custom_registry(
         }
     }
     Ok(map)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pendon_plugin_heading::NumberStyle;
+
+    fn table_options(toml_src: &str) -> pendon_plugin_table::TableOptions {
+        let cfg: TableTaskConfig = toml::from_str(toml_src).expect("valid table config");
+        build_table_options(Some(&cfg))
+    }
+
+    /// Raw import lines and structured `{ module, names }` tables are one and the
+    /// same list, shared by every component of the custom node.
+    #[test]
+    fn table_options_accept_both_import_syntaxes() {
+        let options = table_options(
+            r#"
+[custom_node]
+imports = ["import { TableCaption } from '@comp/table';"]
+
+[custom_node.table]
+name = "CustomTable"
+template = "<CustomTable>{children}</CustomTable>"
+
+[[custom_node.table.imports]]
+module = "@comp/table"
+default = "CustomTable"
+
+[custom_node.thead]
+name = "TableHead"
+template = "<TableHead>{children}</TableHead>"
+
+[[custom_node.thead.imports]]
+module = "@comp/table"
+names = ["TableHead"]
+"#,
+        );
+
+        let node = options.custom_node.expect("custom node");
+        assert_eq!(node.imports.len(), 1);
+        assert!(
+            matches!(&node.imports[0], ImportEntry::Raw(line) if line.contains("TableCaption"))
+        );
+
+        let table = node.table.expect("table component");
+        assert_eq!(table.name, "CustomTable");
+        assert!(matches!(
+            &table.imports[0],
+            ImportEntry::Structured { module, default, .. }
+                if module == "@comp/table" && default.as_deref() == Some("CustomTable")
+        ));
+
+        let thead = node.thead.expect("thead component");
+        assert_eq!(thead.template, "<TableHead>{children}</TableHead>");
+        assert!(matches!(
+            &thead.imports[0],
+            ImportEntry::Structured { names, .. } if names == &vec!["TableHead".to_string()]
+        ));
+
+        // Unconfigured layers stay unset and fall back to plain elements.
+        assert!(node.caption.is_none());
+        assert!(node.tbody.is_none());
+        assert!(node.tfoot.is_none());
+        assert!(node.row.is_none());
+        assert!(node.cell.is_none());
+    }
+
+    #[test]
+    fn table_options_without_custom_node_change_nothing() {
+        assert!(build_table_options(None).custom_node.is_none());
+        let cfg: TableTaskConfig = toml::from_str("").expect("empty table config");
+        assert!(build_table_options(Some(&cfg)).custom_node.is_none());
+    }
+
+    /// `img` and `heading` gained task-level config, so a half-specified
+    /// component must be reported instead of emitting a broken import.
+    #[test]
+    fn img_and_heading_require_name_and_template() {
+        let cfg: ImgTaskConfig =
+            toml::from_str("[custom_node]\nname = \"Figure\"\n").expect("valid img config");
+        let err = build_img_options(Some(&cfg)).expect_err("template is required");
+        assert!(err.contains("img.custom_node.template"), "{err}");
+
+        let cfg: HeadingTaskConfig =
+            toml::from_str("[custom_node]\ntemplate = \"<H>{children}</H>\"\n")
+                .expect("valid heading config");
+        let err = build_heading_options(Some(&cfg)).expect_err("name is required");
+        assert!(err.contains("heading.custom_node.name"), "{err}");
+    }
+
+    #[test]
+    fn img_and_heading_share_the_import_syntax() {
+        let cfg: ImgTaskConfig = toml::from_str(
+            r#"
+[custom_node]
+name = "Figure"
+template = "<Figure>{children}</Figure>"
+imports = ["import Figure from '@/components/Figure';"]
+"#,
+        )
+        .expect("valid img config");
+        let options = build_img_options(Some(&cfg)).expect("valid img options");
+        let node = options.custom_node.expect("custom node");
+        assert_eq!(node.name, "Figure");
+        assert!(matches!(&node.imports[0], ImportEntry::Raw(line) if line.contains("Figure")));
+
+        let cfg: HeadingTaskConfig = toml::from_str(
+            r#"
+auto_number = true
+
+[custom_node]
+name = "DocHeading"
+template = "<DocHeading level={{attrs.level}}>{children}</DocHeading>"
+
+[[custom_node.imports]]
+module = "@/components/DocHeading"
+default = "DocHeading"
+"#,
+        )
+        .expect("valid heading config");
+        let options = build_heading_options(Some(&cfg)).expect("valid heading options");
+        assert!(options.auto_number);
+        assert_eq!(options.number_style, NumberStyle::NestedNumber);
+        let node = options.custom_node.expect("custom node");
+        assert!(matches!(
+            &node.imports[0],
+            ImportEntry::Structured { module, .. } if module == "@/components/DocHeading"
+        ));
+    }
 }
