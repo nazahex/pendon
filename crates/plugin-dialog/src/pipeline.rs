@@ -1,9 +1,21 @@
 use crate::charmap::extract_charmap;
 use crate::render::{render_dd, render_dt};
 use pendon_core::{Event, NodeKind};
+use pendon_plugin_latex::LatexOptions;
 use std::collections::HashMap;
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DialogOptions {
+    /// When `Some`, math inside dialogue content is rendered. `None` (the
+    /// default) leaves `$...$` untouched, matching a task without `latex`.
+    pub latex: Option<LatexOptions>,
+}
+
 pub fn process(events: &[Event]) -> Vec<Event> {
+    process_with_options(events, &DialogOptions::default())
+}
+
+pub fn process_with_options(events: &[Event], options: &DialogOptions) -> Vec<Event> {
     let charmap = extract_charmap(events);
     let mut out: Vec<Event> = Vec::with_capacity(events.len());
     let mut i = 0usize;
@@ -12,7 +24,7 @@ pub fn process(events: &[Event]) -> Vec<Event> {
         if matches!(events.get(i), Some(Event::StartNode(NodeKind::Paragraph))) {
             if let Some(end) = find_matching_end(events, i, NodeKind::Paragraph) {
                 let block = &events[i + 1..end];
-                if let Some(html) = maybe_render_dialog_block(block, &charmap) {
+                if let Some(html) = maybe_render_dialog_block(block, &charmap, options) {
                     out.push(Event::StartNode(NodeKind::HtmlBlock));
                     out.push(Event::Text(html));
                     out.push(Event::EndNode(NodeKind::HtmlBlock));
@@ -35,6 +47,7 @@ pub fn process(events: &[Event]) -> Vec<Event> {
 fn maybe_render_dialog_block(
     block_events: &[Event],
     charmap: &HashMap<String, String>,
+    options: &DialogOptions,
 ) -> Option<String> {
     let raw = collect_text(block_events);
     if raw.trim().is_empty() {
@@ -65,7 +78,7 @@ fn maybe_render_dialog_block(
         let class = charmap.get(&speaker).cloned();
         html.push_str(&render_dt(&speaker, class.as_deref()));
         html.push(' ');
-        html.push_str(&render_dd(&content, class.as_deref()));
+        html.push_str(&render_dd(&content, class.as_deref(), options.latex));
         html.push('\n');
     }
     html.push_str("</dl>\n");
@@ -148,5 +161,62 @@ mod tests {
         assert!(out
             .iter()
             .any(|ev| matches!(ev, Event::StartNode(NodeKind::HtmlBlock))));
+    }
+
+    #[test]
+    fn renders_math_inside_dialogue_content() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text("Revan: \"Maka $x^2$ benar\"\nStevano: \"Setuju\"".to_string()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let out = process_with_options(
+            &events,
+            &DialogOptions {
+                latex: Some(pendon_plugin_latex::LatexOptions::default()),
+            },
+        );
+        let html = out
+            .iter()
+            .find_map(|ev| match ev {
+                Event::Text(t) if t.contains("<dl>") => Some(t.clone()),
+                _ => None,
+            })
+            .expect("dialogue html");
+        assert!(html.contains("latex latex-inline"), "html = {html}");
+    }
+
+    #[test]
+    fn ignores_dollar_inside_link_destination_in_dialogue() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text("Revan: \"lihat [x](/a/$b$) dan $y$\"".to_string()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let out = process_with_options(
+            &events,
+            &DialogOptions {
+                latex: Some(pendon_plugin_latex::LatexOptions::default()),
+            },
+        );
+        let html = out
+            .iter()
+            .find_map(|ev| match ev {
+                Event::Text(t) if t.contains("<dl>") => Some(t.clone()),
+                _ => None,
+            })
+            .expect("dialogue html");
+
+        // The link must survive and its `$b$` destination must stay untouched.
+        assert!(html.contains("href=\"/a/$b$\""), "html = {html}");
+        assert!(!html.contains("/a/<span"), "html = {html}");
+        // The genuine inline math after the link still renders.
+        assert!(html.contains("latex latex-inline"), "html = {html}");
     }
 }

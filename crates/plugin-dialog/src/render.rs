@@ -1,5 +1,6 @@
 use crate::markdown::render_inline_markdown;
 use crate::tokenize::{tokenize_content, DialogToken};
+use pendon_plugin_latex::LatexOptions;
 
 pub fn render_dt(speaker: &str, class: Option<&str>) -> String {
     let mut out = String::from("<dt");
@@ -14,7 +15,7 @@ pub fn render_dt(speaker: &str, class: Option<&str>) -> String {
     out
 }
 
-pub fn render_dd(content: &str, class: Option<&str>) -> String {
+pub fn render_dd(content: &str, class: Option<&str>, latex: Option<LatexOptions>) -> String {
     let mut out = String::from("<dd");
     if let Some(cls) = class {
         out.push_str(" class=\"");
@@ -34,7 +35,7 @@ pub fn render_dd(content: &str, class: Option<&str>) -> String {
                 last_was_break = true;
             }
             DialogToken::Quote(inner) => {
-                let rendered = render_quote(&inner);
+                let rendered = render_quote(&inner, latex);
                 if !rendered.is_empty() {
                     if wrote_non_break && !last_was_break {
                         out.push(' ');
@@ -45,7 +46,7 @@ pub fn render_dd(content: &str, class: Option<&str>) -> String {
                 }
             }
             DialogToken::Italic(inner) => {
-                let rendered = render_italic(&inner);
+                let rendered = render_italic(&inner, latex);
                 if !rendered.is_empty() {
                     if wrote_non_break && !last_was_break {
                         out.push(' ');
@@ -56,7 +57,7 @@ pub fn render_dd(content: &str, class: Option<&str>) -> String {
                 }
             }
             DialogToken::Plain(inner) => {
-                let rendered = render_plain(&inner);
+                let rendered = render_plain(&inner, latex);
                 if !rendered.is_empty() {
                     if wrote_non_break && !last_was_break {
                         out.push(' ');
@@ -73,24 +74,24 @@ pub fn render_dd(content: &str, class: Option<&str>) -> String {
     out
 }
 
-fn render_quote(text: &str) -> String {
-    let inner = render_inline_markdown(text.trim());
+fn render_quote(text: &str, latex: Option<LatexOptions>) -> String {
+    let inner = render_inline_markdown(text.trim(), latex);
     if inner.is_empty() {
         return String::new();
     }
     format!("<q>{}</q>", inner)
 }
 
-fn render_italic(text: &str) -> String {
-    let inner = render_inline_markdown(text.trim());
+fn render_italic(text: &str, latex: Option<LatexOptions>) -> String {
+    let inner = render_inline_markdown(text.trim(), latex);
     if inner.is_empty() {
         return String::new();
     }
     format!("<i>{}</i>", inner)
 }
 
-fn render_plain(text: &str) -> String {
-    let inner = render_inline_markdown(text.trim());
+fn render_plain(text: &str, latex: Option<LatexOptions>) -> String {
+    let inner = render_inline_markdown(text.trim(), latex);
     if inner.is_empty() {
         return String::new();
     }
