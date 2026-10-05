@@ -1,5 +1,6 @@
 use pendon_core::InlinePipeline;
 use pendon_core::{Event, Pipeline};
+use pendon_renderer_solid::ImportEntry;
 use serde::{Deserialize, Serialize};
 
 mod attrs;
@@ -17,8 +18,15 @@ pub struct TableOptions {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TableCustomNode {
+    /// Imports applied to every configured component below. Each component's
+    /// own `imports` list is added on top; the renderer deduplicates.
+    #[serde(default)]
+    pub imports: Vec<ImportEntry>,
     pub table: Option<CustomComponent>,
     pub caption: Option<CustomComponent>,
+    pub thead: Option<CustomComponent>,
+    pub tbody: Option<CustomComponent>,
+    pub tfoot: Option<CustomComponent>,
     pub row: Option<CustomComponent>,
     pub cell: Option<CustomComponent>,
 }
@@ -28,15 +36,7 @@ pub struct CustomComponent {
     pub name: String,
     pub template: String,
     #[serde(default)]
-    pub imports: Vec<CustomImport>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CustomImport {
-    pub module: String,
-    pub default: Option<String>,
-    #[serde(default)]
-    pub names: Vec<String>,
+    pub imports: Vec<ImportEntry>,
 }
 
 pub fn process(events: &[Event], options: &TableOptions, inline_pipeline: &Pipeline) -> Vec<Event> {
@@ -291,5 +291,155 @@ mod tests {
         assert_eq!(list_items(&cells[1]), 2);
         // The escape itself must never reach the output.
         assert!(!text_of(&cells[0]).contains("\\n"));
+    }
+
+    // --- custom node: layers, fallbacks and imports ---
+
+    /// A component template that only wraps its children.
+    fn component(name: &str) -> CustomComponent {
+        CustomComponent {
+            name: name.to_string(),
+            template: format!("<{name}>{{children}}</{name}>"),
+            imports: Vec::new(),
+        }
+    }
+
+    /// Every layer of the table is customised.
+    fn fully_custom_options() -> TableOptions {
+        TableOptions {
+            custom_node: Some(TableCustomNode {
+                imports: Vec::new(),
+                table: Some(component("CustomTable")),
+                caption: Some(component("TableCaption")),
+                thead: Some(component("TableHead")),
+                tbody: Some(component("TableBody")),
+                tfoot: Some(component("TableFoot")),
+                row: Some(component("TableRow")),
+                cell: Some(component("TableCell")),
+            }),
+        }
+    }
+
+    /// Caption, header, body and footer all present, so every configured layer
+    /// is exercised by a single input.
+    const CUSTOM_TABLE_INPUT: &str =
+        "[Judul Tabel]\n| Produk | Stok |\n| --- | --- |\n| Laptop | 15 |\n|===|\n| Total | 15 |\n";
+
+    #[test]
+    fn custom_node_replaces_every_table_layer() {
+        let pipeline = Pipeline::default();
+        let events = paragraph_events(CUSTOM_TABLE_INPUT);
+        let out = process(&events, &fully_custom_options(), &pipeline);
+
+        for name in [
+            "CustomTable",
+            "TableCaption",
+            "TableHead",
+            "TableBody",
+            "TableFoot",
+            "TableRow",
+            "TableCell",
+        ] {
+            assert!(has_custom_component(&out, name), "missing <{name}>");
+        }
+
+        for tag in [
+            "table", "caption", "thead", "tbody", "tfoot", "tr", "th", "td",
+        ] {
+            assert!(
+                !out.iter().any(
+                    |event| matches!(event, Event::StartNode(NodeKind::Element(name)) if name == tag)
+                ),
+                "plain <{tag}> must not be emitted when a component is configured"
+            );
+        }
+    }
+
+    /// Configuring a single layer must not disable the rest: every remaining
+    /// layer falls back to its plain element.
+    #[test]
+    fn partially_configured_custom_node_falls_back_to_plain_elements() {
+        let pipeline = Pipeline::default();
+        let events = paragraph_events("| A | B |\n| --- | --- |\n| 1 | 2 |\n");
+        let options = TableOptions {
+            custom_node: Some(TableCustomNode {
+                table: Some(component("CustomTable")),
+                ..Default::default()
+            }),
+        };
+        let out = process(&events, &options, &pipeline);
+
+        assert!(has_custom_component(&out, "CustomTable"));
+        for tag in ["thead", "tbody", "tr", "th", "td"] {
+            assert!(
+                out.iter().any(
+                    |event| matches!(event, Event::StartNode(NodeKind::Element(name)) if name == tag)
+                ),
+                "missing fallback <{tag}>"
+            );
+        }
+        assert!(!has_custom_component(&out, "TableRow"));
+    }
+
+    /// Section components cover `<thead>`/`<tbody>`/`<tfoot>` as well.
+    #[test]
+    fn custom_sections_replace_thead_tbody_tfoot() {
+        let pipeline = Pipeline::default();
+        let events = paragraph_events("| A |\n| --- |\n| 1 |\n|===|\n| 2 |\n");
+        let out = process(&events, &fully_custom_options(), &pipeline);
+
+        // `<TableBody>`/`<TableFoot>` only appear when those rows exist.
+        for name in ["TableHead", "TableBody", "TableFoot"] {
+            assert!(has_custom_component(&out, name), "missing <{name}>");
+        }
+        assert!(!has_custom_component(&out, "thead"));
+    }
+
+    /// Cells are pre-rendered by this plugin, so the Markdown pass has to know
+    /// they must pass through verbatim — a re-lex dropped the whitespace-only
+    /// chunks and glued the words of every multi-word cell together.
+    #[test]
+    fn custom_components_are_marked_as_pre_rendered_elements() {
+        let pipeline = Pipeline::default();
+        let events = paragraph_events("| Laptop Pro |\n| --- |\n| Mouse Wireless |\n");
+        let out = process(&events, &fully_custom_options(), &pipeline);
+
+        assert!(has_attribute(&out, "__plugin_kind", "element"));
+        assert!(text_of(&out).contains("Laptop Pro"));
+        assert!(text_of(&out).contains("Mouse Wireless"));
+    }
+
+    /// Imports declared once under `custom_node` reach every component; a
+    /// component's own list is appended on top of them.
+    #[test]
+    fn shared_imports_apply_to_every_component() {
+        let mut options = fully_custom_options();
+        let node = options.custom_node.as_mut().expect("custom node");
+        node.imports = vec![ImportEntry::Raw(
+            "import { TableCaption } from '@comp/table';".to_string(),
+        )];
+        node.thead.as_mut().expect("thead").imports = vec![ImportEntry::Structured {
+            module: "@comp/table".to_string(),
+            default: None,
+            names: vec!["TableHead".to_string()],
+        }];
+
+        let hints = solid_hints(&options).expect("hints");
+        assert_eq!(hints.templates.len(), 7);
+
+        let key = ("TableHead".to_string(), Some("TableHead".to_string()));
+        let imports = hints.template_imports.get(&key).expect("thead imports");
+        assert_eq!(imports.len(), 2, "shared + own imports: {imports:?}");
+        assert!(matches!(&imports[0], ImportEntry::Raw(line) if line.contains("TableCaption")));
+        assert!(matches!(
+            &imports[1],
+            ImportEntry::Structured { module, names, .. }
+                if module == "@comp/table" && names == &vec!["TableHead".to_string()]
+        ));
+
+        let cell_key = ("TableCell".to_string(), Some("TableCell".to_string()));
+        let cell_imports = hints.template_imports.get(&cell_key).expect("cell imports");
+        assert_eq!(cell_imports.len(), 1, "shared import only");
+        assert!(matches!(&cell_imports[0], ImportEntry::Raw(_)));
     }
 }

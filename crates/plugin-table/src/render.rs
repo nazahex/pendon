@@ -125,7 +125,12 @@ fn emit_row_elements<C, P>(
 
 /// Emits `id`, `class`, extra properties and the computed `style` attribute for
 /// a table header/body cell.
-fn push_cell_attrs(out: &mut Vec<Event>, attrs: &AttrSpec, align: Align, width: Option<&str>) {
+pub(crate) fn push_cell_attrs(
+    out: &mut Vec<Event>,
+    attrs: &AttrSpec,
+    align: Align,
+    width: Option<&str>,
+) {
     if let Some(id) = attrs.id.as_deref() {
         attribute(out, "id", id);
     }
@@ -159,7 +164,7 @@ fn push_cell_attrs(out: &mut Vec<Event>, attrs: &AttrSpec, align: Align, width: 
 }
 
 /// Emits `id`, `class`, extra properties and `style` for `<table>` / `<tr>`.
-fn push_common_attrs(out: &mut Vec<Event>, attrs: &AttrSpec) {
+pub(crate) fn push_common_attrs(out: &mut Vec<Event>, attrs: &AttrSpec) {
     if let Some(id) = attrs.id.as_deref() {
         attribute(out, "id", id);
     }
