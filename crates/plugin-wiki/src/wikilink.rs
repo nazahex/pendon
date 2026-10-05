@@ -186,6 +186,7 @@ mod tests {
     fn applies_wiki_link_prefix() {
         let opts = WikiOptions {
             link_prefix: Some("/id/wiki".to_string()),
+            ..Default::default()
         };
         let link = parse_wikilink("Anim Esta", &opts).unwrap();
         assert_eq!(link.href, "/id/wiki/Anim_Esta");

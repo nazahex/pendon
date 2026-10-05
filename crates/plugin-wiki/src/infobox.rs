@@ -97,7 +97,8 @@ fn render_infobox(inner: &[Event], class_name: Option<&str>, options: &WikiOptio
         }
 
         if let Some((div_classes, inline_body)) = parse_inline_div_block(&raw) {
-            let rendered = render_fragment(&rewrite_wikilink_markdown(&inline_body, options));
+            let rendered =
+                render_fragment(&rewrite_wikilink_markdown(&inline_body, options), options);
             html.push_str("\n    <dd");
             html.push_str(&full_class_attr(Some(&div_classes)));
             html.push('>');
@@ -109,7 +110,7 @@ fn render_infobox(inner: &[Event], class_name: Option<&str>, options: &WikiOptio
 
         if let Some((div_classes, block_end)) = parse_div_block(inner, i) {
             let body = collect_div_block_text(inner, para_end + 1, block_end.0);
-            let rendered = render_fragment(&rewrite_wikilink_markdown(&body, options));
+            let rendered = render_fragment(&rewrite_wikilink_markdown(&body, options), options);
             html.push_str("\n    <dd");
             html.push_str(&full_class_attr(Some(&div_classes)));
             html.push('>');
@@ -124,7 +125,7 @@ fn render_infobox(inner: &[Event], class_name: Option<&str>, options: &WikiOptio
             html.push_str(&full_class_attr(Some(&format!("h{}", level))));
             html.push('>');
             html.push_str(&strip_single_paragraph_wrapper(
-                render_fragment(&rewrite_wikilink_markdown(heading, options)).trim(),
+                render_fragment(&rewrite_wikilink_markdown(heading, options), options).trim(),
             ));
             html.push_str("</dt>");
             i = para_end + 1;
@@ -150,7 +151,7 @@ fn render_infobox(inner: &[Event], class_name: Option<&str>, options: &WikiOptio
                 }
                 html.push('>');
                 html.push_str(&strip_single_paragraph_wrapper(
-                    render_fragment(&rewrite_wikilink_markdown(key, options)).trim(),
+                    render_fragment(&rewrite_wikilink_markdown(key, options), options).trim(),
                 ));
                 html.push_str("</dt>");
 
@@ -162,7 +163,7 @@ fn render_infobox(inner: &[Event], class_name: Option<&str>, options: &WikiOptio
                 }
                 html.push('>');
                 html.push_str(&strip_single_paragraph_wrapper(
-                    render_fragment(&rewrite_wikilink_markdown(value, options)).trim(),
+                    render_fragment(&rewrite_wikilink_markdown(value, options), options).trim(),
                 ));
                 html.push_str("</dd>");
             }
@@ -171,7 +172,7 @@ fn render_infobox(inner: &[Event], class_name: Option<&str>, options: &WikiOptio
         if !handled_pairs {
             html.push_str("\n    <dd class=\"full\">");
             html.push_str(&strip_single_paragraph_wrapper(
-                render_fragment(&rewrite_wikilink_markdown(trimmed, options)).trim(),
+                render_fragment(&rewrite_wikilink_markdown(trimmed, options), options).trim(),
             ));
             html.push_str("</dd>");
         }
@@ -292,12 +293,18 @@ fn parse_class_prefix(s: &str) -> (String, &str) {
     (String::new(), t)
 }
 
-fn render_fragment(input: &str) -> String {
+fn render_fragment(input: &str, options: &WikiOptions) -> String {
     if input.trim().is_empty() {
         return String::new();
     }
     let events = parse(input, &Options::default());
     let markdown = process_markdown(&events);
+    // Math runs after markdown so a `$` inside a link destination is not
+    // mistaken for inline math.
+    let markdown = match options.latex {
+        Some(latex) => pendon_plugin_latex::process_with_options(&markdown, &latex),
+        None => markdown,
+    };
     pendon_renderer_html::render_html(&markdown)
 }
 
@@ -351,5 +358,28 @@ mod tests {
         let (classes, value) = parse_class_prefix("[[Baz]]");
         assert!(classes.is_empty());
         assert_eq!(value, "[[Baz]]");
+    }
+
+    #[test]
+    fn renders_inline_math_after_markdown() {
+        let options = WikiOptions {
+            link_prefix: None,
+            latex: Some(pendon_plugin_latex::LatexOptions {
+                target: pendon_plugin_latex::LatexTarget::Html,
+            }),
+        };
+        let html = render_fragment("lihat [x](/a/$b$) dan $y$", &options);
+        // The link survives and its `$b$` destination is not treated as math.
+        assert!(html.contains("href=\"/a/$b$\""), "html = {html}");
+        assert!(!html.contains("/a/<span"), "html = {html}");
+        // The genuine inline math still renders.
+        assert!(html.contains("latex latex-inline"), "html = {html}");
+    }
+
+    #[test]
+    fn leaves_math_literal_without_latex_option() {
+        let html = render_fragment("nilai $y$", &WikiOptions::default());
+        assert!(html.contains("$y$"), "html = {html}");
+        assert!(!html.contains("latex latex-inline"), "html = {html}");
     }
 }
