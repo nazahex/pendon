@@ -1,13 +1,17 @@
 use pendon_core::{Event, NodeKind, Severity};
 use serde::ser::{Serialize, SerializeMap, Serializer};
 use serde::Serialize as DeriveSerialize;
+use serde_json::Value;
 use std::collections::BTreeMap;
 
 struct AstNode {
     kind: String,
     text: Option<String>,
     children: Vec<AstNode>,
-    attrs: BTreeMap<String, String>,
+    /// Attribute values are JSON scalars so a bare attribute (a flag, see
+    /// `Event::AttributeFlag`) can be `true` while every legacy attribute stays
+    /// a plain string.
+    attrs: BTreeMap<String, Value>,
 }
 
 pub(super) struct AstDocument {
@@ -101,6 +105,7 @@ impl AstBuilder {
                 Event::EndNode(kind) => self.handle_end(kind),
                 Event::Text(text) => self.handle_text(text),
                 Event::Attribute { name, value } => self.handle_attribute(name, value),
+                Event::AttributeFlag { name } => self.handle_attribute_flag(name),
                 Event::Diagnostic {
                     severity, message, ..
                 } => self.handle_diagnostic(severity, message),
@@ -177,7 +182,30 @@ impl AstBuilder {
 
     fn handle_attribute(&mut self, name: &str, value: &str) {
         if let Some(cur) = self.stack.last_mut() {
-            cur.attrs.insert(name.to_string(), value.to_string());
+            cur.attrs
+                .insert(name.to_string(), Value::String(value.to_string()));
+        }
+        // Custom components carry their placement in `__plugin_kind` (emitted by
+        // plugin-custom before any other attribute). Inline components behave
+        // exactly like `HtmlInline`: they mark their parent as containing inline
+        // content. Without this the parent list item/heading was mistaken for a
+        // plain-text node and `apply_text` flattened the whole subtree, dropping
+        // nested lists and the component itself. `element` marks pre-rendered
+        // children (table nodes) and keeps today's neutral behaviour.
+        if name == "__plugin_kind"
+            && !matches!(value, "block" | "codefence" | "blockquote" | "element")
+        {
+            if let Some(parent_flag) = self.has_inline.iter_mut().rev().nth(1) {
+                *parent_flag = true;
+            }
+        }
+    }
+
+    /// A bare attribute (§6.3 flag) is stored as JSON `true`; renderers turn it
+    /// back into `name` / `name={true}` instead of guessing an empty value.
+    fn handle_attribute_flag(&mut self, name: &str) {
+        if let Some(cur) = self.stack.last_mut() {
+            cur.attrs.insert(name.to_string(), Value::Bool(true));
         }
     }
 
@@ -297,6 +325,7 @@ impl AstBuilder {
             | NodeKind::Image
             | NodeKind::ThematicBreak
             | NodeKind::Document
+            | NodeKind::Element(_)
             | NodeKind::Custom(_) => true,
         }
     }

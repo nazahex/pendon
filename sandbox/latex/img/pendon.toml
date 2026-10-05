@@ -1,0 +1,7 @@
+[[task]]
+name = "Latex in Image Demo (Solid)"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "img,markdown,latex"
+format = "solid"
+markdown_allow_html = true

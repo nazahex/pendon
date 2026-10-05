@@ -150,6 +150,10 @@ module = "@comp/shared/Anchor"
 default = "Anchor"
 ```
 
+`imports` also accepts a raw import line
+(`imports = ["import Anchor from '@comp/shared/Anchor';"]`). Entries coming from
+the same module are merged into a single `import` statement.
+
 ### Available Template Attributes
 
 | Attribute        | Description                                     |

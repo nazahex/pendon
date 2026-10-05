@@ -1,0 +1,36 @@
+[[task]]
+name = "Cite Custom (Solid)"
+input = "./src/custom.md"
+output = "./out/custom.jsx"
+plugin = "micromatter,cite,markdown"
+format = "solid"
+pretty = true
+markdown_allow_html = true
+
+[task.cite]
+reference_source = "internal"
+
+[task.cite.custom]
+name = "Cite"
+template = "<Cite ref={frontmatter.references[attrs.id]} {...attrs} />"
+
+[[task.cite.custom.imports]]
+module = "@comp/content/Cite"
+default = "Cite"
+
+# VANILLA ===
+
+[[task]]
+name = "Cite Vanilla (Solid)"
+input = "./src/vanilla.md"
+output = "./out/vanilla.jsx"
+plugin = "micromatter,cite,markdown"
+format = "solid"
+pretty = true
+markdown_allow_html = true
+
+[task.cite]
+reference_source = "internal"
+prefix = "citeref-"
+class = "cite-ref"
+id_prefix = "cra-"

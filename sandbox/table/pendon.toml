@@ -1,0 +1,79 @@
+[[task]]
+name = "Table Demo (Solid)"
+input = "./src/table.md"
+output = "./out/table.jsx"
+plugin = "table,markdown"
+format = "solid"
+pretty = true
+markdown_allow_html = true
+
+[[task]]
+name = "Table Demo Integration (Solid)"
+input = "./src/integ.md"
+output = "./out/integ.jsx"
+plugin = "micromatter,table,img,cite,wiki,anchor,markdown"
+format = "solid"
+pretty = true
+markdown_allow_html = true
+
+[[task]]
+name = "Custom Table Demo (Solid)"
+input = "./src/custom.md"
+output = "./out/custom.jsx"
+plugin = "table,markdown"
+format = "solid"
+pretty = true
+markdown_allow_html = true
+
+[task.table.custom.table]
+name = "CustomTable"
+template = "<CustomTable id=\"{attrs.id}\" class=\"{attrs.class}\" sortable=\"{attrs.sortable}\" qux=\"{attrs.qux}\">{children}</CustomTable>"
+imports = [
+  "import { TableCaption } from '@comp/shared/Table';",
+  { module = "@comp/shared/Table", default = "CustomTable" },
+]
+
+[task.table.custom.caption]
+name = "TableCaption"
+template = "<TableCaption>{children}</TableCaption>"
+imports = ["import { TableCaption } from '@comp/shared/Table';"]
+
+[task.table.custom.thead]
+name = "TableHead"
+template = "<TableHead>{children}</TableHead>"
+imports = [
+  "import { TableCaption } from '@comp/shared/Table';",
+  { module = "@comp/shared/Table", names = ["TableHead"] },
+]
+
+[task.table.custom.tbody]
+name = "TableBody"
+template = "<TableBody>{children}</TableBody>"
+imports = [
+  "import { TableCaption } from '@comp/shared/Table';",
+  { module = "@comp/shared/Table", names = ["TableBody"] },
+]
+
+[task.table.custom.tfoot]
+name = "TableFoot"
+template = "<TableFoot>{children}</TableFoot>"
+imports = [
+  "import { TableCaption } from '@comp/shared/Table';",
+  { module = "@comp/shared/Table", names = ["TableFoot"] },
+]
+
+[task.table.custom.row]
+name = "TableRow"
+template = "<TableRow class=\"{attrs.class}\">{children}</TableRow>"
+imports = [
+  "import { TableCaption } from '@comp/shared/Table';",
+  { module = "@comp/shared/Table", names = ["TableRow"] },
+]
+
+[task.table.custom.cell]
+name = "TableCell"
+template = "<TableCell align=\"{attrs.align}\" class=\"{attrs.class}\" width=\"{attrs.width}\" colspan=\"{attrs.colspan}\" rowspan=\"{attrs.rowspan}\">{children}</TableCell>"
+imports = [
+  "import { TableCaption } from '@comp/shared/Table';",
+  { module = "@comp/shared/Table", names = ["TableCell"] },
+]

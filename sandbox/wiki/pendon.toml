@@ -1,0 +1,19 @@
+[[task]]
+name = "Wiki Demo (HTML)"
+input = "./src/[slug].md"
+output = "./out/[slug].html"
+plugin = "wiki,img,markdown"
+format = "html"
+pretty = true
+markdown_allow_html = true
+wiki_link_prefix = "/id/wiki"
+
+[[task]]
+name = "Wiki Demo (Solid)"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "wiki,img,markdown"
+format = "solid"
+pretty = true
+markdown_allow_html = true
+wiki_link_prefix = "/id/wiki"

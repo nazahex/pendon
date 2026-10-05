@@ -1,0 +1,38 @@
+[[task]]
+name = "Vicado Demo (Solid)"
+input = "./src/[...slug].md"
+output = "./out/[...slug].jsx"
+plugin = "markdown,vicado"
+format = "solid"
+pretty = true
+
+[[task]]
+name = "Vicado Demo (AST)"
+input = "./src/[...slug].md"
+output = "./out/[...slug].json"
+plugin = "markdown,vicado"
+format = "ast"
+pretty = true
+
+[[task]]
+name = "Vicado + Syntect Demo (HTML)"
+input = "./src/[...slug].md"
+output = "./out/[...slug].html"
+plugin = "markdown,vicado,syntect"
+format = "html"
+pretty = true
+
+[[task]]
+name = "Vicado + Syntect Demo (Solid)"
+input = "./src/[...slug].md"
+output = "./out/[...slug].syntect.jsx"
+plugin = "markdown,vicado,syntect"
+format = "solid"
+pretty = true
+
+[plugin-vicado.renderer.solid]
+
+[[plugin-vicado.renderer.solid.imports]]
+module = "vicado"
+names = ["Vicado"]
+# default = "Vicado"

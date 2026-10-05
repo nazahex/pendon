@@ -1,0 +1,55 @@
+# Rust Scopes
+
+- Note: Derived from highlighting sample content using syntect ClassedHTMLGenerator.
+- Format: Unique CSS classes (sorted) representing scope categories used during HTML generation.
+
+- accessor
+- annotation
+- begin
+- block
+- comment
+- constant
+- control
+- decimal
+- definition
+- documentation
+- double
+- double-slash
+- end
+- entity
+- function
+- generic
+- group
+- impl
+- integer
+- keyword
+- language
+- lifetime
+- line
+- macro
+- member
+- meta
+- modifier
+- name
+- numeric
+- operator
+- other
+- parameter
+- parameters
+- path
+- placeholder
+- punctuation
+- quoted
+- raw
+- return-type
+- rust
+- section
+- separator
+- source
+- storage
+- string
+- struct
+- support
+- terminator
+- type
+- variable

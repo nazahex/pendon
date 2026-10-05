@@ -1,0 +1,47 @@
+[[task]]
+name = "Image Demo (Solid)"
+input = "./src/img.md"
+output = "./out/img.jsx"
+plugin = "micromatter,img,cite,wiki,anchor,markdown"
+format = "solid"
+pretty = true
+markdown_allow_html = true
+
+wiki_link_prefix = "/id/wiki"
+
+[task.img.custom.figure]
+name = "AdvancedImage"
+template = "<AdvancedImage id=\"{attrs.id}\" src=\"{attrs.src}\" alt=\"{attrs.alt}\" foo=\"{attrs.foo}\" baz=\"{attrs.baz}\" class=\"{attrs.class}\">{children}</AdvancedImage>"
+
+[[task.img.custom.figure.imports]]
+module = "@/components/AdvancedImage"
+default = "AdvancedImage"
+
+# === COMPLEX STRUCTURE EXAMPLE ===
+
+[[task]]
+name = "Image Demo (Solid)"
+input = "./src/img-ult.md"
+output = "./out/img-ult.jsx"
+plugin = "micromatter,img,cite,wiki,anchor,markdown"
+format = "solid"
+pretty = true
+markdown_allow_html = true
+
+wiki_link_prefix = "/id/wiki"
+
+[task.img.custom.figure]
+name = "AdvancedImage"
+template = "<AdvancedImage id=\"{attrs.id}\" src=\"{attrs.src}\" alt=\"{attrs.alt}\" foo=\"{attrs.foo}\" baz=\"{attrs.baz}\" class=\"{attrs.class}\">{children}</AdvancedImage>"
+
+[[task.img.custom.figure.imports]]
+module = "@/components/AdvancedImage"
+default = "AdvancedImage"
+
+[task.anchor.custom]
+name = "Anchor"
+template = "<Anchor attrs={attrs} qux=\"{attrs.qux}\">{children}</Anchor>"
+
+[[task.anchor.custom.imports]]
+module = "@comp/shared/Anchor"
+default = "Anchor"

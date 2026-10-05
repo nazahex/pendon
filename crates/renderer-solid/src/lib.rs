@@ -173,4 +173,29 @@ mod tests {
         let output = render_solid(&raw_codefence_events());
         assert!(output.contains("<pre><code innerHTML={\"<p>  <b>x</b></p>\"} /></pre>"));
     }
+
+    /// §6.3: a flag is a bare attribute, and a container that used to drop its
+    /// attributes (`Paragraph`, `Blockquote`, `BulletList`, `OrderedList`) keeps
+    /// them.
+    #[test]
+    fn attribute_flag_and_container_attrs_are_rendered() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Attribute {
+                name: "class".to_string(),
+                value: "x".to_string(),
+            },
+            Event::AttributeFlag {
+                name: "isBar".to_string(),
+            },
+            Event::EndNode(NodeKind::Paragraph),
+            Event::StartNode(NodeKind::Document),
+        ];
+        let output = render_solid(&events);
+        assert!(
+            output.contains("<p class=\"x\" isBar>"),
+            "output = {output}"
+        );
+    }
 }

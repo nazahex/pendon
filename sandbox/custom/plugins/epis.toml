@@ -1,0 +1,24 @@
+name = "epis"
+kind = "inline"
+
+[matcher]
+start_regex = "::epi(?P<level>\\d+)\\s+(?P<reason>[^:]+)::"
+
+[[attrs]]
+name = "level"
+type = "int"
+required = true
+
+[[attrs]]
+name = "reason"
+type = "string"
+required = true
+
+[ast]
+node = "Component"
+node_name = "Epis"
+attrs_map = { level = "level", reason = "reason" }
+
+[renderer.solid]
+imports = ["import { Epis } from './Epis'"]
+component_template = "<Epis level={{attrs.level}} reason={`{attrs.reason}`} />"

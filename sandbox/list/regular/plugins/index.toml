@@ -1,0 +1,11 @@
+[[plugin]]
+id = "parego"
+props = { name = "Parego" }
+path = "parego.toml"
+enabled = true
+
+[[plugin]]
+id = "hint"
+props = { name = "Hint" }
+path = "hint.toml"
+enabled = true

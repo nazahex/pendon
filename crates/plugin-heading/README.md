@@ -144,6 +144,10 @@ module = "@/components/DocHeading"
 default = "DocHeading"
 ```
 
+`imports` also accepts a raw import line
+(`imports = ["import DocHeading from '@/components/DocHeading';"]`). Entries
+coming from the same module are merged into a single `import` statement.
+
 ### Available Template Attributes
 
 | Attribute           | Description                                                     |

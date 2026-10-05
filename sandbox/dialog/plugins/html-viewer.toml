@@ -1,0 +1,19 @@
+name = "html-viewer"
+kind = "block"
+
+[matcher]
+start_regex = '^html\s+viewer$'
+end = "```"
+capture = "rest"
+parse_hint = "codefence-viewer"
+
+[ast]
+node = "HtmlBlock"
+attrs_map = { value = "value" }
+
+[renderer.solid]
+component_template = "<HtmlViewer value={\"{attrs.value}\"} />"
+
+[[renderer.solid.imports]]
+module = "./HtmlViewer"
+default = "HtmlViewer"

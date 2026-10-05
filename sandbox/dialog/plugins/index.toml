@@ -1,0 +1,37 @@
+[[plugin]]
+id = "foo"
+props = { name = "Foo" }
+path = "foo.toml"
+enabled = true
+
+# Additional plugins can be listed here in order.
+
+[[plugin]]
+id = "aside"
+props = { name = "Aside" }
+path = "aside.toml"
+enabled = true
+
+[[plugin]]
+id = "hint"
+props = { name = "Hint" }
+path = "hint.toml"
+enabled = true
+
+[[plugin]]
+id = "html-viewer"
+props = { name = "Html Viewer" }
+path = "html-viewer.toml"
+enabled = true
+
+[[plugin]]
+id = "quiz"
+props = { name = "Quiz" }
+path = "quiz.toml"
+enabled = true
+
+[[plugin]]
+id = "you"
+props = { name = "You" }
+path = "you.toml"
+enabled = true

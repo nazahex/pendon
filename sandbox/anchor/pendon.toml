@@ -1,0 +1,35 @@
+[[task]]
+name = "Anchor Plugin Demo (HTML)"
+input = "./src/[slug].md"
+output = "./out/[slug].html"
+plugin = "micromatter,anchor,cite,markdown"
+format = "html"
+pretty = true
+markdown_allow_html = true
+
+[[task]]
+name = "Anchor Plugin Demo (Solid)"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "micromatter,img,cite,anchor,markdown"
+format = "solid"
+pretty = true
+markdown_allow_html = true
+
+[task.anchor]
+
+[[task]]
+name = "Anchor Custom Node Demo (Solid)"
+input = "./src/custom.md"
+output = "./out/custom.jsx"
+plugin = "anchor,markdown"
+format = "solid"
+pretty = true
+
+[task.anchor.custom]
+name = "Anchor"
+template = "<Anchor attrs={attrs} qux=\"{attrs.qux}\">{children}</Anchor>"
+
+[[task.anchor.custom.imports]]
+module = "@comp/shared/Anchor"
+default = "Anchor"

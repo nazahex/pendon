@@ -144,6 +144,12 @@ pub enum Event {
         name: String,
         value: String,
     },
+    /// A bare (value-less) attribute on the nearest open node, e.g. `disabled`
+    /// or an extras flag (`@@type{isFoo}`). HTML emits `<tag isFoo>` and JSX
+    /// emits `<Tag isFoo />`, so no renderer has to invent a placeholder value.
+    AttributeFlag {
+        name: String,
+    },
     // Non-fatal diagnostic event; does not affect renderer concatenation
     Diagnostic {
         severity: Severity,

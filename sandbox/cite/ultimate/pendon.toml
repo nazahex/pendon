@@ -1,0 +1,7 @@
+[[task]]
+name = "Cite Demo (Solid)"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "micromatter,cite,markdown"
+format = "solid"
+markdown_allow_html = true

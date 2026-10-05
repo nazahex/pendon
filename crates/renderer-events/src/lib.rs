@@ -8,6 +8,7 @@ enum Ev<'a> {
     End { node: String },
     Text { text: &'a str },
     Attribute { name: &'a str, value: &'a str },
+    AttributeFlag { name: &'a str },
     Diagnostic { severity: &'a str, message: &'a str },
 }
 
@@ -23,6 +24,7 @@ pub fn render_events_to_string(events: &[Event]) -> Result<String, serde_json::E
             }),
             Event::Text(s) => out.push(Ev::Text { text: s }),
             Event::Attribute { name, value } => out.push(Ev::Attribute { name, value }),
+            Event::AttributeFlag { name } => out.push(Ev::AttributeFlag { name }),
             Event::Diagnostic {
                 severity, message, ..
             } => out.push(Ev::Diagnostic {

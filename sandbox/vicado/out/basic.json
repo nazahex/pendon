@@ -1,0 +1,70 @@
+{
+  "type": "Document",
+  "children": [
+    {
+      "type": "Heading",
+      "text": "Vicado Basic",
+      "attrs": {
+        "level": "1"
+      }
+    },
+    {
+      "type": "Paragraph",
+      "children": [
+        {
+          "type": "Text",
+          "text": "Dokumen ini berisi contoh Vicado minimal dan lanjutan.\n"
+        }
+      ]
+    },
+    {
+      "type": "Heading",
+      "text": "Minimal",
+      "attrs": {
+        "level": "2"
+      }
+    },
+    {
+      "type": "Vicado",
+      "attrs": {
+        "jsx_props": "language=\"typescript\" code={\"const a = 1\\nconst b = 2\\nconsole.log(a + b)\"}",
+        "name": "Vicado"
+      }
+    },
+    {
+      "type": "Heading",
+      "text": "Full Props",
+      "attrs": {
+        "level": "2"
+      }
+    },
+    {
+      "type": "Vicado",
+      "attrs": {
+        "jsx_props": "language=\"tsx\" code={\"export function greet(name: string) {\\n  return `hello ${name}`\\n}\"} class=\"hero is-vicado\" id=\"editor-main\" fontScale={1.1} lineNumbers={true} mount=\"visible\" tabSize={2} theme=\"solarized\"",
+        "name": "Vicado"
+      }
+    },
+    {
+      "type": "Heading",
+      "text": "Multiple Languages",
+      "attrs": {
+        "level": "2"
+      }
+    },
+    {
+      "type": "Vicado",
+      "attrs": {
+        "jsx_props": "language=\"javascript\" code={\"const now = new Date()\\nconsole.log(now.toISOString())\"} cache={true} mount=\"defer\"",
+        "name": "Vicado"
+      }
+    },
+    {
+      "type": "Vicado",
+      "attrs": {
+        "jsx_props": "language=\"css\" code={\".button {\\n  color: #222;\\n  border: 1px solid #888;\\n}\"} class=\"snippet\" mount=\"visible\"",
+        "name": "Vicado"
+      }
+    }
+  ]
+}

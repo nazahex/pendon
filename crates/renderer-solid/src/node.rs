@@ -25,12 +25,16 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                 // Metadata only; skip emitting markup.
             }
             "Paragraph" => {
-                out.push_str("<p>");
+                out.push_str("<p");
+                render_attrs(v, out, &[]);
+                out.push('>');
                 render_children(v, out, hints);
                 out.push_str("</p>\n");
             }
             "Blockquote" => {
-                out.push_str("<blockquote>\n");
+                out.push_str("<blockquote");
+                render_attrs(v, out, &[]);
+                out.push_str(">\n");
                 render_children(v, out, hints);
                 out.push_str("</blockquote>\n");
             }
@@ -81,7 +85,9 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                 }
             }
             "BulletList" => {
-                out.push_str("<ul>\n");
+                out.push_str("<ul");
+                render_attrs(v, out, &[]);
+                out.push_str(">\n");
                 render_children(v, out, hints);
                 out.push_str("</ul>\n");
             }
@@ -94,6 +100,7 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                         out.push_str("}");
                     }
                 }
+                render_attrs(v, out, &["start"]);
                 out.push_str(">\n");
                 render_children(v, out, hints);
                 out.push_str("</ol>\n");
@@ -277,6 +284,8 @@ fn render_text_or_children(v: &Value, out: &mut String, hints: Option<&SolidRend
     }
 }
 
+/// Emits the attributes of `v` as JSX attributes. A JSON `true` value is a bare
+/// attribute (§6.3 flag) and is emitted in JSX boolean shorthand: `<Tag isFoo />`.
 fn render_attrs(v: &Value, out: &mut String, skipped: &[&str]) {
     let Some(attrs) = v.get("attrs").and_then(Value::as_object) else {
         return;
@@ -288,6 +297,9 @@ fn render_attrs(v: &Value, out: &mut String, skipped: &[&str]) {
         }
         out.push(' ');
         out.push_str(name);
+        if matches!(value, Value::Bool(true)) {
+            continue;
+        }
         out.push_str("=\"");
         match value {
             Value::String(value) => escape_jsx(value, out),

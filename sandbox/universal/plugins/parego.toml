@@ -1,0 +1,38 @@
+name = "aside"
+kind = "block"
+
+[matcher]
+start_regex = '^:::(?P<type>abstract|note|info|warn|error|task|def|exp|pre)(?:\s*\[\s*"?(?P<title>[^\]"]+)"?\s*\])?(?:\s*\(\s*"?(?P<tag>[^)"]+)"?\s*\))?\s*$'
+end = ":::"
+capture = "rest"
+parse_hint = "bracket-arg"
+
+[[attrs]]
+name = "type"
+type = "string"
+required = true
+
+[[attrs]]
+name = "title"
+type = "string"
+required = false
+
+[[attrs]]
+name = "tag"
+type = "string"
+required = false
+
+[ast]
+node = "Component"
+node_name = "Parego"
+attrs_map = { type = "type", title = "title", tag = "tag" }
+
+[renderer.solid]
+component_template = "<Parego type=\"{attrs.type}\" title=\"{attrs.title}\" {...attrs}>{children}</Parego>"
+
+[[renderer.solid.imports]]
+module = "@comp/shared/Parego"
+default = "Parego"
+
+[meta]
+description = "Render aside blocks to Parego component"

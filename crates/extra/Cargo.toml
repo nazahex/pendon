@@ -6,3 +6,4 @@ license = "MIT"
 description = "Shared attribute parsing primitives for Pendon plugins"
 
 [dependencies]
+pendon-core = { path = "../core" }

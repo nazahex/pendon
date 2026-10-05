@@ -23,12 +23,16 @@ fn render_node(v: &Value, out: &mut String) {
             }
             "Frontmatter" => {}
             "Paragraph" => {
-                out.push_str("<p>");
+                out.push_str("<p");
+                render_attrs_except(v, out, &[]);
+                out.push('>');
                 render_children(v, out);
                 out.push_str("</p>\n");
             }
             "Blockquote" => {
-                out.push_str("<blockquote>\n");
+                out.push_str("<blockquote");
+                render_attrs_except(v, out, &[]);
+                out.push_str(">\n");
                 render_children(v, out);
                 out.push_str("</blockquote>\n");
             }
@@ -90,7 +94,9 @@ fn render_node(v: &Value, out: &mut String) {
                 out.push_str("</code></pre>\n");
             }
             "BulletList" => {
-                out.push_str("<ul>\n");
+                out.push_str("<ul");
+                render_attrs_except(v, out, &[]);
+                out.push_str(">\n");
                 render_children(v, out);
                 out.push_str("</ul>\n");
             }
@@ -102,6 +108,7 @@ fn render_node(v: &Value, out: &mut String) {
                     out.push_str(start);
                     out.push_str("\"");
                 }
+                render_attrs_except(v, out, &["start"]);
                 out.push_str(">\n");
                 render_children(v, out);
                 out.push_str("</ol>\n");

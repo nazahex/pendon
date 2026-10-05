@@ -1,0 +1,67 @@
+[[task]]
+name = "Cite Demo (HTML)"
+input = "./src/[slug].md"
+output = "./out/[slug].html"
+plugin = "micromatter,cite,markdown"
+format = "html"
+pretty = true
+markdown_allow_html = true
+
+[task.cite]
+reference_source = "external"
+reference_file = "./src/citeref.yaml"
+prefix = "citeref-"
+class = "cite-ref"
+id_prefix = "cra-"
+
+[[task]]
+name = "Cite Demo (Solid)"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "micromatter,cite,markdown"
+format = "solid"
+pretty = true
+markdown_allow_html = true
+
+[task.cite]
+reference_source = "external"
+reference_file = "./src/citeref.yaml"
+prefix = "citeref-"
+class = "cite-ref"
+id_prefix = "cra-"
+
+[[task]]
+name = "Cite Demo (Custom Component)"
+input = "./src/custom.md"
+output = "./out/custom.jsx"
+plugin = "micromatter,cite,markdown"
+format = "solid"
+pretty = true
+markdown_allow_html = true
+
+[task.cite]
+reference_source = "external"
+reference_file = "./src/citeref.yaml"
+prefix = "citeref-"
+class = "cite-ref"
+id_prefix = "cra-"
+
+[task.cite.custom]
+name = "Citation"
+template = "<Citation index={attrs.index} id={attrs.id} loc={attrs.loc} class=\"{attrs.class}\" foo={attrs.foo}>{children}</Citation>"
+
+[[task.cite.custom.imports]]
+module = "@comp/citation"
+default = "Citation"
+
+[[task]]
+name = "Cite Demo Dynamic Path (Solid)"
+input = "./src/books/[collection_id]/[...slug].md"
+output = "../kazviz.com/content/books/[collection_id]/[chapter_id]/[...slug].jsx"
+plugin = "micromatter,cite,markdown"
+format = "solid"
+pretty = true
+markdown_allow_html = true
+
+cite_reference_source = "external"
+cite_reference_file = "./src/books/[collection_id]/[chapter_id]/citeref.yaml"

@@ -1,0 +1,11 @@
+name = "you"
+kind = "inline"
+
+[matcher]
+start = "<You"
+
+[renderer.solid]
+
+[[renderer.solid.imports]]
+module = "./You"
+default = "You"

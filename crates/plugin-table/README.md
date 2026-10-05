@@ -14,7 +14,7 @@ Advanced, AsciiDoc-inspired table syntax plugin for Pendon.
 - Builds a **2D matrix grid** in memory to accurately calculate `colspan` and `rowspan` merges.
 - Intercepts table blocks **before** the standard Markdown parser runs, ensuring custom syntax is never mangled.
 - Routes cell content and captions through the **shared inline pipeline** for full Markdown, citation, and image support.
-- Supports **four distinct custom Solid components** (Table, Caption, Row, Cell) for complete frontend control.
+- Supports **seven optional custom Solid components** (Table, Caption, Head, Body, Foot, Row, Cell) for complete frontend control.
 - Provides a **graceful fallback** to standard GFM tables if the custom syntax is invalid or incomplete.
 
 ## Recommended Plugin Order
@@ -125,9 +125,16 @@ Separate the footer rows from the body using a strict delimiter line.
 
 ## Custom Solid Components
 
-Replace the default HTML output with custom Solid components for each structural layer.
+Replace the default HTML output with custom Solid components for any structural
+layer of the table: `table`, `caption`, `thead`, `tbody`, `tfoot`, `row`, and
+`cell`. Every layer is independent — configure the ones you need and the rest
+keep rendering as plain elements, so a partial config degrades gracefully.
 
 ```toml
+[task.table.custom_node]
+# Shared by every component below; a component's own list is added on top.
+imports = ["import { TableCaption } from '@/components/table';"]
+
 [task.table.custom_node.table]
 name = "CustomTable"
 template = "<CustomTable id=\"{attrs.id}\" class=\"{attrs.class}\">{children}</CustomTable>"
@@ -136,10 +143,49 @@ template = "<CustomTable id=\"{attrs.id}\" class=\"{attrs.class}\">{children}</C
 module = "@/components/CustomTable"
 default = "CustomTable"
 
+[task.table.custom_node.caption]
+name = "TableCaption"
+template = "<TableCaption>{children}</TableCaption>"
+
+[task.table.custom_node.thead]
+name = "TableHead"
+template = "<TableHead>{children}</TableHead>"
+
+[task.table.custom_node.tbody]
+name = "TableBody"
+template = "<TableBody>{children}</TableBody>"
+
+[task.table.custom_node.tfoot]
+name = "TableFoot"
+template = "<TableFoot>{children}</TableFoot>"
+
+[task.table.custom_node.row]
+name = "TableRow"
+template = "<TableRow class=\"{attrs.class}\">{children}</TableRow>"
+
 [task.table.custom_node.cell]
 name = "TableCell"
 template = "<TableCell align=\"{attrs.align}\" class=\"{attrs.class}\" colspan=\"{attrs.colspan}\" rowspan=\"{attrs.rowspan}\" width=\"{attrs.width}\">{children}</TableCell>"
 ```
+
+### Imports Syntax
+
+Every task-level plugin (`cite`, `img`, `anchor`, `heading`, `table`) shares one
+`imports` syntax, and each entry is either a raw import line or a structured
+table:
+
+```toml
+imports = ["import { TableCaption } from '@/components/table';"] # raw line
+
+[[task.table.custom_node.cell.imports]] # structured
+module = "@/components/table"
+default = "TableCell" # optional default import
+names = ["TableHead"] # optional named imports
+```
+
+Entries are deduplicated per module, so several components importing from the
+same module collapse into a single merged `import` line. Imports are only
+emitted for components actually used by the document.
 
 ### Available Template Attributes
 
@@ -149,9 +195,30 @@ template = "<TableCell align=\"{attrs.align}\" class=\"{attrs.class}\" colspan=\
 | `{attrs.class}`   | Space-separated merged class list.                |
 | `{attrs.align}`   | Horizontal alignment (`left`, `center`, `right`). |
 | `{attrs.width}`   | Explicit width from the column delimiter.         |
-| `{attrs.colspan}` | Calculated horizontal span (only emitted if > 1). |
-| `{attrs.rowspan}` | Calculated vertical span (only emitted if > 1).   |
-| `{children}`      | Rendered inline JSX nodes for the cell content.   |
+| `{attrs.colspan}` | Calculated horizontal span, empty when it is `1`. |
+| `{attrs.rowspan}` | Calculated vertical span, empty when it is `1`.   |
+| `{children}`      | Rendered inline JSX nodes for the content.        |
+
+`table`, `caption`, `row`, and `cell` receive the attributes above. The section
+components (`thead`, `tbody`, `tfoot`) carry no attributes of their own — their
+templates should use `{children}` only.
+
+An attribute that is not set for a node resolves to an empty string, so a
+template like `colspan="{attrs.colspan}"` emits `colspan=""` for single cells.
+
+Use the spread operator `{...attrs}` to forward every attribute — including
+unknown keys from `{key: "value"}` blocks — as component props. Keys already
+written explicitly in the template are not duplicated:
+
+```toml
+[task.table.custom_node.table]
+name = "CustomTable"
+template = "<CustomTable {...attrs}>{children}</CustomTable>"
+
+[task.table.custom_node.cell]
+name = "TableCell"
+template = "<TableCell {...attrs} colspan=\"{attrs.colspan}\" rowspan=\"{attrs.rowspan}\">{children}</TableCell>"
+```
 
 ## Inline Pipeline Integration
 

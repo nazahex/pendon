@@ -1,0 +1,311 @@
+export const frontmatter = {
+  charmap: ["Revan", "a", "Stevano", "b"],
+  description:
+    "Revan terjebak dalam anhedonia dan kehampaan hidup, sementara Stevano berjuang menemaninya tetap bertahan di tengah rasa putus asa yang makin pekat.",
+  headline: "Anhedonia - Bayangan Bintang",
+  title: "Anhedonia: Bayangan Bintang - Sebuah Cerita",
+}
+export default function PendonView() {
+  return (
+    <>
+      <h2>Hari 4</h2>
+      <p>
+        Revan duduk di rooftop kediamannya. Melamun melihat langit malam, yang mana pada malam ini
+        bintang bersinar lebih terang daripada biasanya. Angin menghembus kencang, menyejukkan jiwa
+        di tengah kesuraman dunia.
+      </p>
+      <p>
+        Stevano: &quot;Revan, kamu kenapa?&quot; Revan:{" "}
+        <em>
+          (Sejenak menatap Stevano dengan wajah lesu. Merenung diam tak ada yang bisa diucap.)
+        </em>{" "}
+        &quot;Hmm.. Aku tidak tahu.&quot; Stevano: &quot;Kamu semakin aneh akhir-akhir ini. Makanmu
+        pun sedikit. Apa yang sebenarnya sedang kamu pikirkan?&quot; Revan: &quot;Aku tidak
+        tahu.&quot;{" "}
+        <em>(Wajah mulai menampilkan pantulan kesedihan mendalam dari balik jiwanya.)</em> ...
+        &quot;Aku sangat kosong. Aku tidak tahu harus melakukan apa. Aku tidak punya tujuan. Aku
+        tidak punya arah. Aku tidak punya ketakutan. Semuanya terasa datar dan tidak
+        bermakna.&quot;\\...\\&quot;Aku sudah lama mencari arah hidup baru. Cahayanya selalu tidak
+        sampai pada diriku, ia hanya melewatiku begitu saja seolah-olah aku tidak ada.&quot;
+        ...\\&quot;Aku sudah lama mati. Yang kamu lihat saat ini hanyalah jasadku yang tertinggal.
+        Yang bisa aku lakukan saat ini adalah menunggu Tuhan mengembalikan jasad ini ke tempat yang
+        seharusnya.&quot; Stevano:{" "}
+        <em>(Menatap Revan dengan serius sembari mencoba memahami maksud perkataannya.)</em>{" "}
+        &quot;Revan, apa yang sebenarnya kamu minta? Semua keinginanmu selalu kamu dapatkan.
+        Orang-orang di sekitarmu menyayangimu. Apa yang kurang dari kehidupanmu? Kehidupanmu adalah
+        mimpi bagi banyak orang lain.&quot; Revan:{" "}
+        <em>(Mulai menangis ringan, menahan sesuatu yang getir dari dalam dada.)</em> &quot;Ya, aku
+        tahu itu. Tapi apa artinya jika semua itu tidak membuatku bahagia. Semua hal yang ada di
+        dunia sudah terasa hambar. Seperti memakan makanan yang sama bertahun-tahun, apakah kamu
+        akan tahan akan hal itu? Pasti kamu akan muak, mual, dan bahkan takut untuk sekedar
+        membayangkan merasakannya lagi.&quot;\\&quot;Semua yang kamu sebutkan adalah cara untuk
+        menjadi bahagia. Tapi cara tersebut sudah tidak bekerja lagi untukku. Sekarang sudah tidak
+        ada lagi bagiku cara untuk bahagia.&quot;\\&quot;Aku sudah kehabisan jatah kebahagiaanku di
+        dunia. Aku harus melewati sisa hidupku dalam kekosongan yang menggerogotiku dari dalam
+        setiap saat.&quot;\\&quot;Tolong, seseorang bantu aku. Aku sangat ingin kembali merasakan
+        hidup.&quot;
+      </p>
+      <p>
+        Revan menangis terisak-isak, tidak lagi mampu menahan apa yang ada di dalam. Stevano
+        merangkul Revan dan mengelus-elus punggungnya. Stevano tidak tahu harus berbuat dan berkata
+        apa. Namun dia merasakan getirnya perasaan yang dialami Revan.
+      </p>
+      <dl>
+        <dt class="b">Stevano</dt>{" "}
+        <dd class="b">
+          <q>Tak apa kamu menangis. Kamu sudah sangat kuat mengalami ini selama bertahun-tahun.</q>
+        </dd>
+        <dt class="a">Revan</dt>{" "}
+        <dd class="a">
+          <q>A-apa yang harus aku lakukan??</q>{" "}
+          <i>(Perkataannya sedikit tertutupi oleh isak tangisnya.)</i>
+        </dd>
+        <dt class="b">Stevano</dt>{" "}
+        <dd class="b">
+          <q>
+            Hmm... Aku tidak tahu. Bukannya aku tidak peduli, tapi aku benar-benar tidak tahu. Jika
+            aku mengalami hal seperti itu, aku tidak aku bisa selamat atau tidak.
+          </q>
+        </dd>
+        <dt class="b">Stevano</dt>{" "}
+        <dd class="b">
+          <q>
+            Revan, aku rasa sebaiknya kamu mencari bantuan profesional untuk hal ini. Masalahmu
+            sudah di luar batas kemampuan orang-orang biasa sepertiku. Aku bisa menemanimu kapan pun
+            kamu siap. Oke?
+          </q>
+        </dd>
+        <dt class="a">Revan</dt>{" "}
+        <dd class="a">
+          <q>
+            Aku pun menginginkan itu. Tapi kondisinya sekarang sudah tidak mungkin. Harga tenaga
+            medis terlalu mahal dan aku sudah tidak punya biaya untuk itu. Kau tau sendiri aku sudah
+            lama berhenti bekerja.
+          </q>
+        </dd>
+        <dt class="b">Stevano</dt>{" "}
+        <dd class="b">
+          <i>(Menghela nafas.)</i>{" "}
+          <q>Revan, apakah cinta dan kasih sayangku kepadamu selama ini tidak cukup?</q>
+        </dd>
+        <dt class="a">Revan</dt>{" "}
+        <dd class="a">
+          <q>
+            Kamu adalah satu-satunya alasan aku bisa tetap bertahan hidup sejauh ini. Akan tetapi
+            sayang sekali kasih sayang seseorang sudah tidak lagi memiliki rasa bagiku. Aku
+            benar-benar sudah kehilangan rasa atas segalanya tanpa terkecuali, benar-benar
+            segalanya. Maaf. Tapi tolong jangan menjauhiku karena ini, ini bukan kemauanku.
+          </q>
+        </dd>
+        <dt class="b">Stevano</dt>{" "}
+        <dd class="b">
+          <i>(Menghela nafas sekali lagi.)</i>{" "}
+          <q>Aku tidak akan menjauhimu. Tenang saja. Aku akan selalu ada untukmu.</q>
+        </dd>
+      </dl>
+
+      <h2>Hari 16</h2>
+      <p>
+        Revan sudah 2 bulan bolos sekolah. Dan semakin lama, ia semakin sulit dihubungi. Tidak ada
+        yang menyadari dan mengkhawatirkan keadaan Revan kecuali Stevano.
+      </p>
+      <dl>
+        <dt class="b">Stevano</dt>{" "}
+        <dd class="b">
+          <q>Revan, kenapa? Kenapa kamu tidak membalas pesanku? Apakah kamu marah?</q>
+        </dd>
+        <dt class="a">Revan</dt>{" "}
+        <dd class="a">
+          <q>Aku tidak tahu. Aku tidak mau hidup. Aku sudah sangat lelah.</q>{" "}
+          <i>(Melamun, mata berkaca-kaca.)</i>
+        </dd>
+        <dt class="b">Stevano</dt>{" "}
+        <dd class="b">
+          <q>Hei, jangan berkata begitu.</q>
+        </dd>
+        <dt class="a">Revan</dt>{" "}
+        <dd class="a">
+          <q>Aku tidak tahu lagi.</q>
+        </dd>
+      </dl>
+
+      <p>
+        Stevano sangat ingin membawa Revan ke tenaga medis. Tapi sayang sekali hal itu tidak bisa
+        dilakukan karena masalah jarak dan biaya.
+      </p>
+      <dl>
+        <dt class="b">Stevano</dt>{" "}
+        <dd class="b">
+          <i>(Memeluk Revan dengan erat.)</i>{" "}
+          <q>Revan, tolong hentikan. Aku tidak mau kehilanganmu.</q>{" "}
+          <i>(Stevano menangis keras.)</i>
+        </dd>
+        <dt class="a">Revan</dt>{" "}
+        <dd class="a">
+          <q>Stev, aku tidak tahu.</q> <i>(Air mata bercucuran dari balik lamunan.)</i>{" "}
+          <q>Aku tidak tahu.</q>
+        </dd>
+      </dl>
+
+      <h2>Hari 17</h2>
+      <p>
+        Stevano mengajak Revan duduk-duduk di taman dekat kota. Stevano sangat khawatir dengan
+        kondisi Revan yang semakin terlihat memburuk.
+      </p>
+      <p>
+        Stevano: &quot;Rev, aku ingin menanyakan sesuatu. Apa yang membuatmu tidak bisa hidup tanpa
+        makna? Apakah semenyakitkan itu?&quot; Revan: &quot;Ya, terkadang sangat menyakitkan. Namun
+        terkadang juga menenangkan.&quot; &quot;Sebenarnya yang aku inginkan memanglah hidup tanpa
+        tujuan, tanpa ambisi, tanpa kekhawatiran. Hanya hidup saja lalu melakukan apapun tanpa
+        tujuan yang kaku.&quot; &quot;Sayang sekali, dunia tidak mengizinkan itu. Dunia menyuruhku
+        bekerja. Dan pekerjaan adalah hal yang paling menyiksa bagiku.&quot; &quot;Bekerja mungkin
+        terdengar biasa saja bagi orang lain. Dan ya, aku tahu itu. Umumnya orang sanggup bekerja
+        karena mereka memiliki tujuan yang jelas. Misalkan ingin menjadi kaya raya atau sekedar
+        memenuhi kebutuhan hidupnya. Tapi untukku, aku tidak punya tujuan yang bermakna dari semua
+        itu. Aku tidak punya keinginan untuk menjadi kaya raya, aku tidak punya keinginan untuk
+        sejahtera, aku tidak punya keinginan apapun.&quot; &quot;Pekerjaan bagiku adalah seperti
+        mati-matian berburu rusa tapi aku adalah kambing. Tapi aku harus berburu rusa untuk
+        mendapatkan rumput agar aku tidak mati. Dan aku tidak boleh mati secara sengaja karena jika
+        aku melakukannya aku mendapatkan hukuman abadi di alam berikutnya. Ini sangat melelahkan dan
+        menyiksa.&quot; Stevano: &quot;Ngomong-ngomong, senang bisa mendengarkan itu darimu.
+        Mendengarmu berbicara panjang lebar seperti ini membuatku lega, kau tahu. Mengenai yang kamu
+        katakan di akhir, aku sepertinya mulai paham dengan bagaimana rasanya. Aku mulai mengerti
+        itu.&quot; &quot;Aku tiba-tiba berfikir, bahwa ilusi kebahagiaan yang ada di masyarakat
+        dunia ternyata penting, tidak selalu bodoh.&quot; ... Stevano: &quot;Hei hei... Bagaimana
+        jika itu dijadikan tujuan utama hidupmu mulai sekarang. Ini adalah misi utamamu sekarang,
+        dari sahabatmu, Stevano, untuk sahabatnya, Revan. Misi utamamu sekarang adalah bukan
+        mencapai kesuksesan dunia, tapi keluar dari sistem aneh itu dan hidup sendiri tanpa harus
+        berada di bawahnya. Kamu harus bisa mendapatkan rumput dengan cara yang sesuai tanpa harus
+        berburu rusa. Itu tidak akan mudah dan butuh waktu yang lama, tapi bukankah itu yang kamu
+        inginkan?&quot; Revan: &quot;Hebat, aku suka itu. Aku kira itu akan berhasil. Tapi, hmm...
+        aku tetap harus bekerja kan untuk melakukan itu? Sejujurnya aku sudah tidak kuat lagi, aku
+        sudah sangat muak dengan pekerjaan. Aku tidak mau lagi berburu rusa. Menanam rumput sendiri
+        butuh waktu dan modal. Untuk mendapatkan modal, lagi-lagi aku harus berburu rusa.&quot;
+        Stevano: &quot;Aku mengerti. Sekarang aku berikan kamu dua pilihan: melanjutkan berburu rusa
+        selama beberapa bulan untuk menanam rumput sendiri, atau selamanya terpaksa berburu rusa dan
+        tidak pernah bisa punya rumput sendiri? Dua-duanya tidak enak, namun yang pertama lebih
+        sebentar. Revan, aku yakin kamu pasti memililih yang pertama. Kamu hanya sedang kelelahan.
+        Kamu butuh istirahat. Aku minta kamu istirahat dan tidak melakukan apapun sampai kamu merasa
+        baikan.&quot; Revan: &quot;Entahlah, aku sudah beristirahat total selama 2 bulan dan sampai
+        sekarang masih seperti ini. Aku khawatir ini akan sangat lama.&quot; Stevano: &quot;Tidak.
+        Kamu sudah bekerja keras bertahun-tahun, istirahat 2 bulan masih sangat sedikit dibandingkan
+        kerja kerasmu. Jangan anggap itu kriminal. Kamu berhak berhenti tanpa tekanan apapun.&quot;
+        Revan: &quot;Entahlah, aku masih bingung. Bagaimana bisa aku tenang beristirahat jika
+        tagihanku masih terus berjalan dan menumpuk?? Aku tidak bisa benar-benar beristirahat total.
+        Sayang sekali. Aku sudah mencoba mencari pekerjaan ringan yang tidak menguras energi mental.
+        Namun, kamu tahu sendiri bagaimana endingnya.&quot; Stevano: &quot;Ah sial. Mencari
+        pekerjaan saat ini memang super duper sulit. Aku mengerti, kamu benar-benar terjebak kan
+        ya??&quot; <em>(Menghela nafas dan menggeleng-gelengkan kepala.)</em> &quot;Ish, sialnya
+        dunia ini.&quot; Revan: <em>(Menyeringai)</em> &quot;Nah, tahu kan?&quot; Stevano:
+        &quot;Jika pakai agama, dunia ini memang sekedar tempat ujian dan tidak diperuntukkan untuk
+        bersenang-senang. Jadi, dunia sedang menjadi dirinya sendiri. Tidak ada yang salah dengan
+        itu. Ekspektasi kita saja yang terlalu baik.&quot; Revan: &quot;Ekspektasiku sudah buruk
+        tentang dunia dari dulu. Menurutku sesuatu yang lebih mendasar. Yakni bahwasanya manusia
+        diciptakan dengan spesifikasi untuk surga, bukan untuk menghadapi ujian di bumi.&quot;
+        Stevano: &quot;Hei... Ada benarnya juga perkataanmu.&quot; Revan: &quot;Tapi aku tak peduli.
+        Kenyataannya kita ada di bumi dan harus menjalani ini semua.&quot;
+      </p>
+      <h2>Hari 19</h2>
+      <p>Semakin hari Revan semakin menderita dengan kekosongannya.</p>
+      <dl>
+        <dt class="a">Revan</dt>{" "}
+        <dd class="a">
+          <q>Aku ingin berbuat dosa untuk merasakan rasa. Aku ingin berzina, aku ingin minum.</q>
+        </dd>
+        <dt class="b">Stevano</dt>{" "}
+        <dd class="b">
+          <i>(Menatap Revan dengan wajah khawatir dan bingung.)</i>{" "}
+          <q>
+            Aku tidak pernah menyangka mendengar ini darimu. Tapi tak apa kalau kau mau itu. Aku
+            temani kalau kau mau.
+          </q>
+        </dd>
+        <dt class="a">Revan</dt>{" "}
+        <dd class="a">
+          <q>
+            Ya, temani aku. Aku sejujurnya sempat ragu karena jika aku minum di dunia, maka aku
+            tidak bisa minum lagi nanti ketika di surga. Kemudian aku berfikir lagi nanti di surga
+            aku bisa menikmati yang lain. Bagaimana menurutmu?
+          </q>
+        </dd>
+        <dt class="b">Stevano</dt>{" "}
+        <dd class="b">
+          <q>
+            Hahahah. Aku tidak tahu berkata apa tentang itu, aku tidak berani berkata aneh tentang
+            akhirat. Aku tak pernah terpikirkan sejauh itu. Kau sangatlah unik.
+          </q>
+        </dd>
+      </dl>
+
+      <p>
+        Mereka berdua kemudian pergi ke klub malam di kota terdekat. Jaraknya 1 jam lebih. Kala itu
+        hujan rintik-rintik turun dari malam yang sunyi.
+      </p>
+      <dl>
+        <dt class="a">Revan</dt>{" "}
+        <dd class="a">
+          <q>
+            Aku sudah lama ingin anggur merah ini. Ini adalah pertama kalinya aku minum. Wanna try?
+          </q>
+        </dd>
+        <dt class="b">Stevano</dt>{" "}
+        <dd class="b">
+          <q>No, thanks. Aku di sini hanya untuk menemanimu dan menjagamu. Go for it.</q>
+        </dd>
+        <dt class="a">Revan</dt>{" "}
+        <dd class="a">
+          <q>
+            Aku tidak berencana sampai mabuk berat dan kehilangan akalku. Aku hanya ingin tinggi
+            sedikit dan mendapatkan sensai terbebas sementara. Aku ingin merasakan rasa lagi, entah
+            itu bahagia atau kesedihan. Apapun itu.
+          </q>
+        </dd>
+      </dl>
+
+      <p>
+        Stevano hanya bisa melihat. Ia merasa sedikit lega karena Revan tidak lagi pasif dan
+        menyerah--meskipun cara yang Revan lakukan tidaklah sehat.
+      </p>
+      <dl>
+        <dt class="a">Revan</dt>{" "}
+        <dd class="a">
+          <q>
+            Aku adalah orang yang sangat paham agama, dan dosaku berlipat ganda dengan melakukan ini
+            karena aku tahu betul apa yang sedang aku lakukan.
+          </q>
+        </dd>
+        <dt class="b">Stevano</dt>{" "}
+        <dd class="b">
+          <q>Lalu, kenapa kau masih melakukannya?</q>
+        </dd>
+        <dt class="a">Revan</dt>{" "}
+        <dd class="a">
+          <q>
+            Aku ingin merasakan sesuatu. Hanya itu. Termasuk perasaan menyesal dan depresi yang
+            terasa jelas.
+          </q>
+        </dd>
+      </dl>
+
+      <p>
+        Beberapa saat kemudian Stevano berpindah tempat duduk ke samping Revan. Ia merangkul Revan,
+        Revan menyenderkan kepalanya ke bahu Stevano, lalu segera ia menangis tersedu-sedu. Stevano
+        mencoba menenangkannya dengan mengelus kepalanya.
+      </p>
+      <p>
+        Revan: &quot;Thanks sudah mau terus menemaniku sampai sejauh ini. I love you.&quot; Stevano:
+        &quot;I love you too. Tolong jangan pergi...&quot; Revan: &quot;Aku harap.&quot; ... ...
+        Revan: &quot;Aku harap kau nyata. Sayang sekali kau hanyalah imajinasiku untuk membuatku
+        tetap waras.&quot;
+      </p>
+      <p>
+        Rasa sesak tak terbendung terasa sangat memekakan dari dada. Revan hanya bisa duduk diam
+        sendirian dan merasakannya.
+      </p>
+      <h2>Hari 20</h2>
+      <p>PHQ-9 27/27 SHAPS 54/56 BHS 20/20</p>
+      <h2>Hari 22</h2>
+      <strong> </strong>
+    </>
+  )
+}

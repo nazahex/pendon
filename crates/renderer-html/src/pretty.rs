@@ -31,7 +31,9 @@ fn render_node(v: &Value, out: &mut String, indent: &mut usize) {
             "Frontmatter" => {}
             "Paragraph" => {
                 pad(out, *indent);
-                out.push_str("<p>\n");
+                out.push_str("<p");
+                render_attrs_except(v, out, &[]);
+                out.push_str(">\n");
                 *indent += 1;
                 render_children(v, out, indent);
                 *indent -= 1;
@@ -40,7 +42,9 @@ fn render_node(v: &Value, out: &mut String, indent: &mut usize) {
             }
             "Blockquote" => {
                 pad(out, *indent);
-                out.push_str("<blockquote>\n");
+                out.push_str("<blockquote");
+                render_attrs_except(v, out, &[]);
+                out.push_str(">\n");
                 *indent += 1;
                 render_children(v, out, indent);
                 *indent -= 1;
@@ -117,7 +121,9 @@ fn render_node(v: &Value, out: &mut String, indent: &mut usize) {
             }
             "BulletList" => {
                 pad(out, *indent);
-                out.push_str("<ul>\n");
+                out.push_str("<ul");
+                render_attrs_except(v, out, &[]);
+                out.push_str(">\n");
                 *indent += 1;
                 render_children(v, out, indent);
                 *indent -= 1;
@@ -133,6 +139,7 @@ fn render_node(v: &Value, out: &mut String, indent: &mut usize) {
                     out.push_str(start);
                     out.push_str("\"");
                 }
+                render_attrs_except(v, out, &["start"]);
                 out.push_str(">\n");
                 *indent += 1;
                 render_children(v, out, indent);

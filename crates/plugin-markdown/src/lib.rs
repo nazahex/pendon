@@ -70,7 +70,9 @@ pub fn process_with_options(events: &[Event], opts: MarkdownOptions) -> Vec<Even
             }
             Event::EndNode(kind) => end::handle(&mut ctx, kind),
             Event::Text(s) => text::handle(&mut ctx, s),
-            Event::Diagnostic { .. } | Event::Attribute { .. } => ctx.push_event(ev),
+            Event::Diagnostic { .. } | Event::Attribute { .. } | Event::AttributeFlag { .. } => {
+                ctx.push_event(ev)
+            }
         }
         i += 1;
     }

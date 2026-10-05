@@ -12,6 +12,7 @@ use pendon_renderer_solid::{render_solid_with_hints, SolidRenderHints};
 
 mod cache;
 mod cli;
+mod components;
 mod config;
 mod plugins;
 mod process;
@@ -110,7 +111,7 @@ fn main() -> ExitCode {
     let inline_pipeline = build_context_inline_pipeline(
         pendon_plugin_img::ImgOptions::default(),
         wiki_opts.clone(),
-        build_anchor_options(None),
+        build_anchor_options(None).unwrap_or_default(),
         latex_options,
         &enabled_plugins,
     );

@@ -1,7 +1,10 @@
 use std::collections::BTreeMap;
 
 use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::{parse_attrs, ExtraAttrs};
+use pendon_extra::{
+    legacy_extras_warning, parse_attrs, scan_extras_chars, to_attributes, ExtraAttrs, ExtrasAttr,
+    ExtrasHead, ExtrasOptions,
+};
 use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
 
 #[derive(Clone, Debug, Default)]
@@ -80,20 +83,33 @@ fn emit_text(text: &str, options: &AnchorOptions, out: &mut Vec<Event>) {
         let is_image_syntax = chars[cursor] == '[' && cursor > 0 && chars[cursor - 1] == '!';
 
         if chars[cursor] == '[' && !is_image_syntax {
-            if let Some((end, label, raw_target, extra)) = parse_link(&chars, cursor) {
-                let (attrs, warning) = build_attributes(&raw_target, extra);
+            if let Some(link) = parse_link(&chars, cursor) {
+                let built =
+                    build_attributes(&link.target, link.legacy.as_ref(), link.extras.as_ref());
                 flush_text(&mut normal, out);
 
-                if let Some(message) = warning {
+                // §14: the pre-§11 `[.class,#id]{key: value}` form still works but
+                // is reported, so no config keeps it by accident.
+                if link.legacy.is_some() {
+                    out.push(legacy_extras_warning("anchor"));
+                }
+                if let Some(message) = built.conflict.as_ref() {
                     out.push(Event::Diagnostic {
                         severity: Severity::Warning,
-                        message,
+                        message: message.clone(),
+                        span: None,
+                    });
+                }
+                for message in &built.warnings {
+                    out.push(Event::Diagnostic {
+                        severity: Severity::Warning,
+                        message: format!("[anchor] {message}"),
                         span: None,
                     });
                 }
 
-                emit_anchor(&label, attrs, options, out);
-                cursor = end;
+                emit_anchor(&link.label, built, options, out);
+                cursor = link.end;
                 continue;
             }
         }
@@ -105,7 +121,19 @@ fn emit_text(text: &str, options: &AnchorOptions, out: &mut Vec<Event>) {
     flush_text(&mut normal, out);
 }
 
-fn parse_link(chars: &[char], start: usize) -> Option<(usize, String, String, Option<ExtraAttrs>)> {
+/// A parsed `[label](target "title")` head plus whatever attributes are attached
+/// to it: the §11 extras head and the deprecated `[.class,#id]{key: value}` form
+/// (§7.2).
+struct ParsedLink {
+    end: usize,
+    label: String,
+    /// `url` and, after a `\0`, the optional head title.
+    target: String,
+    extras: Option<ExtrasHead>,
+    legacy: Option<ExtraAttrs>,
+}
+
+fn parse_link(chars: &[char], start: usize) -> Option<ParsedLink> {
     if chars.get(start) != Some(&'[') {
         return None;
     }
@@ -124,20 +152,43 @@ fn parse_link(chars: &[char], start: usize) -> Option<(usize, String, String, Op
 
     // Extra attributes must be directly attached without spaces. Accepts both
     // the `{key: val}` form and the `[.class,#id]{key: val}` form.
-    let extra = parse_link_extra_attrs(chars, &mut end);
+    let legacy = parse_link_extra_attrs(chars, &mut end);
+
+    // §7.2: the `@@type{…}` extras head follows the legacy block when present.
+    let (extras, end) = match scan_extras_chars(chars, end) {
+        Some((head, next)) => (Some(head), next),
+        None => (None, end),
+    };
 
     let target = match title {
         Some(t) => format!("{}\u{0}{}", raw_target, t),
         None => raw_target,
     };
 
-    Some((end, label, target, extra))
+    Some(ParsedLink {
+        end,
+        label,
+        target,
+        extras,
+        legacy,
+    })
+}
+
+/// The attributes of one `<a>`: values in `BTreeMap` order (the emission order
+/// the golden fixtures were built with), the bare flags of a §11 extras head,
+/// the `^`/`~` conflict warning and the §13 warnings of the extras merge.
+struct AnchorAttrs {
+    values: BTreeMap<String, String>,
+    flags: Vec<String>,
+    conflict: Option<String>,
+    warnings: Vec<String>,
 }
 
 fn build_attributes(
     encoded_target: &str,
-    extra: Option<ExtraAttrs>,
-) -> (BTreeMap<String, String>, Option<String>) {
+    legacy: Option<&ExtraAttrs>,
+    extras: Option<&ExtrasHead>,
+) -> AnchorAttrs {
     let (encoded_url, title) = encoded_target
         .split_once('\u{0}')
         .map(|(url, title)| (url, Some(title)))
@@ -199,22 +250,91 @@ fn build_attributes(
         i += 1;
     }
 
-    if let Some(extra) = extra {
-        if let Some(id) = extra.id {
-            attrs.insert("id".to_string(), id);
+    if let Some(extra) = legacy {
+        if let Some(id) = extra.id.as_ref() {
+            attrs.insert("id".to_string(), id.clone());
         }
         if !extra.classes.is_empty() {
             attrs.insert("class".to_string(), extra.classes.join(" "));
         }
-        for (key, value) in extra.properties {
+        for (key, value) in &extra.properties {
             if key == "rel" {
                 for token in value.split_whitespace() {
                     add_rel(&mut rel, token);
                 }
             } else if key == "target" {
-                target = Some(value);
+                target = Some(value.clone());
             } else {
-                attrs.insert(key, value);
+                attrs.insert(key.clone(), value.clone());
+            }
+        }
+    }
+
+    // §7.2 / §6.2: the extras head attaches to the `<a>`; the construct head
+    // (URL modifiers and the `("title")` head) wins, `href` is never overridable.
+    let mut flags = Vec::new();
+    let mut warnings = Vec::new();
+    if let Some(head) = extras {
+        let parsed = to_attributes(head, &ExtrasOptions::default());
+        for warning in &parsed.warnings {
+            warnings.push(pendon_extra::warning_message(warning));
+        }
+        let positional_id = parsed.value("slug").map(|value| value.literal());
+        for (key, value) in &parsed.items {
+            if key == "slug" {
+                continue;
+            }
+            if key == "href" {
+                warnings.push(
+                    "`href` is owned by the link; the extras value was ignored (§10.4)".to_string(),
+                );
+                continue;
+            }
+            let text = match value {
+                ExtrasAttr::Flag => {
+                    if attrs.contains_key(key) {
+                        warnings.push(format!(
+                            "`{key}` was dropped because the construct head already sets it"
+                        ));
+                    } else {
+                        flags.push(key.clone());
+                    }
+                    continue;
+                }
+                ExtrasAttr::Value(value) => value.literal(),
+            };
+            if key == "rel" {
+                for token in text.split_whitespace() {
+                    add_rel(&mut rel, token);
+                }
+                continue;
+            }
+            if key == "target" {
+                // §7.2: an explicit modifier wins, the external `_blank` does not.
+                if explicit_target.is_none() {
+                    target = Some(text);
+                } else {
+                    warnings.push(
+                        "`target` was dropped because a URL modifier already set it".to_string(),
+                    );
+                }
+                continue;
+            }
+            if attrs.contains_key(key) {
+                warnings.push(format!(
+                    "`{key}` was dropped because the construct head already sets it"
+                ));
+                continue;
+            }
+            attrs.insert(key.clone(), text);
+        }
+        if let Some(id) = positional_id {
+            if attrs.contains_key("id") {
+                warnings.push(
+                    "extras `slug` was dropped because the element already has an id".to_string(),
+                );
+            } else {
+                attrs.insert("id".to_string(), id);
             }
         }
     }
@@ -227,7 +347,12 @@ fn build_attributes(
         attrs.insert("rel".to_string(), rel.join(" "));
     }
 
-    (attrs, conflict)
+    AnchorAttrs {
+        values: attrs,
+        flags,
+        conflict,
+        warnings,
+    }
 }
 
 fn strip_url_modifiers(url: &str) -> (String, String) {
@@ -253,12 +378,7 @@ fn strip_url_modifiers(url: &str) -> (String, String) {
     (base, modifiers)
 }
 
-fn emit_anchor(
-    label: &str,
-    attrs: BTreeMap<String, String>,
-    options: &AnchorOptions,
-    out: &mut Vec<Event>,
-) {
+fn emit_anchor(label: &str, attrs: AnchorAttrs, options: &AnchorOptions, out: &mut Vec<Event>) {
     let node = options
         .custom_node
         .as_ref()
@@ -271,8 +391,13 @@ fn emit_anchor(
             value: custom.name.clone(),
         });
     }
-    for (name, value) in attrs {
+    for (name, value) in attrs.values {
         out.push(Event::Attribute { name, value });
+    }
+    // §6.3: a bare flag stays a bare attribute (`<a isFoo>`), it never becomes
+    // `isFoo="isFoo"`.
+    for name in attrs.flags {
+        out.push(Event::AttributeFlag { name });
     }
     out.push(Event::Text(label.to_string()));
     out.push(Event::EndNode(node));
@@ -439,5 +564,135 @@ mod tests {
         assert!(out.iter().any(
             |event| matches!(event, Event::StartNode(NodeKind::Custom(name)) if name == "Anchor")
         ));
+    }
+
+    // --- §7.2 extras head -------------------------------------------------
+
+    /// Collects the attributes, bare flags and warnings of one emitted text.
+    struct Emitted {
+        attrs: Vec<(String, String)>,
+        flags: Vec<String>,
+        warnings: Vec<String>,
+        text: String,
+    }
+
+    fn emit(text: &str) -> Emitted {
+        let mut out = Vec::new();
+        emit_text(text, &AnchorOptions::default(), &mut out);
+        let mut emitted = Emitted {
+            attrs: Vec::new(),
+            flags: Vec::new(),
+            warnings: Vec::new(),
+            text: String::new(),
+        };
+        for event in out {
+            match event {
+                Event::Attribute { name, value } => emitted.attrs.push((name, value)),
+                Event::AttributeFlag { name } => emitted.flags.push(name),
+                Event::Text(text) => emitted.text.push_str(&text),
+                Event::Diagnostic { message, .. } => emitted.warnings.push(message),
+                _ => {}
+            }
+        }
+        emitted
+    }
+
+    fn value<'a>(emitted: &'a Emitted, name: &str) -> Option<&'a str> {
+        emitted
+            .attrs
+            .iter()
+            .find_map(|(key, value)| (key == name).then_some(value.as_str()))
+    }
+
+    #[test]
+    fn extras_attach_to_the_anchor_element() {
+        let emitted = emit("[foo](/docs)@@anchor{.hero,#main,rel: \"ugc\",isFoo}");
+        assert_eq!(value(&emitted, "href"), Some("/docs"));
+        assert_eq!(value(&emitted, "class"), Some("hero"));
+        assert_eq!(value(&emitted, "id"), Some("main"));
+        assert!(emitted.flags.contains(&"isFoo".to_string()));
+        // §7.2: `rel:` extras merge with the modifier result.
+        assert_eq!(value(&emitted, "rel"), Some("ugc"));
+        // The head is consumed, no fragment of it is left in the label.
+        assert_eq!(emitted.text, "foo");
+    }
+
+    #[test]
+    fn head_title_wins_over_an_extras_title() {
+        let emitted = emit("[foo](/docs \"Head title\")@anchor{\"Extras title\"}");
+        // `@anchor{…}` is not a head (single `@`), so it stays literal text.
+        assert_eq!(value(&emitted, "title"), Some("Head title"));
+        assert!(emitted.text.contains("@anchor"));
+
+        let emitted = emit("[foo](/docs \"Head title\")@@anchor{\"Extras title\"}");
+        assert_eq!(value(&emitted, "title"), Some("Head title"));
+        assert!(
+            emitted.warnings.iter().any(|w| w.contains("`title`")),
+            "{:?}",
+            emitted.warnings
+        );
+    }
+
+    #[test]
+    fn extras_slug_becomes_the_element_id() {
+        let emitted = emit("[foo](/docs)@@anchor{`slug-a`}");
+        assert_eq!(value(&emitted, "id"), Some("slug-a"));
+        assert!(value(&emitted, "slug").is_none());
+
+        // §6.2: `#id` > head slug > extras slug.
+        let emitted = emit("[foo](/docs)@@anchor{`slug-a`, #explicit}");
+        assert_eq!(value(&emitted, "id"), Some("explicit"));
+        assert!(
+            emitted.warnings.iter().any(|w| w.contains("extras `slug`")),
+            "{:?}",
+            emitted.warnings
+        );
+    }
+
+    #[test]
+    fn href_stays_construct_owned() {
+        let emitted = emit("[foo](/docs)@@anchor{href: \"/evil\"}");
+        assert_eq!(value(&emitted, "href"), Some("/docs"));
+        assert!(
+            emitted.warnings.iter().any(|w| w.contains("`href`")),
+            "{:?}",
+            emitted.warnings
+        );
+    }
+
+    #[test]
+    fn target_extras_do_not_replace_an_explicit_modifier() {
+        // `^` is an explicit modifier: it wins.
+        let emitted = emit("[foo](/docs^)@@anchor{target: \"_self\"}");
+        assert_eq!(value(&emitted, "target"), Some("_blank"));
+        assert!(emitted.warnings.iter().any(|w| w.contains("`target`")));
+
+        // An external link only defaults to `_blank`, so extras may retarget it.
+        let emitted = emit("[foo](https://example.com)@@anchor{target: \"_self\"}");
+        assert_eq!(value(&emitted, "target"), Some("_self"));
+    }
+
+    #[test]
+    fn malformed_extras_stay_literal_text() {
+        let emitted = emit("[foo](/docs)@@anchor{`unterminated}");
+        assert_eq!(value(&emitted, "href"), Some("/docs"));
+        assert!(emitted.text.contains("@@anchor{"), "{}", emitted.text);
+        assert!(emitted.warnings.is_empty(), "{:?}", emitted.warnings);
+    }
+
+    #[test]
+    fn legacy_extras_form_is_reported() {
+        let emitted = emit("[foo](/docs)[.bax,#rew]{zo: \"kong\"}");
+        assert_eq!(value(&emitted, "class"), Some("bax"));
+        assert_eq!(value(&emitted, "id"), Some("rew"));
+        assert_eq!(value(&emitted, "zo"), Some("kong"));
+        assert!(
+            emitted
+                .warnings
+                .iter()
+                .any(|w| w.contains("deprecated") && w.contains("@@type")),
+            "{:?}",
+            emitted.warnings
+        );
     }
 }

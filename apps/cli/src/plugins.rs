@@ -1,6 +1,6 @@
 use pendon_core::{ContextPipeline, Event};
 use pendon_plugin_anchor::{AnchorCustomNode, AnchorOptions};
-use pendon_plugin_cite::{CitationContext, CiteCustomNode, CiteOptions, CiteSection};
+use pendon_plugin_cite::{CitationContext, CiteCustomNode, CiteOptions};
 use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
 use pendon_plugin_heading::{HeadingCustomNode, HeadingOptions};
 use pendon_plugin_img::{ImgCustomNode, ImgOptions};
@@ -10,7 +10,7 @@ use std::path::Path;
 
 use crate::config::{
     AnchorTaskConfig, CiteTaskConfig, HeadingTaskConfig, ImgTaskConfig, PluginCustomSection,
-    PluginVicadoSection, TableComponentConfig, TableTaskConfig,
+    PluginVicadoSection, TableTaskConfig,
 };
 use crate::utils::substitute_output;
 
@@ -36,10 +36,9 @@ impl DocumentContext {
         let references = citation.get_used_references();
         let options = citation.options().clone();
         let diagnostics = citation.drain_diagnostics();
-        let events = citation.replace_section_markers(events);
         drop(citation);
 
-        let mut events = events;
+        let mut events = events.to_vec();
         pendon_plugin_cite::update_frontmatter_in_events(
             &mut events,
             &cites,
@@ -174,6 +173,86 @@ pub fn load_custom_spec(
     Ok(spec)
 }
 
+/// §11 primary layer of `plugin-anchor`: the `<a>` it emits.
+const ANCHOR_LAYER: &str = "anchor";
+/// §11 primary layer of `plugin-img`: the `<figure>` container the custom node
+/// replaces. The `img` layer (`<img>`) needs the img cutover (§14).
+const IMG_LAYER: &str = "figure";
+/// §11 primary layer of `plugin-heading`: the `<h*>` element.
+const HEADING_LAYER: &str = "heading";
+/// §11 primary layer of `plugin-cite`: the citation leaf.
+const CITE_LAYER: &str = "cite";
+/// Default template for the citation component: a self-closing leaf, so §11
+/// rule 6 does not require a `{children}` token.
+const CITE_DEFAULT_TEMPLATE: &str =
+    "<Citation index={attrs.index} id={attrs.id} loc={attrs.loc} />";
+/// §11 layers of `plugin-table`, one per element it emits.
+const TABLE_LAYERS: [&str; 7] = ["table", "caption", "thead", "tbody", "tfoot", "row", "cell"];
+
+/// Loads `task.<plugin>.custom` (§11) once per task, printing the loader's
+/// non-fatal deprecation warnings (§11 rule 4, §13).
+fn load_custom(
+    plugin: &str,
+    primary_layer: &str,
+    custom: Option<&toml::Value>,
+) -> Result<Option<crate::components::LoadedComponents>, String> {
+    let Some(custom) = custom else {
+        return Ok(None);
+    };
+    let loaded = crate::components::load(plugin, primary_layer, Some(custom))
+        .map_err(|error| error.to_string())?;
+    for warning in &loaded.warnings {
+        eprintln!("Warning: {}", warning);
+    }
+    Ok(Some(loaded))
+}
+
+/// §14: `[task.<plugin>.custom_node]` was replaced by the §11 `custom.<layer>`
+/// form. The removed key is still parsed so a stale config fails with a
+/// migration message instead of silently losing the custom component.
+fn check_custom_node_removed(plugin: &str, legacy: bool) -> Result<(), String> {
+    if legacy {
+        return Err(format!(
+            "task.{plugin}.custom_node was removed; use task.{plugin}.custom.<layer> (§11, §14)"
+        ));
+    }
+    Ok(())
+}
+
+/// A layer entry with no name, template or imports carries no intent (an empty
+/// `[custom]` table, or `custom = []`).
+fn entry_is_configured(entry: &crate::components::ComponentEntry) -> bool {
+    entry.name.is_some() || entry.template.is_some() || !entry.imports.is_empty()
+}
+
+/// Resolves one layer of an already loaded `custom` config into the single
+/// component the pre-cutover plugin options can hold.
+fn layer_entry(
+    plugin: &str,
+    loaded: Option<&crate::components::LoadedComponents>,
+    layer: &str,
+) -> Result<Option<crate::components::ComponentEntry>, String> {
+    let Some(loaded) = loaded else {
+        return Ok(None);
+    };
+    crate::components::resolve_single(plugin, &loaded.components, layer)
+        .map(|entry| entry.cloned().filter(entry_is_configured))
+        .map_err(|error| error.to_string())
+}
+
+/// Rejects §11 layers this plugin cannot carry yet (§14: no silent drops).
+fn check_layers(
+    plugin: &str,
+    loaded: Option<&crate::components::LoadedComponents>,
+    wired: &[&str],
+) -> Result<(), String> {
+    let Some(loaded) = loaded else {
+        return Ok(());
+    };
+    crate::components::reject_unwired_layers(plugin, &loaded.components, wired)
+        .map_err(|error| error.to_string())
+}
+
 pub fn build_cite_options(
     config: Option<&CiteTaskConfig>,
     input_pattern: &str,
@@ -212,40 +291,18 @@ pub fn build_cite_options(
         ))
         }
     };
-    let custom_node = config.custom_node.as_ref().map(|node| CiteCustomNode {
-        name: node.name.clone().unwrap_or_else(|| "Citation".to_string()),
-        template: node.template.clone().unwrap_or_else(|| {
-            "<Citation index={attrs.index} id={attrs.id} loc={attrs.loc} />".to_string()
-        }),
-        imports: node
-            .imports
-            .as_deref()
-            .map(parse_import_entries)
-            .unwrap_or_default(),
-    });
-    let section = config.section.as_ref().map(|section| {
-        let name = section
-            .node
-            .clone()
-            .unwrap_or_else(|| "CitationSection".to_string());
-        CiteSection {
-            marker: section
-                .marker
+    check_custom_node_removed("cite", config.custom_node.is_some())?;
+    let loaded = load_custom("cite", CITE_LAYER, config.custom.as_ref())?;
+    check_layers("cite", loaded.as_ref(), &[CITE_LAYER])?;
+    let custom_node =
+        layer_entry("cite", loaded.as_ref(), CITE_LAYER)?.map(|entry| CiteCustomNode {
+            name: entry.name.clone().unwrap_or_else(|| "Citation".to_string()),
+            template: entry
+                .template
                 .clone()
-                .unwrap_or_else(|| "{{ footnote }}".to_string()),
-            name: name.clone(),
-            template: section.template.clone().unwrap_or_else(|| {
-                format!(
-                    "<{name} cites={{frontmatter.cites}} references={{frontmatter.references}} />"
-                )
-            }),
-            imports: section
-                .imports
-                .as_deref()
-                .map(parse_import_entries)
-                .unwrap_or_default(),
-        }
-    });
+                .unwrap_or_else(|| CITE_DEFAULT_TEMPLATE.to_string()),
+            imports: entry.imports.clone(),
+        });
     Ok(CiteOptions {
         prefix: config
             .prefix
@@ -260,68 +317,82 @@ pub fn build_cite_options(
             .clone()
             .unwrap_or_else(|| "cra-".to_string()),
         custom_node,
-        section,
         external_references,
     })
 }
 
-pub fn build_anchor_options(config: Option<&AnchorTaskConfig>) -> AnchorOptions {
-    let custom_node = config
-        .and_then(|config| config.custom_node.as_ref())
-        .map(|node| AnchorCustomNode {
-            name: node.name.clone().unwrap_or_else(|| "Anchor".to_string()),
-            template: node
+pub fn build_anchor_options(config: Option<&AnchorTaskConfig>) -> Result<AnchorOptions, String> {
+    let Some(config) = config else {
+        return Ok(AnchorOptions::default());
+    };
+    check_custom_node_removed("anchor", config.custom_node.is_some())?;
+    let loaded = load_custom("anchor", ANCHOR_LAYER, config.custom.as_ref())?;
+    check_layers("anchor", loaded.as_ref(), &[ANCHOR_LAYER])?;
+    let custom_node =
+        layer_entry("anchor", loaded.as_ref(), ANCHOR_LAYER)?.map(|entry| AnchorCustomNode {
+            name: entry.name.clone().unwrap_or_else(|| "Anchor".to_string()),
+            template: entry
                 .template
                 .clone()
                 .unwrap_or_else(|| "<Anchor href=\"{attrs.href}\">{children}</Anchor>".to_string()),
-            imports: node
-                .imports
-                .as_deref()
-                .map(parse_import_entries)
-                .unwrap_or_default(),
+            imports: entry.imports.clone(),
         });
-    AnchorOptions { custom_node }
+    Ok(AnchorOptions { custom_node })
 }
 
-pub fn build_table_options(config: Option<&TableTaskConfig>) -> pendon_plugin_table::TableOptions {
+pub fn build_table_options(
+    config: Option<&TableTaskConfig>,
+) -> Result<pendon_plugin_table::TableOptions, String> {
     let Some(config) = config else {
-        return pendon_plugin_table::TableOptions::default();
+        return Ok(pendon_plugin_table::TableOptions::default());
     };
 
-    let custom_node =
-        config
-            .custom_node
-            .as_ref()
-            .map(|node| pendon_plugin_table::TableCustomNode {
-                imports: node
-                    .imports
-                    .as_deref()
-                    .map(parse_import_entries)
-                    .unwrap_or_default(),
-                table: build_table_component(node.table.as_ref()),
-                caption: build_table_component(node.caption.as_ref()),
-                thead: build_table_component(node.thead.as_ref()),
-                tbody: build_table_component(node.tbody.as_ref()),
-                tfoot: build_table_component(node.tfoot.as_ref()),
-                row: build_table_component(node.row.as_ref()),
-                cell: build_table_component(node.cell.as_ref()),
-            });
+    check_custom_node_removed("table", config.custom_node.is_some())?;
+    let loaded = load_custom("table", "table", config.custom.as_ref())?;
+    check_layers("table", loaded.as_ref(), &TABLE_LAYERS)?;
+    let Some(loaded) = loaded.as_ref() else {
+        return Ok(pendon_plugin_table::TableOptions::default());
+    };
 
-    pendon_plugin_table::TableOptions { custom_node }
-}
+    let pick = |layer: &str| -> Result<Option<pendon_plugin_table::CustomComponent>, String> {
+        Ok(layer_entry("table", Some(loaded), layer)?.map(|entry| {
+            pendon_plugin_table::CustomComponent {
+                name: entry.name.clone().unwrap_or_default(),
+                template: entry.template.clone().unwrap_or_default(),
+                imports: entry.imports.clone(),
+            }
+        }))
+    };
+    let table = pick("table")?;
+    let caption = pick("caption")?;
+    let thead = pick("thead")?;
+    let tbody = pick("tbody")?;
+    let tfoot = pick("tfoot")?;
+    let row = pick("row")?;
+    let cell = pick("cell")?;
 
-fn build_table_component(
-    cfg: Option<&TableComponentConfig>,
-) -> Option<pendon_plugin_table::CustomComponent> {
-    let c = cfg?;
-    Some(pendon_plugin_table::CustomComponent {
-        name: c.name.clone().unwrap_or_default(),
-        template: c.template.clone().unwrap_or_default(),
-        imports: c
-            .imports
-            .as_deref()
-            .map(parse_import_entries)
-            .unwrap_or_default(),
+    // No layer configured: keep the built-in element path rather than
+    // entering the custom emit path with nothing to emit.
+    if [&table, &caption, &thead, &tbody, &tfoot, &row, &cell]
+        .iter()
+        .all(|component| component.is_none())
+    {
+        return Ok(pendon_plugin_table::TableOptions::default());
+    }
+
+    Ok(pendon_plugin_table::TableOptions {
+        custom_node: Some(pendon_plugin_table::TableCustomNode {
+            // §11 moves imports onto each entry, so there is no layer-wide
+            // list to inherit any more.
+            imports: Vec::new(),
+            table,
+            caption,
+            thead,
+            tbody,
+            tfoot,
+            row,
+            cell,
+        }),
     })
 }
 
@@ -329,18 +400,18 @@ pub fn build_img_options(config: Option<&ImgTaskConfig>) -> Result<ImgOptions, S
     let Some(config) = config else {
         return Ok(ImgOptions::default());
     };
-    let custom_node = match config.custom_node.as_ref() {
-        None => None,
-        Some(node) => Some(ImgCustomNode {
-            name: require(node.name.as_ref(), "img.custom_node.name")?,
-            template: require(node.template.as_ref(), "img.custom_node.template")?,
-            imports: node
-                .imports
-                .as_deref()
-                .map(parse_import_entries)
-                .unwrap_or_default(),
-        }),
-    };
+    check_custom_node_removed("img", config.custom_node.is_some())?;
+    let loaded = load_custom("img", IMG_LAYER, config.custom.as_ref())?;
+    check_layers("img", loaded.as_ref(), &[IMG_LAYER])?;
+    let custom_node = layer_entry("img", loaded.as_ref(), IMG_LAYER)?
+        .map(|entry| {
+            Ok::<_, String>(ImgCustomNode {
+                name: require(entry.name.as_ref(), "img.custom.figure.name")?,
+                template: require(entry.template.as_ref(), "img.custom.figure.template")?,
+                imports: entry.imports.clone(),
+            })
+        })
+        .transpose()?;
     Ok(ImgOptions { custom_node })
 }
 
@@ -348,18 +419,18 @@ pub fn build_heading_options(config: Option<&HeadingTaskConfig>) -> Result<Headi
     let Some(config) = config else {
         return Ok(HeadingOptions::default());
     };
-    let custom_node = match config.custom_node.as_ref() {
-        None => None,
-        Some(node) => Some(HeadingCustomNode {
-            name: require(node.name.as_ref(), "heading.custom_node.name")?,
-            template: require(node.template.as_ref(), "heading.custom_node.template")?,
-            imports: node
-                .imports
-                .as_deref()
-                .map(parse_import_entries)
-                .unwrap_or_default(),
-        }),
-    };
+    check_custom_node_removed("heading", config.custom_node.is_some())?;
+    let loaded = load_custom("heading", HEADING_LAYER, config.custom.as_ref())?;
+    check_layers("heading", loaded.as_ref(), &[HEADING_LAYER])?;
+    let custom_node = layer_entry("heading", loaded.as_ref(), HEADING_LAYER)?
+        .map(|entry| {
+            Ok::<_, String>(HeadingCustomNode {
+                name: require(entry.name.as_ref(), "heading.custom.heading.name")?,
+                template: require(entry.template.as_ref(), "heading.custom.heading.template")?,
+                imports: entry.imports.clone(),
+            })
+        })
+        .transpose()?;
     Ok(HeadingOptions {
         auto_number: config.auto_number.unwrap_or_default(),
         number_style: config.number_style.clone().unwrap_or_default(),
@@ -437,7 +508,7 @@ pub fn build_solid_hints(specs: &[PluginSpec]) -> SolidRenderHints {
 /// The single parser for task-level `imports` arrays. Every entry is either a
 /// raw import line (`"import X from 'y'"`) or a structured
 /// `{ module, default, names }` table — one syntax for every plugin.
-fn parse_import_entries(imports: &[toml::Value]) -> Vec<ImportEntry> {
+pub(crate) fn parse_import_entries(imports: &[toml::Value]) -> Vec<ImportEntry> {
     let mut parsed_imports: Vec<ImportEntry> = Vec::new();
     for val in imports {
         match val {
@@ -570,46 +641,42 @@ mod tests {
 
     fn table_options(toml_src: &str) -> pendon_plugin_table::TableOptions {
         let cfg: TableTaskConfig = toml::from_str(toml_src).expect("valid table config");
-        build_table_options(Some(&cfg))
+        build_table_options(Some(&cfg)).expect("valid table options")
     }
 
-    /// Raw import lines and structured `{ module, names }` tables are one and the
-    /// same list, shared by every component of the custom node.
+    /// §11: raw import lines and structured `{ module, names }` tables are one
+    /// and the same list, and each layer owns its own list.
     #[test]
     fn table_options_accept_both_import_syntaxes() {
         let options = table_options(
             r#"
-[custom_node]
-imports = ["import { TableCaption } from '@comp/table';"]
-
-[custom_node.table]
+[custom.table]
 name = "CustomTable"
 template = "<CustomTable>{children}</CustomTable>"
+imports = ["import { TableCaption } from '@comp/table';", { module = "@comp/table", default = "CustomTable" }]
 
-[[custom_node.table.imports]]
-module = "@comp/table"
-default = "CustomTable"
-
-[custom_node.thead]
+[custom.thead]
 name = "TableHead"
 template = "<TableHead>{children}</TableHead>"
 
-[[custom_node.thead.imports]]
+[[custom.thead.imports]]
 module = "@comp/table"
 names = ["TableHead"]
 "#,
         );
 
         let node = options.custom_node.expect("custom node");
-        assert_eq!(node.imports.len(), 1);
-        assert!(
-            matches!(&node.imports[0], ImportEntry::Raw(line) if line.contains("TableCaption"))
-        );
+        // §11 rule 4: imports moved onto the entries, there is no layer-wide
+        // list to inherit any more.
+        assert!(node.imports.is_empty());
 
         let table = node.table.expect("table component");
         assert_eq!(table.name, "CustomTable");
+        assert!(
+            matches!(&table.imports[0], ImportEntry::Raw(line) if line.contains("TableCaption"))
+        );
         assert!(matches!(
-            &table.imports[0],
+            &table.imports[1],
             ImportEntry::Structured { module, default, .. }
                 if module == "@comp/table" && default.as_deref() == Some("CustomTable")
         ));
@@ -631,9 +698,15 @@ names = ["TableHead"]
 
     #[test]
     fn table_options_without_custom_node_change_nothing() {
-        assert!(build_table_options(None).custom_node.is_none());
+        assert!(build_table_options(None)
+            .expect("no config")
+            .custom_node
+            .is_none());
         let cfg: TableTaskConfig = toml::from_str("").expect("empty table config");
-        assert!(build_table_options(Some(&cfg)).custom_node.is_none());
+        assert!(build_table_options(Some(&cfg))
+            .expect("empty config")
+            .custom_node
+            .is_none());
     }
 
     /// `img` and `heading` gained task-level config, so a half-specified
@@ -641,22 +714,22 @@ names = ["TableHead"]
     #[test]
     fn img_and_heading_require_name_and_template() {
         let cfg: ImgTaskConfig =
-            toml::from_str("[custom_node]\nname = \"Figure\"\n").expect("valid img config");
+            toml::from_str("[custom.figure]\nname = \"Figure\"\n").expect("valid img config");
         let err = build_img_options(Some(&cfg)).expect_err("template is required");
-        assert!(err.contains("img.custom_node.template"), "{err}");
+        assert!(err.contains("img.custom.figure.template"), "{err}");
 
         let cfg: HeadingTaskConfig =
-            toml::from_str("[custom_node]\ntemplate = \"<H>{children}</H>\"\n")
+            toml::from_str("[custom.heading]\ntemplate = \"<H>{children}</H>\"\n")
                 .expect("valid heading config");
         let err = build_heading_options(Some(&cfg)).expect_err("name is required");
-        assert!(err.contains("heading.custom_node.name"), "{err}");
+        assert!(err.contains("heading.custom.heading.name"), "{err}");
     }
 
     #[test]
     fn img_and_heading_share_the_import_syntax() {
         let cfg: ImgTaskConfig = toml::from_str(
             r#"
-[custom_node]
+[custom.figure]
 name = "Figure"
 template = "<Figure>{children}</Figure>"
 imports = ["import Figure from '@/components/Figure';"]
@@ -672,11 +745,11 @@ imports = ["import Figure from '@/components/Figure';"]
             r#"
 auto_number = true
 
-[custom_node]
+[custom.heading]
 name = "DocHeading"
 template = "<DocHeading level={{attrs.level}}>{children}</DocHeading>"
 
-[[custom_node.imports]]
+[[custom.heading.imports]]
 module = "@/components/DocHeading"
 default = "DocHeading"
 "#,
@@ -690,5 +763,199 @@ default = "DocHeading"
             &node.imports[0],
             ImportEntry::Structured { module, .. } if module == "@/components/DocHeading"
         ));
+    }
+
+    /// §11: `custom` is the canonical key, `[[custom]]` addresses the primary
+    /// layer, and imports live on the entry.
+    #[test]
+    fn anchor_options_read_the_layered_custom_key() {
+        let cfg: AnchorTaskConfig = toml::from_str(
+            r#"
+[[custom]]
+type = ["anchorA", "anchorB"]
+name = "AnchorAB"
+template = "<AnchorAB {...attrs}>{children}</AnchorAB>"
+
+[[custom.imports]]
+module = "@comp/shared/Anchor"
+names = ["AnchorAB"]
+"#,
+        )
+        .expect("valid anchor config");
+
+        let options = build_anchor_options(Some(&cfg)).expect("valid anchor options");
+        let node = options.custom_node.expect("custom node");
+        assert_eq!(node.name, "AnchorAB");
+        assert_eq!(node.template, "<AnchorAB {...attrs}>{children}</AnchorAB>");
+        assert!(matches!(
+            &node.imports[0],
+            ImportEntry::Structured { module, .. } if module == "@comp/shared/Anchor"
+        ));
+    }
+
+    /// §11 layered table config: one key per layer, imports per entry, and no
+    /// layer-wide import list any more.
+    #[test]
+    fn table_options_read_the_layers_of_custom() {
+        let options = table_options(
+            r#"
+[custom.table]
+name = "CustomTable"
+template = "<CustomTable>{children}</CustomTable>"
+
+[custom.thead]
+name = "TableHead"
+template = "<TableHead>{children}</TableHead>"
+
+[[custom.thead.imports]]
+module = "@comp/table"
+names = ["TableHead"]
+"#,
+        );
+
+        let node = options.custom_node.expect("custom node");
+        assert_eq!(node.table.expect("table layer").name, "CustomTable");
+        let thead = node.thead.expect("thead layer");
+        assert_eq!(thead.template, "<TableHead>{children}</TableHead>");
+        assert!(matches!(
+            &thead.imports[0],
+            ImportEntry::Structured { module, names, .. }
+                if module == "@comp/table" && names == &vec!["TableHead".to_string()]
+        ));
+        assert!(node.imports.is_empty());
+        assert!(node.caption.is_none());
+        assert!(node.cell.is_none());
+    }
+
+    /// A `custom` key with nothing in it keeps the built-in element path.
+    #[test]
+    fn empty_custom_key_changes_nothing() {
+        assert!(table_options("[custom]\n").custom_node.is_none());
+
+        let cfg: AnchorTaskConfig = toml::from_str("custom = []\n").expect("valid anchor config");
+        assert!(build_anchor_options(Some(&cfg))
+            .expect("valid anchor options")
+            .custom_node
+            .is_none());
+    }
+
+    /// §11 rule 3 needs per-type routing, which is the plugin cutover tracked by
+    /// §14: a layer that cannot be covered by one component is a config error
+    /// instead of a silent downgrade to the default.
+    #[test]
+    fn layers_that_need_type_routing_are_rejected() {
+        let cfg: AnchorTaskConfig = toml::from_str(
+            r#"
+[[custom]]
+type = ["anchorA", "anchorB"]
+name = "AnchorAB"
+template = "<AnchorAB {...attrs}>{children}</AnchorAB>"
+
+[[custom]]
+name = "AnchorDefault"
+template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
+"#,
+        )
+        .expect("valid anchor config");
+        let err = build_anchor_options(Some(&cfg)).expect_err("two components need routing");
+        assert!(err.contains("need per-type routing"), "{err}");
+        assert!(err.contains("anchor.custom.anchor"), "{err}");
+    }
+
+    /// Unknown layers are typos and the removed `custom_node` key is a
+    /// migration; both are reported (§11 rule 1, §14).
+    #[test]
+    fn unknown_layers_and_removed_custom_node_are_rejected() {
+        let cfg: AnchorTaskConfig =
+            toml::from_str("[custom.legend]\nname = \"Legend\"\n").expect("valid anchor config");
+        let err = build_anchor_options(Some(&cfg)).expect_err("unknown layer");
+        assert!(err.contains("unsupported layer"), "{err}");
+
+        let cfg: AnchorTaskConfig = toml::from_str(
+            "[custom]\nname = \"A\"\ntemplate = \"<A>{children}</A>\"\n\n[custom_node]\nname = \"B\"\n",
+        )
+        .expect("valid anchor config");
+        let err = build_anchor_options(Some(&cfg)).expect_err("removed key");
+        assert!(err.contains("custom_node was removed"), "{err}");
+    }
+
+    /// Every plugin that used to read `[task.<plugin>.custom_node]` fails the
+    /// build with a migration message instead of ignoring the table (§14).
+    #[test]
+    fn every_plugin_rejects_the_removed_custom_node_key() {
+        let table: TableTaskConfig =
+            toml::from_str("[custom_node.cell]\nname = \"Cell\"\n").expect("valid table config");
+        let err = build_table_options(Some(&table)).expect_err("removed key");
+        assert!(err.contains("task.table.custom_node was removed"), "{err}");
+
+        let img: ImgTaskConfig =
+            toml::from_str("[custom_node]\nname = \"Figure\"\n").expect("valid img config");
+        let err = build_img_options(Some(&img)).expect_err("removed key");
+        assert!(err.contains("task.img.custom_node was removed"), "{err}");
+
+        let heading: HeadingTaskConfig =
+            toml::from_str("[custom_node]\nname = \"Heading\"\n").expect("valid heading config");
+        let err = build_heading_options(Some(&heading)).expect_err("removed key");
+        assert!(
+            err.contains("task.heading.custom_node was removed"),
+            "{err}"
+        );
+
+        let cite: CiteTaskConfig =
+            toml::from_str("[custom_node]\nname = \"Cite\"\n").expect("valid cite config");
+        let err = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
+            .expect_err("removed key");
+        assert!(err.contains("task.cite.custom_node was removed"), "{err}");
+    }
+
+    /// `img` reads the `figure` layer (the outermost node) and reports layers
+    /// whose cutover has not landed.
+    #[test]
+    fn img_reads_the_figure_layer() {
+        let cfg: ImgTaskConfig = toml::from_str(
+            r#"
+[custom.figure]
+name = "Figure"
+template = "<Figure>{children}</Figure>"
+"#,
+        )
+        .expect("valid img config");
+        let options = build_img_options(Some(&cfg)).expect("valid img options");
+        assert_eq!(options.custom_node.expect("custom node").name, "Figure");
+
+        let cfg: ImgTaskConfig =
+            toml::from_str("[custom.figure]\nname = \"Figure\"\n").expect("valid img config");
+        let err = build_img_options(Some(&cfg)).expect_err("template required");
+        assert!(err.contains("img.custom.figure.template"), "{err}");
+
+        let cfg: ImgTaskConfig =
+            toml::from_str("[custom.img]\nname = \"Thumb\"\ntemplate = \"<img />\"\n")
+                .expect("valid img config");
+        let err = build_img_options(Some(&cfg)).expect_err("img layer not wired");
+        assert!(err.contains("unsupported layer"), "{err}");
+    }
+
+    /// `heading` and `cite` read their primary layer; the citation leaf keeps its
+    /// default (self-closing) template when the entry omits one.
+    #[test]
+    fn heading_and_cite_read_their_primary_layer() {
+        let cfg: HeadingTaskConfig = toml::from_str(
+            r#"
+[custom.heading]
+name = "DocHeading"
+template = "<DocHeading>{children}</DocHeading>"
+"#,
+        )
+        .expect("valid heading config");
+        let options = build_heading_options(Some(&cfg)).expect("valid heading options");
+        assert_eq!(options.custom_node.expect("custom node").name, "DocHeading");
+
+        let cfg: CiteTaskConfig =
+            toml::from_str("[custom]\nname = \"Cite\"\n").expect("valid cite config");
+        let options = build_cite_options(Some(&cfg), "./src/[slug].md", "./src/a.md", None)
+            .expect("valid cite options");
+        let node = options.custom_node.expect("custom node");
+        assert_eq!(node.name, "Cite");
+        assert_eq!(node.template, CITE_DEFAULT_TEMPLATE);
     }
 }

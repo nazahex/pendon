@@ -1,0 +1,5 @@
+[[plugin]]
+id = "epis"
+props = { name = "Epis" }
+path = "epis.toml"
+enabled = true

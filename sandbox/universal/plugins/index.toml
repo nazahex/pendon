@@ -1,0 +1,23 @@
+[[plugin]]
+id = "hint"
+props = { name = "Hint" }
+path = "hint.toml"
+enabled = true
+
+[[plugin]]
+id = "parego"
+props = { name = "Parego" }
+path = "parego.toml"
+enabled = true
+
+[[plugin]]
+id = "quiz"
+props = { name = "Quiz" }
+path = "quiz.toml"
+enabled = true
+
+[[plugin]]
+id = "epis"
+props = { name = "Epis" }
+path = "epis.toml"
+enabled = true

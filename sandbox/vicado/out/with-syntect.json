@@ -1,0 +1,84 @@
+{
+  "type": "Document",
+  "children": [
+    {
+      "type": "Heading",
+      "text": "Vicado With Regular Codeblock",
+      "attrs": {
+        "level": "1"
+      }
+    },
+    {
+      "type": "Paragraph",
+      "children": [
+        {
+          "type": "Text",
+          "text": "Dokumen ini menunjukkan Vicado berjalan bersamaan dengan code fence reguler.\n"
+        }
+      ]
+    },
+    {
+      "type": "Heading",
+      "text": "Vicado Fence",
+      "attrs": {
+        "level": "2"
+      }
+    },
+    {
+      "type": "Vicado",
+      "attrs": {
+        "jsx_props": "language=\"typescript\" code={\"function sum(a: number, b: number) {\\n  return a + b\\n}\"} class=\"panel\" id=\"vicado-one\" baz={89} enabled={true} foo=\"bar\" mount=\"visible\"",
+        "name": "Vicado"
+      }
+    },
+    {
+      "type": "Heading",
+      "text": "Regular Fence (Should Be Highlighted By Syntect)",
+      "attrs": {
+        "level": "2"
+      }
+    },
+    {
+      "type": "CodeFence",
+      "text": "fn main() {\n    for i in 0..3 {\n        println!(\"{}\", i);\n    }\n}\n",
+      "attrs": {
+        "lang": "rust"
+      }
+    },
+    {
+      "type": "CodeFence",
+      "text": "<section class=\"demo\">\n  <h2>Regular HTML block</h2>\n  <p>This should stay as regular highlighted code.</p>\n</section>\n",
+      "attrs": {
+        "lang": "html"
+      }
+    },
+    {
+      "type": "Heading",
+      "text": "Another Vicado Fence",
+      "attrs": {
+        "level": "2"
+      }
+    },
+    {
+      "type": "Vicado",
+      "attrs": {
+        "jsx_props": "language=\"js\" code={\"const names = [\\\"ana\\\", \\\"budi\\\", \\\"caca\\\"]\\nconsole.log(names.map((n) => n.toUpperCase()))\"} compact={true} mount=\"lazy\"",
+        "name": "Vicado"
+      }
+    },
+    {
+      "type": "Heading",
+      "text": "Regular Fence Again",
+      "attrs": {
+        "level": "2"
+      }
+    },
+    {
+      "type": "CodeFence",
+      "text": "type User = { id: number; name: string }\nconst users: User[] = [{ id: 1, name: \"A\" }]\nconsole.log(users)\n",
+      "attrs": {
+        "lang": "ts"
+      }
+    }
+  ]
+}

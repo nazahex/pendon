@@ -1,0 +1,174 @@
+[[task]]
+name = "Unified Demo"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "micromatter,table,img,directive,cite,wiki,anchor,markdown,latex,syntect,heading,sectionize"
+format = "solid"
+markdown_strip_comments = true
+markdown_allow_html = true
+
+# === ANCHOR ===
+
+[[task.anchor.custom]]
+type = ["anchorA", "anchorB"]
+name = "AnchorAB"
+imports = "import { AnchorAB } from '@comp/shared/Anchor'"
+template = "<AnchorAB type={\"{attrs.type}\"} {...attrs}>{children}</AnchorAB>"
+
+[[task.anchor.custom]]
+# blank type means it will be used as default for all other type and un-typed that are not defined
+name = "AnchorDefault"
+imports = "import { AnchorDefault } from '@comp/shared/Anchor'"
+template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
+
+# === CITE ===
+
+[task.cite]
+reference_source = "internal"
+prefix = "cite-"
+class = "cite-ref"
+id_prefix = "cra-"
+
+[task.cite.custom]
+name = "Cite"
+imports = "import { Cite } from '@comp/content/Cite'"
+template = "<Cite reference={frontmatter.references[\"{attrs.id}\"]} {...attrs} />"
+
+[[task.marker.custom]]
+type = ["bibliography"]
+name = "Bibliography"
+imports = "import { Bibliography } from '@comp/content/Cite'"
+template = "<Bibliography cites={frontmatter.cites} references={frontmatter.references} />"
+
+# === DIRECTIVE ===
+
+[[task.directive.custom]]
+type = ["asideA", "asideB"]
+name = "AsideAB"
+bracket_key = "slug"
+parentheses_key = "title"
+imports = "import { AsideAB } from '@comp/content/AsideAB'"
+template = "<AsideAB slug={\"{attrs.slug}\"} title={\"{attrs.title}\"} type={\"{attrs.type}\"} {...attrs} >{children}</AsideAB>"
+
+[[task.directive.custom]]
+type = ["note"]
+name = "Note"
+bracket_key = "id"
+parentheses_key = "level"
+imports = "import Note from '@comp/content/Note'"
+template = "<Note {...attrs} >{children}</Note>"
+
+[[task.directive.custom]]
+type = ["MarkA"]
+name = "MarkA"
+bracket_key = "level"
+parentheses_key = "popup"
+imports = "import MarkA from '@comp/content/MarkA'"
+template = "<MarkA {...attrs}>{children}</MarkA>"
+
+# === MARKER ===
+
+[[task.marker.custom]]
+type = ["markerA", "markerB"]
+name = "MarkerAB"
+imports = "import { MarkerAB } from '@comp/content/Marker'"
+template = "<MarkerAB {...attrs} />"
+
+# === TABLE ===
+
+[task.table.custom.table]
+name = "Table"
+imports = "import Table from '@comp/content/Table'"
+template = "<Table {...attrs}>{children}</Table>"
+
+[task.table.custom.caption]
+name = "TableCaption"
+imports = "import { TableCaption } from '@comp/content/Table'"
+template = "<TableCaption {...attrs}>{children}</TableCaption>"
+
+[[task.table.custom.thead]]
+type = ["theadA", "theadD"]
+name = "TableHeadAD"
+imports = "import { TableHeadAD } from '@comp/content/Table'"
+template = "<TableHeadAD {...attrs}>{children}</TableHeadAD>"
+
+[[task.table.custom.thead]]
+name = "TableHeadDefault"
+imports = "import { TableHeadDefault } from '@comp/content/Table'"
+template = "<TableHeadDefault {...attrs}>{children}</TableHeadDefault>"
+
+[task.table.custom.tbody]
+name = "TableBody"
+imports = "import { TableBody } from '@comp/content/Table'"
+template = "<TableBody {...attrs}>{children}</TableBody>"
+
+[task.table.custom.tfoot]
+name = "TableFoot"
+imports = "import { TableFoot } from '@comp/content/Table'"
+template = "<TableFoot {...attrs}>{children}</TableFoot>"
+
+[[task.table.custom.row]]
+type = ["rowA", "rowB"]
+name = "TableRowAB"
+imports = "import { TableRowAB } from '@comp/content/Table'"
+template = "<TableRowAB {...attrs}>{children}</TableRowAB>"
+
+[[task.table.custom.row]]
+name = "TableRowDefault"
+imports = "import { TableRowDefault } from '@comp/content/Table'"
+template = "<TableRowDefault {...attrs}>{children}</TableRowDefault>"
+
+[[task.table.custom.cell]]
+type = ["cellA", "cellB"]
+name = "TableCellAB"
+imports = "import { TableCellAB } from '@comp/content/Table'"
+template = "<TableCellAB {...attrs}>{children}</TableCellAB>"
+
+[[task.table.custom.cell]]
+name = "TableCellDefault"
+imports = "import { TableCellDefault } from '@comp/content/Table'"
+template = "<TableCellDefault {...attrs}>{children}</TableCellDefault>"
+
+# === HEADING ===
+
+[task.heading]
+auto_number = true
+number_style = "nested-number"
+
+[[task.heading.custom]]
+type = ["headingX", "headingY"]
+name = "HeadingXY"
+imports = "import { HeadingXY } from '@comp/content/Heading'"
+template = "<HeadingXY level={\"{attrs.level}\"} id={\"{attrs.id}\"} class={\"{attrs.class}\"} number={\"{attrs.number}\"} {...attrs}>{children}</HeadingXY>"
+
+[[task.heading.custom]]
+name = "HeadingDefault"
+imports = "import { HeadingDefault } from '@comp/content/Heading'"
+template = "<HeadingDefault {...attrs}>{children}</HeadingDefault>"
+
+# === IMAGE ===
+
+[task.img.img.custom]
+name = "AdvancedImage"
+imports = "import AdvancedImage from '@comp/content/AdvancedImage'"
+template = "<AdvancedImage {...attrs}>{children}</AdvancedImage>"
+
+[task.img.figure.custom]
+name = "Figure"
+imports = "import Figure from '@comp/content/Figure'"
+template = "<Figure {...attrs}>{children}</Figure>"
+
+# === WIKI ===
+
+[task.wiki]
+link_prefix = "/id/wiki"
+
+[task.wiki.anchor.custom]
+name = "WikiLink"
+imports = "import { WikiLink } from '@comp/content/Wiki'"
+template = "<WikiLink href={\"{attrs.href}\"} {...attrs}>{children}</WikiLink>"
+
+[task.wiki.infobox.custom]
+name = "Infobox"
+imports = "import { Infobox } from '@comp/content/Infobox'"
+template = "<Infobox {...attrs}>{children}</Infobox>"

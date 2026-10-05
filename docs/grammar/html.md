@@ -1,0 +1,66 @@
+# HTML Scopes
+
+- Note: Derived from highlighting sample content using syntect ClassedHTMLGenerator.
+- Format: Unique CSS classes (sorted) representing scope categories used during HTML generation.
+
+- any
+- arithmetic
+- assignment
+- attribute-name
+- attribute-with-value
+- basic
+- begin
+- block
+- character
+- class
+- class-name
+- color
+- comment
+- constant
+- css
+- definition
+- doctype
+- double
+- double-slash
+- embedded
+- end
+- entity
+- html
+- id
+- inline
+- js
+- key-value
+- keyword
+- line
+- meta
+- name
+- numeric
+- operator
+- other
+- property-list
+- property-name
+- property-value
+- punctuation
+- quoted
+- readwrite
+- rgb-value
+- rule
+- script
+- section
+- selector
+- separator
+- sgml
+- source
+- statement
+- storage
+- string
+- structure
+- style
+- support
+- tag
+- terminator
+- text
+- toc-list
+- type
+- unquoted
+- variable

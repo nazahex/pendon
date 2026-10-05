@@ -1,0 +1,25 @@
+name = "hint"
+kind = "block"
+
+[matcher]
+start_regex = '^(?P<type>[!\?x])\s*(?P<body>.*)$'
+end = ""
+capture = "rest"
+parse_hint = "blockquote-sigil"
+
+[[attrs]]
+name = "type"
+type = "string"
+required = true
+
+[ast]
+node = "Component"
+node_name = "Hint"
+attrs_map = { type = "type" }
+
+[renderer.solid]
+component_template = "<Hint type=\"{attrs.type}\">{children}</Hint>"
+
+[[renderer.solid.imports]]
+module = "./Hint"
+default = "Hint"

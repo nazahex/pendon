@@ -1,0 +1,20 @@
+export default function PendonView() {
+  return (
+    <>
+      <p>Nulla eu voluptate cillum aute laboris in commodo quis id reprehenderit.</p>
+      <ul>
+        <li>Foo</li>
+        <li>Bar</li>
+        <li>Baz</li>
+      </ul>
+      <p>
+        Elit commodo mollit labore sunt dolore dolor deserunt ex proident non ad cupidatat occaecat
+        non.
+      </p>
+      <ul>
+        <li>FDoo</li>
+        <li>Bdaz</li>
+      </ul>
+    </>
+  )
+}

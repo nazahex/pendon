@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use pendon_core::{Event, NodeKind};
+use pendon_extra::{parse_property_block, split_csv};
 use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde_json::Value;
 
@@ -185,7 +186,7 @@ fn parse_class_block(input: &str) -> (Vec<String>, Option<String>) {
     let mut classes: Vec<String> = Vec::new();
     let mut id: Option<String> = None;
 
-    for token in split_csv_like(input) {
+    for token in split_csv(input) {
         let t = token.trim();
         if t.is_empty() {
             continue;
@@ -209,23 +210,16 @@ fn parse_class_block(input: &str) -> (Vec<String>, Option<String>) {
 }
 
 fn parse_props_block(input: &str) -> BTreeMap<String, Value> {
-    let mut props = BTreeMap::new();
-
-    for pair in split_csv_like(input) {
-        let Some((raw_key, raw_value)) = pair.split_once(':') else {
-            continue;
-        };
-
-        let key = raw_key.trim();
-        if !is_valid_prop_key(key) {
-            continue;
-        }
-
-        let value = parse_value(raw_value.trim());
-        props.insert(key.to_string(), value);
-    }
-
-    props
+    parse_property_block(&format!("{{{input}}}"))
+        .map(|(attrs, _)| {
+            attrs
+                .properties
+                .into_iter()
+                .filter(|(key, _)| is_valid_prop_key(key))
+                .map(|(key, value)| (key, parse_value(&value)))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn parse_value(input: &str) -> Value {
@@ -253,35 +247,6 @@ fn parse_value(input: &str) -> Value {
     }
 
     Value::String(input.to_string())
-}
-
-fn split_csv_like(input: &str) -> Vec<&str> {
-    let mut out: Vec<&str> = Vec::new();
-    let mut start = 0usize;
-    let mut quote: Option<char> = None;
-
-    for (idx, ch) in input.char_indices() {
-        match ch {
-            '"' | '\'' => {
-                if quote == Some(ch) {
-                    quote = None;
-                } else if quote.is_none() {
-                    quote = Some(ch);
-                }
-            }
-            ',' if quote.is_none() => {
-                out.push(input[start..idx].trim());
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-
-    if start <= input.len() {
-        out.push(input[start..].trim());
-    }
-
-    out
 }
 
 fn take_token(input: &str) -> Option<(&str, &str)> {

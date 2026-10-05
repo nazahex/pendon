@@ -1,0 +1,21 @@
+name = "quiz"
+kind = "block"
+
+[matcher]
+start = ":::quiz"
+end = ":::"
+capture = "rest"
+
+[ast]
+node = "Component"
+node_name = "Quiz"
+
+[renderer.solid]
+component_template = "<Quiz>{children}</Quiz>"
+
+[[renderer.solid.imports]]
+module = "@comp/content/Quiz"
+default = "Quiz"
+
+[meta]
+description = "Render quiz blocks (:::quiz ... :::) as the Quiz component"

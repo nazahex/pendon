@@ -1,0 +1,72 @@
+<h2>
+  Highlight Bagian Kode (Inline/Range)
+</h2>
+<p>
+  Contoh sintaks:
+
+</p>
+<pre class="foo boz"><code><p><b><b>&lt;</b><b>p</b><b>&gt;</b></b>Lorem consequat <b><b>&lt;</b><b>b</b><b>&gt;</b></b>mollit commodo<b><b>&lt;/</b><b>b</b><b>&gt;</b></b> cillum <strong><b><b>&lt;</b><b>small</b><b>&gt;</b></b></strong>labore<b><b>&lt;/</b><b>small</b><b>&gt;</b></b> <strong>indah</strong> ut ex nisi excepteur ad nostrud quis dolore.<b><b>&lt;/</b><b>p</b><b>&gt;</b></b></p></code></pre>
+<p>
+  Rekomendasi tag: 
+  <code>  &lt;strong&gt;
+</code>
+  
+
+</p>
+<h2>
+  Highlight Baris
+</h2>
+<h3>
+  Plain
+</h3>
+<p>
+  Contoh sintaks:
+
+</p>
+<pre class="wrap"><code><p class="mark"><b>import</b> { log } <b>from</b> <i><i>&quot;</i>console<i>&quot;</i></i>; </p><p>const data <b>=</b> [10, 20, null];</p><p class="mark">async function<b>*</b> hitung(a, b <b>=</b> 5) {</p><p class="mark">  <b>for</b> (let x <b>of</b> data) {</p><p class="mark">    <b>if</b> (x<b>?</b>.val <b>?</b><b>?</b> true) <b>yield</b> (a <b>+</b> b) <b>*</b> x;</p><p>  }</p><p>}</p><p>hitung(2).next().then(({ value }) =&gt; log(<i><i>`</i>Hasil: </i>${value}<i><i>`</i></i>));</p></code></pre>
+<p>
+  Rekomendasi tag: 
+  <code>  &lt;p class=&quot;mark&quot;&gt;
+</code>
+  
+Catatan: 1-index based
+
+</p>
+<h3>
+  Insert
+</h3>
+<p>
+  Contoh sintaks:
+
+</p>
+<pre class="bar"><code><p class="ins"><b>import</b> { log } <b>from</b> <i><i>&quot;</i>console<i>&quot;</i></i>; </p><p>const data <b>=</b> [10, 20, null];</p><p class="ins">async function<b>*</b> hitung(a, b <b>=</b> 5) {</p><p class="ins">  <b>for</b> (let x <b>of</b> data) {</p><p class="ins">    <b>if</b> (x<b>?</b>.val <b>?</b><b>?</b> true) <b>yield</b> (a <b>+</b> b) <b>*</b> x;</p><p>  }</p><p>}</p><p>hitung(2).next().then(({ value }) =&gt; log(<i><i>`</i>Hasil: </i>${value}<i><i>`</i></i>));</p></code></pre>
+<p>
+  Rekomendasi tag: 
+  <code>  &lt;p class=&quot;ins&quot;&gt;
+</code>
+  
+
+</p>
+<h3>
+  Delete
+</h3>
+<p>
+  Contoh sintaks:
+
+</p>
+<pre class="dux"><code><p class="del"><b>import</b> { log } <b>from</b> <i><i>&quot;</i>console<i>&quot;</i></i>; </p><p>const data <b>=</b> [10, 20, null];</p><p class="del">async function<b>*</b> hitung(a, b <b>=</b> 5) {</p><p class="del">  <b>for</b> (let x <b>of</b> data) {</p><p class="del">    <b>if</b> (x<b>?</b>.val <b>?</b><b>?</b> true) <b>yield</b> (a <b>+</b> b) <b>*</b> x;</p><p>  }</p><p>}</p><p>hitung(2).next().then(({ value }) =&gt; log(<i><i>`</i>Hasil: </i>${value}<i><i>`</i></i>));</p></code></pre>
+<p>
+  Rekomendasi tag: 
+  <code>  &lt;p class=&quot;del&quot;&gt;
+</code>
+  
+
+</p>
+<h2>
+  Kombinasi
+</h2>
+<p>
+  Contoh sintaks:
+
+</p>
+<pre class="bar"><code><p class="ins"><b>import</b> { <strong>log</strong> } <b>from</b> <i><i>&quot;</i>console<i>&quot;</i></i>; </p><p>const data <b>=</b> [10, 20, null];</p><p class="del">async f<strong>unction</strong><b>*</b> hitung(a, b <b>=</b> 5) {</p><p class="del">  <b>for</b> (let x <b>of</b> data) {</p><p>    <b>if</b> (x<b>?</b>.val <b>?</b><b>?</b> true) <b>yield</b> (a <b>+</b> b) <b>*</b> x;</p><p>  }</p><p>}</p><p>hitung(2).next().then(({ value }) =&gt; <strong>log</strong>(<i><i>`</i>Hasil: </i>${value}<i><i>`</i></i>));</p></code></pre>

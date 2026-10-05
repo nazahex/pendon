@@ -2,6 +2,34 @@
 //!
 //! Plugins remain responsible for interpreting parsed properties. This crate
 //! only defines the common syntax and preserves the unprefixed property key.
+//!
+//! Three generations live here side by side:
+//!
+//! * [`parse_attrs`] / [`ExtraAttrs`] — the legacy `[.class,#id]{key: value}`
+//!   suffix used by the components that predate the unified syntax.
+//! * [`parse_extras`] / [`parse_directive_head`] / [`to_attributes`] — the
+//!   `@@type{…}` extras head defined by `docs/spec/SYNTAX.md` §4–§6.
+//! * [`scan_extras_chars`] / [`emit_attrs`] / [`warning_event`] — the glue that
+//!   binds a parsed head to the event IR, shared by the construct plugins.
+//!
+//! The legacy helpers are retired together with the migration phases; new code
+//! must use the extras API.
+
+mod bind;
+mod typed;
+mod value;
+
+pub use bind::{
+    emit_attr_warnings, emit_attrs, legacy_extras_warning, scan_extras_chars, warning_event,
+    warning_message,
+};
+
+pub use typed::{
+    parse_directive_head, parse_extras, parse_extras_body, parse_type_marker, to_attributes, Attrs,
+    DirectiveHead, DirectiveMatch, DirectiveSigil, ExtrasAttr, ExtrasError, ExtrasHead, ExtrasItem,
+    ExtrasMatch, ExtrasOptions, ExtrasWarning,
+};
+pub use value::{classify_scalar, number_kind, AttrValue, NumberKind};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ExtraAttrs {

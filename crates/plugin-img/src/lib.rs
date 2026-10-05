@@ -1,8 +1,11 @@
 use pendon_core::{
     element_close, element_open, parse, raw_inline, Event, InlinePipeline, NodeKind, Options,
-    Pipeline,
+    Pipeline, Severity,
 };
-use pendon_extra::{parse_attrs, ExtraAttrs};
+use pendon_extra::{
+    legacy_extras_warning, parse_attrs, scan_extras_chars, to_attributes, ExtraAttrs, ExtrasAttr,
+    ExtrasHead, ExtrasOptions,
+};
 use pendon_plugin_markdown::process as process_markdown;
 use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
@@ -32,6 +35,12 @@ struct ParsedImage {
     container: Option<ContainerKind>,
     attrs: ExtraAttrs,
     marker: ImageMarker,
+    /// Bare flags of the §7.1 extras head (§6.3), emitted on the outermost node.
+    flags: Vec<String>,
+    /// §13 warnings raised while resolving the head and extras.
+    warnings: Vec<String>,
+    /// Whether the deprecated `[.c,#id]{k:v}` block was read (§14).
+    legacy: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -150,6 +159,7 @@ fn emit_custom_image<C>(
         None => return,
     };
 
+    push_image_warnings(parsed, out);
     let node_kind = NodeKind::Custom(custom.name.clone());
     out.push(Event::StartNode(node_kind.clone()));
 
@@ -224,30 +234,23 @@ fn emit_custom_image<C>(
         });
     }
     for (k, v) in &parsed.attrs.properties {
-        if !k.starts_with("--") {
+        if !k.starts_with("--") && k != "style" {
             out.push(Event::Attribute {
                 name: k.clone(),
                 value: v.clone(),
             });
         }
     }
-    if parsed
-        .attrs
-        .properties
-        .iter()
-        .any(|(key, _)| key.starts_with("--"))
-    {
-        let style_str: String = parsed
-            .attrs
-            .properties
-            .iter()
-            .filter(|(key, _)| key.starts_with("--"))
-            .map(|(k, v)| format!("{}:{};", k, v))
-            .collect();
+    let style_str = image_style(&parsed.attrs);
+    if !style_str.is_empty() {
         out.push(Event::Attribute {
             name: "style".to_string(),
             value: style_str,
         });
+    }
+    // §6.3: a bare flag stays a bare attribute, also on a custom component.
+    for name in &parsed.flags {
+        out.push(Event::AttributeFlag { name: name.clone() });
     }
 
     // Caption as rendered inline children with full inline pipeline support
@@ -301,21 +304,20 @@ fn parse_figure_syntax(line: &str) -> Option<ParsedImage> {
     if core.marker.container != Some(ContainerKind::Figure) {
         return None;
     }
-    let (attrs, rest, _had_attrs) = parse_optional_attrs(core.rest);
-    let caption = rest.trim();
+    let blocks = parse_attached_blocks(core.rest);
+    let caption = blocks.rest.trim();
+    let caption = if caption.is_empty() {
+        None
+    } else {
+        Some(caption.to_string())
+    };
 
-    Some(ParsedImage {
-        alt: core.alt,
-        src: core.src,
-        caption: if caption.is_empty() {
-            None
-        } else {
-            Some(caption.to_string())
-        },
-        container: Some(ContainerKind::Figure),
-        attrs,
-        marker: core.marker,
-    })
+    Some(build_parsed_image(
+        core,
+        Some(ContainerKind::Figure),
+        caption,
+        blocks,
+    ))
 }
 
 fn parse_decorated_image_syntax(line: &str) -> Option<ParsedImage> {
@@ -325,37 +327,26 @@ fn parse_decorated_image_syntax(line: &str) -> Option<ParsedImage> {
     }
 
     if let Some(container) = core.marker.container {
-        let (attrs, rest, _had_attrs) = parse_optional_attrs(core.rest);
-        if !rest.trim().is_empty() {
+        let blocks = parse_attached_blocks(core.rest);
+        if !blocks.rest.trim().is_empty() {
             return None;
         }
-        return Some(ParsedImage {
-            alt: core.alt,
-            src: core.src,
-            caption: None,
-            container: Some(container),
-            attrs,
-            marker: core.marker,
-        });
+        return Some(build_parsed_image(core, Some(container), None, blocks));
     }
 
-    let (attrs, rest, had_attrs) = parse_optional_attrs(core.rest);
+    let blocks = parse_attached_blocks(core.rest);
+    // §7.1: an extras head alone makes the image advanced, exactly like the
+    // `[.class,#id]{k:v}` block does.
+    let has_attrs = blocks.legacy || blocks.extras.is_some();
     let has_marker_mod = core.marker.has_modifiers();
-    if !has_marker_mod && (!had_attrs || !rest.trim().is_empty()) {
+    if !has_marker_mod && (!has_attrs || !blocks.rest.trim().is_empty()) {
         return None;
     }
-    if has_marker_mod && !rest.trim().is_empty() {
+    if has_marker_mod && !blocks.rest.trim().is_empty() {
         return None;
     }
 
-    Some(ParsedImage {
-        alt: core.alt,
-        src: core.src,
-        caption: None,
-        container: None,
-        attrs,
-        marker: core.marker,
-    })
+    Some(build_parsed_image(core, None, None, blocks))
 }
 
 // --- Structured Element Emission (used when no custom component is configured) ---
@@ -373,12 +364,13 @@ fn emit_element_image<C, P>(
 ) where
     P: InlinePipeline<C>,
 {
+    push_image_warnings(parsed, out);
     let container = parsed.container.or(parsed.marker.container);
 
     match container {
         Some(ContainerKind::Figure) => {
             out.extend(element_open("figure"));
-            push_common_attrs(out, &parsed.attrs);
+            push_common_attrs(out, &parsed.attrs, &parsed.flags);
             push_img_element(parsed, out);
 
             if let Some(caption) = &parsed.caption {
@@ -399,7 +391,7 @@ fn emit_element_image<C, P>(
                 _ => unreachable!(),
             };
             out.extend(element_open(tag));
-            push_common_attrs(out, &parsed.attrs);
+            push_common_attrs(out, &parsed.attrs, &parsed.flags);
             push_img_element(parsed, out);
             out.push(element_close(tag));
         }
@@ -407,7 +399,7 @@ fn emit_element_image<C, P>(
             out.extend(element_open("img"));
             push_image_marker_attrs(out, &parsed.marker);
             attribute(out, "alt", &parsed.alt);
-            push_common_attrs(out, &parsed.attrs);
+            push_common_attrs(out, &parsed.attrs, &parsed.flags);
             attribute(out, "src", &parsed.src);
             out.push(element_close("img"));
         }
@@ -524,9 +516,161 @@ fn parse_marker(raw: &str) -> Option<ImageMarker> {
     Some(marker)
 }
 
-fn parse_optional_attrs(input: &str) -> (ExtraAttrs, &str, bool) {
+/// The attribute blocks attached after an image's `(url)` head: the deprecated
+/// `[.class,#id]{key: value}` form (§14) and the §11 `@@type{…}` extras head
+/// (§7.1). Both attach to the outermost node of the construct.
+struct AttachedBlocks<'a> {
+    attrs: ExtraAttrs,
+    extras: Option<ExtrasHead>,
+    /// Whether the deprecated block was present and is therefore reported (§14).
+    legacy: bool,
+    /// Text left after the blocks: the figure caption or trailing text.
+    rest: &'a str,
+}
+
+impl<'a> AttachedBlocks<'a> {
+    fn empty(rest: &'a str) -> Self {
+        Self {
+            attrs: ExtraAttrs::default(),
+            extras: None,
+            legacy: false,
+            rest,
+        }
+    }
+}
+
+/// Parses the attribute blocks attached to an image. The extras head must be
+/// adjacent to the legacy block (§4.1), so it is scanned on the untrimmed rest.
+fn parse_attached_blocks(input: &str) -> AttachedBlocks<'_> {
     let parsed = parse_attrs(input);
-    (parsed.attrs, parsed.rest, parsed.had_attrs)
+    let consumed = input.len().saturating_sub(parsed.rest.len());
+    let rest = &input[consumed..];
+    let chars: Vec<char> = rest.chars().collect();
+
+    match scan_extras_chars(&chars, 0) {
+        Some((head, next)) => {
+            let bytes: usize = chars[..next].iter().map(|ch| ch.len_utf8()).sum();
+            AttachedBlocks {
+                attrs: parsed.attrs,
+                extras: Some(head),
+                legacy: parsed.had_attrs,
+                rest: &rest[bytes..],
+            }
+        }
+        None => AttachedBlocks {
+            attrs: parsed.attrs,
+            extras: None,
+            legacy: parsed.had_attrs,
+            rest,
+        },
+    }
+}
+
+/// Assembles a parsed image: merges the attached blocks into the attributes and
+/// keeps the flags and warnings the merge resolved.
+fn build_parsed_image(
+    core: ImageCore<'_>,
+    container: Option<ContainerKind>,
+    caption: Option<String>,
+    blocks: AttachedBlocks<'_>,
+) -> ParsedImage {
+    let AttachedBlocks {
+        mut attrs,
+        extras,
+        legacy,
+        ..
+    } = blocks;
+    let mut flags = Vec::new();
+    let mut warnings = Vec::new();
+    merge_image_extras(&mut attrs, extras.as_ref(), &mut flags, &mut warnings);
+
+    ParsedImage {
+        alt: core.alt,
+        src: core.src,
+        caption,
+        container,
+        attrs,
+        marker: core.marker,
+        flags,
+        warnings,
+        legacy,
+    }
+}
+
+/// Whether the construct side (head or deprecated block) already sets `key`.
+fn has_attribute(attrs: &ExtraAttrs, key: &str) -> bool {
+    match key {
+        "id" => attrs.id.is_some(),
+        "class" => !attrs.classes.is_empty(),
+        _ => attrs.properties.iter().any(|(name, _)| name == key),
+    }
+}
+
+/// Merges a §7.1 extras head into the image attributes.
+///
+/// The construct side wins (§6.2): an `id`/`class`/prop already set by the head
+/// or the deprecated block is kept and the extras value is reported as dropped.
+/// `class` accumulates (§6.4), `slug` fills `id` when no `id` is present, and
+/// bare flags stay bare attributes (§6.3).
+fn merge_image_extras(
+    attrs: &mut ExtraAttrs,
+    extras: Option<&ExtrasHead>,
+    flags: &mut Vec<String>,
+    warnings: &mut Vec<String>,
+) {
+    let Some(head) = extras else {
+        return;
+    };
+
+    let parsed = to_attributes(head, &ExtrasOptions::default());
+    for warning in &parsed.warnings {
+        warnings.push(pendon_extra::warning_message(warning));
+    }
+
+    let extras_id = parsed.value("id").map(|value| value.literal());
+    let extras_slug = parsed.value("slug").map(|value| value.literal());
+
+    for (key, value) in &parsed.items {
+        if key == "id" || key == "slug" {
+            continue;
+        }
+        match value {
+            ExtrasAttr::Flag => {
+                if has_attribute(attrs, key) {
+                    warnings.push(format!(
+                        "`{key}` was dropped because the construct head already sets it"
+                    ));
+                } else {
+                    flags.push(key.clone());
+                }
+            }
+            ExtrasAttr::Value(value) => {
+                let text = value.literal();
+                // §6.4: `class` accumulates, head classes first.
+                if key == "class" {
+                    for token in text.split_whitespace() {
+                        attrs.classes.push(token.to_string());
+                    }
+                    continue;
+                }
+                if has_attribute(attrs, key) {
+                    warnings.push(format!(
+                        "`{key}` was dropped because the construct head already sets it"
+                    ));
+                    continue;
+                }
+                attrs.properties.push((key.clone(), text));
+            }
+        }
+    }
+
+    // §6.2: `#id` > extras `slug`; an `id` already on the image wins.
+    match extras_id.or(extras_slug) {
+        Some(id) if attrs.id.is_none() => attrs.id = Some(id),
+        Some(_) => warnings
+            .push("extras `id` was dropped because the image already has an id (§6.2)".to_string()),
+        None => {}
+    }
 }
 
 fn is_inline_marker_char(ch: char) -> bool {
@@ -543,27 +687,31 @@ fn find_char_index(chars: &[char], mut index: usize, wanted: char) -> Option<usi
     None
 }
 
-/// Parses an adjacent `[.class,#id]{key: val}` block, returning the attributes
-/// and the number of consumed characters (0 when nothing valid was attached).
-fn parse_inline_attrs(input: &str) -> (ExtraAttrs, usize) {
+/// Parses the attribute blocks attached to an inline image, returning them and
+/// the number of consumed characters (0 when nothing valid was attached).
+fn parse_inline_blocks(input: &str) -> (AttachedBlocks<'_>, usize) {
     let starts_with_block = input.starts_with('{')
+        || input.starts_with("@@")
         || (input.starts_with('[')
             && input
                 .chars()
                 .nth(1)
                 .is_some_and(|ch| ch == '.' || ch == '#'));
     if !starts_with_block {
-        return (ExtraAttrs::default(), 0);
+        return (AttachedBlocks::empty(input), 0);
     }
-    let parsed = parse_attrs(input);
-    let has_content = parsed.attrs.id.is_some()
-        || !parsed.attrs.classes.is_empty()
-        || !parsed.attrs.properties.is_empty();
-    if !parsed.had_attrs || !has_content {
-        return (ExtraAttrs::default(), 0);
+
+    let blocks = parse_attached_blocks(input);
+    let has_content = blocks.extras.is_some()
+        || blocks.attrs.id.is_some()
+        || !blocks.attrs.classes.is_empty()
+        || !blocks.attrs.properties.is_empty();
+    if !has_content {
+        return (AttachedBlocks::empty(input), 0);
     }
-    let consumed_bytes = input.len().saturating_sub(parsed.rest.len());
-    (parsed.attrs, input[..consumed_bytes].chars().count())
+
+    let consumed_bytes = input.len().saturating_sub(blocks.rest.len());
+    (blocks, input[..consumed_bytes].chars().count())
 }
 
 /// Attempts to parse an advanced image starting at `start` (the first marker
@@ -599,24 +747,20 @@ fn parse_inline_image_at(chars: &[char], start: usize) -> Option<(usize, ParsedI
     let src: String = chars[close_br + 2..close_par].iter().collect();
 
     let rest_source: String = chars[close_par + 1..].iter().collect();
-    let (attrs, consumed) = parse_inline_attrs(&rest_source);
+    let (blocks, consumed) = parse_inline_blocks(&rest_source);
 
     if !marker.has_modifiers() && consumed == 0 {
         return None;
     }
 
     let end = close_par + 1 + consumed;
-    Some((
-        end,
-        ParsedImage {
-            alt,
-            src,
-            caption: None,
-            container: None,
-            attrs,
-            marker,
-        },
-    ))
+    let core = ImageCore {
+        alt,
+        src,
+        rest: "",
+        marker,
+    };
+    Some((end, build_parsed_image(core, None, None, blocks)))
 }
 
 /// Emits `text` while replacing any inline advanced image patterns with their
@@ -670,7 +814,7 @@ fn emit_inline_image<C, P>(
     }
 }
 
-fn push_common_attrs(out: &mut Vec<Event>, attrs: &ExtraAttrs) {
+fn push_common_attrs(out: &mut Vec<Event>, attrs: &ExtraAttrs, flags: &[String]) {
     if let Some(id) = attrs.id.as_deref() {
         attribute(out, "id", id);
     }
@@ -680,22 +824,61 @@ fn push_common_attrs(out: &mut Vec<Event>, attrs: &ExtraAttrs) {
     }
 
     // HTML elements keep the `data-` prefix (custom components receive the
-    // keys verbatim, see `emit_custom_image`).
+    // keys verbatim, see `emit_custom_image`). The `style` value is emitted as
+    // the `style` attribute itself (§6.3).
     for (k, v) in &attrs.properties {
-        if k.starts_with("--") {
+        if k.starts_with("--") || k == "style" {
             continue;
         }
         attribute(out, &format!("data-{}", k), v);
     }
 
-    let styles: String = attrs
+    let styles = image_style(attrs);
+    if !styles.is_empty() {
+        attribute(out, "style", &styles);
+    }
+
+    // §6.3: a bare flag stays a bare attribute (`<figure isFoo>`).
+    for name in flags {
+        out.push(Event::AttributeFlag { name: name.clone() });
+    }
+}
+
+/// The `style` value of an image: the `--var` properties of the deprecated
+/// block, followed by the `style` value the extras head merged (§6.3).
+fn image_style(attrs: &ExtraAttrs) -> String {
+    let mut styles: String = attrs
         .properties
         .iter()
         .filter(|(k, _)| k.starts_with("--"))
         .map(|(k, v)| format!("{}:{};", k, v))
         .collect();
-    if !styles.is_empty() {
-        attribute(out, "style", &styles);
+    for (key, value) in &attrs.properties {
+        if key != "style" {
+            continue;
+        }
+        if !styles.is_empty() {
+            styles.push(' ');
+        }
+        styles.push_str(value);
+        if !styles.ends_with(';') {
+            styles.push(';');
+        }
+    }
+    styles
+}
+
+/// §13/§14 diagnostics raised while parsing and merging an image head.
+fn push_image_warnings(parsed: &ParsedImage, out: &mut Vec<Event>) {
+    if parsed.legacy {
+        out.push(legacy_extras_warning("img"));
+    }
+    for message in &parsed.warnings {
+        out.push(Event::Diagnostic {
+            severity: Severity::Warning,
+            message: format!("[img] {message}"),
+            span: None,
+        });
     }
 }
 
@@ -1031,6 +1214,153 @@ mod tests {
         assert!(marker.async_decoding);
         assert_eq!(marker.width, Some(300));
         assert_eq!(marker.height, Some(800));
+    }
+
+    #[test]
+    fn extras_attach_to_the_outermost_figure() {
+        let pipeline = Pipeline::default();
+        let events = paragraph_events(
+            "~?!!h300w800[Alt](https://x.test/a.webp)@@figure{.wide, #fig, foo: \"bar\"} Caption",
+        );
+        let out = process(&events, &ImgOptions::default(), &pipeline);
+
+        // §7.1: extras go to the outer `<figure>`, the `w`/`h` marker stays on
+        // the inner `<img>`.
+        let figure = element_children(&out, "figure");
+        assert!(has_attribute(&figure, "id", "fig"));
+        assert!(has_attribute(&figure, "class", "wide"));
+        assert!(has_attribute(&figure, "data-foo", "bar"));
+        let img = element_children(&figure, "img");
+        assert!(has_attribute(&img, "width", "800"));
+        assert!(has_attribute(&img, "height", "300"));
+        assert!(!has_attribute(&img, "class", "wide"));
+
+        // The whitespace after the head does not leak into the caption.
+        let caption = element_children(&out, "figcaption");
+        assert!(has_text(&caption, "Caption"));
+        assert!(!has_text(&caption, "@@figure"));
+    }
+
+    #[test]
+    fn extras_attach_to_an_inline_image() {
+        let pipeline = Pipeline::default();
+        let events = paragraph_events(
+            "Ad ex tempor !?~[Alt](https://x.test/a.webp)@@img{con: \"jux\", .foo} consectetur.",
+        );
+        let out = process(&events, &ImgOptions::default(), &pipeline);
+
+        assert!(out
+            .iter()
+            .any(|event| matches!(event, Event::StartNode(NodeKind::Paragraph))));
+        assert!(has_attribute(&out, "class", "foo"));
+        assert!(has_attribute(&out, "data-con", "jux"));
+        assert!(has_attribute(&out, "loading", "lazy"));
+        assert!(has_text(&out, "consectetur."));
+        assert!(!has_text(&out, "@@img"));
+    }
+
+    #[test]
+    fn extras_class_accumulates_after_the_legacy_classes() {
+        let parsed = parse_figure_syntax("!![Alt](https://x.test/a.webp)[.head]@@figure{.extra}")
+            .expect("figure");
+        // §6.4: class accumulates, head classes first.
+        assert_eq!(parsed.attrs.classes, vec!["head", "extra"]);
+    }
+
+    #[test]
+    fn the_legacy_block_wins_over_extras_and_reports_it() {
+        let parsed = parse_figure_syntax("!![Alt](https://x.test/a.webp)[#hero]@@figure{#other}")
+            .expect("figure");
+        assert_eq!(parsed.attrs.id.as_deref(), Some("hero"));
+        assert!(parsed.legacy);
+        assert!(parsed
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("already has an id")));
+
+        let pipeline = Pipeline::default();
+        let events = paragraph_events("!![Alt](https://x.test/a.webp)[#hero]@@figure{#other} Cap");
+        let out = process(&events, &ImgOptions::default(), &pipeline);
+        // §14: the deprecated block is reported, not applied silently.
+        assert!(out.iter().any(|event| matches!(
+            event,
+            Event::Diagnostic { message, .. } if message.contains("[img]") && message.contains("deprecated")
+        )));
+    }
+
+    #[test]
+    fn extras_slug_fills_the_id_when_no_id_is_present() {
+        let parsed = parse_figure_syntax("!![Alt](https://x.test/a.webp)@@figure{`the-figure`}")
+            .expect("figure");
+        // §6.2: `#id` > head slug > extras slug.
+        assert_eq!(parsed.attrs.id.as_deref(), Some("the-figure"));
+    }
+
+    #[test]
+    fn bare_flags_stay_bare_attributes() {
+        let pipeline = Pipeline::default();
+        let events = paragraph_events("!![Alt](https://x.test/a.webp)@@figure{isFoo} Cap");
+        let out = process(&events, &ImgOptions::default(), &pipeline);
+
+        let figure = element_children(&out, "figure");
+        assert!(figure
+            .iter()
+            .any(|event| matches!(event, Event::AttributeFlag { name } if name == "isFoo")));
+    }
+
+    #[test]
+    fn extras_style_merges_into_the_style_attribute() {
+        let pipeline = Pipeline::default();
+        let events = paragraph_events("![Alt](https://x.test/a.webp)@@img{--r: \"5deg\"}");
+        let out = process(&events, &ImgOptions::default(), &pipeline);
+
+        assert!(has_attribute(&out, "style", "--r: 5deg;"));
+        assert!(!out.iter().any(|event| matches!(
+            event,
+            Event::Attribute { name, .. } if name == "data-style"
+        )));
+    }
+
+    #[test]
+    fn malformed_extras_stay_literal_text() {
+        let pipeline = Pipeline::default();
+        let events = paragraph_events("Ad ex tempor ![Alt](https://x.test/a.webp)@@figure{.a ex.");
+        let out = process(&events, &ImgOptions::default(), &pipeline);
+
+        assert!(!out.iter().any(
+            |event| matches!(event, Event::StartNode(NodeKind::Element(name)) if name == "img")
+        ));
+        assert!(has_text(&out, "@@figure{.a"));
+    }
+
+    #[test]
+    fn custom_component_receives_extras_props() {
+        let pipeline = Pipeline::default();
+        let options = ImgOptions {
+            custom_node: Some(ImgCustomNode {
+                name: "AdvancedImage".into(),
+                template: "<AdvancedImage />".into(),
+                imports: Vec::new(),
+            }),
+        };
+        let events = paragraph_events(
+            "!![Alt](https://x.test/a.webp)@@figure{.hero, foo: \"bar\"} A caption",
+        );
+        let out = process(&events, &options, &pipeline);
+
+        assert!(out.iter().any(|e| matches!(
+            e,
+            Event::StartNode(NodeKind::Custom(name)) if name == "AdvancedImage"
+        )));
+        assert!(out.iter().any(|e| matches!(
+            e,
+            Event::Attribute { name, value } if name == "class" && value == "hero"
+        )));
+        assert!(out.iter().any(|e| matches!(
+            e,
+            Event::Attribute { name, value } if name == "foo" && value == "bar"
+        )));
+        assert!(has_text(&out, "A caption"));
     }
 
     #[test]

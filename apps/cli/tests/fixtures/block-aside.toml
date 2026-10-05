@@ -1,0 +1,27 @@
+name = "aside"
+kind = "block"
+
+[meta]
+description = "Render :::note / :::warn containers as the Aside component"
+
+[matcher]
+start_regex = '^:::(?P<type>note|warn)\s*$'
+end = ":::"
+capture = "rest"
+
+[[attrs]]
+name = "type"
+type = "string"
+required = true
+
+[ast]
+node = "Component"
+node_name = "Aside"
+attrs_map = { type = "type" }
+
+[renderer.solid]
+component_template = "<Aside type=\"{attrs.type}\">{children}</Aside>"
+
+[[renderer.solid.imports]]
+module = "@comp/shared/Aside"
+default = "Aside"

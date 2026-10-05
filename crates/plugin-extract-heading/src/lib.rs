@@ -1,4 +1,5 @@
 use pendon_core::{Event, NodeKind};
+use pendon_extra::{scan_extras_chars, to_attributes, ExtrasOptions};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -19,8 +20,10 @@ struct HeadingCapture {
 
 // --- Extras Parser (mirrors plugin-heading) ---
 
-/// Parses [id][.classes]{attrs} from the start of heading text.
-/// Returns (custom_id, consumed_byte_length).
+/// Parses the heading head (§7.4 / §11) from the start of heading text:
+/// `[slug]`, `[.classes]`, `("title")`, the pre-§11 `{attrs}` block and the
+/// `@@type{…}` extras head.
+/// Returns (custom_id, consumed_character_count).
 fn parse_heading_prefix(raw_text: &str) -> (Option<String>, usize) {
     let chars: Vec<char> = raw_text.chars().collect();
     let mut cursor = 0;
@@ -68,7 +71,55 @@ fn parse_heading_prefix(raw_text: &str) -> (Option<String>, usize) {
         }
     }
 
+    // §7.4: an optional `("title")` head, never part of the heading text.
+    while cursor < chars.len() && chars[cursor].is_whitespace() {
+        cursor += 1;
+    }
+    if cursor < chars.len() && chars[cursor] == '(' {
+        if let Some(close) = find_matching_paren(&chars, cursor) {
+            cursor = close + 1;
+        }
+    }
+
+    // §7.4: an adjacent `@@type{…}` head attaches to the heading. `#id` beats
+    // the `[slug]` head, which beats the extras slug (§6.2).
+    while cursor < chars.len() && chars[cursor].is_whitespace() {
+        cursor += 1;
+    }
+    if let Some((head, next)) = scan_extras_chars(&chars, cursor) {
+        let parsed = to_attributes(&head, &ExtrasOptions::default());
+        match parsed.value("id").map(|value| value.literal()) {
+            Some(id) => custom_id = Some(id),
+            None => {
+                if custom_id.is_none() {
+                    custom_id = parsed.value("slug").map(|value| value.literal());
+                }
+            }
+        }
+        cursor = next;
+        // The whitespace after the head is not part of the heading text.
+        while cursor < chars.len() && matches!(chars[cursor], ' ' | '\t') {
+            cursor += 1;
+        }
+    }
+
     (custom_id, cursor)
+}
+
+/// Finds the `)` matching the `(` at `start`, counting nested pairs.
+fn find_matching_paren(chars: &[char], start: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut i = start;
+    while i < chars.len() {
+        match chars[i] {
+            '(' => depth += 1,
+            ')' if depth == 1 => return Some(i),
+            ')' => depth -= 1,
+            _ => {}
+        }
+        i += 1;
+    }
+    None
 }
 
 fn find_char(chars: &[char], mut index: usize, wanted: char) -> Option<usize> {
@@ -384,4 +435,52 @@ fn push_headings_block(out: &mut Vec<Event>, data: &str) {
 
 fn headings_node_kind() -> NodeKind {
     NodeKind::Custom("Headings".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strips_the_legacy_head() {
+        let text = "[foo-bar][.extra]{ qux: \"anu\" } Foo Bar Barosa";
+        let (id, consumed) = parse_heading_prefix(text);
+        assert_eq!(id.as_deref(), Some("foo-bar"));
+        assert_eq!(&text[consumed..], "Foo Bar Barosa");
+    }
+
+    #[test]
+    fn strips_the_extras_head() {
+        let text = "[foo-bar]@@heading{.extra, qux: \"anu\"} Foo Bar Barosa";
+        let (id, consumed) = parse_heading_prefix(text);
+        assert_eq!(id.as_deref(), Some("foo-bar"));
+        assert_eq!(&text[consumed..], "Foo Bar Barosa");
+    }
+
+    #[test]
+    fn strips_the_title_head() {
+        let text = "[slug](\"Boom\") Body";
+        let (id, consumed) = parse_heading_prefix(text);
+        assert_eq!(id.as_deref(), Some("slug"));
+        assert_eq!(&text[consumed..], "Body");
+    }
+
+    #[test]
+    fn extras_id_beats_the_slug_head() {
+        let text = "[slug]@@heading{#explicit} Body";
+        let (id, _) = parse_heading_prefix(text);
+        assert_eq!(id.as_deref(), Some("explicit"));
+
+        let text = "@@heading{`extras-slug`} Body";
+        let (id, _) = parse_heading_prefix(text);
+        assert_eq!(id.as_deref(), Some("extras-slug"));
+    }
+
+    #[test]
+    fn malformed_extras_are_kept_in_the_text() {
+        let text = "@@heading{`unterminated} Body";
+        let (id, consumed) = parse_heading_prefix(text);
+        assert_eq!(id, None);
+        assert_eq!(consumed, 0);
+    }
 }

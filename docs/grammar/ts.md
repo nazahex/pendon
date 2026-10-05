@@ -1,0 +1,61 @@
+# TypeScript Scopes
+
+- Note: Derived from highlighting sample content using syntect ClassedHTMLGenerator.
+- Format: Unique CSS classes (sorted) representing scope categories used during HTML generation.
+
+- arithmetic
+- assignment
+- begin
+- bitwise
+- block
+- builtin
+- class
+- comma
+- comment
+- comparison
+- conditional
+- constant
+- control
+- declaration
+- definition
+- double-slash
+- embedded
+- end
+- entity
+- expression
+- extends
+- function
+- group
+- import
+- import-export
+- inherited-class
+- js
+- keyword
+- label
+- line
+- logical
+- meta
+- modifier
+- name
+- numeric
+- object-literal
+- operator
+- other
+- parameter
+- punctuation
+- quoted
+- readwrite
+- relational
+- section
+- separator
+- single
+- source
+- statement
+- storage
+- string
+- support
+- template
+- template-expression
+- terminator
+- type
+- variable

@@ -1,0 +1,11 @@
+# Sandbox config for syntect-based codeblock highlighting
+
+[[task]]
+name = "Syntect Demo HTML"
+input = "./src/[...slug].md"
+output = "./out/[...slug].html"
+plugin = "markdown,syntect"
+format = "html"
+pretty = true
+strict = false
+css_embed = "./styles.css"

@@ -1,0 +1,8 @@
+[[task]]
+name = "Table Demo Integration (Solid)"
+input = "./src/integ.md"
+output = "./out/integ.jsx"
+plugin = "micromatter,table,img,cite,wiki,anchor,markdown"
+format = "solid"
+pretty = true
+markdown_allow_html = true

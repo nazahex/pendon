@@ -1,0 +1,4 @@
+<h1>
+  JS Example
+</h1>
+<pre><code><p><b>import</b> { log } <b>from</b> <i><i>&quot;</i>console<i>&quot;</i></i>; </p><p>const data <b>=</b> [10, 20, null];</p><p>async function<b>*</b> hitung(a, b <b>=</b> 5) {</p><p>  <b>for</b> (let x <b>of</b> data) {</p><p>    <b>if</b> (x<b>?</b>.val <b>?</b><b>?</b> true) <b>yield</b> (a <b>+</b> b) <b>*</b> x;</p><p>  }</p><p>}</p><p>hitung(2).next().then(({ value }) =&gt; log(<i><i>`</i>Hasil: </i>${value}<i><i>`</i></i>));</p></code></pre>

@@ -24,40 +24,30 @@ pub struct ConfigTask {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct ImgTaskConfig {
-    pub custom_node: Option<ImgCustomNodeConfig>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub struct ImgCustomNodeConfig {
-    pub name: Option<String>,
-    pub template: Option<String>,
-    pub imports: Option<Vec<toml::Value>>,
+    /// §11 layer component sets: `[task.img.custom.figure]`.
+    pub custom: Option<toml::Value>,
+    /// Removed pre-§11 key (`[task.img.custom_node]`, §14). The table is still
+    /// parsed so a stale config fails with a migration message instead of
+    /// silently dropping the custom component.
+    pub custom_node: Option<toml::Value>,
 }
 
 #[derive(Debug, Deserialize, Default)]
 pub struct HeadingTaskConfig {
     pub auto_number: Option<bool>,
     pub number_style: Option<pendon_plugin_heading::NumberStyle>,
-    pub custom_node: Option<HeadingCustomNodeConfig>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub struct HeadingCustomNodeConfig {
-    pub name: Option<String>,
-    pub template: Option<String>,
-    pub imports: Option<Vec<toml::Value>>,
+    /// §11 layer component sets: `[task.heading.custom.heading]`.
+    pub custom: Option<toml::Value>,
+    /// Removed pre-§11 key (`[task.heading.custom_node]`, §14).
+    pub custom_node: Option<toml::Value>,
 }
 
 #[derive(Debug, Deserialize, Default)]
 pub struct AnchorTaskConfig {
-    pub custom_node: Option<AnchorCustomNodeConfig>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub struct AnchorCustomNodeConfig {
-    pub name: Option<String>,
-    pub template: Option<String>,
-    pub imports: Option<Vec<toml::Value>>,
+    /// §11 layer component sets: `[task.anchor.custom]`.
+    pub custom: Option<toml::Value>,
+    /// Removed pre-§11 key (`[task.anchor.custom_node]`, §14).
+    pub custom_node: Option<toml::Value>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -67,48 +57,18 @@ pub struct CiteTaskConfig {
     pub prefix: Option<String>,
     pub class: Option<String>,
     pub id_prefix: Option<String>,
-    pub custom_node: Option<CiteCustomNodeConfig>,
-    pub section: Option<CiteSectionConfig>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub struct CiteCustomNodeConfig {
-    pub name: Option<String>,
-    pub template: Option<String>,
-    pub imports: Option<Vec<toml::Value>>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub struct CiteSectionConfig {
-    pub marker: Option<String>,
-    pub node: Option<String>,
-    pub template: Option<String>,
-    pub imports: Option<Vec<toml::Value>>,
+    /// §11 layer component sets: `[task.cite.custom]` (primary layer `cite`).
+    pub custom: Option<toml::Value>,
+    /// Removed pre-§11 key (`[task.cite.custom_node]`, §14).
+    pub custom_node: Option<toml::Value>,
 }
 
 #[derive(Debug, Deserialize, Default)]
 pub struct TableTaskConfig {
-    pub custom_node: Option<TableCustomNodeConfig>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub struct TableCustomNodeConfig {
-    /// Imports shared by every configured component below.
-    pub imports: Option<Vec<toml::Value>>,
-    pub table: Option<TableComponentConfig>,
-    pub caption: Option<TableComponentConfig>,
-    pub thead: Option<TableComponentConfig>,
-    pub tbody: Option<TableComponentConfig>,
-    pub tfoot: Option<TableComponentConfig>,
-    pub row: Option<TableComponentConfig>,
-    pub cell: Option<TableComponentConfig>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub struct TableComponentConfig {
-    pub name: Option<String>,
-    pub template: Option<String>,
-    pub imports: Option<Vec<toml::Value>>,
+    /// §11 layer component sets: `[task.table.custom.table]`, `…custom.thead`, …
+    pub custom: Option<toml::Value>,
+    /// Removed pre-§11 key (`[task.table.custom_node]`, §14).
+    pub custom_node: Option<toml::Value>,
 }
 
 #[derive(Debug, Deserialize, Default)]

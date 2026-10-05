@@ -1,0 +1,7 @@
+[[task]]
+name = "Image Inline Demo (Solid)"
+input = "./src/img-inline.md"
+output = "./out/img-inline.jsx"
+plugin = "img,markdown"
+format = "solid"
+markdown_allow_html = true

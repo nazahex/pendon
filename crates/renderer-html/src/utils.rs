@@ -16,7 +16,8 @@ pub(crate) fn attr_bool(v: &Value, key: &str) -> bool {
     attr_str(v, key).map(|raw| raw == "1").unwrap_or(false)
 }
 
-/// Emits `name="value"` for every attribute except `skip`, escaping HTML.
+/// Emits every attribute except `skip` as HTML: `name="value"`, or a bare `name`
+/// for a flag (§6.3), matching what the JSX renderer emits.
 pub(crate) fn render_attrs_except(v: &Value, out: &mut String, skip: &[&str]) {
     let Some(attrs) = v.get("attrs").and_then(|attrs| attrs.as_object()) else {
         return;
@@ -27,6 +28,9 @@ pub(crate) fn render_attrs_except(v: &Value, out: &mut String, skip: &[&str]) {
         }
         out.push(' ');
         out.push_str(name);
+        if matches!(value, Value::Bool(true)) {
+            continue;
+        }
         out.push_str("=\"");
         match value {
             Value::String(value) => escape_html(value, out),

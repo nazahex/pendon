@@ -1,0 +1,133 @@
+# 1. Contoh Buku
+suryana-2026:
+  id: suryana-2026
+  type: book
+  title: Masa Depan Rekayasa Perangkat Lunak
+  authors:
+    - firstName: Eko
+      lastName: Suryana
+  publisher: TechPress Indonesia
+  publisherLocation: Jakarta
+  issuedDate:
+    year: 2026
+  isbn: 978-602-0000-00-0
+  language: id
+
+# 2. Contoh Jurnal Akademik
+paper-smith:
+  id: paper-smith
+  type: journal
+  title: Generative MDX to PDF Compilation Architectures
+  authors:
+    - firstName: John
+      lastName: Smith
+    - firstName: Jane
+      lastName: Doe
+  containerTitle: Journal of Web Engineering
+  volume: "18"
+  issue: "4"
+  pages: 210-225
+  issuedDate:
+    year: 2025
+    month: 8
+  doi: 10.1016/j.jwe.2025.08.001
+  language: en
+
+# 3. Contoh Website / Artikel Online
+web-react:
+  id: web-react
+  type: website
+  title: React Server Components Best Practices
+  publisherOrg: React Documentation
+  url: https://react.dev/learn/server-components
+  issuedDate:
+    year: 2026
+    month: 1
+    day: 15
+  accessedDate:
+    year: 2026
+    month: 9
+    day: 5
+  language: en
+
+# 4. Contoh Laporan Resmi / Whitepaper
+report-unesco-2025:
+  id: report-unesco-2025
+  type: report
+  title: Global Education Monitoring Report 2025
+  publisherOrg: UNESCO
+  publisherLocation: Paris
+  url: https://unesdoc.unesco.org/ark:/48223/pf0000380000
+  issuedDate:
+    year: 2025
+  language: en
+
+# 5. Contoh Tesis / Skripsi / Disertasi
+thesis-pratama-2024:
+  id: thesis-pratama-2024
+  type: thesis
+  title: Optimasi AST Parser pada Generator Dokumen Hybrid
+  authors:
+    - firstName: Budi
+      lastName: Pratama
+  publisher: Universitas Indonesia
+  publisherLocation: Depok
+  issuedDate:
+    year: 2024
+  language: id
+
+# 6. Contoh Berita / Media Massa Online
+news-kompas-2026:
+  id: news-kompas-2026
+  type: news
+  title: Perkembangan Standar Baru Penyusunan Dokumen Digital
+  authors:
+    - firstName: Andi
+      lastName: Nurhayati
+  containerTitle: Kompas.com
+  url: https://tekno.kompas.com/read/2026/03/10/perkembangan-dokumen-digital
+  issuedDate:
+    year: 2026
+    month: 3
+    day: 10
+  accessedDate:
+    year: 2026
+    month: 9
+    day: 5
+  language: id
+
+# 7. Contoh Video (YouTube / Dokumenter)
+video-keynote-2026:
+  id: video-keynote-2026
+  type: video
+  title: The Future of Web Compilation Paradigms
+  authors:
+    - firstName: Sarah
+      lastName: Connor
+  publisherOrg: Web Dev Conference
+  url: https://www.youtube.com/watch?v=example123
+  issuedDate:
+    year: 2026
+    month: 5
+    day: 20
+  accessedDate:
+    year: 2026
+    month: 9
+    day: 5
+  language: en
+
+# 8. Contoh Paper Konferensi / Prosiding
+conf-lee-2025:
+  id: conf-lee-2025
+  type: conference
+  title: High-Performance PDF Rendering from Custom Syntax
+  authors:
+    - firstName: David
+      lastName: Lee
+  containerTitle: Proceedings of the 30th International Web Conference
+  pages: 45-52
+  issuedDate:
+    year: 2025
+    month: 11
+  doi: 10.1145/3374272.3376234
+  language: en

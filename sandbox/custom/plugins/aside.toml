@@ -1,0 +1,33 @@
+name = "aside"
+kind = "block"
+
+[matcher]
+start_regex = '^:::(?P<type>note|tip|warn|error|task|info)(?:\s*\[\s*"?(?P<title>[^\]"]+)"?\s*\])?\s*$'
+end = ":::"
+capture = "rest"
+parse_hint = "bracket-arg"
+
+[[attrs]]
+name = "type"
+type = "string"
+required = true
+
+[[attrs]]
+name = "title"
+type = "string"
+required = false
+
+[ast]
+node = "Component"
+node_name = "Aside"
+attrs_map = { type = "type", title = "title" }
+
+[renderer.solid]
+component_template = "<Aside type=\"{attrs.type}\" title=\"{attrs.title}\">{children}</Aside>"
+
+[[renderer.solid.imports]]
+module = "./Aside"
+default = "Aside"
+
+[meta]
+description = "Render :::note|tip|warn|error|task|info blocks to Aside component"

@@ -716,3 +716,107 @@ format = "solid"
     assert!(output.contains("code={\"<div>ok</div>\"}"));
     assert!(!output.contains("code={\"\\n<div>ok</div>\\n\"}"));
 }
+
+/// The custom table node covers every layer of the table — caption, the three
+/// sections, rows and cells — and its `imports` list is shared by all of them.
+#[test]
+fn run_config_table_custom_layers_and_shared_imports() {
+    let dir = tempdir().expect("temp dir");
+    let src_dir = dir.path().join("src");
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir_all(&src_dir).expect("create src dir");
+    std::fs::create_dir_all(&out_dir).expect("create out dir");
+
+    std::fs::write(
+        src_dir.join("sales.md"),
+        "[Laporan Penjualan]\n| Produk | Stok |\n| --- | --- |\n| Laptop Pro | 15 |\n|===|\n| Total | 15 |\n",
+    )
+    .expect("write markdown file");
+
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        r#"[[task]]
+input = "./src/[...slug].md"
+output = "./out/[...slug].jsx"
+plugin = "table,markdown"
+format = "solid"
+
+
+[task.table.custom.table]
+name = "CustomTable"
+template = "<CustomTable>{children}</CustomTable>"
+imports = ["import { TableCaption } from '@comp/table';", { module = "@comp/table", default = "CustomTable" }]
+
+[task.table.custom.caption]
+name = "TableCaption"
+template = "<TableCaption>{children}</TableCaption>"
+
+[task.table.custom.thead]
+name = "TableHead"
+template = "<TableHead>{children}</TableHead>"
+
+[[task.table.custom.thead.imports]]
+module = "@comp/table"
+names = ["TableHead"]
+
+[task.table.custom.tbody]
+name = "TableBody"
+template = "<TableBody>{children}</TableBody>"
+
+[task.table.custom.tfoot]
+name = "TableFoot"
+template = "<TableFoot>{children}</TableFoot>"
+
+[task.table.custom.row]
+name = "TableRow"
+template = "<TableRow>{children}</TableRow>"
+
+[task.table.custom.cell]
+name = "TableCell"
+template = "<TableCell>{children}</TableCell>"
+"#,
+    )
+    .expect("write config file");
+
+    let mut cmd = cargo_bin_cmd!("pendon");
+    cmd.current_dir(dir.path()).arg("run").assert().success();
+
+    let output = std::fs::read_to_string(out_dir.join("sales.jsx")).expect("read output jsx");
+
+    for name in [
+        "CustomTable",
+        "TableCaption",
+        "TableHead",
+        "TableBody",
+        "TableFoot",
+        "TableRow",
+        "TableCell",
+    ] {
+        assert!(
+            output.contains(&format!("<{name}")),
+            "missing <{name}>: {output}"
+        );
+    }
+    for tag in [
+        "<table", "<caption", "<thead", "<tbody", "<tfoot", "<tr", "<td",
+    ] {
+        assert!(
+            !output.contains(tag),
+            "plain {tag}> must not remain: {output}"
+        );
+    }
+
+    // Shared raw line plus each component's own entry, merged per module.
+    assert!(
+        output.contains("import { TableCaption } from '@comp/table';"),
+        "{output}"
+    );
+    assert!(
+        output.contains("import CustomTable, {TableHead} from \"@comp/table\";"),
+        "{output}"
+    );
+
+    // Cells are pre-rendered, so their words must stay separated.
+    assert!(output.contains("Laptop Pro"), "{output}");
+    assert!(output.contains("Laporan Penjualan"), "{output}");
+}

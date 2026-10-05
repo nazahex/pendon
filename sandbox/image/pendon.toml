@@ -1,0 +1,17 @@
+[[task]]
+name = "Image Demo (HTML)"
+input = "./src/[slug].md"
+output = "./out/[slug].html"
+plugin = "dialog,img,markdown"
+format = "html"
+pretty = true
+markdown_allow_html = true
+
+[[task]]
+name = "Image Demo (Solid)"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "img,cite,anchor,markdown"
+format = "solid"
+pretty = true
+markdown_allow_html = true

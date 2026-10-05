@@ -1,0 +1,26 @@
+[[task]]
+name = "Universal Integration (Solid)"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "micromatter,table,img,epis,parego,cite,wiki,anchor,markdown,latex,syntect,heading,sectionize,extract-heading,hint"
+format = "solid"
+markdown_strip_comments = true
+markdown_allow_html = true
+
+[task.cite]
+reference_source = "internal"
+
+[task.cite.custom]
+name = "Cite"
+template = "<Cite reference={frontmatter.references[\"{attrs.id}\"]} {...attrs} />"
+
+[[task.cite.custom.imports]]
+module = "@comp/content/Cite"
+default = "Cite"
+
+[task.heading]
+auto_number = true
+number_style = "nested-number"
+
+[plugin-custom]
+source = ["./plugins/index.toml"]

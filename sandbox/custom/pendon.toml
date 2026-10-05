@@ -1,0 +1,14 @@
+# Project-local Pendon configuration for the custom demo
+
+[[task]]
+name = "Custom Demo 2 (Solid)"
+input = "./src/[...slug].md"
+output = "./out/[...slug].jsx"
+plugin = "epis,quiz,parego,foo,html-viewer,markdown,hint,you"
+format = "solid"
+pretty = true
+markdown_allow_html = true
+
+[plugin-custom]
+source = ["./plugins/index.toml"]
+enable_unsafe_hooks = false

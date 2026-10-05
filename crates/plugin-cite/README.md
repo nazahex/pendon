@@ -136,6 +136,10 @@ module = "@comp/citation"
 default = "Citation"
 ```
 
+`imports` also accepts a raw import line
+(`imports = ["import Citation from '@comp/citation';"]`). Entries coming from the
+same module are merged into a single `import` statement.
+
 Available template attributes:
 
 | Attribute         | Description                                                          |

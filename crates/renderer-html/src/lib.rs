@@ -105,6 +105,35 @@ mod tests {
         assert!(output.contains("<span>inline</span>"), "output = {output}");
     }
 
+    /// §6.3: flags are bare attributes and container attributes (`class`, …)
+    /// survive into HTML in both modes.
+    #[test]
+    fn attribute_flag_and_container_attrs_are_rendered() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Attribute {
+                name: "class".to_string(),
+                value: "x".to_string(),
+            },
+            Event::AttributeFlag {
+                name: "isBar".to_string(),
+            },
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+        let compact = render_html(&events);
+        assert!(
+            compact.contains("<p class=\"x\" isBar>"),
+            "compact = {compact}"
+        );
+        let pretty = render_html_pretty(&events);
+        assert!(
+            pretty.contains("<p class=\"x\" isBar>"),
+            "pretty = {pretty}"
+        );
+    }
+
     #[test]
     fn link_title_is_rendered_in_html_modes() {
         let compact = render_html(&link_with_title_events());

@@ -1,0 +1,25 @@
+name = "epis"
+kind = "inline"
+
+[meta]
+description = "Render epistemic inline markers (::epi1 reason::) as the Epis component"
+
+[matcher]
+# The `{...}` block is now captured into the `kv` group so the custom
+# plugin engine can parse it into AST attributes for the spread operator.
+start_regex = "::\\[ep(?<level>[1-4])\\](?:\\[[^\\]]*\\])?(?:\\{(?<kv>[^}]*)\\})?\\s*(?<body>.*?)::"
+
+# Only declare attrs that need type coercion or validation.
+[[attrs]]
+name = "level"
+type = "int"
+required = true
+
+[ast]
+node = "Component"
+node_name = "Epis"
+
+[renderer.solid]
+imports = ["import Epis from '@comp/content/Epis'"]
+# Use single braces for template variables
+component_template = "<Epis {...attrs}>{children}</Epis>"

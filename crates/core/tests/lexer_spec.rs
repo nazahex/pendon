@@ -32,3 +32,25 @@ fn detects_hashes_and_backticks_at_line_start() {
     assert!(has_hashes);
     assert_eq!(has_fence, 2);
 }
+
+#[test]
+fn short_backtick_run_keeps_the_line_in_one_text_token() {
+    // A single backtick at column 0 may open an inline code span: the whole line
+    // has to stay in one token so the inline parser can see its closing backtick.
+    let toks = tokenize("`code` tail\nplain\n");
+    let text: Vec<&str> = toks
+        .iter()
+        .filter_map(|t| match t {
+            Token::Text(s) => Some(*s),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(text, vec!["`code` tail", "plain"]);
+    assert_eq!(toks.len(), 4, "two text tokens and two newlines: {toks:?}");
+}
+
+#[test]
+fn double_backtick_run_is_not_a_fence() {
+    let toks = tokenize("``x``\n");
+    assert!(matches!(toks[0], Token::Text("``x``")));
+}

@@ -203,6 +203,10 @@ module = "@/components/AdvancedImage"
 default = "AdvancedImage"
 ```
 
+`imports` also accepts a raw import line
+(`imports = ["import AdvancedImage from '@/components/AdvancedImage';"]`). Entries
+coming from the same module are merged into a single `import` statement.
+
 ### Available Template Attributes
 
 | Attribute                | Description                                                        |

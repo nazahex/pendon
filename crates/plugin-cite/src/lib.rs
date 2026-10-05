@@ -3,7 +3,10 @@ use std::fs;
 use std::path::Path;
 
 use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::parse_attrs;
+use pendon_extra::{
+    legacy_extras_warning, parse_attrs, scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead,
+    ExtrasOptions,
+};
 use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde_json::{Map, Value};
 
@@ -16,21 +19,12 @@ pub struct CiteCustomNode {
     pub imports: Vec<ImportEntry>,
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct CiteSection {
-    pub marker: String,
-    pub name: String,
-    pub template: String,
-    pub imports: Vec<ImportEntry>,
-}
-
 #[derive(Clone, Debug)]
 pub struct CiteOptions {
     pub prefix: String,
     pub class_name: String,
     pub id_prefix: String,
     pub custom_node: Option<CiteCustomNode>,
-    pub section: Option<CiteSection>,
     pub external_references: Option<Value>,
 }
 
@@ -41,19 +35,39 @@ impl Default for CiteOptions {
             class_name: "cite-ref".to_string(),
             id_prefix: "cra-".to_string(),
             custom_node: None,
-            section: None,
             external_references: None,
         }
     }
 }
 
-/// Extra attributes parsed from [.class,#id]{key: val} syntax after cite args.
+/// Extra attributes parsed from the `[.class,#id]{key: val}` block (§14) and the
+/// §7.3 `@@type{…}` extras head after cite args.
 #[derive(Debug, Clone, Default)]
 struct CiteExtraAttrs {
     classes: Vec<String>,
     id: Option<String>,
     data: Vec<(String, String)>,
     styles: Vec<(String, String)>,
+    /// The `style` value the extras head merged from `--var` items (§6.3).
+    extras_style: Option<String>,
+    /// Bare flags of the extras head (§6.3), emitted as bare attributes.
+    flags: Vec<String>,
+    /// §13 warnings raised while merging the head.
+    warnings: Vec<String>,
+    /// Whether the deprecated block was read and must be reported (§14).
+    legacy: bool,
+}
+
+impl CiteExtraAttrs {
+    /// Whether the construct side already sets `key` (extras then lose, §6.2).
+    fn has_key(&self, key: &str) -> bool {
+        match key {
+            "id" => self.id.is_some(),
+            "class" => !self.classes.is_empty(),
+            "style" => self.extras_style.is_some() || !self.styles.is_empty(),
+            _ => self.data.iter().any(|(name, _)| name == key),
+        }
+    }
 }
 
 /// Shared citation state that persists across multiple process_calls within
@@ -177,45 +191,6 @@ impl CitationContext {
     pub fn options(&self) -> &CiteOptions {
         &self.options
     }
-
-    /// Replaces paragraph nodes containing only the section marker text
-    /// with a custom section node. Call this AFTER all process_events() calls
-    /// are complete, during finalization.
-    pub fn replace_section_markers(&self, events: &[Event]) -> Vec<Event> {
-        let Some(section) = &self.options.section else {
-            return events.to_vec();
-        };
-
-        let mut out = Vec::with_capacity(events.len());
-        let mut i = 0usize;
-        while i < events.len() {
-            if matches!(events.get(i), Some(Event::StartNode(NodeKind::Paragraph))) {
-                let mut end = i + 1;
-                let mut text = String::new();
-                while end < events.len()
-                    && !matches!(events[end], Event::EndNode(NodeKind::Paragraph))
-                {
-                    if let Event::Text(value) = &events[end] {
-                        text.push_str(value);
-                    }
-                    end += 1;
-                }
-                if end < events.len() && text.trim() == section.marker {
-                    out.push(Event::StartNode(NodeKind::Custom(section.name.clone())));
-                    out.push(Event::Attribute {
-                        name: "name".to_string(),
-                        value: section.name.clone(),
-                    });
-                    out.push(Event::EndNode(NodeKind::Custom(section.name.clone())));
-                    i = end + 1;
-                    continue;
-                }
-            }
-            out.push(events[i].clone());
-            i += 1;
-        }
-        out
-    }
 }
 
 // --- Legacy API (backward compatible) ---
@@ -285,9 +260,6 @@ pub fn solid_hints(options: &CiteOptions) -> Option<SolidRenderHints> {
     if let Some(custom) = options.custom_node.as_ref() {
         add_node(&custom.name, &custom.template, &custom.imports);
     }
-    if let Some(section) = options.section.as_ref() {
-        add_node(&section.name, &section.template, &section.imports);
-    }
     if hints.templates.is_empty() {
         None
     } else {
@@ -304,8 +276,37 @@ fn emit_text(text: &str, ctx: &mut CitationContext, out: &mut Vec<Event>) {
 
     while cursor < chars.len() {
         if chars[cursor..].starts_with(&['[', '^', '^', ']', '(']) {
-            if let Some((end, id, props, extra)) = parse_citation(&chars, cursor) {
+            if let Some((end, id, props, mut extra)) = parse_citation(&chars, cursor) {
                 flush_text(&mut normal, out);
+
+                // §14: the deprecated block is reported, not applied silently.
+                if extra.legacy {
+                    out.push(legacy_extras_warning("cite"));
+                }
+                // §7.3/§6.2: the cite args are the construct head and win over
+                // a same-named extras prop.
+                let head_keys: Vec<String> = props.keys().cloned().collect();
+                let mut dropped: Vec<String> = Vec::new();
+                extra.data.retain(|(key, _)| {
+                    if head_keys.contains(key) {
+                        dropped.push(key.clone());
+                        false
+                    } else {
+                        true
+                    }
+                });
+                for key in dropped {
+                    extra.warnings.push(format!(
+                        "`{key}` was dropped because the construct head already sets it"
+                    ));
+                }
+                for message in &extra.warnings {
+                    out.push(Event::Diagnostic {
+                        severity: Severity::Warning,
+                        message: format!("[cite] {message}"),
+                        span: None,
+                    });
+                }
 
                 if reference_exists(&ctx.references, &id) {
                     let mut citation = Map::new();
@@ -419,15 +420,14 @@ fn emit_citation(
     }
 
     // Add style attributes
-    if !extra.styles.is_empty() {
-        html.push_str(" style=\"");
-        for (k, v) in &extra.styles {
-            html.push_str(&escape_html(k));
-            html.push(':');
-            html.push_str(&escape_html(v));
-            html.push(';');
-        }
-        html.push('"');
+    let style = cite_style(extra);
+    if !style.is_empty() {
+        html.push_str(&format!(" style=\"{}\"", escape_html(&style)));
+    }
+
+    // §6.3: a bare flag stays a bare attribute in the markup too.
+    for name in &extra.flags {
+        html.push_str(&format!(" {}", escape_html(name)));
     }
 
     html.push_str(&format!(">[{}]</a></sup>", index));
@@ -462,17 +462,37 @@ fn emit_extra_attrs(out: &mut Vec<Event>, extra: &CiteExtraAttrs) {
             value: v.clone(),
         });
     }
-    if !extra.styles.is_empty() {
-        let style_str: String = extra
-            .styles
-            .iter()
-            .map(|(k, v)| format!("{}:{};", k, v))
-            .collect();
+    let style = cite_style(extra);
+    if !style.is_empty() {
         out.push(Event::Attribute {
             name: "style".to_string(),
-            value: style_str,
+            value: style,
         });
     }
+    // §6.3: a bare flag stays a bare attribute on custom components too.
+    for name in &extra.flags {
+        out.push(Event::AttributeFlag { name: name.clone() });
+    }
+}
+
+/// The `style` value of a citation: the `--var` properties of the deprecated
+/// block, followed by the `style` value the extras head merged (§6.3).
+fn cite_style(extra: &CiteExtraAttrs) -> String {
+    let mut styles: String = extra
+        .styles
+        .iter()
+        .map(|(k, v)| format!("{}:{};", k, v))
+        .collect();
+    if let Some(value) = &extra.extras_style {
+        if !styles.is_empty() {
+            styles.push(' ');
+        }
+        styles.push_str(value);
+        if !styles.ends_with(';') {
+            styles.push(';');
+        }
+    }
+    styles
 }
 
 // --- Parsing Helpers ---
@@ -531,9 +551,9 @@ fn parse_citation(
     Some((cursor, id, props, extra))
 }
 
-/// Parses [.class,#id]{key: val} after cite arguments.
-/// Extra attributes must be attached directly without spaces. If there is
-/// a space, it separates the citation from subsequent text or other citations.
+/// Parses the blocks attached to a citation: `[.class,#id]{key: val}` and the
+/// adjacent §7.3 `@@type{…}` extras head. Both attach to the citation node; the
+/// construct head (the citation args) wins.
 fn parse_cite_extra_attrs(chars: &[char], cursor: &mut usize) -> CiteExtraAttrs {
     let mut extra = CiteExtraAttrs::default();
     let source: String = chars[*cursor..].iter().collect();
@@ -543,23 +563,98 @@ fn parse_cite_extra_attrs(chars: &[char], cursor: &mut usize) -> CiteExtraAttrs 
                 .chars()
                 .nth(1)
                 .is_some_and(|character| character == '.' || character == '#'));
-    if !starts_with_valid_block {
-        return extra;
-    }
-
-    let parsed = parse_attrs(&source);
-    let consumed = source.len().saturating_sub(parsed.rest.len());
-    *cursor += source[..consumed].chars().count();
-    extra.id = parsed.attrs.id;
-    extra.classes = parsed.attrs.classes;
-    for (key, value) in parsed.attrs.properties {
-        if key.starts_with("--") {
-            extra.styles.push((key, value));
-        } else {
-            extra.data.push((key, value));
+    if starts_with_valid_block {
+        let parsed = parse_attrs(&source);
+        let consumed = source.len().saturating_sub(parsed.rest.len());
+        *cursor += source[..consumed].chars().count();
+        extra.id = parsed.attrs.id;
+        extra.classes = parsed.attrs.classes;
+        extra.legacy = parsed.had_attrs;
+        for (key, value) in parsed.attrs.properties {
+            if key.starts_with("--") {
+                extra.styles.push((key, value));
+            } else {
+                extra.data.push((key, value));
+            }
         }
     }
+
+    // §7.3: the extras head must be adjacent (`[^^]("book")@@cite{…}`).
+    let rest: Vec<char> = chars[*cursor..].to_vec();
+    if let Some((head, next)) = scan_extras_chars(&rest, 0) {
+        *cursor += next;
+        merge_cite_extras(&mut extra, &head);
+    }
+
     extra
+}
+
+/// Merges a §7.3 extras head into the citation's extra attributes.
+///
+/// The construct side wins (§6.2): a slot the head or the deprecated block
+/// already set is kept and the extras value is reported as dropped. `class`
+/// accumulates (§6.4) and bare flags stay bare attributes (§6.3).
+fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead) {
+    let parsed = to_attributes(head, &ExtrasOptions::default());
+    for warning in &parsed.warnings {
+        extra.warnings.push(pendon_extra::warning_message(warning));
+    }
+
+    // §6.2: `#id` > extras `slug`; both feed the `cite-id` slot.
+    let extras_id = parsed.value("id").map(|value| value.literal());
+    let extras_slug = parsed.value("slug").map(|value| value.literal());
+
+    for (key, value) in &parsed.items {
+        if key == "id" || key == "slug" {
+            continue;
+        }
+        match value {
+            ExtrasAttr::Flag => {
+                if extra.has_key(key) {
+                    extra.warnings.push(format!(
+                        "`{key}` was dropped because the construct head already sets it"
+                    ));
+                } else {
+                    extra.flags.push(key.clone());
+                }
+            }
+            ExtrasAttr::Value(value) => {
+                let text = value.literal();
+                if key == "class" {
+                    for token in text.split_whitespace() {
+                        extra.classes.push(token.to_string());
+                    }
+                    continue;
+                }
+                if key == "style" {
+                    if extra.has_key("style") {
+                        extra.warnings.push(
+                            "`style` was dropped because the construct head already sets it"
+                                .to_string(),
+                        );
+                    } else {
+                        extra.extras_style = Some(text);
+                    }
+                    continue;
+                }
+                if extra.has_key(key) {
+                    extra.warnings.push(format!(
+                        "`{key}` was dropped because the construct head already sets it"
+                    ));
+                    continue;
+                }
+                extra.data.push((key.clone(), text));
+            }
+        }
+    }
+
+    match extras_id.or(extras_slug) {
+        Some(id) if extra.id.is_none() => extra.id = Some(id),
+        Some(_) => extra.warnings.push(
+            "extras `id` was dropped because the citation already has an id (§6.2)".to_string(),
+        ),
+        None => {}
+    }
 }
 
 fn split_args(chars: &[char]) -> Vec<String> {
@@ -872,6 +967,142 @@ mod tests {
         assert!(result.iter().any(|e| matches!(
             e,
             Event::Attribute { name, value } if name == "foo" && value == "bar"
+        )));
+    }
+
+    /// The raw HTML the default (non-custom) citation path emits.
+    fn html_text(events: &[Event]) -> String {
+        events
+            .iter()
+            .filter_map(|event| match event {
+                Event::Text(text) if text.starts_with("<sup") => Some(text.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn events_with_text(text: &str) -> Vec<Event> {
+        vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Frontmatter),
+            Event::Attribute {
+                name: "data".into(),
+                value: r#"{"references":{"book":{"title":"Book"}}}"#.into(),
+            },
+            Event::EndNode(NodeKind::Frontmatter),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text(text.to_string()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ]
+    }
+
+    #[test]
+    fn parses_the_extras_head_after_cite_args() {
+        let chars: Vec<char> =
+            r#"[^^]("book")@@cite{.highlight, #short, note: "x", --color: "red"} tail"#
+                .chars()
+                .collect();
+        let (end, id, props, extra) = parse_citation(&chars, 0).unwrap();
+        assert_eq!(id, "book");
+        assert!(props.is_empty());
+        assert_eq!(extra.classes, vec!["highlight"]);
+        assert_eq!(extra.id.as_deref(), Some("short"));
+        assert_eq!(extra.data, vec![("note".to_string(), "x".to_string())]);
+        assert_eq!(extra.extras_style.as_deref(), Some("--color: red"));
+        assert!(!extra.legacy);
+
+        // Only the citation and its head are consumed, the trailing text stays.
+        let consumed: String = chars[..end].iter().collect();
+        assert_eq!(
+            consumed,
+            r#"[^^]("book")@@cite{.highlight, #short, note: "x", --color: "red"}"#
+        );
+    }
+
+    #[test]
+    fn extras_merge_into_the_custom_citation_node() {
+        let mut options = CiteOptions::default();
+        options.custom_node = Some(CiteCustomNode {
+            name: "Citation".into(),
+            template: "<Citation />".into(),
+            imports: Vec::new(),
+        });
+
+        let result = process(
+            &events_with_text(r#"[^^]("book")@@cite{.hero, citeId: "short", isFoo}"#),
+            &options,
+        );
+
+        assert!(result.iter().any(|e| matches!(
+            e,
+            Event::Attribute { name, value } if name == "class" && value == "hero"
+        )));
+        assert!(result.iter().any(|e| matches!(
+            e,
+            Event::Attribute { name, value } if name == "citeId" && value == "short"
+        )));
+        // §6.3: bare flags stay bare attributes.
+        assert!(result
+            .iter()
+            .any(|e| matches!(e, Event::AttributeFlag { name } if name == "isFoo")));
+        // §7.3: the reference id of the citation is untouched.
+        assert!(result.iter().any(|e| matches!(
+            e,
+            Event::Attribute { name, value } if name == "id" && value == "book"
+        )));
+    }
+
+    #[test]
+    fn cite_args_win_over_extras_props() {
+        let result = process(
+            &events_with_text(r#"[^^]("book", "p. 1")@@cite{loc: "p. 9", note: "n"}"#),
+            &CiteOptions::default(),
+        );
+
+        let html = html_text(&result);
+        assert!(html.contains("data-note=\"n\""), "{html}");
+        assert!(!html.contains("loc"), "{html}");
+        assert!(result.iter().any(|event| matches!(
+            event,
+            Event::Diagnostic { message, .. }
+                if message.contains("[cite]") && message.contains("`loc`")
+        )));
+    }
+
+    #[test]
+    fn extras_style_and_flags_reach_the_markup() {
+        let result = process(
+            &events_with_text(r#"[^^]("book")@@cite{.hero, --color: "red", isFoo}"#),
+            &CiteOptions::default(),
+        );
+
+        let html = html_text(&result);
+        assert!(html.contains("class=\"cite-ref hero\""), "{html}");
+        assert!(html.contains("style=\"--color: red;\""), "{html}");
+        assert!(html.contains(" isFoo>"), "{html}");
+    }
+
+    #[test]
+    fn cites_extras_id_lands_in_the_cite_id_slot() {
+        let result = process(
+            &events_with_text(r#"[^^]("book")@@cite{`short-slug`}"#),
+            &CiteOptions::default(),
+        );
+        // §6.2: `#id` > extras `slug`.
+        assert!(html_text(&result).contains("data-cite-id=\"short-slug\""));
+    }
+
+    #[test]
+    fn the_deprecated_block_is_reported() {
+        let result = process(
+            &events_with_text(r#"[^^]("book")[#short]"#),
+            &CiteOptions::default(),
+        );
+        assert!(result.iter().any(|event| matches!(
+            event,
+            Event::Diagnostic { message, .. }
+                if message.contains("[cite]") && message.contains("deprecated")
         )));
     }
 

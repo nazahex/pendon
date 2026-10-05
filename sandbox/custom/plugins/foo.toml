@@ -1,0 +1,45 @@
+name = "foo"
+kind = "block"
+
+[matcher]
+# Regex captures an optional bracket argument and optional brace keyvals on the opening line.
+# Named capture groups: `argument` for the bracket value, `kv` for the brace contents.
+start_regex = '^:::foo(?:\s*\[(?P<argument>[^\]]+)\])?\s*(?:\{(?P<kv>.*)\})?\s*$'
+end = ":::"
+capture = "rest"
+parse_hint = "bracket-arg+brace-keyvals"
+
+[[attrs]]
+name = "argument"
+type = "string"
+required = false
+
+[[attrs]]
+name = "qux"
+type = "string"
+required = false
+
+[[attrs]]
+name = "waldo"
+type = "int"
+required = false
+
+[[attrs]]
+name = "isBar"
+type = "bool"
+required = false
+
+[ast]
+node = "Component"
+node_name = "Foo"
+# Map parsed captures/attrs into AST attrs. Renderer templates will use `attrs.<name>` tokens.
+attrs_map = { argument = "argument", qux = "attributes.qux", waldo = "attributes.waldo", isBar = "attributes.isBar" }
+
+[renderer.solid]
+# Template tokens: {children}, {attrs.argument}, {attrs.qux}, {attrs.waldo}, {attrs.isBar}
+component_template = "<Foo argument=\"{attrs.argument}\" attributes={{ qux: \"{attrs.attributes.qux}\", waldo: {attrs.attributes.waldo}, isBar: {attrs.attributes.isBar} }}>{children}</Foo>"
+
+# Recommend structured import so renderer can merge/dedupe across plugins
+[[renderer.solid.imports]]
+module = "./Foo"
+default = "Foo"

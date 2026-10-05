@@ -113,10 +113,23 @@ pub fn process_single_file(
         }
     };
 
+    let anchor_options = match build_anchor_options(task.anchor.as_ref()) {
+        Ok(o) => o,
+        Err(msg) => {
+            eprintln!("Error: {}", msg);
+            return ProcessResult {
+                success: false,
+                bytes_written: 0,
+                cache_entry: None,
+                skipped_write: false,
+            };
+        }
+    };
+
     let inline_pipeline = build_context_inline_pipeline(
         img_options.clone(),
         task_wiki_opts.clone(),
-        build_anchor_options(task.anchor.as_ref()),
+        anchor_options.clone(),
         latex_options,
         &enabled_plugins,
     );
@@ -126,7 +139,6 @@ pub fn process_single_file(
     let mut builtin_hints: Vec<SolidRenderHints> = Vec::new();
     let mut used_quiz = false;
     let mut used_vicado = false;
-    let anchor_options = build_anchor_options(task.anchor.as_ref());
     let mut anchor_ran = false;
     let mut cite_ran = false;
     let mut markdown_ran = false;
@@ -196,7 +208,18 @@ pub fn process_single_file(
                     result
                 }
                 "table" => {
-                    let table_opts = build_table_options(task.table.as_ref());
+                    let table_opts = match build_table_options(task.table.as_ref()) {
+                        Ok(o) => o,
+                        Err(msg) => {
+                            eprintln!("Error: {}", msg);
+                            return ProcessResult {
+                                success: false,
+                                bytes_written: 0,
+                                cache_entry: None,
+                                skipped_write: false,
+                            };
+                        }
+                    };
                     let result = pendon_plugin_table::process_with_context(
                         &events,
                         &table_opts,
