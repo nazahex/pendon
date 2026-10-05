@@ -122,6 +122,46 @@ fn slugify(input: &str) -> String {
     }
 }
 
+fn strip_heading_marker(input: &str, level: usize) -> &str {
+    let mut marker_end = 0;
+    for (index, character) in input.char_indices() {
+        if character == '#' {
+            marker_end = index + character.len_utf8();
+        } else {
+            break;
+        }
+    }
+    if marker_end != level {
+        return input;
+    }
+    let rest = &input[marker_end..];
+    rest.strip_prefix(' ').unwrap_or(rest)
+}
+
+fn strip_number_prefix(input: &str) -> &str {
+    let bytes = input.as_bytes();
+    let mut index = 0;
+    let mut saw_digit = false;
+    while index < bytes.len() {
+        if bytes[index].is_ascii_digit() {
+            saw_digit = true;
+            index += 1;
+        } else if bytes[index] == b'.' && saw_digit {
+            saw_digit = false;
+            index += 1;
+        } else if bytes[index].is_ascii_whitespace() {
+            return if index > 0 && !saw_digit {
+                input[index..].trim_start()
+            } else {
+                input
+            };
+        } else {
+            return input;
+        }
+    }
+    input
+}
+
 // --- Main Processor ---
 
 pub fn process(events: &[Event]) -> Vec<Event> {
@@ -217,12 +257,14 @@ fn consume_heading(events: &[Event], start_idx: usize) -> (HeadingCapture, usize
         }
     }
 
+    let visible_text = strip_number_prefix(strip_heading_marker(&text, level));
+
     // Use the same prefix parser as plugin-heading to strip [id][.class]{attrs}
-    let (prefix_id, consumed_len) = parse_heading_prefix(&text);
-    let clean_text = text[consumed_len..].trim().to_string();
+    let (prefix_id, consumed_len) = parse_heading_prefix(visible_text);
+    let clean_text = visible_text[consumed_len..].trim().to_string();
 
     let final_text = if clean_text.is_empty() {
-        text.trim().to_string()
+        visible_text.trim().to_string()
     } else {
         clean_text
     };

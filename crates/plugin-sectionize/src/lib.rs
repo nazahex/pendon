@@ -115,6 +115,46 @@ fn slugify(input: &str) -> String {
     }
 }
 
+fn strip_heading_marker(input: &str, level: usize) -> &str {
+    let mut marker_end = 0;
+    for (index, character) in input.char_indices() {
+        if character == '#' {
+            marker_end = index + character.len_utf8();
+        } else {
+            break;
+        }
+    }
+    if marker_end != level {
+        return input;
+    }
+    let rest = &input[marker_end..];
+    rest.strip_prefix(' ').unwrap_or(rest)
+}
+
+fn strip_number_prefix(input: &str) -> &str {
+    let bytes = input.as_bytes();
+    let mut index = 0;
+    let mut saw_digit = false;
+    while index < bytes.len() {
+        if bytes[index].is_ascii_digit() {
+            saw_digit = true;
+            index += 1;
+        } else if bytes[index] == b'.' && saw_digit {
+            saw_digit = false;
+            index += 1;
+        } else if bytes[index].is_ascii_whitespace() {
+            return if index > 0 && !saw_digit {
+                input[index..].trim_start()
+            } else {
+                input
+            };
+        } else {
+            return input;
+        }
+    }
+    input
+}
+
 fn ensure_unique(base: String, used: &mut HashMap<String, usize>) -> String {
     let counter = used.entry(base.clone()).or_insert(0);
     if *counter == 0 {
@@ -258,15 +298,17 @@ fn consume_heading(
         }
     }
 
+    let visible_heading = strip_number_prefix(strip_heading_marker(&heading_text, heading_level));
+
     // Extract ID using prefix parser as fallback when plugin-heading hasn't run
-    let (prefix_id, _consumed) = parse_heading_prefix(&heading_text);
+    let (prefix_id, _consumed) = parse_heading_prefix(visible_heading);
 
     // Priority: explicit id attr > prefix [id] > auto-slug from visible text
     // For slug generation, use text after prefix to avoid bracket/brace artifacts
     let clean_text = if _consumed > 0 {
-        heading_text[_consumed..].trim().to_string()
+        visible_heading[_consumed..].trim().to_string()
     } else {
-        heading_text.trim().to_string()
+        visible_heading.trim().to_string()
     };
 
     let need_id = heading_level >= 2 || prefix_id.is_some() || heading_id_attr.is_some();
