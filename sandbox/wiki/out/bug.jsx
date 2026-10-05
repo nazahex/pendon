@@ -1,29 +1,16 @@
-export default function PendonView() {
-  return (
-    <>
-      <p>Nulla eu voluptate cillum aute laboris in commodo quis id reprehenderit.</p>
-      <ul>
-        <li>
-          <a href="/id/wiki/Foo" title="Foo">
-            Foo
-          </a>
-          : Aliquip ipsum laboris aliqua ex.
-        </li>
-        <li>Bar</li>
-        <li>
-          <a href="/id/wiki/Baz" title="Baz">
-            Baz
-          </a>
-        </li>
-      </ul>
-      <p>
-        Elit commodo mollit labore sunt dolore dolor deserunt ex proident non ad cupidatat occaecat
-        non.
-      </p>
-      <ul>
-        <li>FDoo</li>
-        <li>Bdaz</li>
-      </ul>
-    </>
-  )
-}
+export default function PendonView() { return (<>
+<p>Nulla eu voluptate cillum aute laboris in commodo quis id reprehenderit.
+</p>
+<ul>
+<li><a href="/id/wiki/Foo" title="Foo">Foo</a>: Aliquip ipsum laboris aliqua ex.</li>
+<li>Bar</li>
+<li><a href="/id/wiki/Baz" title="Baz">Baz</a></li>
+</ul>
+<p>Elit commodo mollit labore sunt dolore dolor deserunt ex proident non ad cupidatat occaecat non.
+</p>
+<ul>
+<li>FDoo</li>
+<li>Bdaz</li>
+</ul>
+
+</>); }

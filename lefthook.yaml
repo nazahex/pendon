@@ -22,6 +22,9 @@ pre-commit:
     # JS / TS / JSON / CSS (Biome)
     biome:
       glob: "*.{cjs,js,mjs,jsx,ts,tsx,json,jsonc,css}"
+      # `sandbox/**` is fixture data: the inputs are byte-significant and the
+      # `out/` files are generator output compared against a golden baseline.
+      exclude: "sandbox/**"
       run: >
         command -v bun >/dev/null 2>&1
         && bun run biome check --write {staged_files}
@@ -31,6 +34,8 @@ pre-commit:
     # Formatting (Markdown / YAML / TOML)
     dprint:
       glob: "*.{md,scss,sass,toml,yml,yaml}"
+      # See the biome command above: never rewrite the fixture tree.
+      exclude: "sandbox/**"
       run: >
         command -v bun >/dev/null 2>&1
         && bun run dprint fmt {staged_files}

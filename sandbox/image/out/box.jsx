@@ -1,23 +1,7 @@
-export const frontmatter = { cites: [] }
-export default function PendonView() {
-  return (
-    <>
-      <img
-        alt="Aternative Text"
-        src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp"
-        style="--wix:sum;--rotate:5deg;"
-      />
-      <img
-        alt="Aternative Text"
-        src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp"
-        style="--wix:sum;--rotate:5deg;"
-      />
-      <figure style="--wix:sum;--rotate:5deg;">
-        <img
-          alt="Aternative Text"
-          src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp"
-        />
-      </figure>
-    </>
-  )
-}
+export const frontmatter = {"cites":[]};
+export default function PendonView() { return (<>
+<img alt="Aternative Text" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" style="--wix:sum;--rotate:5deg;" />
+<img alt="Aternative Text" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" style="--wix:sum;--rotate:5deg;" />
+<figure style="--wix:sum;--rotate:5deg;"><img alt="Aternative Text" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" /></figure>
+
+</>); }
