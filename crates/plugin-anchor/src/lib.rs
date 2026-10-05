@@ -8,14 +8,7 @@ use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
 pub struct AnchorCustomNode {
     pub name: String,
     pub template: String,
-    pub imports: Vec<AnchorImport>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AnchorImport {
-    pub module: String,
-    pub default: Option<String>,
-    pub names: Vec<String>,
+    pub imports: Vec<ImportEntry>,
 }
 
 #[derive(Clone, Debug)]
@@ -74,18 +67,7 @@ pub fn solid_hints(options: &AnchorOptions) -> Option<SolidRenderHints> {
         node_name: Some(custom.name.clone()),
         template: custom.template.clone(),
     });
-    hints.template_imports.insert(
-        key,
-        custom
-            .imports
-            .iter()
-            .map(|import| ImportEntry::Structured {
-                module: import.module.clone(),
-                default: import.default.clone(),
-                names: import.names.clone(),
-            })
-            .collect(),
-    );
+    hints.template_imports.insert(key, custom.imports.clone());
     Some(hints)
 }
 

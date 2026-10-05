@@ -13,7 +13,7 @@ use serde_json::{Map, Value};
 pub struct CiteCustomNode {
     pub name: String,
     pub template: String,
-    pub imports: Vec<CiteImport>,
+    pub imports: Vec<ImportEntry>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -21,14 +21,7 @@ pub struct CiteSection {
     pub marker: String,
     pub name: String,
     pub template: String,
-    pub imports: Vec<CiteImport>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CiteImport {
-    pub module: String,
-    pub default: Option<String>,
-    pub names: Vec<String>,
+    pub imports: Vec<ImportEntry>,
 }
 
 #[derive(Clone, Debug)]
@@ -280,24 +273,14 @@ pub fn process(events: &[Event], options: &CiteOptions) -> Vec<Event> {
 
 pub fn solid_hints(options: &CiteOptions) -> Option<SolidRenderHints> {
     let mut hints = SolidRenderHints::default();
-    let mut add_node = |name: &str, template: &str, imports: &[CiteImport]| {
+    let mut add_node = |name: &str, template: &str, imports: &[ImportEntry]| {
         let key = (name.to_string(), Some(name.to_string()));
         hints.templates.push(ComponentTemplate {
             node_type: name.to_string(),
             node_name: Some(name.to_string()),
             template: template.to_string(),
         });
-        hints.template_imports.insert(
-            key,
-            imports
-                .iter()
-                .map(|import| ImportEntry::Structured {
-                    module: import.module.clone(),
-                    default: import.default.clone(),
-                    names: import.names.clone(),
-                })
-                .collect(),
-        );
+        hints.template_imports.insert(key, imports.to_vec());
     };
     if let Some(custom) = options.custom_node.as_ref() {
         add_node(&custom.name, &custom.template, &custom.imports);

@@ -32,15 +32,7 @@ pub struct HeadingCustomNode {
     pub name: String,
     pub template: String,
     #[serde(default)]
-    pub imports: Vec<HeadingImport>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HeadingImport {
-    pub module: String,
-    pub default: Option<String>,
-    #[serde(default)]
-    pub names: Vec<String>,
+    pub imports: Vec<ImportEntry>,
 }
 
 // --- Counter Logic ---
@@ -419,18 +411,8 @@ pub fn solid_hints(options: &HeadingOptions) -> Option<SolidRenderHints> {
         template: custom.template.clone(),
     });
 
-    let imports: Vec<ImportEntry> = custom
-        .imports
-        .iter()
-        .map(|imp| ImportEntry::Structured {
-            module: imp.module.clone(),
-            default: imp.default.clone(),
-            names: imp.names.clone(),
-        })
-        .collect();
-
-    if !imports.is_empty() {
-        hints.template_imports.insert(key, imports);
+    if !custom.imports.is_empty() {
+        hints.template_imports.insert(key, custom.imports.clone());
     }
 
     Some(hints)

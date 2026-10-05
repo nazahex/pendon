@@ -9,6 +9,19 @@ mod text;
 
 use context::ParseContext;
 
+/// How a `NodeKind::Custom` node should be treated by the Markdown pass, as
+/// declared by its `__plugin_kind` attribute.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CustomPlacement {
+    /// Block content: re-lexed as blocks, closing open quotes/lists/tables.
+    Block,
+    /// Children were already rendered by another plugin (e.g. table cells):
+    /// passed through verbatim, never re-lexed.
+    Element,
+    /// Inline content inside the current line.
+    Inline,
+}
+
 pub fn process(events: &[Event]) -> Vec<Event> {
     process_with_options(events, MarkdownOptions::default())
 }
@@ -35,16 +48,17 @@ pub fn process_with_options(events: &[Event], opts: MarkdownOptions) -> Vec<Even
         let ev = &events[i];
         match ev {
             Event::StartNode(kind) => {
-                let mut is_block_custom = false;
+                let mut placement = CustomPlacement::Inline;
                 if matches!(kind, NodeKind::Custom(_)) {
                     // Look ahead untuk mencari atribut __plugin_kind
                     for j in (i + 1)..events.len() {
                         match &events[j] {
                             Event::Attribute { name, value } if name == "__plugin_kind" => {
-                                if value == "block" || value == "codefence" || value == "blockquote"
-                                {
-                                    is_block_custom = true;
-                                }
+                                placement = match value.as_str() {
+                                    "block" | "codefence" | "blockquote" => CustomPlacement::Block,
+                                    "element" => CustomPlacement::Element,
+                                    _ => CustomPlacement::Inline,
+                                };
                                 break;
                             }
                             Event::Attribute { .. } => continue,
@@ -52,7 +66,7 @@ pub fn process_with_options(events: &[Event], opts: MarkdownOptions) -> Vec<Even
                         }
                     }
                 }
-                start::handle(&mut ctx, kind, is_block_custom);
+                start::handle(&mut ctx, kind, placement);
             }
             Event::EndNode(kind) => end::handle(&mut ctx, kind),
             Event::Text(s) => text::handle(&mut ctx, s),
@@ -210,6 +224,47 @@ mod tests {
         assert!(!events
             .iter()
             .any(|e| matches!(e, Event::StartNode(NodeKind::HtmlBlock))));
+    }
+
+    /// Children of a node marked `__plugin_kind="element"` were already rendered
+    /// by their own plugin (every table cell and section of a custom table, for
+    /// instance), so they must pass through verbatim. Re-lexing them made the
+    /// pass drop the whitespace-only chunks, which glued the words of every
+    /// multi-word cell together.
+    #[test]
+    fn element_placement_passes_children_through_verbatim() {
+        let events = vec![
+            Event::StartNode(NodeKind::Custom("TableCell".to_string())),
+            Event::Attribute {
+                name: "__plugin_kind".to_string(),
+                value: "element".to_string(),
+            },
+            Event::Text("Laptop".to_string()),
+            Event::Text(" ".to_string()),
+            Event::StartNode(NodeKind::Strong),
+            Event::Text("Pro".to_string()),
+            Event::EndNode(NodeKind::Strong),
+            Event::Text(" ".to_string()),
+            Event::Text("15".to_string()),
+            Event::EndNode(NodeKind::Custom("TableCell".to_string())),
+        ];
+
+        let out = process_with_options(&events, MarkdownOptions::default());
+
+        let text: String = out
+            .iter()
+            .filter_map(|event| match event {
+                Event::Text(chunk) => Some(chunk.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(text, "Laptop Pro 15");
+        assert!(out
+            .iter()
+            .any(|e| matches!(e, Event::StartNode(NodeKind::Custom(name)) if name == "TableCell")));
+        assert!(out
+            .iter()
+            .any(|e| matches!(e, Event::StartNode(NodeKind::Strong))));
     }
 
     #[test]

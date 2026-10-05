@@ -1,6 +1,13 @@
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// One import entry for a custom component template.
+///
+/// Every task-level plugin (cite, img, anchor, heading, table) shares this type
+/// and the same TOML syntax: either a raw import line (`"import X from 'y'"`)
+/// or a structured `{ module, default, names }` table.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum ImportEntry {
     Raw(String),
     Structured {

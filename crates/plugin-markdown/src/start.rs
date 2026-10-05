@@ -2,6 +2,7 @@
 use pendon_core::NodeKind;
 
 use crate::context::ParseContext;
+use crate::CustomPlacement;
 
 fn is_inline_node(kind: &NodeKind) -> bool {
     matches!(
@@ -17,7 +18,7 @@ fn is_inline_node(kind: &NodeKind) -> bool {
     )
 }
 
-pub fn handle(ctx: &mut ParseContext, kind: &NodeKind, is_block_custom: bool) {
+pub fn handle(ctx: &mut ParseContext, kind: &NodeKind, placement: CustomPlacement) {
     match kind {
         NodeKind::Heading => {
             ctx.close_all_lists();
@@ -65,13 +66,24 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind, is_block_custom: bool) {
             ctx.emit_start_element(kind.clone());
         }
         // Handle Custom nodes explicitly based on __plugin_kind metadata
-        NodeKind::Custom(_) => {
-            if is_block_custom {
+        NodeKind::Custom(_) => match placement {
+            CustomPlacement::Block => {
                 ctx.close_blockquotes();
                 ctx.close_all_lists();
                 ctx.close_table_if_open();
                 ctx.emit_start(kind.clone());
-            } else {
+            }
+            CustomPlacement::Element => {
+                // Children were already rendered by the emitting plugin (table
+                // cells, captions, …): mark the subtree so its text is passed
+                // through verbatim instead of being re-lexed.
+                if ctx.pending_para_start {
+                    ctx.emit_start(NodeKind::Paragraph);
+                    ctx.pending_para_start = false;
+                }
+                ctx.emit_start_element(kind.clone());
+            }
+            CustomPlacement::Inline => {
                 if ctx.pending_para_start {
                     ctx.emit_start(NodeKind::Paragraph);
                     ctx.pending_para_start = false;
@@ -82,7 +94,7 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind, is_block_custom: bool) {
                 // node's own text would be mistaken for the start of a new line.
                 ctx.at_line_start = false;
             }
-        }
+        },
         _ => {
             if !is_inline_node(kind) {
                 ctx.close_blockquotes();
