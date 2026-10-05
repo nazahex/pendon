@@ -7,14 +7,17 @@ use pendon_extra::{
     ExtrasHead, ExtrasOptions,
 };
 use pendon_plugin_markdown::process as process_markdown;
-use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
+use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
 
 // --- Configuration & Types ---
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ImgOptions {
-    pub custom_node: Option<ImgCustomNode>,
+    /// §11 `img` layer: the `<img>` element itself.
+    pub img: ComponentSet<ImgCustomNode>,
+    /// §11 `figure` layer: the `<figure>` container of `~?!!`.
+    pub figure: ComponentSet<ImgCustomNode>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -37,6 +40,8 @@ struct ParsedImage {
     marker: ImageMarker,
     /// Bare flags of the §7.1 extras head (§6.3), emitted on the outermost node.
     flags: Vec<String>,
+    /// The `@@type{…}` marker, when present: the §11 routing key (rule 3).
+    type_marker: Option<String>,
     /// §13 warnings raised while resolving the head and extras.
     warnings: Vec<String>,
     /// Whether the deprecated `[.c,#id]{k:v}` block was read (§14).
@@ -100,13 +105,16 @@ where
             if let Some(end) = find_matching_end(events, i, NodeKind::Paragraph) {
                 let block = &events[i + 1..end];
                 if let Some(parsed) = maybe_parse_advanced_image(block) {
-                    if options.custom_node.is_some() {
-                        emit_custom_image(&parsed, options, inline_pipeline, context, &mut out);
-                    } else {
-                        emit_element_image(&parsed, inline_pipeline, context, &mut out);
-                        // Block level images own their line (the old HtmlBlock
-                        // rendering appended a newline after the markup).
-                        out.extend(raw_inline("\n"));
+                    match route_image(&parsed, options) {
+                        Some(route) => {
+                            emit_custom_image(&parsed, &route, inline_pipeline, context, &mut out);
+                        }
+                        None => {
+                            emit_element_image(&parsed, inline_pipeline, context, &mut out);
+                            // Block level images own their line (the old HtmlBlock
+                            // rendering appended a newline after the markup).
+                            out.extend(raw_inline("\n"));
+                        }
                     }
                     i = end + 1;
                     continue;
@@ -145,29 +153,177 @@ where
     out
 }
 
-// --- Custom Node Emission ---
+// --- §11 routing -----------------------------------------------------------
 
-fn emit_custom_image<C>(
+/// §11 rule 3 routing of one image: which component renders the outermost node,
+/// and whether the `<img>` element nests inside it.
+struct CustomRoute<'a> {
+    outer: &'a ImgCustomNode,
+    /// `Some` when the `img` layer renders the element nested inside the outer
+    /// component (a figure whose `figure` *and* `img` layers are configured).
+    inner: Option<&'a ImgCustomNode>,
+    /// `true` when the outer node is the `<figure>` container of `~?!!`.
+    outer_is_figure: bool,
+}
+
+/// Selects the component of the outermost node (§11 rule 3).
+///
+/// - `~?!!` (a figure): the `figure` layer is the container, the `img` layer the
+///   element inside it; either one alone replaces the whole image.
+/// - any other image: the `img` layer is the node; the `figure` layer is used
+///   when no `img` entry answers the marker (pre-cutover configs keep working).
+fn route_image<'a>(parsed: &ParsedImage, options: &'a ImgOptions) -> Option<CustomRoute<'a>> {
+    let marker = parsed.type_marker.as_deref();
+    let img = options.img.select(marker);
+    let figure = options.figure.select(marker);
+    let is_figure = matches!(
+        parsed.container.or(parsed.marker.container),
+        Some(ContainerKind::Figure)
+    );
+
+    match (is_figure, figure, img) {
+        // Both layers on a figure: the container wraps the element.
+        (true, Some(figure), Some(img)) => Some(CustomRoute {
+            outer: figure,
+            inner: Some(img),
+            outer_is_figure: true,
+        }),
+        (true, Some(figure), None) => Some(CustomRoute {
+            outer: figure,
+            inner: None,
+            outer_is_figure: true,
+        }),
+        // A single component replaces the whole image (pre-cutover behaviour).
+        (_, None, Some(img)) => Some(CustomRoute {
+            outer: img,
+            inner: None,
+            outer_is_figure: false,
+        }),
+        // A non-figure image with both layers: the `img` layer is the node — the
+        // `figure` layer only has meaning for a figure.
+        (false, Some(_), Some(img)) => Some(CustomRoute {
+            outer: img,
+            inner: None,
+            outer_is_figure: false,
+        }),
+        (false, Some(figure), None) => Some(CustomRoute {
+            outer: figure,
+            inner: None,
+            outer_is_figure: false,
+        }),
+        (true, None, None) | (false, None, None) => None,
+    }
+}
+
+/// Emits `id`/`class`/props/`style`/flags of the outermost node. Custom
+/// components receive the keys verbatim (`type` included), unlike the HTML
+/// fallback which prefixes extra props with `data-`.
+fn push_custom_extra_attrs(parsed: &ParsedImage, out: &mut Vec<Event>) {
+    if let Some(id) = &parsed.attrs.id {
+        attribute(out, "id", id);
+    }
+    if !parsed.attrs.classes.is_empty() {
+        attribute(out, "class", &parsed.attrs.classes.join(" "));
+    }
+    for (k, v) in &parsed.attrs.properties {
+        if !k.starts_with("--") && k != "style" {
+            attribute(out, k, v);
+        }
+    }
+    let style_str = image_style(&parsed.attrs);
+    if !style_str.is_empty() {
+        attribute(out, "style", &style_str);
+    }
+    // §6.3: a bare flag stays a bare attribute, also on a custom component.
+    for name in &parsed.flags {
+        out.push(Event::AttributeFlag { name: name.clone() });
+    }
+}
+
+/// The `container` attribute, when the marker asked for one.
+fn push_container_attribute(parsed: &ParsedImage, out: &mut Vec<Event>) {
+    if let Some(container) = parsed.container.or(parsed.marker.container) {
+        let value = match container {
+            ContainerKind::Figure => "figure",
+            ContainerKind::Paragraph => "p",
+            ContainerKind::Division => "div",
+        };
+        attribute(out, "container", value);
+    }
+}
+
+/// `alt`/`src` plus the `w`/`h` and lazy/async marker attributes: the payload of
+/// the `<img>` element itself, which stays on the inner node (§7.1).
+fn push_image_element_attrs(parsed: &ParsedImage, out: &mut Vec<Event>) {
+    attribute(out, "alt", &parsed.alt);
+    attribute(out, "src", &parsed.src);
+    if parsed.marker.lazy {
+        attribute(out, "lazy", "1");
+    }
+    if parsed.marker.async_decoding {
+        attribute(out, "async_decoding", "1");
+    }
+    if let Some(width) = parsed.marker.width {
+        attribute(out, "width", &width.to_string());
+    }
+    if let Some(height) = parsed.marker.height {
+        attribute(out, "height", &height.to_string());
+    }
+}
+
+fn emit_caption_children<C>(
     parsed: &ParsedImage,
-    options: &ImgOptions,
     inline_pipeline: &impl InlinePipeline<C>,
     context: &mut C,
     out: &mut Vec<Event>,
 ) {
-    let custom = match options.custom_node.as_ref() {
-        Some(c) => c,
-        None => return,
+    let Some(caption) = &parsed.caption else {
+        return;
     };
+    out.extend(render_caption_events(caption, inline_pipeline, context));
+}
 
+// --- Custom Node Emission ---
+
+fn emit_custom_image<C>(
+    parsed: &ParsedImage,
+    route: &CustomRoute<'_>,
+    inline_pipeline: &impl InlinePipeline<C>,
+    context: &mut C,
+    out: &mut Vec<Event>,
+) {
     push_image_warnings(parsed, out);
-    let node_kind = NodeKind::Custom(custom.name.clone());
+    let node_kind = NodeKind::Custom(route.outer.name.clone());
     out.push(Event::StartNode(node_kind.clone()));
 
     // Emit component name for renderer template matching
     out.push(Event::Attribute {
         name: "name".to_string(),
-        value: custom.name.clone(),
+        value: route.outer.name.clone(),
     });
+
+    if route.outer_is_figure {
+        // §7.1: the extras belong to the outermost node (here the `<figure>`),
+        // its caption stays a child, and the `<img>` element nests inside (§11).
+        push_container_attribute(parsed, out);
+        push_custom_extra_attrs(parsed, out);
+        match route.inner {
+            Some(inner) => {
+                let inner_kind = NodeKind::Custom(inner.name.clone());
+                out.push(Event::StartNode(inner_kind.clone()));
+                out.push(Event::Attribute {
+                    name: "name".to_string(),
+                    value: inner.name.clone(),
+                });
+                push_image_element_attrs(parsed, out);
+                out.push(Event::EndNode(inner_kind));
+            }
+            None => push_img_element(parsed, out),
+        }
+        emit_caption_children(parsed, inline_pipeline, context, out);
+        out.push(Event::EndNode(node_kind));
+        return;
+    }
 
     // Core image attributes
     out.push(Event::Attribute {
@@ -218,72 +374,40 @@ fn emit_custom_image<C>(
         });
     }
 
-    // Extra attributes (id, class, props, style).
-    // Custom Solid components receive plain props, so keys are passed through
-    // verbatim instead of being prefixed with `data-` (unlike the HTML path).
-    if let Some(id) = &parsed.attrs.id {
-        out.push(Event::Attribute {
-            name: "id".to_string(),
-            value: id.clone(),
-        });
-    }
-    if !parsed.attrs.classes.is_empty() {
-        out.push(Event::Attribute {
-            name: "class".to_string(),
-            value: parsed.attrs.classes.join(" "),
-        });
-    }
-    for (k, v) in &parsed.attrs.properties {
-        if !k.starts_with("--") && k != "style" {
-            out.push(Event::Attribute {
-                name: k.clone(),
-                value: v.clone(),
-            });
-        }
-    }
-    let style_str = image_style(&parsed.attrs);
-    if !style_str.is_empty() {
-        out.push(Event::Attribute {
-            name: "style".to_string(),
-            value: style_str,
-        });
-    }
-    // §6.3: a bare flag stays a bare attribute, also on a custom component.
-    for name in &parsed.flags {
-        out.push(Event::AttributeFlag { name: name.clone() });
-    }
+    // Extra attributes (id, class, props, style) and the bare flags (§6.3):
+    // custom Solid components receive the keys verbatim (unlike the HTML path).
+    push_custom_extra_attrs(parsed, out);
 
     // Caption as rendered inline children with full inline pipeline support
-    if let Some(caption) = &parsed.caption {
-        let caption_events = render_caption_events(caption, inline_pipeline, context);
-        for ev in caption_events {
-            out.push(ev);
-        }
-    }
+    emit_caption_children(parsed, inline_pipeline, context, out);
 
     out.push(Event::EndNode(node_kind));
 }
 
 // --- Solid Hints Integration ---
 
-/// Builds SolidRenderHints for the custom image component when configured.
-/// Returns None if no custom_node is defined, letting the renderer fall back
-/// to its built-in HtmlBlock handler.
+/// Builds SolidRenderHints for the configured image components (the `img` and
+/// `figure` layers, §11). Returns None when neither layer is configured, letting
+/// the renderer fall back to its built-in handler.
 pub fn solid_hints(options: &ImgOptions) -> Option<SolidRenderHints> {
-    let custom = options.custom_node.as_ref()?;
-    let key = (custom.name.clone(), Some(custom.name.clone()));
-
     let mut hints = SolidRenderHints::default();
-    hints.templates.push(ComponentTemplate {
-        node_type: custom.name.clone(),
-        node_name: Some(custom.name.clone()),
-        template: custom.template.clone(),
-    });
+    // §11 rule 3: every entry of every layer answers its own instances.
+    for custom in options.img.components().chain(options.figure.components()) {
+        let key = (custom.name.clone(), Some(custom.name.clone()));
+        hints.templates.push(ComponentTemplate {
+            node_type: custom.name.clone(),
+            node_name: Some(custom.name.clone()),
+            template: custom.template.clone(),
+        });
 
-    if !custom.imports.is_empty() {
-        hints.template_imports.insert(key, custom.imports.clone());
+        if !custom.imports.is_empty() {
+            hints.template_imports.insert(key, custom.imports.clone());
+        }
     }
 
+    if hints.templates.is_empty() {
+        return None;
+    }
     Some(hints)
 }
 
@@ -582,7 +706,18 @@ fn build_parsed_image(
     } = blocks;
     let mut flags = Vec::new();
     let mut warnings = Vec::new();
+    let type_marker = extras.as_ref().and_then(|head| head.type_marker.clone());
     merge_image_extras(&mut attrs, extras.as_ref(), &mut flags, &mut warnings);
+    // §11 rule 3: the marker is the routing key of the instance; it is carried
+    // as a `type` attribute so a `{attrs.type}` template can read it back. An
+    // explicit `type:` prop keeps its own value.
+    if let Some(marker) = &type_marker {
+        if !has_attribute(&attrs, "type") {
+            attrs
+                .properties
+                .insert(0, ("type".to_string(), marker.clone()));
+        }
+    }
 
     ParsedImage {
         alt: core.alt,
@@ -592,6 +727,7 @@ fn build_parsed_image(
         attrs,
         marker: core.marker,
         flags,
+        type_marker,
         warnings,
         legacy,
     }
@@ -807,10 +943,9 @@ fn emit_inline_image<C, P>(
 ) where
     P: InlinePipeline<C>,
 {
-    if options.custom_node.is_some() {
-        emit_custom_image(parsed, options, inline_pipeline, context, out);
-    } else {
-        emit_element_image(parsed, inline_pipeline, context, out);
+    match route_image(parsed, options) {
+        Some(route) => emit_custom_image(parsed, &route, inline_pipeline, context, out),
+        None => emit_element_image(parsed, inline_pipeline, context, out),
     }
 }
 
@@ -824,10 +959,15 @@ fn push_common_attrs(out: &mut Vec<Event>, attrs: &ExtraAttrs, flags: &[String])
     }
 
     // HTML elements keep the `data-` prefix (custom components receive the
-    // keys verbatim, see `emit_custom_image`). The `style` value is emitted as
-    // the `style` attribute itself (§6.3).
+    // keys verbatim, see `push_custom_extra_attrs`), except the §11 routing key
+    // `type`, which stays a plain attribute (§11 rule 3). The `style` value is
+    // emitted as the `style` attribute itself (§6.3).
     for (k, v) in &attrs.properties {
         if k.starts_with("--") || k == "style" {
+            continue;
+        }
+        if k == "type" {
+            attribute(out, "type", v);
             continue;
         }
         attribute(out, &format!("data-{}", k), v);
@@ -971,6 +1111,7 @@ fn find_matching_end(events: &[Event], start_idx: usize, kind: NodeKind) -> Opti
 mod tests {
     use super::*;
     use pendon_core::ContextPipeline;
+    use pendon_renderer_solid::TypedComponent;
 
     fn paragraph_events(text: &str) -> Vec<Event> {
         vec![
@@ -1178,11 +1319,14 @@ mod tests {
     fn emits_custom_node_with_all_attributes() {
         let pipeline = Pipeline::default();
         let options = ImgOptions {
-            custom_node: Some(ImgCustomNode {
-                name: "AdvancedImage".into(),
-                template: "<AdvancedImage />".into(),
-                imports: Vec::new(),
-            }),
+            img: ComponentSet::new(),
+            figure: ComponentSet::from_entries([TypedComponent::default_component(
+                ImgCustomNode {
+                    name: "AdvancedImage".into(),
+                    template: "<AdvancedImage />".into(),
+                    imports: Vec::new(),
+                },
+            )]),
         };
         let events =
             paragraph_events("!![Alt](https://x.test/a.webp)[.hero]{foo: \"bar\"} A caption");
@@ -1337,11 +1481,14 @@ mod tests {
     fn custom_component_receives_extras_props() {
         let pipeline = Pipeline::default();
         let options = ImgOptions {
-            custom_node: Some(ImgCustomNode {
-                name: "AdvancedImage".into(),
-                template: "<AdvancedImage />".into(),
-                imports: Vec::new(),
-            }),
+            img: ComponentSet::new(),
+            figure: ComponentSet::from_entries([TypedComponent::default_component(
+                ImgCustomNode {
+                    name: "AdvancedImage".into(),
+                    template: "<AdvancedImage />".into(),
+                    imports: Vec::new(),
+                },
+            )]),
         };
         let events = paragraph_events(
             "!![Alt](https://x.test/a.webp)@@figure{.hero, foo: \"bar\"} A caption",

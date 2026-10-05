@@ -2,7 +2,7 @@ use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
     parse_property_block, scan_extras_chars, to_attributes, ExtrasAttr, ExtrasOptions,
 };
-use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
+use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -26,7 +26,9 @@ impl Default for NumberStyle {
 pub struct HeadingOptions {
     pub auto_number: bool,
     pub number_style: NumberStyle,
-    pub custom_node: Option<HeadingCustomNode>,
+    /// §11 component set of the `heading` layer: typed entries plus at most one
+    /// default, selected per instance by the `@@type{…}` marker (rule 3).
+    pub custom: ComponentSet<HeadingCustomNode>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -96,6 +98,8 @@ struct HeadingHead {
     attrs: BTreeMap<String, String>,
     /// Bare flags of the extras head (§6.3).
     flags: Vec<String>,
+    /// The `@@type{…}` marker, when present: the §11 routing key (rule 3).
+    type_marker: Option<String>,
     /// §13 warnings raised while resolving the head.
     warnings: Vec<String>,
     /// Characters of the input consumed by the head.
@@ -200,8 +204,10 @@ fn parse_heading_head(raw_text: &str) -> HeadingHead {
 
     // §7.4: an adjacent `@@type{…}` head attaches to the heading element.
     let mut flags = Vec::new();
+    let mut type_marker = None;
     if let Some((head, next)) = scan_extras_chars(&chars, cursor) {
         cursor = next;
+        type_marker = head.type_marker.clone();
         let parsed = to_attributes(&head, &ExtrasOptions::default());
         for warning in &parsed.warnings {
             warnings.push(pendon_extra::warning_message(warning));
@@ -266,10 +272,20 @@ fn parse_heading_head(raw_text: &str) -> HeadingHead {
         }
     }
 
+    // §11 rule 3: the marker is the routing key of the instance; it is carried
+    // as a `type` attribute so a `{attrs.type}` template can read it back. An
+    // explicit `type:` prop keeps its own value.
+    if let Some(marker) = &type_marker {
+        attrs
+            .entry("type".to_string())
+            .or_insert_with(|| marker.clone());
+    }
+
     HeadingHead {
         id: head_id,
         attrs,
         flags,
+        type_marker,
         warnings,
         consumed: cursor,
     }
@@ -406,12 +422,13 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
             };
 
             // 5. Determine node type: Custom component or standard Heading
-            let use_custom = options.custom_node.is_some();
-            let node_kind = if use_custom {
-                NodeKind::Custom(options.custom_node.as_ref().unwrap().name.clone())
-            } else {
-                NodeKind::Heading
-            };
+            // §11 rule 3: the marker picks the component, an unmatched marker
+            // falls back to the layer default, no default to `<h*>`.
+            let custom = options.custom.select(head.type_marker.as_deref());
+            let use_custom = custom.is_some();
+            let node_kind = custom
+                .map(|custom| NodeKind::Custom(custom.name.clone()))
+                .unwrap_or(NodeKind::Heading);
 
             // 6. Emit StartNode and the §13 warnings the head resolved.
             out.push(Event::StartNode(node_kind.clone()));
@@ -426,7 +443,7 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
             // 7. Emit attributes based on rendering mode
             if use_custom {
                 // Custom node mode: emit all attributes needed by the Solid template
-                let custom = options.custom_node.as_ref().unwrap();
+                let custom = custom.expect("custom component");
                 out.push(Event::Attribute {
                     name: "name".to_string(),
                     value: custom.name.clone(),
@@ -538,22 +555,29 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
 
 // --- Solid Hints Integration ---
 
-/// Builds SolidRenderHints for the custom heading component when configured.
-/// Returns None if no custom_node is defined, letting the renderer fall back
-/// to its built-in Heading handler.
+/// Builds SolidRenderHints for the custom heading components when configured.
+/// Returns None if no component is defined, letting the renderer fall back to
+/// its built-in Heading handler. Every entry of the set gets a template, typed
+/// or not (§11 rule 3).
 pub fn solid_hints(options: &HeadingOptions) -> Option<SolidRenderHints> {
-    let custom = options.custom_node.as_ref()?;
-    let key = (custom.name.clone(), Some(custom.name.clone()));
+    if options.custom.is_empty() {
+        return None;
+    }
 
     let mut hints = SolidRenderHints::default();
-    hints.templates.push(ComponentTemplate {
-        node_type: custom.name.clone(),
-        node_name: Some(custom.name.clone()),
-        template: custom.template.clone(),
-    });
+    for custom in options.custom.components() {
+        hints.templates.push(ComponentTemplate {
+            node_type: custom.name.clone(),
+            node_name: Some(custom.name.clone()),
+            template: custom.template.clone(),
+        });
 
-    if !custom.imports.is_empty() {
-        hints.template_imports.insert(key, custom.imports.clone());
+        if !custom.imports.is_empty() {
+            hints.template_imports.insert(
+                (custom.name.clone(), Some(custom.name.clone())),
+                custom.imports.clone(),
+            );
+        }
     }
 
     Some(hints)

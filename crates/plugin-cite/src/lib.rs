@@ -7,7 +7,7 @@ use pendon_extra::{
     legacy_extras_warning, parse_attrs, scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead,
     ExtrasOptions,
 };
-use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
+use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde_json::{Map, Value};
 
 // --- Public Types ---
@@ -24,7 +24,9 @@ pub struct CiteOptions {
     pub prefix: String,
     pub class_name: String,
     pub id_prefix: String,
-    pub custom_node: Option<CiteCustomNode>,
+    /// §11 component set of the `cite` layer: typed entries plus at most one
+    /// default, selected per instance by the `@@type{…}` marker (rule 3).
+    pub custom: ComponentSet<CiteCustomNode>,
     pub external_references: Option<Value>,
 }
 
@@ -34,7 +36,7 @@ impl Default for CiteOptions {
             prefix: "citeref-".to_string(),
             class_name: "cite-ref".to_string(),
             id_prefix: "cra-".to_string(),
-            custom_node: None,
+            custom: ComponentSet::new(),
             external_references: None,
         }
     }
@@ -54,6 +56,8 @@ struct CiteExtraAttrs {
     flags: Vec<String>,
     /// §13 warnings raised while merging the head.
     warnings: Vec<String>,
+    /// The `@@type{…}` marker, when present: the §11 routing key (rule 3).
+    type_marker: Option<String>,
     /// Whether the deprecated block was read and must be reported (§14).
     legacy: bool,
 }
@@ -257,8 +261,11 @@ pub fn solid_hints(options: &CiteOptions) -> Option<SolidRenderHints> {
         });
         hints.template_imports.insert(key, imports.to_vec());
     };
-    if let Some(custom) = options.custom_node.as_ref() {
-        add_node(&custom.name, &custom.template, &custom.imports);
+    if !options.custom.is_empty() {
+        // §11 rule 3: every entry of the set answers instances of its own.
+        for custom in options.custom.components() {
+            add_node(&custom.name, &custom.template, &custom.imports);
+        }
     }
     if hints.templates.is_empty() {
         None
@@ -370,7 +377,9 @@ fn emit_citation(
     index: usize,
     extra: &CiteExtraAttrs,
 ) {
-    if let Some(custom) = &options.custom_node {
+    // §11 rule 3: the marker picks the component, an unmatched marker falls
+    // back to the layer default, no default to the built-in `<sup>` markup.
+    if let Some(custom) = options.custom.select(extra.type_marker.as_deref()) {
         out.push(Event::StartNode(NodeKind::Custom(custom.name.clone())));
         out.push(Event::Attribute {
             name: "name".to_string(),
@@ -655,6 +664,16 @@ fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead) {
         ),
         None => {}
     }
+
+    // §11 rule 3: the type marker is the routing key of the citation; it is
+    // carried as a `type` attribute so a `{attrs.type}` template can read it
+    // back. An explicit `type:` prop keeps its own value.
+    extra.type_marker = head.type_marker.clone();
+    if let Some(marker) = &head.type_marker {
+        if !extra.has_key("type") {
+            extra.data.push(("type".to_string(), marker.clone()));
+        }
+    }
 }
 
 fn split_args(chars: &[char]) -> Vec<String> {
@@ -835,6 +854,7 @@ fn yaml_to_json(value: &serde_yaml::Value) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pendon_renderer_solid::TypedComponent;
 
     fn events_with_refs() -> Vec<Event> {
         vec![
@@ -905,11 +925,12 @@ mod tests {
     #[test]
     fn renders_custom_node() {
         let mut options = CiteOptions::default();
-        options.custom_node = Some(CiteCustomNode {
-            name: "Citation".into(),
-            template: "<Citation>{children}</Citation>".into(),
-            imports: Vec::new(),
-        });
+        options.custom =
+            ComponentSet::from_entries([TypedComponent::default_component(CiteCustomNode {
+                name: "Citation".into(),
+                template: "<Citation>{children}</Citation>".into(),
+                imports: Vec::new(),
+            })]);
         let result = process(&events_with_refs(), &options);
         assert!(result.iter().any(|event| matches!(
             event,
@@ -939,11 +960,12 @@ mod tests {
     #[test]
     fn emits_extra_attrs_on_custom_node() {
         let mut options = CiteOptions::default();
-        options.custom_node = Some(CiteCustomNode {
-            name: "Citation".into(),
-            template: "<Citation />".into(),
-            imports: Vec::new(),
-        });
+        options.custom =
+            ComponentSet::from_entries([TypedComponent::default_component(CiteCustomNode {
+                name: "Citation".into(),
+                template: "<Citation />".into(),
+                imports: Vec::new(),
+            })]);
 
         let events = vec![
             Event::StartNode(NodeKind::Document),
@@ -1008,7 +1030,15 @@ mod tests {
         assert!(props.is_empty());
         assert_eq!(extra.classes, vec!["highlight"]);
         assert_eq!(extra.id.as_deref(), Some("short"));
-        assert_eq!(extra.data, vec![("note".to_string(), "x".to_string())]);
+        // §11 rule 3: the marker rides along as the `type` attribute.
+        assert_eq!(extra.type_marker.as_deref(), Some("cite"));
+        assert_eq!(
+            extra.data,
+            vec![
+                ("note".to_string(), "x".to_string()),
+                ("type".to_string(), "cite".to_string()),
+            ]
+        );
         assert_eq!(extra.extras_style.as_deref(), Some("--color: red"));
         assert!(!extra.legacy);
 
@@ -1023,11 +1053,12 @@ mod tests {
     #[test]
     fn extras_merge_into_the_custom_citation_node() {
         let mut options = CiteOptions::default();
-        options.custom_node = Some(CiteCustomNode {
-            name: "Citation".into(),
-            template: "<Citation />".into(),
-            imports: Vec::new(),
-        });
+        options.custom =
+            ComponentSet::from_entries([TypedComponent::default_component(CiteCustomNode {
+                name: "Citation".into(),
+                template: "<Citation />".into(),
+                imports: Vec::new(),
+            })]);
 
         let result = process(
             &events_with_text(r#"[^^]("book")@@cite{.hero, citeId: "short", isFoo}"#),
@@ -1109,11 +1140,12 @@ mod tests {
     #[test]
     fn extra_id_does_not_replace_citation_id_on_custom_node() {
         let mut options = CiteOptions::default();
-        options.custom_node = Some(CiteCustomNode {
-            name: "Citation".into(),
-            template: "<Citation />".into(),
-            imports: Vec::new(),
-        });
+        options.custom =
+            ComponentSet::from_entries([TypedComponent::default_component(CiteCustomNode {
+                name: "Citation".into(),
+                template: "<Citation />".into(),
+                imports: Vec::new(),
+            })]);
 
         let events = vec![
             Event::StartNode(NodeKind::Document),

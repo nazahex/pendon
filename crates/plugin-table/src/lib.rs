@@ -1,6 +1,6 @@
 use pendon_core::InlinePipeline;
 use pendon_core::{Event, Pipeline};
-use pendon_renderer_solid::ImportEntry;
+use pendon_renderer_solid::{ComponentSet, ImportEntry};
 use serde::{Deserialize, Serialize};
 
 mod attrs;
@@ -22,13 +22,38 @@ pub struct TableCustomNode {
     /// own `imports` list is added on top; the renderer deduplicates.
     #[serde(default)]
     pub imports: Vec<ImportEntry>,
-    pub table: Option<CustomComponent>,
-    pub caption: Option<CustomComponent>,
-    pub thead: Option<CustomComponent>,
-    pub tbody: Option<CustomComponent>,
-    pub tfoot: Option<CustomComponent>,
-    pub row: Option<CustomComponent>,
-    pub cell: Option<CustomComponent>,
+    /// §11 component sets, one per layer (`§8` layer mapping).
+    #[serde(default)]
+    pub table: ComponentSet<CustomComponent>,
+    #[serde(default)]
+    pub caption: ComponentSet<CustomComponent>,
+    #[serde(default)]
+    pub thead: ComponentSet<CustomComponent>,
+    #[serde(default)]
+    pub tbody: ComponentSet<CustomComponent>,
+    #[serde(default)]
+    pub tfoot: ComponentSet<CustomComponent>,
+    #[serde(default)]
+    pub row: ComponentSet<CustomComponent>,
+    #[serde(default)]
+    pub cell: ComponentSet<CustomComponent>,
+}
+
+impl TableCustomNode {
+    /// Whether any layer has a component to render with.
+    pub fn is_configured(&self) -> bool {
+        [
+            &self.table,
+            &self.caption,
+            &self.thead,
+            &self.tbody,
+            &self.tfoot,
+            &self.row,
+            &self.cell,
+        ]
+        .iter()
+        .any(|set| !set.is_empty())
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -99,6 +124,7 @@ where
 mod tests {
     use super::*;
     use pendon_core::{ContextPipeline, NodeKind};
+    use pendon_renderer_solid::TypedComponent;
 
     fn paragraph_events(text: &str) -> Vec<Event> {
         vec![
@@ -173,6 +199,89 @@ mod tests {
         events.iter().any(|event| {
             matches!(event, Event::Attribute { name: n, value: v } if n == name && v == value)
         })
+    }
+
+    /// §8: the declaration line, the `|| caption ||` line and the cell/row/section
+    /// extras each land on their own layer; bare `===` is retired.
+    #[test]
+    fn section_eight_layers_land_on_their_elements() {
+        let pipeline = Pipeline::default();
+        let events = paragraph_events(
+            "|-[sales](\"Laporan\")@@tableX{.striped}-|\n\
+             || @@captionX{.cap} Caption ||\n\
+             | A | B |\n\
+             | @@cellA{.v-top} :--- | :--- |\n\
+             | @@cellB{.lead} 1 | 2 |@@rowB{.info}\n\
+             |===|@@tfootX{.total}\n\
+             | Total | > |\n",
+        );
+        let out = process(&events, &TableOptions::default(), &pipeline);
+
+        // Declaration line → `<table>`; caption line → `<caption>`.
+        assert!(has_attribute(&out, "id", "sales"));
+        assert!(has_attribute(&out, "title", "Laporan"));
+        assert!(has_attribute(&out, "type", "tableX"));
+        assert!(has_attribute(&out, "class", "striped"));
+        let caption = all_element_children(&out, "caption");
+        assert!(has_attribute(&caption[0], "class", "cap"), "{caption:?}");
+        assert!(has_attribute(&caption[0], "type", "captionX"));
+
+        // Cell-front extras → the `<th>` of that column (and its `<td>`s), row
+        // end-of-line extras → the `<tr>`, `|===|` extras → the `<tfoot>`.
+        assert!(has_attribute(&out, "type", "cellA"));
+        assert!(has_attribute(&out, "class", "v-top"));
+        assert!(has_attribute(&out, "type", "cellB"));
+        // §6.4: the column class and the cell class accumulate.
+        assert!(has_attribute(&out, "class", "v-top lead"));
+        assert!(has_attribute(&out, "type", "rowB"));
+        assert!(has_attribute(&out, "class", "info"));
+        let tfoot = all_element_children(&out, "tfoot");
+        assert!(has_attribute(&tfoot[0], "class", "total"), "{tfoot:?}");
+        assert!(has_attribute(&tfoot[0], "type", "tfootX"));
+
+        // A bare `===` is no longer a footer separator (§8).
+        let events = paragraph_events("| A |\n| --- |\n| 1 |\n===\n| 2 |\n");
+        let out = process(&events, &TableOptions::default(), &pipeline);
+        assert!(all_element_children(&out, "tfoot").is_empty());
+    }
+
+    /// §8: extras in front of a `>`/`^` marker decorate the cell they merge into.
+    #[test]
+    fn cell_extras_before_a_span_marker_merge_into_the_spanned_cell() {
+        let pipeline = Pipeline::default();
+        let events = paragraph_events("| A | B |\n| --- | --- |\n| 1 | @@cellA{.wide} > |\n");
+        let out = process(&events, &TableOptions::default(), &pipeline);
+
+        assert!(has_attribute(&out, "colspan", "2"));
+        assert!(has_attribute(&out, "type", "cellA"));
+        assert!(has_attribute(&out, "class", "wide"));
+    }
+
+    /// §8: a taxonomy that the lexer turned into a `Link` — the declaration head
+    /// `[slug]("A longer title")` — is rebuilt before the table is parsed.
+    #[test]
+    fn declaration_head_lexed_as_a_link_still_parses() {
+        let pipeline = Pipeline::default();
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text("|-".to_string()),
+            Event::StartNode(NodeKind::Link),
+            Event::Attribute {
+                name: "href".to_string(),
+                value: "\"Laporan Penjualan 2026\"".to_string(),
+            },
+            Event::Text("sales".to_string()),
+            Event::EndNode(NodeKind::Link),
+            Event::Text("@@tableX{.striped}-|\n| A |\n| --- |\n| 1 |\n".to_string()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+        let out = process(&events, &TableOptions::default(), &pipeline);
+
+        assert!(has_attribute(&out, "id", "sales"));
+        assert!(has_attribute(&out, "title", "Laporan Penjualan 2026"));
+        assert!(text_of(&out).contains('1'));
     }
 
     /// Stand-in for an inline custom plugin (like `cite`): rewrites `{{cite}}`
@@ -304,18 +413,23 @@ mod tests {
         }
     }
 
+    /// A one-component layer set (its default entry).
+    fn layer(name: &str) -> ComponentSet<CustomComponent> {
+        ComponentSet::from_entries([TypedComponent::default_component(component(name))])
+    }
+
     /// Every layer of the table is customised.
     fn fully_custom_options() -> TableOptions {
         TableOptions {
             custom_node: Some(TableCustomNode {
                 imports: Vec::new(),
-                table: Some(component("CustomTable")),
-                caption: Some(component("TableCaption")),
-                thead: Some(component("TableHead")),
-                tbody: Some(component("TableBody")),
-                tfoot: Some(component("TableFoot")),
-                row: Some(component("TableRow")),
-                cell: Some(component("TableCell")),
+                table: layer("CustomTable"),
+                caption: layer("TableCaption"),
+                thead: layer("TableHead"),
+                tbody: layer("TableBody"),
+                tfoot: layer("TableFoot"),
+                row: layer("TableRow"),
+                cell: layer("TableCell"),
             }),
         }
     }
@@ -363,7 +477,7 @@ mod tests {
         let events = paragraph_events("| A | B |\n| --- | --- |\n| 1 | 2 |\n");
         let options = TableOptions {
             custom_node: Some(TableCustomNode {
-                table: Some(component("CustomTable")),
+                table: layer("CustomTable"),
                 ..Default::default()
             }),
         };
@@ -418,7 +532,8 @@ mod tests {
         node.imports = vec![ImportEntry::Raw(
             "import { TableCaption } from '@comp/table';".to_string(),
         )];
-        node.thead.as_mut().expect("thead").imports = vec![ImportEntry::Structured {
+        let thead = node.thead.entries_mut().first_mut().expect("thead entry");
+        thead.component.imports = vec![ImportEntry::Structured {
             module: "@comp/table".to_string(),
             default: None,
             names: vec!["TableHead".to_string()],

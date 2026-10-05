@@ -4,7 +4,9 @@ use pendon_plugin_cite::{CitationContext, CiteCustomNode, CiteOptions};
 use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
 use pendon_plugin_heading::{HeadingCustomNode, HeadingOptions};
 use pendon_plugin_img::{ImgCustomNode, ImgOptions};
-use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
+use pendon_renderer_solid::{
+    ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints, TypedComponent,
+};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -175,9 +177,12 @@ pub fn load_custom_spec(
 
 /// §11 primary layer of `plugin-anchor`: the `<a>` it emits.
 const ANCHOR_LAYER: &str = "anchor";
-/// §11 primary layer of `plugin-img`: the `<figure>` container the custom node
-/// replaces. The `img` layer (`<img>`) needs the img cutover (§14).
+/// §11 primary layer of `plugin-img`: the `<figure>` container. A bare
+/// `[task.img.custom]` table addresses this layer.
 const IMG_LAYER: &str = "figure";
+/// §11 layers of `plugin-img` (§7.1): the `<img>` element and its `<figure>`
+/// container.
+const IMG_LAYERS: [&str; 2] = ["img", "figure"];
 /// §11 primary layer of `plugin-heading`: the `<h*>` element.
 const HEADING_LAYER: &str = "heading";
 /// §11 primary layer of `plugin-cite`: the citation leaf.
@@ -225,19 +230,30 @@ fn entry_is_configured(entry: &crate::components::ComponentEntry) -> bool {
     entry.name.is_some() || entry.template.is_some() || !entry.imports.is_empty()
 }
 
-/// Resolves one layer of an already loaded `custom` config into the single
-/// component the pre-cutover plugin options can hold.
-fn layer_entry(
-    plugin: &str,
+/// Loads one §11 layer as a component set: every entry of the layer with its
+/// `type` markers (§11 rule 3). Entries with no name, template or imports are
+/// dropped, so an empty `[custom]` table stays a no-op.
+fn layer_set<C>(
     loaded: Option<&crate::components::LoadedComponents>,
     layer: &str,
-) -> Result<Option<crate::components::ComponentEntry>, String> {
-    let Some(loaded) = loaded else {
-        return Ok(None);
+    make: impl Fn(&crate::components::ComponentEntry) -> Result<C, String>,
+) -> Result<ComponentSet<C>, String> {
+    let Some(set) = loaded.and_then(|loaded| loaded.components.layer(layer)) else {
+        return Ok(ComponentSet::new());
     };
-    crate::components::resolve_single(plugin, &loaded.components, layer)
-        .map(|entry| entry.cloned().filter(entry_is_configured))
-        .map_err(|error| error.to_string())
+    let mut entries = Vec::new();
+    for entry in set
+        .typed()
+        .iter()
+        .chain(set.default_entry().into_iter())
+        .filter(|entry| entry_is_configured(entry))
+    {
+        entries.push(TypedComponent {
+            types: entry.types.clone(),
+            component: make(entry)?,
+        });
+    }
+    Ok(ComponentSet::from_entries(entries))
 }
 
 /// Rejects §11 layers this plugin cannot carry yet (§14: no silent drops).
@@ -294,15 +310,16 @@ pub fn build_cite_options(
     check_custom_node_removed("cite", config.custom_node.is_some())?;
     let loaded = load_custom("cite", CITE_LAYER, config.custom.as_ref())?;
     check_layers("cite", loaded.as_ref(), &[CITE_LAYER])?;
-    let custom_node =
-        layer_entry("cite", loaded.as_ref(), CITE_LAYER)?.map(|entry| CiteCustomNode {
+    let custom = layer_set(loaded.as_ref(), CITE_LAYER, |entry| {
+        Ok(CiteCustomNode {
             name: entry.name.clone().unwrap_or_else(|| "Citation".to_string()),
             template: entry
                 .template
                 .clone()
                 .unwrap_or_else(|| CITE_DEFAULT_TEMPLATE.to_string()),
             imports: entry.imports.clone(),
-        });
+        })
+    })?;
     Ok(CiteOptions {
         prefix: config
             .prefix
@@ -316,7 +333,7 @@ pub fn build_cite_options(
             .id_prefix
             .clone()
             .unwrap_or_else(|| "cra-".to_string()),
-        custom_node,
+        custom,
         external_references,
     })
 }
@@ -328,16 +345,17 @@ pub fn build_anchor_options(config: Option<&AnchorTaskConfig>) -> Result<AnchorO
     check_custom_node_removed("anchor", config.custom_node.is_some())?;
     let loaded = load_custom("anchor", ANCHOR_LAYER, config.custom.as_ref())?;
     check_layers("anchor", loaded.as_ref(), &[ANCHOR_LAYER])?;
-    let custom_node =
-        layer_entry("anchor", loaded.as_ref(), ANCHOR_LAYER)?.map(|entry| AnchorCustomNode {
+    let custom = layer_set(loaded.as_ref(), ANCHOR_LAYER, |entry| {
+        Ok(AnchorCustomNode {
             name: entry.name.clone().unwrap_or_else(|| "Anchor".to_string()),
             template: entry
                 .template
                 .clone()
                 .unwrap_or_else(|| "<Anchor href=\"{attrs.href}\">{children}</Anchor>".to_string()),
             imports: entry.imports.clone(),
-        });
-    Ok(AnchorOptions { custom_node })
+        })
+    })?;
+    Ok(AnchorOptions { custom })
 }
 
 pub fn build_table_options(
@@ -348,20 +366,17 @@ pub fn build_table_options(
     };
 
     check_custom_node_removed("table", config.custom_node.is_some())?;
-    let loaded = load_custom("table", "table", config.custom.as_ref())?;
+    let loaded = load_custom("table", TABLE_LAYERS[0], config.custom.as_ref())?;
     check_layers("table", loaded.as_ref(), &TABLE_LAYERS)?;
-    let Some(loaded) = loaded.as_ref() else {
-        return Ok(pendon_plugin_table::TableOptions::default());
-    };
 
-    let pick = |layer: &str| -> Result<Option<pendon_plugin_table::CustomComponent>, String> {
-        Ok(layer_entry("table", Some(loaded), layer)?.map(|entry| {
-            pendon_plugin_table::CustomComponent {
+    let pick = |layer: &str| {
+        layer_set(loaded.as_ref(), layer, |entry| {
+            Ok(pendon_plugin_table::CustomComponent {
                 name: entry.name.clone().unwrap_or_default(),
                 template: entry.template.clone().unwrap_or_default(),
                 imports: entry.imports.clone(),
-            }
-        }))
+            })
+        })
     };
     let table = pick("table")?;
     let caption = pick("caption")?;
@@ -375,7 +390,7 @@ pub fn build_table_options(
     // entering the custom emit path with nothing to emit.
     if [&table, &caption, &thead, &tbody, &tfoot, &row, &cell]
         .iter()
-        .all(|component| component.is_none())
+        .all(|set| set.is_empty())
     {
         return Ok(pendon_plugin_table::TableOptions::default());
     }
@@ -402,17 +417,22 @@ pub fn build_img_options(config: Option<&ImgTaskConfig>) -> Result<ImgOptions, S
     };
     check_custom_node_removed("img", config.custom_node.is_some())?;
     let loaded = load_custom("img", IMG_LAYER, config.custom.as_ref())?;
-    check_layers("img", loaded.as_ref(), &[IMG_LAYER])?;
-    let custom_node = layer_entry("img", loaded.as_ref(), IMG_LAYER)?
-        .map(|entry| {
+    check_layers("img", loaded.as_ref(), &IMG_LAYERS)?;
+    let make = |layer: &'static str| {
+        move |entry: &crate::components::ComponentEntry| {
             Ok::<_, String>(ImgCustomNode {
-                name: require(entry.name.as_ref(), "img.custom.figure.name")?,
-                template: require(entry.template.as_ref(), "img.custom.figure.template")?,
+                name: require(entry.name.as_ref(), &format!("img.custom.{layer}.name"))?,
+                template: require(
+                    entry.template.as_ref(),
+                    &format!("img.custom.{layer}.template"),
+                )?,
                 imports: entry.imports.clone(),
             })
-        })
-        .transpose()?;
-    Ok(ImgOptions { custom_node })
+        }
+    };
+    let img = layer_set(loaded.as_ref(), "img", make("img"))?;
+    let figure = layer_set(loaded.as_ref(), "figure", make("figure"))?;
+    Ok(ImgOptions { img, figure })
 }
 
 pub fn build_heading_options(config: Option<&HeadingTaskConfig>) -> Result<HeadingOptions, String> {
@@ -422,19 +442,17 @@ pub fn build_heading_options(config: Option<&HeadingTaskConfig>) -> Result<Headi
     check_custom_node_removed("heading", config.custom_node.is_some())?;
     let loaded = load_custom("heading", HEADING_LAYER, config.custom.as_ref())?;
     check_layers("heading", loaded.as_ref(), &[HEADING_LAYER])?;
-    let custom_node = layer_entry("heading", loaded.as_ref(), HEADING_LAYER)?
-        .map(|entry| {
-            Ok::<_, String>(HeadingCustomNode {
-                name: require(entry.name.as_ref(), "heading.custom.heading.name")?,
-                template: require(entry.template.as_ref(), "heading.custom.heading.template")?,
-                imports: entry.imports.clone(),
-            })
+    let custom = layer_set(loaded.as_ref(), HEADING_LAYER, |entry| {
+        Ok(HeadingCustomNode {
+            name: require(entry.name.as_ref(), "heading.custom.heading.name")?,
+            template: require(entry.template.as_ref(), "heading.custom.heading.template")?,
+            imports: entry.imports.clone(),
         })
-        .transpose()?;
+    })?;
     Ok(HeadingOptions {
         auto_number: config.auto_number.unwrap_or_default(),
         number_style: config.number_style.clone().unwrap_or_default(),
-        custom_node,
+        custom,
     })
 }
 
@@ -670,7 +688,7 @@ names = ["TableHead"]
         // list to inherit any more.
         assert!(node.imports.is_empty());
 
-        let table = node.table.expect("table component");
+        let table = node.table.default_component().expect("table component");
         assert_eq!(table.name, "CustomTable");
         assert!(
             matches!(&table.imports[0], ImportEntry::Raw(line) if line.contains("TableCaption"))
@@ -681,19 +699,19 @@ names = ["TableHead"]
                 if module == "@comp/table" && default.as_deref() == Some("CustomTable")
         ));
 
-        let thead = node.thead.expect("thead component");
+        let thead = node.thead.default_component().expect("thead component");
         assert_eq!(thead.template, "<TableHead>{children}</TableHead>");
         assert!(matches!(
             &thead.imports[0],
             ImportEntry::Structured { names, .. } if names == &vec!["TableHead".to_string()]
         ));
 
-        // Unconfigured layers stay unset and fall back to plain elements.
-        assert!(node.caption.is_none());
-        assert!(node.tbody.is_none());
-        assert!(node.tfoot.is_none());
-        assert!(node.row.is_none());
-        assert!(node.cell.is_none());
+        // Unconfigured layers stay empty and fall back to plain elements.
+        assert!(node.caption.is_empty());
+        assert!(node.tbody.is_empty());
+        assert!(node.tfoot.is_empty());
+        assert!(node.row.is_empty());
+        assert!(node.cell.is_empty());
     }
 
     #[test]
@@ -737,7 +755,10 @@ imports = ["import Figure from '@/components/Figure';"]
         )
         .expect("valid img config");
         let options = build_img_options(Some(&cfg)).expect("valid img options");
-        let node = options.custom_node.expect("custom node");
+        let node = options
+            .figure
+            .default_component()
+            .expect("figure component");
         assert_eq!(node.name, "Figure");
         assert!(matches!(&node.imports[0], ImportEntry::Raw(line) if line.contains("Figure")));
 
@@ -758,7 +779,10 @@ default = "DocHeading"
         let options = build_heading_options(Some(&cfg)).expect("valid heading options");
         assert!(options.auto_number);
         assert_eq!(options.number_style, NumberStyle::NestedNumber);
-        let node = options.custom_node.expect("custom node");
+        let node = options
+            .custom
+            .default_component()
+            .expect("heading component");
         assert!(matches!(
             &node.imports[0],
             ImportEntry::Structured { module, .. } if module == "@/components/DocHeading"
@@ -784,7 +808,11 @@ names = ["AnchorAB"]
         .expect("valid anchor config");
 
         let options = build_anchor_options(Some(&cfg)).expect("valid anchor options");
-        let node = options.custom_node.expect("custom node");
+        // §11 rule 2: the `type` markers travel with the entry, so the plugin can
+        // route per instance (§11 rule 3, OPEN-C3).
+        let entry = options.custom.entries().first().expect("anchor entry");
+        assert_eq!(entry.types, vec!["anchorA", "anchorB"]);
+        let node = &entry.component;
         assert_eq!(node.name, "AnchorAB");
         assert_eq!(node.template, "<AnchorAB {...attrs}>{children}</AnchorAB>");
         assert!(matches!(
@@ -814,8 +842,11 @@ names = ["TableHead"]
         );
 
         let node = options.custom_node.expect("custom node");
-        assert_eq!(node.table.expect("table layer").name, "CustomTable");
-        let thead = node.thead.expect("thead layer");
+        assert_eq!(
+            node.table.default_component().expect("table layer").name,
+            "CustomTable"
+        );
+        let thead = node.thead.default_component().expect("thead layer");
         assert_eq!(thead.template, "<TableHead>{children}</TableHead>");
         assert!(matches!(
             &thead.imports[0],
@@ -823,8 +854,8 @@ names = ["TableHead"]
                 if module == "@comp/table" && names == &vec!["TableHead".to_string()]
         ));
         assert!(node.imports.is_empty());
-        assert!(node.caption.is_none());
-        assert!(node.cell.is_none());
+        assert!(node.caption.is_empty());
+        assert!(node.cell.is_empty());
     }
 
     /// A `custom` key with nothing in it keeps the built-in element path.
@@ -835,15 +866,14 @@ names = ["TableHead"]
         let cfg: AnchorTaskConfig = toml::from_str("custom = []\n").expect("valid anchor config");
         assert!(build_anchor_options(Some(&cfg))
             .expect("valid anchor options")
-            .custom_node
-            .is_none());
+            .custom
+            .is_empty());
     }
 
-    /// §11 rule 3 needs per-type routing, which is the plugin cutover tracked by
-    /// §14: a layer that cannot be covered by one component is a config error
-    /// instead of a silent downgrade to the default.
+    /// §11 rules 2/3: typed entries and the layer default all reach the plugin,
+    /// which routes per instance (OPEN-C3) instead of the CLI refusing them.
     #[test]
-    fn layers_that_need_type_routing_are_rejected() {
+    fn typed_entries_and_the_default_build_a_routable_set() {
         let cfg: AnchorTaskConfig = toml::from_str(
             r#"
 [[custom]]
@@ -857,9 +887,16 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
 "#,
         )
         .expect("valid anchor config");
-        let err = build_anchor_options(Some(&cfg)).expect_err("two components need routing");
-        assert!(err.contains("need per-type routing"), "{err}");
-        assert!(err.contains("anchor.custom.anchor"), "{err}");
+        let options = build_anchor_options(Some(&cfg)).expect("routable layer");
+
+        assert_eq!(options.custom.entries().len(), 2);
+        let typed = options.custom.select(Some("anchorA")).expect("typed entry");
+        assert_eq!(typed.name, "AnchorAB");
+        let unclaimed = options
+            .custom
+            .select(Some("anchorZ"))
+            .expect("default entry");
+        assert_eq!(unclaimed.name, "AnchorDefault");
     }
 
     /// Unknown layers are typos and the removed `custom_node` key is a
@@ -908,8 +945,8 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
         assert!(err.contains("task.cite.custom_node was removed"), "{err}");
     }
 
-    /// `img` reads the `figure` layer (the outermost node) and reports layers
-    /// whose cutover has not landed.
+    /// `img` reads the `figure` layer (the outermost node) and the `img` layer
+    /// (the element it contains), and reports unknown layers.
     #[test]
     fn img_reads_the_figure_layer() {
         let cfg: ImgTaskConfig = toml::from_str(
@@ -921,18 +958,30 @@ template = "<Figure>{children}</Figure>"
         )
         .expect("valid img config");
         let options = build_img_options(Some(&cfg)).expect("valid img options");
-        assert_eq!(options.custom_node.expect("custom node").name, "Figure");
+        assert_eq!(
+            options
+                .figure
+                .default_component()
+                .expect("figure component")
+                .name,
+            "Figure"
+        );
 
         let cfg: ImgTaskConfig =
             toml::from_str("[custom.figure]\nname = \"Figure\"\n").expect("valid img config");
         let err = build_img_options(Some(&cfg)).expect_err("template required");
         assert!(err.contains("img.custom.figure.template"), "{err}");
 
+        // The `img` layer is wired: it renders the `<img>` element of a figure
+        // or the whole component of a plain image (§7.1).
         let cfg: ImgTaskConfig =
             toml::from_str("[custom.img]\nname = \"Thumb\"\ntemplate = \"<img />\"\n")
                 .expect("valid img config");
-        let err = build_img_options(Some(&cfg)).expect_err("img layer not wired");
-        assert!(err.contains("unsupported layer"), "{err}");
+        let options = build_img_options(Some(&cfg)).expect("img layer wired");
+        assert_eq!(
+            options.img.default_component().expect("img component").name,
+            "Thumb"
+        );
     }
 
     /// `heading` and `cite` read their primary layer; the citation leaf keeps its
@@ -948,13 +997,20 @@ template = "<DocHeading>{children}</DocHeading>"
         )
         .expect("valid heading config");
         let options = build_heading_options(Some(&cfg)).expect("valid heading options");
-        assert_eq!(options.custom_node.expect("custom node").name, "DocHeading");
+        assert_eq!(
+            options
+                .custom
+                .default_component()
+                .expect("heading component")
+                .name,
+            "DocHeading"
+        );
 
         let cfg: CiteTaskConfig =
             toml::from_str("[custom]\nname = \"Cite\"\n").expect("valid cite config");
         let options = build_cite_options(Some(&cfg), "./src/[slug].md", "./src/a.md", None)
             .expect("valid cite options");
-        let node = options.custom_node.expect("custom node");
+        let node = options.custom.default_component().expect("cite component");
         assert_eq!(node.name, "Cite");
         assert_eq!(node.template, CITE_DEFAULT_TEMPLATE);
     }

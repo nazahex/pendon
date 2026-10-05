@@ -5,7 +5,7 @@ use pendon_extra::{
     legacy_extras_warning, parse_attrs, scan_extras_chars, to_attributes, ExtraAttrs, ExtrasAttr,
     ExtrasHead, ExtrasOptions,
 };
-use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
+use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 
 #[derive(Clone, Debug, Default)]
 pub struct AnchorCustomNode {
@@ -14,15 +14,11 @@ pub struct AnchorCustomNode {
     pub imports: Vec<ImportEntry>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct AnchorOptions {
-    pub custom_node: Option<AnchorCustomNode>,
-}
-
-impl Default for AnchorOptions {
-    fn default() -> Self {
-        Self { custom_node: None }
-    }
+    /// §11 component set of the `anchor` layer: typed entries plus at most one
+    /// default, selected per instance by the `@@type{…}` marker (rule 3).
+    pub custom: ComponentSet<AnchorCustomNode>,
 }
 
 pub fn process(events: &[Event], options: &AnchorOptions) -> Vec<Event> {
@@ -62,15 +58,25 @@ pub fn process(events: &[Event], options: &AnchorOptions) -> Vec<Event> {
 }
 
 pub fn solid_hints(options: &AnchorOptions) -> Option<SolidRenderHints> {
-    let custom = options.custom_node.as_ref()?;
-    let key = (custom.name.clone(), Some(custom.name.clone()));
+    if options.custom.is_empty() {
+        return None;
+    }
     let mut hints = SolidRenderHints::default();
-    hints.templates.push(ComponentTemplate {
-        node_type: custom.name.clone(),
-        node_name: Some(custom.name.clone()),
-        template: custom.template.clone(),
-    });
-    hints.template_imports.insert(key, custom.imports.clone());
+    // §11 rule 3: every entry of the set answers instances of its own, so every
+    // entry needs a template (typed entries are not shadowed by the default).
+    for custom in options.custom.components() {
+        hints.templates.push(ComponentTemplate {
+            node_type: custom.name.clone(),
+            node_name: Some(custom.name.clone()),
+            template: custom.template.clone(),
+        });
+        if !custom.imports.is_empty() {
+            hints.template_imports.insert(
+                (custom.name.clone(), Some(custom.name.clone())),
+                custom.imports.clone(),
+            );
+        }
+    }
     Some(hints)
 }
 
@@ -180,6 +186,9 @@ fn parse_link(chars: &[char], start: usize) -> Option<ParsedLink> {
 struct AnchorAttrs {
     values: BTreeMap<String, String>,
     flags: Vec<String>,
+    /// The `@@type{…}` marker of the extras head, when present: the §11 routing
+    /// key of the instance (§11 rule 3).
+    type_marker: Option<String>,
     conflict: Option<String>,
     warnings: Vec<String>,
 }
@@ -347,9 +356,20 @@ fn build_attributes(
         attrs.insert("rel".to_string(), rel.join(" "));
     }
 
+    // §11 rule 3: the `@@type{…}` marker is the routing key of the instance. It
+    // is carried to the node as a `type` attribute so a `{attrs.type}` template
+    // can read it back; an explicit `type:` prop keeps its own value.
+    let type_marker = extras.and_then(|head| head.type_marker.clone());
+    if let Some(marker) = &type_marker {
+        attrs
+            .entry("type".to_string())
+            .or_insert_with(|| marker.clone());
+    }
+
     AnchorAttrs {
         values: attrs,
         flags,
+        type_marker,
         conflict,
         warnings,
     }
@@ -379,13 +399,14 @@ fn strip_url_modifiers(url: &str) -> (String, String) {
 }
 
 fn emit_anchor(label: &str, attrs: AnchorAttrs, options: &AnchorOptions, out: &mut Vec<Event>) {
-    let node = options
-        .custom_node
-        .as_ref()
+    // §11 rule 3: the marker picks the component; an unmatched marker falls back
+    // to the layer default, and a layer without a default to the `<a>` element.
+    let custom = options.custom.select(attrs.type_marker.as_deref());
+    let node = custom
         .map(|custom| NodeKind::Custom(custom.name.clone()))
         .unwrap_or(NodeKind::Link);
     out.push(Event::StartNode(node.clone()));
-    if let Some(custom) = options.custom_node.as_ref() {
+    if let Some(custom) = custom {
         out.push(Event::Attribute {
             name: "name".to_string(),
             value: custom.name.clone(),
@@ -489,6 +510,7 @@ fn flush_text(normal: &mut String, out: &mut Vec<Event>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pendon_renderer_solid::TypedComponent;
 
     #[test]
     fn adds_external_defaults_without_modifiers() {
@@ -553,17 +575,110 @@ mod tests {
     #[test]
     fn creates_custom_node() {
         let options = AnchorOptions {
-            custom_node: Some(AnchorCustomNode {
-                name: "Anchor".into(),
-                template: "<Anchor>{children}</Anchor>".into(),
-                imports: Vec::new(),
-            }),
+            custom: ComponentSet::from_entries([TypedComponent::default_component(
+                AnchorCustomNode {
+                    name: "Anchor".into(),
+                    template: "<Anchor>{children}</Anchor>".into(),
+                    imports: Vec::new(),
+                },
+            )]),
         };
         let mut out = Vec::new();
         emit_text("[foo](/docs)", &options, &mut out);
         assert!(out.iter().any(
             |event| matches!(event, Event::StartNode(NodeKind::Custom(name)) if name == "Anchor")
         ));
+    }
+
+    /// §11 rule 3: the marker routes to its own component, an unclaimed marker
+    /// to the layer default, and a marker without either to the `<a>` element —
+    /// which still carries the marker as its `type` attribute.
+    #[test]
+    fn type_marker_routes_between_typed_entries_and_the_default() {
+        let options = AnchorOptions {
+            custom: ComponentSet::from_entries([
+                TypedComponent::typed(
+                    ["anchorA", "anchorB"],
+                    AnchorCustomNode {
+                        name: "AnchorAB".into(),
+                        template: "<AnchorAB>{children}</AnchorAB>".into(),
+                        imports: Vec::new(),
+                    },
+                ),
+                TypedComponent::default_component(AnchorCustomNode {
+                    name: "AnchorDefault".into(),
+                    template: "<AnchorDefault>{children}</AnchorDefault>".into(),
+                    imports: Vec::new(),
+                }),
+            ]),
+        };
+
+        let mut out = Vec::new();
+        emit_text("[a](/a)@@anchorA{.hero}", &options, &mut out);
+        assert!(out.iter().any(
+            |event| matches!(event, Event::StartNode(NodeKind::Custom(name)) if name == "AnchorAB")
+        ));
+        assert!(out.iter().any(
+            |event| matches!(event, Event::Attribute { name, value } if name == "type" && value == "anchorA")
+        ));
+
+        let mut out = Vec::new();
+        emit_text("[a](/a)@@undeclared{}", &options, &mut out);
+        assert!(out.iter().any(
+            |event| matches!(event, Event::StartNode(NodeKind::Custom(name)) if name == "AnchorDefault")
+        ));
+    }
+
+    /// Without a matching entry the node stays the `<a>` element, but the marker
+    /// is not lost (§6.4): it is emitted as a `type` attribute.
+    #[test]
+    fn unclaimed_marker_keeps_the_builtin_element_and_its_type() {
+        let options = AnchorOptions {
+            custom: ComponentSet::from_entries([TypedComponent::typed(
+                ["anchorA"],
+                AnchorCustomNode {
+                    name: "AnchorA".into(),
+                    template: "<AnchorA>{children}</AnchorA>".into(),
+                    imports: Vec::new(),
+                },
+            )]),
+        };
+        let mut out = Vec::new();
+        emit_text("[a](/a)@@anchorB{}", &options, &mut out);
+        assert!(out
+            .iter()
+            .any(|event| matches!(event, Event::StartNode(NodeKind::Link))));
+        assert!(out.iter().any(
+            |event| matches!(event, Event::Attribute { name, value } if name == "type" && value == "anchorB")
+        ));
+    }
+
+    /// Every entry of the set needs a template, typed or not.
+    #[test]
+    fn hints_cover_typed_entries_and_the_default() {
+        let options = AnchorOptions {
+            custom: ComponentSet::from_entries([
+                TypedComponent::typed(
+                    ["anchorA"],
+                    AnchorCustomNode {
+                        name: "AnchorA".into(),
+                        template: "<AnchorA>{children}</AnchorA>".into(),
+                        imports: Vec::new(),
+                    },
+                ),
+                TypedComponent::default_component(AnchorCustomNode {
+                    name: "AnchorDefault".into(),
+                    template: "<AnchorDefault>{children}</AnchorDefault>".into(),
+                    imports: Vec::new(),
+                }),
+            ]),
+        };
+        let hints = solid_hints(&options).expect("hints");
+        assert_eq!(hints.templates.len(), 2);
+        assert!(hints
+            .templates
+            .iter()
+            .any(|template| template.node_type == "AnchorA"));
     }
 
     // --- §7.2 extras head -------------------------------------------------

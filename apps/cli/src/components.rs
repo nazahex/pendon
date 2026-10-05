@@ -152,27 +152,13 @@ impl ComponentSet {
 
     /// Convenience for hint construction: a template per entry, tagged with the
     /// node kind the layer emits.
-    #[allow(dead_code)] // §11 rule-3 API: the Phase-1 binder builds hints from it.
+    #[allow(dead_code)] // §11 rule-3 API: kept as the config-side mirror of the plugin sets.
     pub fn templates(&self, node_type: &str, node_name: Option<&str>) -> Vec<ComponentTemplate> {
         self.typed
             .iter()
             .chain(self.default.iter())
             .filter_map(|entry| entry.to_template(node_type, node_name))
             .collect()
-    }
-
-    /// The one component a pre-cutover plugin option struct can carry (§14): the
-    /// layer default, or the layer's only entry.
-    ///
-    /// Only meaningful for a *routable* layer; see [`resolve_single`].
-    pub fn single_entry(&self) -> Option<&ComponentEntry> {
-        if let Some(default) = &self.default {
-            return Some(default);
-        }
-        match self.typed.as_slice() {
-            [only] => Some(only),
-            _ => None,
-        }
     }
 }
 
@@ -209,36 +195,6 @@ impl PluginComponents {
             .entry(layer.to_string())
             .or_insert_with(|| ComponentSet::new(layer))
     }
-}
-
-/// Resolves one layer into the single component a pre-cutover plugin option
-/// struct can hold (§11 rule 3, §14).
-///
-/// A layer is *routable* when one component covers every instance: a layer
-/// default (with no `type` entries) or exactly one entry. Everything else needs
-/// per-instance routing — the plugin cutover tracked by §14 — and is rejected
-/// here instead of being dropped (§18 rule 2 forbids silent data loss).
-pub fn resolve_single<'a>(
-    plugin: &str,
-    components: &'a PluginComponents,
-    layer: &str,
-) -> Result<Option<&'a ComponentEntry>, ConfigError> {
-    let Some(set) = components.layer(layer) else {
-        return Ok(None);
-    };
-
-    let typed = set.typed().len();
-    let default = usize::from(set.default_entry().is_some());
-    if typed == 0 || (typed == 1 && default == 0) {
-        return Ok(set.single_entry());
-    }
-
-    Err(ConfigError(format!(
-        "task.{plugin}.custom.{layer}: {} components need per-type routing (`type` markers), \
-         which arrives with that plugin's §11 cutover — declare a single component or a layer \
-         default without `type`",
-        typed + default
-    )))
 }
 
 /// Rejects `custom` layers the plugin cannot carry yet.
@@ -744,78 +700,53 @@ mod tests {
         assert_eq!(entry.imports.len(), 1);
     }
 
-    /// §11 rule 3 + §14: a layer is routable while one component covers every
-    /// instance (a default, or a single entry); anything else is reported
-    /// instead of silently emitting the default.
+    /// §11 rule 3, at the config level: exact `type` match → layer default →
+    /// `None` (the plugin then falls back to its built-in element), and every
+    /// entry of a layer gets a template for the renderer hints.
     #[test]
-    fn resolve_single_accepts_routable_layers_only() {
-        let default_only = custom_of(
-            r#"
-            [custom.thead]
-            name = "Head"
-            template = "<Head>{children}</Head>"
-            "#,
-        );
-        let loaded = load("table", "table", Some(&default_only)).unwrap();
-        let entry = resolve_single("table", &loaded.components, "thead")
-            .expect("default layer resolves")
-            .expect("entry");
-        assert_eq!(entry.name.as_deref(), Some("Head"));
-        // A layer that is not configured stays `None`.
-        assert!(resolve_single("table", &loaded.components, "tfoot")
-            .unwrap()
-            .is_none());
-
-        let single_typed = custom_of(
+    fn select_routes_type_then_default_then_fallback() {
+        let custom = custom_of(
             r#"
             [[custom.thead]]
             type = ["theadA", "theadB"]
             name = "HeadAB"
             template = "<HeadAB>{children}</HeadAB>"
-            "#,
-        );
-        let loaded = load("table", "table", Some(&single_typed)).unwrap();
-        assert!(resolve_single("table", &loaded.components, "thead")
-            .unwrap()
-            .is_some());
-
-        let routed = custom_of(
-            r#"
-            [[custom.thead]]
-            type = "theadA"
-            name = "HeadA"
-            template = "<HeadA>{children}</HeadA>"
-
-            [[custom.thead]]
-            type = "theadB"
-            name = "HeadB"
-            template = "<HeadB>{children}</HeadB>"
-            "#,
-        );
-        let loaded = load("table", "table", Some(&routed)).unwrap();
-        let error = resolve_single("table", &loaded.components, "thead").unwrap_err();
-        assert!(
-            error.to_string().contains("need per-type routing"),
-            "{error}"
-        );
-
-        // A typed entry next to a default is unrouteable too, even though the
-        // legacy plugin options could have emitted the default.
-        let mixed = custom_of(
-            r#"
-            [[custom.thead]]
-            type = "theadA"
-            name = "HeadA"
-            template = "<HeadA>{children}</HeadA>"
 
             [[custom.thead]]
             name = "HeadDefault"
             template = "<HeadDefault>{children}</HeadDefault>"
             "#,
         );
-        let loaded = load("table", "table", Some(&mixed)).unwrap();
-        let error = resolve_single("table", &loaded.components, "thead").unwrap_err();
-        assert!(error.to_string().contains("2 components"), "{error}");
+        let loaded = load("table", "table", Some(&custom)).unwrap();
+
+        let entry = loaded.components.select("thead", Some("theadA"));
+        assert_eq!(
+            entry.and_then(|entry| entry.name.as_deref()),
+            Some("HeadAB")
+        );
+
+        let entry = loaded.components.select("thead", Some("theadZ"));
+        assert_eq!(
+            entry.and_then(|entry| entry.name.as_deref()),
+            Some("HeadDefault")
+        );
+
+        // A layer without a default falls back to the built-in element.
+        let typed_only = custom_of(
+            r#"
+            [[custom.thead]]
+            type = "theadA"
+            name = "HeadA"
+            template = "<HeadA>{children}</HeadA>"
+            "#,
+        );
+        let loaded = load("table", "table", Some(&typed_only)).unwrap();
+        assert!(loaded.components.select("thead", Some("theadZ")).is_none());
+
+        // §11 rule 3 hints: one template per entry, both entries covered.
+        let set = loaded.components.layer("thead").expect("thead layer");
+        assert_eq!(set.templates("thead", None).len(), 1);
+        assert!(loaded.components.layer("tfoot").is_none());
     }
 
     /// §11 rule 1: layer names are the elements a plugin emits, so an unknown

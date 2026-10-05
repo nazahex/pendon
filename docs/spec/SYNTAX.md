@@ -883,10 +883,62 @@ slug, `class` accumulates (head first, §6.4), head wins for every other key
 (`legacy_extras_warning`, §14). Extras must be adjacent (§4.1); a malformed
 head stays literal text (§4.3).
 
-Still open for Phase 1: the §8 table layers (`|- … -|`, `|| caption ||`,
-cell/row/section extras), the golden fixtures 01–07 (`docs/spec/golden/` +
-`apps/cli/tests/syntax_spec.rs`), and per-instance `type` routing inside the
-plugins (OPEN-C3).
+Still open for Phase 1: the golden fixtures 01–07 (`docs/spec/golden/` +
+`apps/cli/tests/syntax_spec.rs`).
+
+### 17.3 Progress after the §11 component-set routing and the §8 table layers
+
+**Per-instance routing (OPEN-C3) is done.** A layer is no longer restricted to
+one component: every plugin that owns layers carries a
+[`ComponentSet`](../crates/renderer-solid/src/components.rs) — typed entries plus
+at most one default — and selects per instance with §11 rule 3 (exact `type`
+match → layer default → built-in element). The marker travels to the node as a
+plain `type` attribute, so `{attrs.type}` templates read it back, and every entry
+of every layer gets a renderer hint. The CLI's `resolve_single` /
+"routable layer" restriction is gone (`apps/cli/src/plugins.rs::layer_set`).
+
+| Plugin           | Layers (§11)                                                 |
+| ---------------- | ------------------------------------------------------------ |
+| `plugin-anchor`  | `anchor`                                                     |
+| `plugin-heading` | `heading`                                                    |
+| `plugin-cite`    | `cite`                                                       |
+| `plugin-img`     | `img` (the `<img>`), `figure` (its container)                |
+| `plugin-table`   | `table`, `caption`, `thead`, `tbody`, `tfoot`, `row`, `cell` |
+
+The **`img` cutover** landed with the routing: a `~?!!` figure whose `figure`
+_and_ `img` layers are configured nests them (`<Figure …><AdvancedImage …/>caption</Figure>`),
+with the extras on the outermost node, `w`/`h` on the inner `<img>` and the
+caption as children; a layer configured alone still replaces the whole image, so
+pre-cutover configs are unchanged.
+
+**§8 table layers** parse:
+
+- the declaration line `|-[slug]("title")@@type{…}-|` → the `<table>` layer;
+- the caption line `|| extras? content ||` → the `<caption>` layer (the pre-§8
+  `[caption][.c]{k:v}` form keeps its historical meaning: its extras configure
+  the `<table>`);
+- cell-front extras (`| @@cellA{.x} content |`, also in front of the `>`/`^`
+  markers, whose extras merge into the spanned cell) → the `cell` layer of that
+  `<th>`/`<td>`; the column marker of the alignment row routes the column's cells;
+- row end-of-line extras (`… |@@rowB{.x}`) → the `<tr>`; the legacy
+  `-[.row-danger]` last-cell form still works;
+- the alignment row's end-of-line extras → the `<tbody>`; the `|===|` line's
+  extras → the `<tfoot>`. Bare `===` is **retired**.
+- `thead` has no extras slot of its own in §8, so its set is used as a default.
+
+Two robustness notes:
+
+- A table paragraph that the lexer turned into a `Link` (the declaration head
+  `[slug]("A title with spaces")` can trigger that) is rebuilt from the events
+  (`[label](href "title")`) before the table is parsed.
+- A block image whose marker has no `!` (`~?[alt](src)`, `~?w800[alt](src)`) can
+  be lexed as a link too; use `~![…]` / `~?!!…` (or wait for the §12 protect
+  pass) until the pre-markdown protect stage lands.
+
+Not yet wired: `task.wiki.custom.anchor` / `task.wiki.custom.infobox` (the wiki
+plugin emits no custom node yet and `ConfigTask` does not read those keys), the
+`marker` / `directive` / `list` / `blockquote` layers (their plugins land in
+Phase 3). `sandbox/unified` therefore configures only the plugins that exist.
 
 ## 18. Acceptance criteria
 

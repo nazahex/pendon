@@ -3,11 +3,13 @@ use pendon_renderer_ast::render_ast_to_string;
 use serde_json::Value;
 use std::collections::BTreeSet;
 
+mod components;
 mod imports;
 mod metadata;
 mod node;
 mod template;
 
+pub use components::{ComponentSet, TypedComponent};
 pub use imports::{ComponentTemplate, ImportEntry, SolidRenderHints};
 
 pub fn render_solid(events: &[Event]) -> String {

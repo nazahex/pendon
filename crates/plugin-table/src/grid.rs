@@ -1,10 +1,10 @@
-use crate::attrs::{merge_attrs, AttrSpec};
+use crate::attrs::{merge_layer, LayerAttrs};
 use crate::parser::{Align, ColumnSpec, RowSpec};
 
 #[derive(Debug, Clone)]
 pub struct ProcessedCell {
     pub text: String,
-    pub attrs: AttrSpec,
+    pub attrs: LayerAttrs,
     pub colspan: usize,
     pub rowspan: usize,
     pub align: Align,
@@ -15,7 +15,7 @@ pub struct ProcessedCell {
 #[derive(Debug, Clone)]
 pub struct ProcessedRow {
     pub cells: Vec<ProcessedCell>,
-    pub attrs: AttrSpec,
+    pub attrs: LayerAttrs,
 }
 
 pub fn process_grid(
@@ -46,7 +46,7 @@ fn process_row_group(
         for _ in 0..num_cols {
             row.push(ProcessedCell {
                 text: String::new(),
-                attrs: AttrSpec::default(),
+                attrs: LayerAttrs::default(),
                 colspan: 1,
                 rowspan: 1,
                 align: Align::None,
@@ -73,6 +73,9 @@ fn process_row_group(
             if cell_spec.is_colspan_marker {
                 // > combine this cell with the cell to the LEFT
                 if col_idx > 0 {
+                    let mut target = grid[row_idx][col_idx - 1].attrs.clone();
+                    merge_layer(&mut target, &cell_spec.attrs);
+                    grid[row_idx][col_idx - 1].attrs = target;
                     grid[row_idx][col_idx - 1].colspan += 1;
                     grid[row_idx][col_idx].is_hidden = true;
                 }
@@ -83,12 +86,15 @@ fn process_row_group(
                     while source_row > 0 && grid[source_row][col_idx].is_hidden {
                         source_row -= 1;
                     }
+                    let mut target = grid[source_row][col_idx].attrs.clone();
+                    merge_layer(&mut target, &cell_spec.attrs);
+                    grid[source_row][col_idx].attrs = target;
                     grid[source_row][col_idx].rowspan += 1;
                     grid[row_idx][col_idx].is_hidden = true;
                 }
             } else {
                 let mut cell_attrs = col_spec.map(|c| c.attrs.clone()).unwrap_or_default();
-                merge_attrs(&mut cell_attrs, &cell_spec.attrs);
+                merge_layer(&mut cell_attrs, &cell_spec.attrs);
 
                 // Important: Preserve existing colspan and rowspan values if they were already set by previous cells
                 let existing_colspan = grid[row_idx][col_idx].colspan;

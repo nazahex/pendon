@@ -1,4 +1,4 @@
-use crate::attrs::AttrSpec;
+use crate::attrs::{push_flags, LayerAttrs};
 use crate::grid::{process_grid, ProcessedRow};
 use crate::parser::{Align, TableBlock};
 use pendon_core::{
@@ -25,15 +25,25 @@ pub fn emit_table_elements<C, P>(
         &table_block.footer_rows,
     );
 
-    open(out, "table");
+    // §8: the declaration line carries the `<table>` extras; the pre-§8 caption
+    // form keeps putting its extras on the `<table>` (its documented shape).
+    let mut table_attrs = table_block.attrs.clone();
     if let Some(caption) = &table_block.caption {
-        push_common_attrs(out, &caption.attrs);
+        if !caption.new_form && table_attrs.is_empty() {
+            table_attrs = caption.attrs.clone();
+        }
     }
+
+    open(out, "table");
+    push_common_attrs(out, &table_attrs);
     text(out, "\n");
 
     if let Some(caption) = &table_block.caption {
         text(out, "  ");
         open(out, "caption");
+        if caption.new_form {
+            push_common_attrs(out, &caption.attrs);
+        }
         let rendered = render_inline_events(&caption.text, inline_pipeline, context);
         out.extend(rendered);
         close(out, "caption");
@@ -68,6 +78,8 @@ pub fn emit_table_elements<C, P>(
     if !body_rows.is_empty() {
         text(out, "  ");
         open(out, "tbody");
+        // §8: the alignment row's end-of-line extras belong to the `<tbody>`.
+        push_common_attrs(out, &table_block.tbody);
         for row in &body_rows {
             emit_row_elements(row, inline_pipeline, context, out);
         }
@@ -80,6 +92,8 @@ pub fn emit_table_elements<C, P>(
     if !footer_rows.is_empty() {
         text(out, "  ");
         open(out, "tfoot");
+        // §8: extras of the `|===|` line.
+        push_common_attrs(out, &table_block.tfoot);
         for row in &footer_rows {
             emit_row_elements(row, inline_pipeline, context, out);
         }
@@ -123,14 +137,15 @@ fn emit_row_elements<C, P>(
     close(out, "tr");
 }
 
-/// Emits `id`, `class`, extra properties and the computed `style` attribute for
-/// a table header/body cell.
+/// Emits `id`, `class`, extra properties, the computed `style` and the §6.3 bare
+/// flags for a table header/body cell.
 pub(crate) fn push_cell_attrs(
     out: &mut Vec<Event>,
-    attrs: &AttrSpec,
+    layer: &LayerAttrs,
     align: Align,
     width: Option<&str>,
 ) {
+    let attrs = &layer.attrs;
     if let Some(id) = attrs.id.as_deref() {
         attribute(out, "id", id);
     }
@@ -161,10 +176,13 @@ pub(crate) fn push_cell_attrs(
     if !styles.is_empty() {
         attribute(out, "style", &format!("{};", styles.join("; ")));
     }
+    push_flags(out, &layer.flags);
 }
 
-/// Emits `id`, `class`, extra properties and `style` for `<table>` / `<tr>`.
-pub(crate) fn push_common_attrs(out: &mut Vec<Event>, attrs: &AttrSpec) {
+/// Emits `id`, `class`, extra properties, `style` and the bare flags for
+/// `<table>` / `<tbody>` / `<tfoot>` / `<tr>`.
+pub(crate) fn push_common_attrs(out: &mut Vec<Event>, layer: &LayerAttrs) {
+    let attrs = &layer.attrs;
     if let Some(id) = attrs.id.as_deref() {
         attribute(out, "id", id);
     }
@@ -186,6 +204,7 @@ pub(crate) fn push_common_attrs(out: &mut Vec<Event>, attrs: &AttrSpec) {
     if !styles.is_empty() {
         attribute(out, "style", &styles.concat());
     }
+    push_flags(out, &layer.flags);
 }
 
 fn text(out: &mut Vec<Event>, value: &str) {
