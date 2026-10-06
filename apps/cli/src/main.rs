@@ -297,7 +297,11 @@ fn main() -> ExitCode {
             }
         }
         "html" => {
-            let s = pendon_renderer_html::render_html(&events);
+            let s = if args.pretty {
+                pendon_renderer_html::render_html_pretty(&events)
+            } else {
+                pendon_renderer_html::render_html(&events)
+            };
             println!("{}", s);
             if has_error {
                 ExitCode::from(2)

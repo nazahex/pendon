@@ -29,12 +29,16 @@ pendon --format events --input ./doc.md
 
 # AST renderer (structured output)
 pendon --format ast --input ./doc.md
+
+# Pretty HTML renderer (indented, one child per line)
+pendon --plugin markdown --format html --pretty --input ./doc.md
 ```
 
 ### Flags
 
 - `--input <path>`: Read input from file instead of stdin.
-- `--format <name>`: Output format. Supports `json`, `events`, `ast`.
+- `--format <name>`: Output format. Supports `json`, `events`, `ast`, `html`, `solid`.
+- `--pretty`: Select the second, indented mode of a format that has one (`json`, `events`, `ast`, `html`). Same as `pretty = true` on a task.
 - `--strict`: Escalate diagnostics into errors. The CLI still prints output and exits with a non-zero code if any error is present.
 - `--tui`: Show a minimal spinner on stderr while reading input (safe for pipelines).
 - `--max-doc-bytes <n>`: Warn/error when input size exceeds `n` bytes.

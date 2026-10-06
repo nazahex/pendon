@@ -1,6 +1,8 @@
 use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::str::contains;
 use predicates::Predicate;
+use std::fs;
+use tempfile::tempdir;
 
 fn run_cli(input: &str, args: &[&str]) -> (i32, String, String) {
     let mut cmd = cargo_bin_cmd!("pendon");
@@ -57,4 +59,55 @@ fn html_ignores_frontmatter_block() {
     );
     assert!(!contains("---").eval(&out));
     assert!(contains("<h1>Hello</h1>").eval(&out));
+}
+
+/// The CLI must expose the second HTML mode: `--pretty` used to be accepted and
+/// then ignored on the stdin path, because only the TOML task key (`Task.pretty`)
+/// reached `render_html_pretty`.
+#[test]
+fn html_pretty_flag_indents_the_output() {
+    let input = "# Title\n\nText with **strong**.\n";
+    let (_code, compact, _err) = run_cli(input, &["--plugin", "markdown", "--format", "html"]);
+    let (_code, pretty, _err) = run_cli(
+        input,
+        &["--plugin", "markdown", "--format", "html", "--pretty"],
+    );
+
+    // The compact mode keeps the paragraph text on the opening tag's line.
+    assert!(contains("<p>Text with ").eval(&compact));
+    // The pretty mode puts every child on its own indented line.
+    assert!(contains("<p>\n  Text with ").eval(&pretty));
+    assert!(contains("\n  <strong>").eval(&pretty));
+    assert_ne!(compact, pretty);
+}
+
+/// The same second mode has to stay reachable from the TOML path
+/// (`pretty = true` on a task with `format = "html"`).
+#[test]
+fn config_pretty_key_indents_the_html_task_output() {
+    let dir = tempdir().expect("temp dir");
+    fs::write(
+        dir.path().join("doc.md"),
+        "# Title\n\nText with **strong**.\n",
+    )
+    .expect("source");
+    fs::write(
+        dir.path().join("pendon.toml"),
+        r#"[[task]]
+name = "Doc (HTML)"
+input = "./doc.md"
+output = "./out/doc.html"
+plugin = "markdown"
+format = "html"
+pretty = true
+"#,
+    )
+    .expect("config");
+
+    let mut cmd = cargo_bin_cmd!("pendon");
+    cmd.current_dir(dir.path()).arg("run").assert().success();
+
+    let out = fs::read_to_string(dir.path().join("out/doc.html")).expect("task output");
+    assert!(contains("<p>\n  Text with ").eval(&out));
+    assert!(contains("\n  <strong>").eval(&out));
 }
