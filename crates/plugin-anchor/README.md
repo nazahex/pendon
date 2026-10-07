@@ -113,16 +113,17 @@ External links receive `target="_blank"` and `rel="noopener"` by default. These 
 
 ## Extra Attributes
 
-Extra attributes may be attached immediately after the closing parenthesis, in
-either of two forms (they can also be combined):
+An extras head may be attached immediately after the closing parenthesis:
 
 ```md
 [Link](/page){class: "highlight", id: "important-link", --color: "blue"}
-[Link](/page)[.highlight,#important-link]{data-track: "cta"}
+[Link](/page)@@anchorA{.highlight, #important-link, data-track: "cta"}
 ```
 
-The `[.class,#id]` block sets a `class` list and an `id`; the `{key: "value"}`
-block sets arbitrary attributes.
+The head is a single `{…}` block; the `@@type` prefix is optional and, when
+present, is the §11 routing marker of the instance. `.class` items accumulate in
+the `class` list, `#id` (or a positional `` `slug` ``) sets the element `id`, and
+`key: "value"` items set arbitrary attributes.
 
 Special handling:
 
@@ -132,9 +133,9 @@ Special handling:
 - All other keys become regular HTML/Solid attributes
 - Values can be quoted (`"value"`) or unquoted (`value`)
 
-The attribute block must be attached directly (no leading space). A `[...]`
-block is only treated as classes/ID when its first character is `.` or `#`, so a
-following link such as `[next](/next)` is never swallowed.
+The head must touch the closing `)` (no space, and no space before its own `{`):
+`[Link](/page) {.x}` and `[Link](/page)@@a {.x}` both stay literal text. The
+retired `[.class,#id]{key: value}` block is literal text too.
 
 ## Custom Solid Component
 
@@ -182,7 +183,7 @@ Without a custom node, links render as standard `<a>` tags via the built-in `Lin
 - This plugin processes **raw text events** — it must run before `plugin-markdown`
 - Links inside code fences, inline code, HTML blocks, and HTML inline elements are ignored
 - Image syntax `![alt](src)` is explicitly skipped (handled by `plugin-img`)
-- Extra attribute blocks (`[.class,#id]` and `{key: val}`) only support flat values — nested objects are not supported
+- Extra attribute items (`.class`, `#id`, `{key: val}`) only support flat values — nested objects are not supported
 - Unquoted values in extra attrs are treated as literal strings (no expression evaluation)
 - Modifier parsing strips tokens from the URL right-to-left; malformed trailing characters that don't match known modifiers are left as part of the URL
 
@@ -192,7 +193,7 @@ Without a custom node, links render as standard `<a>` tags via the built-in `Lin
 - Nested brackets in labels are not supported
 - Parentheses inside URLs must be balanced for correct parsing
 - The plugin does not validate URLs or check for broken links
-- Extra attributes require at least one `{key: val}` pair or a `[.class,#id]` token; empty blocks (e.g. `{}`) are ignored
+- Extra attributes require at least one extras item (`.class`, `#id`, `key: val` or a bare flag) after `)`; the head must be adjacent
 
 ## License
 

@@ -2,10 +2,7 @@ use pendon_core::{
     element_close, element_open, parse, raw_inline, Event, InlinePipeline, NodeKind, Options,
     Pipeline, Severity,
 };
-use pendon_extra::{
-    legacy_extras_warning, parse_attrs, scan_extras_chars, to_attributes, ExtraAttrs, ExtrasAttr,
-    ExtrasHead, ExtrasOptions,
-};
+use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead, ExtrasOptions};
 use pendon_plugin_markdown::process as process_markdown;
 use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
@@ -36,7 +33,7 @@ struct ParsedImage {
     src: String,
     caption: Option<String>,
     container: Option<ContainerKind>,
-    attrs: ExtraAttrs,
+    attrs: ImageAttrs,
     marker: ImageMarker,
     /// Bare flags of the §7.1 extras head (§6.3), emitted on the outermost node.
     flags: Vec<String>,
@@ -44,8 +41,17 @@ struct ParsedImage {
     type_marker: Option<String>,
     /// §13 warnings raised while resolving the head and extras.
     warnings: Vec<String>,
-    /// Whether the deprecated `[.c,#id]{k:v}` block was read (§14).
-    legacy: bool,
+}
+
+/// The attributes of one image, assembled from its §7.1 extras head (§6).
+///
+/// The pre-§11 `[.c,#id]{k:v}` block is retired (§14), so extras are the only
+/// source and the construct's own `src`/`alt` are emitted separately.
+#[derive(Debug, Clone, Default)]
+struct ImageAttrs {
+    id: Option<String>,
+    classes: Vec<String>,
+    properties: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -459,9 +465,8 @@ fn parse_decorated_image_syntax(line: &str) -> Option<ParsedImage> {
     }
 
     let blocks = parse_attached_blocks(core.rest);
-    // §7.1: an extras head alone makes the image advanced, exactly like the
-    // `[.class,#id]{k:v}` block does.
-    let has_attrs = blocks.legacy || blocks.extras.is_some();
+    // §7.1: an extras head alone makes the image advanced.
+    let has_attrs = blocks.extras.is_some();
     let has_marker_mod = core.marker.has_modifiers();
     if !has_marker_mod && (!has_attrs || !blocks.rest.trim().is_empty()) {
         return None;
@@ -640,53 +645,36 @@ fn parse_marker(raw: &str) -> Option<ImageMarker> {
     Some(marker)
 }
 
-/// The attribute blocks attached after an image's `(url)` head: the deprecated
-/// `[.class,#id]{key: value}` form (§14) and the §11 `@@type{…}` extras head
-/// (§7.1). Both attach to the outermost node of the construct.
+/// The §11 extras head attached after an image's `(url)` head (§7.1). It
+/// attaches to the outermost node of the construct; the retired
+/// `[.class,#id]{key: value}` block is literal text (§14).
 struct AttachedBlocks<'a> {
-    attrs: ExtraAttrs,
     extras: Option<ExtrasHead>,
-    /// Whether the deprecated block was present and is therefore reported (§14).
-    legacy: bool,
-    /// Text left after the blocks: the figure caption or trailing text.
+    /// Text left after the head: the figure caption or trailing text.
     rest: &'a str,
 }
 
 impl<'a> AttachedBlocks<'a> {
     fn empty(rest: &'a str) -> Self {
-        Self {
-            attrs: ExtraAttrs::default(),
-            extras: None,
-            legacy: false,
-            rest,
-        }
+        Self { extras: None, rest }
     }
 }
 
-/// Parses the attribute blocks attached to an image. The extras head must be
-/// adjacent to the legacy block (§4.1), so it is scanned on the untrimmed rest.
+/// Parses the extras head attached to an image.
+///
+/// §4.1: the head must touch the closing `)` of the `(url)` block, so it is
+/// scanned at the exact cursor position.
 fn parse_attached_blocks(input: &str) -> AttachedBlocks<'_> {
-    let parsed = parse_attrs(input);
-    let consumed = input.len().saturating_sub(parsed.rest.len());
-    let rest = &input[consumed..];
-    let chars: Vec<char> = rest.chars().collect();
-
+    let chars: Vec<char> = input.chars().collect();
     match scan_extras_chars(&chars, 0) {
         Some((head, next)) => {
             let bytes: usize = chars[..next].iter().map(|ch| ch.len_utf8()).sum();
             AttachedBlocks {
-                attrs: parsed.attrs,
                 extras: Some(head),
-                legacy: parsed.had_attrs,
-                rest: &rest[bytes..],
+                rest: &input[bytes..],
             }
         }
-        None => AttachedBlocks {
-            attrs: parsed.attrs,
-            extras: None,
-            legacy: parsed.had_attrs,
-            rest,
-        },
+        None => AttachedBlocks::empty(input),
     }
 }
 
@@ -698,16 +686,14 @@ fn build_parsed_image(
     caption: Option<String>,
     blocks: AttachedBlocks<'_>,
 ) -> ParsedImage {
-    let AttachedBlocks {
-        mut attrs,
-        extras,
-        legacy,
-        ..
-    } = blocks;
+    let AttachedBlocks { extras, .. } = blocks;
     let mut flags = Vec::new();
     let mut warnings = Vec::new();
     let type_marker = extras.as_ref().and_then(|head| head.type_marker.clone());
-    merge_image_extras(&mut attrs, extras.as_ref(), &mut flags, &mut warnings);
+    let mut attrs = match extras.as_ref() {
+        Some(head) => image_attrs_from_head(head, &mut flags, &mut warnings),
+        None => ImageAttrs::default(),
+    };
     // §11 rule 3: the marker is the routing key of the instance; it is carried
     // as a `type` attribute so a `{attrs.type}` template can read it back. An
     // explicit `type:` prop keeps its own value.
@@ -729,12 +715,11 @@ fn build_parsed_image(
         flags,
         type_marker,
         warnings,
-        legacy,
     }
 }
 
-/// Whether the construct side (head or deprecated block) already sets `key`.
-fn has_attribute(attrs: &ExtraAttrs, key: &str) -> bool {
+/// Whether the image head already sets `key`.
+fn has_attribute(attrs: &ImageAttrs, key: &str) -> bool {
     match key {
         "id" => attrs.id.is_some(),
         "class" => !attrs.classes.is_empty(),
@@ -742,71 +727,40 @@ fn has_attribute(attrs: &ExtraAttrs, key: &str) -> bool {
     }
 }
 
-/// Merges a §7.1 extras head into the image attributes.
+/// Assembles the image attributes from a §7.1 extras head (§6).
 ///
-/// The construct side wins (§6.2): an `id`/`class`/prop already set by the head
-/// or the deprecated block is kept and the extras value is reported as dropped.
-/// `class` accumulates (§6.4), `slug` fills `id` when no `id` is present, and
-/// bare flags stay bare attributes (§6.3).
-fn merge_image_extras(
-    attrs: &mut ExtraAttrs,
-    extras: Option<&ExtrasHead>,
+/// `class` accumulates (§6.4), `slug` fills `id` when no `#id` is present
+/// (§6.2) and bare flags stay bare attributes (§6.3).
+fn image_attrs_from_head(
+    head: &ExtrasHead,
     flags: &mut Vec<String>,
     warnings: &mut Vec<String>,
-) {
-    let Some(head) = extras else {
-        return;
-    };
-
+) -> ImageAttrs {
     let parsed = to_attributes(head, &ExtrasOptions::default());
     for warning in &parsed.warnings {
         warnings.push(pendon_extra::warning_message(warning));
     }
 
-    let extras_id = parsed.value("id").map(|value| value.literal());
-    let extras_slug = parsed.value("slug").map(|value| value.literal());
-
+    let mut attrs = ImageAttrs::default();
     for (key, value) in &parsed.items {
-        if key == "id" || key == "slug" {
-            continue;
-        }
-        match value {
-            ExtrasAttr::Flag => {
-                if has_attribute(attrs, key) {
-                    warnings.push(format!(
-                        "`{key}` was dropped because the construct head already sets it"
-                    ));
-                } else {
-                    flags.push(key.clone());
-                }
-            }
-            ExtrasAttr::Value(value) => {
-                let text = value.literal();
-                // §6.4: `class` accumulates, head classes first.
-                if key == "class" {
-                    for token in text.split_whitespace() {
-                        attrs.classes.push(token.to_string());
-                    }
-                    continue;
-                }
-                if has_attribute(attrs, key) {
-                    warnings.push(format!(
-                        "`{key}` was dropped because the construct head already sets it"
-                    ));
-                    continue;
-                }
-                attrs.properties.push((key.clone(), text));
+        match (key.as_str(), value) {
+            ("id", _) | ("slug", _) => {}
+            ("class", ExtrasAttr::Value(value)) => attrs
+                .classes
+                .extend(value.literal().split_whitespace().map(str::to_string)),
+            (name, ExtrasAttr::Flag) => flags.push(name.to_string()),
+            (name, ExtrasAttr::Value(value)) => {
+                attrs.properties.push((name.to_string(), value.literal()))
             }
         }
     }
 
-    // §6.2: `#id` > extras `slug`; an `id` already on the image wins.
-    match extras_id.or(extras_slug) {
-        Some(id) if attrs.id.is_none() => attrs.id = Some(id),
-        Some(_) => warnings
-            .push("extras `id` was dropped because the image already has an id (§6.2)".to_string()),
-        None => {}
-    }
+    // §6.2: `#id` beats the extras `slug`.
+    attrs.id = parsed
+        .value("id")
+        .or_else(|| parsed.value("slug"))
+        .map(|value| value.literal());
+    attrs
 }
 
 fn is_inline_marker_char(ch: char) -> bool {
@@ -826,23 +780,12 @@ fn find_char_index(chars: &[char], mut index: usize, wanted: char) -> Option<usi
 /// Parses the attribute blocks attached to an inline image, returning them and
 /// the number of consumed characters (0 when nothing valid was attached).
 fn parse_inline_blocks(input: &str) -> (AttachedBlocks<'_>, usize) {
-    let starts_with_block = input.starts_with('{')
-        || input.starts_with("@@")
-        || (input.starts_with('[')
-            && input
-                .chars()
-                .nth(1)
-                .is_some_and(|ch| ch == '.' || ch == '#'));
-    if !starts_with_block {
+    if !input.starts_with('{') && !input.starts_with("@@") {
         return (AttachedBlocks::empty(input), 0);
     }
 
     let blocks = parse_attached_blocks(input);
-    let has_content = blocks.extras.is_some()
-        || blocks.attrs.id.is_some()
-        || !blocks.attrs.classes.is_empty()
-        || !blocks.attrs.properties.is_empty();
-    if !has_content {
+    if blocks.extras.is_none() {
         return (AttachedBlocks::empty(input), 0);
     }
 
@@ -949,7 +892,7 @@ fn emit_inline_image<C, P>(
     }
 }
 
-fn push_common_attrs(out: &mut Vec<Event>, attrs: &ExtraAttrs, flags: &[String]) {
+fn push_common_attrs(out: &mut Vec<Event>, attrs: &ImageAttrs, flags: &[String]) {
     if let Some(id) = attrs.id.as_deref() {
         attribute(out, "id", id);
     }
@@ -984,9 +927,8 @@ fn push_common_attrs(out: &mut Vec<Event>, attrs: &ExtraAttrs, flags: &[String])
     }
 }
 
-/// The `style` value of an image: the `--var` properties of the deprecated
-/// block, followed by the `style` value the extras head merged (§6.3).
-fn image_style(attrs: &ExtraAttrs) -> String {
+/// The `style` value of an image (§6.3).
+fn image_style(attrs: &ImageAttrs) -> String {
     let mut styles: String = attrs
         .properties
         .iter()
@@ -1008,11 +950,8 @@ fn image_style(attrs: &ExtraAttrs) -> String {
     styles
 }
 
-/// §13/§14 diagnostics raised while parsing and merging an image head.
+/// §13 diagnostics raised while parsing and merging an image head.
 fn push_image_warnings(parsed: &ParsedImage, out: &mut Vec<Event>) {
-    if parsed.legacy {
-        out.push(legacy_extras_warning("img"));
-    }
     for message in &parsed.warnings {
         out.push(Event::Diagnostic {
             severity: Severity::Warning,
@@ -1263,7 +1202,7 @@ mod tests {
     fn renders_decorated_image_attributes() {
         let pipeline = Pipeline::default();
         let events = paragraph_events(
-            "![Alt](https://x.test/a.webp)[.x,#hero]{foo: \"bar\", --r: \"5deg\"}",
+            "![Alt](https://x.test/a.webp){.x, #hero, foo: \"bar\", --r: \"5deg\"}",
         );
         let out = process(&events, &ImgOptions::default(), &pipeline);
 
@@ -1274,14 +1213,14 @@ mod tests {
         assert!(has_attribute(&out, "id", "hero"));
         assert!(has_attribute(&out, "class", "x"));
         assert!(has_attribute(&out, "data-foo", "bar"));
-        assert!(has_attribute(&out, "style", "--r:5deg;"));
+        assert!(has_attribute(&out, "style", "--r: 5deg;"));
     }
 
     #[test]
     fn renders_inline_advanced_image_inside_paragraph() {
         let pipeline = Pipeline::default();
         let events = paragraph_events(
-            "Ad ex tempor !?~[Alt](https://x.test/a.webp)[.foo]{con: \"jux\"} consectetur.",
+            "Ad ex tempor !?~[Alt](https://x.test/a.webp){.foo, con: \"jux\"} consectetur.",
         );
         let out = process(&events, &ImgOptions::default(), &pipeline);
 
@@ -1329,7 +1268,7 @@ mod tests {
             )]),
         };
         let events =
-            paragraph_events("!![Alt](https://x.test/a.webp)[.hero]{foo: \"bar\"} A caption");
+            paragraph_events("!![Alt](https://x.test/a.webp){.hero, foo: \"bar\"} A caption");
         let out = process(&events, &options, &pipeline);
 
         assert!(out.iter().any(|e| matches!(
@@ -1404,31 +1343,24 @@ mod tests {
     }
 
     #[test]
-    fn extras_class_accumulates_after_the_legacy_classes() {
-        let parsed = parse_figure_syntax("!![Alt](https://x.test/a.webp)[.head]@@figure{.extra}")
+    fn extras_class_accumulates() {
+        let parsed = parse_figure_syntax("!![Alt](https://x.test/a.webp)@@figure{.head, .extra}")
             .expect("figure");
-        // §6.4: class accumulates, head classes first.
+        // §6.4: class accumulates.
         assert_eq!(parsed.attrs.classes, vec!["head", "extra"]);
     }
 
+    /// §14/D3: the retired `[.class,#id]{k:v}` block is literal text.
     #[test]
-    fn the_legacy_block_wins_over_extras_and_reports_it() {
-        let parsed = parse_figure_syntax("!![Alt](https://x.test/a.webp)[#hero]@@figure{#other}")
-            .expect("figure");
-        assert_eq!(parsed.attrs.id.as_deref(), Some("hero"));
-        assert!(parsed.legacy);
-        assert!(parsed
-            .warnings
-            .iter()
-            .any(|warning| warning.contains("already has an id")));
-
+    fn the_retired_legacy_block_is_literal_text() {
         let pipeline = Pipeline::default();
-        let events = paragraph_events("!![Alt](https://x.test/a.webp)[#hero]@@figure{#other} Cap");
+        let events = paragraph_events("!![Alt](https://x.test/a.webp)[#hero]{k: \"v\"} Cap");
         let out = process(&events, &ImgOptions::default(), &pipeline);
-        // §14: the deprecated block is reported, not applied silently.
-        assert!(out.iter().any(|event| matches!(
+
+        assert!(!has_attribute(&out, "id", "hero"));
+        assert!(!out.iter().any(|event| matches!(
             event,
-            Event::Diagnostic { message, .. } if message.contains("[img]") && message.contains("deprecated")
+            Event::Diagnostic { message, .. } if message.contains("deprecated")
         )));
     }
 

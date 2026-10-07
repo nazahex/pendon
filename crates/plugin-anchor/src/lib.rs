@@ -1,10 +1,7 @@
 use std::collections::BTreeMap;
 
 use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::{
-    legacy_extras_warning, parse_attrs, scan_extras_chars, to_attributes, ExtraAttrs, ExtrasAttr,
-    ExtrasHead, ExtrasOptions,
-};
+use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead, ExtrasOptions};
 use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 
 #[derive(Clone, Debug, Default)]
@@ -90,15 +87,9 @@ fn emit_text(text: &str, options: &AnchorOptions, out: &mut Vec<Event>) {
 
         if chars[cursor] == '[' && !is_image_syntax {
             if let Some(link) = parse_link(&chars, cursor) {
-                let built =
-                    build_attributes(&link.target, link.legacy.as_ref(), link.extras.as_ref());
+                let built = build_attributes(&link.target, link.extras.as_ref());
                 flush_text(&mut normal, out);
 
-                // §14: the pre-§11 `[.class,#id]{key: value}` form still works but
-                // is reported, so no config keeps it by accident.
-                if link.legacy.is_some() {
-                    out.push(legacy_extras_warning("anchor"));
-                }
                 if let Some(message) = built.conflict.as_ref() {
                     out.push(Event::Diagnostic {
                         severity: Severity::Warning,
@@ -127,16 +118,14 @@ fn emit_text(text: &str, options: &AnchorOptions, out: &mut Vec<Event>) {
     flush_text(&mut normal, out);
 }
 
-/// A parsed `[label](target "title")` head plus whatever attributes are attached
-/// to it: the §11 extras head and the deprecated `[.class,#id]{key: value}` form
-/// (§7.2).
+/// A parsed `[label](target "title")` head plus the §11 extras head attached to
+/// it (§7.2).
 struct ParsedLink {
     end: usize,
     label: String,
     /// `url` and, after a `\0`, the optional head title.
     target: String,
     extras: Option<ExtrasHead>,
-    legacy: Option<ExtraAttrs>,
 }
 
 fn parse_link(chars: &[char], start: usize) -> Option<ParsedLink> {
@@ -154,13 +143,9 @@ fn parse_link(chars: &[char], start: usize) -> Option<ParsedLink> {
     let raw_input: String = chars[close_label + 2..close_target].iter().collect();
 
     let (raw_target, title) = split_target_title(&raw_input);
-    let mut end = close_target + 1;
+    let end = close_target + 1;
 
-    // Extra attributes must be directly attached without spaces. Accepts both
-    // the `{key: val}` form and the `[.class,#id]{key: val}` form.
-    let legacy = parse_link_extra_attrs(chars, &mut end);
-
-    // §7.2: the `@@type{…}` extras head follows the legacy block when present.
+    // §7.2/§4.1: extras must touch the closing `)`.
     let (extras, end) = match scan_extras_chars(chars, end) {
         Some((head, next)) => (Some(head), next),
         None => (None, end),
@@ -176,7 +161,6 @@ fn parse_link(chars: &[char], start: usize) -> Option<ParsedLink> {
         label,
         target,
         extras,
-        legacy,
     })
 }
 
@@ -193,11 +177,7 @@ struct AnchorAttrs {
     warnings: Vec<String>,
 }
 
-fn build_attributes(
-    encoded_target: &str,
-    legacy: Option<&ExtraAttrs>,
-    extras: Option<&ExtrasHead>,
-) -> AnchorAttrs {
+fn build_attributes(encoded_target: &str, extras: Option<&ExtrasHead>) -> AnchorAttrs {
     let (encoded_url, title) = encoded_target
         .split_once('\u{0}')
         .map(|(url, title)| (url, Some(title)))
@@ -257,26 +237,6 @@ fn build_attributes(
             i += 1;
         }
         i += 1;
-    }
-
-    if let Some(extra) = legacy {
-        if let Some(id) = extra.id.as_ref() {
-            attrs.insert("id".to_string(), id.clone());
-        }
-        if !extra.classes.is_empty() {
-            attrs.insert("class".to_string(), extra.classes.join(" "));
-        }
-        for (key, value) in &extra.properties {
-            if key == "rel" {
-                for token in value.split_whitespace() {
-                    add_rel(&mut rel, token);
-                }
-            } else if key == "target" {
-                target = Some(value.clone());
-            } else {
-                attrs.insert(key.clone(), value.clone());
-            }
-        }
     }
 
     // §7.2 / §6.2: the extras head attaches to the `<a>`; the construct head
@@ -424,34 +384,6 @@ fn emit_anchor(label: &str, attrs: AnchorAttrs, options: &AnchorOptions, out: &m
     out.push(Event::EndNode(node));
 }
 
-/// Parses an adjacent `[.class,#id]{key: val}` (or `{key: val}`) block after a
-/// link target. Returns `None` when nothing valid is attached, preserving
-/// surrounding text (e.g. a following markdown link).
-fn parse_link_extra_attrs(chars: &[char], end: &mut usize) -> Option<ExtraAttrs> {
-    let source: String = chars[*end..].iter().collect();
-    let starts_with_block = source.starts_with('{')
-        || (source.starts_with('[')
-            && source
-                .chars()
-                .nth(1)
-                .is_some_and(|character| character == '.' || character == '#'));
-    if !starts_with_block {
-        return None;
-    }
-
-    let parsed = parse_attrs(&source);
-    let has_content = parsed.attrs.id.is_some()
-        || !parsed.attrs.classes.is_empty()
-        || !parsed.attrs.properties.is_empty();
-    if !parsed.had_attrs || !has_content {
-        return None;
-    }
-
-    let consumed = source.len().saturating_sub(parsed.rest.len());
-    *end += source[..consumed].chars().count();
-    Some(parsed.attrs)
-}
-
 fn split_target_title(input: &str) -> (String, Option<String>) {
     let trimmed = input.trim();
     if let Some(quote) = trimmed.find('"') {
@@ -532,10 +464,10 @@ mod tests {
     }
 
     #[test]
-    fn parses_bracket_and_brace_extra_attrs() {
+    fn parses_an_adjacent_extras_head() {
         let mut out = Vec::new();
         emit_text(
-            "[foo](/docs)[.bax,#rew]{zo: \"kong\"}",
+            "[foo](/docs){zo: \"kong\", .bax}",
             &AnchorOptions::default(),
             &mut out,
         );
@@ -547,7 +479,6 @@ mod tests {
             })
             .collect();
         assert!(attrs.contains(&("class", "bax")));
-        assert!(attrs.contains(&("id", "rew")));
         assert!(attrs.contains(&("zo", "kong")));
 
         let leftover: String = out
@@ -557,8 +488,7 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert!(!leftover.contains("[.bax]"));
-        assert!(!leftover.contains("kong"));
+        assert_eq!(leftover, "foo");
     }
 
     #[test]
@@ -795,19 +725,42 @@ mod tests {
         assert!(emitted.warnings.is_empty(), "{:?}", emitted.warnings);
     }
 
+    /// §14/§D3: the retired `[.class,#id]{key: value}` form is plain text.
     #[test]
-    fn legacy_extras_form_is_reported() {
+    fn the_retired_legacy_form_is_literal_text() {
         let emitted = emit("[foo](/docs)[.bax,#rew]{zo: \"kong\"}");
-        assert_eq!(value(&emitted, "class"), Some("bax"));
-        assert_eq!(value(&emitted, "id"), Some("rew"));
-        assert_eq!(value(&emitted, "zo"), Some("kong"));
+        assert_eq!(value(&emitted, "href"), Some("/docs"));
+        assert!(value(&emitted, "class").is_none());
+        assert!(value(&emitted, "id").is_none());
+        assert!(emitted.warnings.is_empty(), "{:?}", emitted.warnings);
         assert!(
-            emitted
-                .warnings
-                .iter()
-                .any(|w| w.contains("deprecated") && w.contains("@@type")),
-            "{:?}",
-            emitted.warnings
+            emitted.text.contains("[.bax,#rew]{zo: \"kong\"}"),
+            "{}",
+            emitted.text
+        );
+    }
+
+    /// §4.1: extras touch the `)`, and a type may stand alone.
+    #[test]
+    fn a_type_only_head_stops_before_the_punctuation() {
+        let emitted = emit("[t](/a)@@anchorA.");
+        assert_eq!(value(&emitted, "href"), Some("/a"));
+        assert_eq!(value(&emitted, "type"), Some("anchorA"));
+        assert_eq!(emitted.text, "t.");
+
+        // A bare head is the same as the `@@` spelling (§3).
+        let emitted = emit("[t](/a){.hero}");
+        assert_eq!(value(&emitted, "href"), Some("/a"));
+        assert_eq!(value(&emitted, "class"), Some("hero"));
+        assert_eq!(emitted.text, "t");
+
+        // `@@type {…}` is not a head (§4.1).
+        let emitted = emit("[t](/a)@@anchorA {.hero}");
+        assert!(value(&emitted, "class").is_none());
+        assert!(
+            emitted.text.contains("@@anchorA {.hero}"),
+            "{}",
+            emitted.text
         );
     }
 }
