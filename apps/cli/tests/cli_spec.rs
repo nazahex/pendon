@@ -729,7 +729,7 @@ fn run_config_table_custom_layers_and_shared_imports() {
 
     std::fs::write(
         src_dir.join("sales.md"),
-        "[Laporan Penjualan]\n| Produk | Stok |\n| --- | --- |\n| Laptop Pro | 15 |\n|===|\n| Total | 15 |\n",
+        "|| Laporan Penjualan ||\n| Produk | Stok |\n| --- | --- |\n| Laptop Pro | 15 |\n|===|\n| Total | 15 |\n",
     )
     .expect("write markdown file");
 

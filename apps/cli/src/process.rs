@@ -10,9 +10,11 @@ use std::path::Path;
 use crate::cache::{create_cache_entry, CacheFile};
 use crate::config::ConfigTask;
 use crate::plugins::{
-    build_anchor_options, build_cite_options, build_context_inline_pipeline, build_heading_options,
-    build_img_options, build_table_options, has_plugin, latex_target_for_format, load_custom_spec,
-    merge_solid_hints, plugin_names, process_stateless_plugin, track_used_spec, DocumentContext,
+    build_anchor_options, build_blockquote_options, build_cite_options,
+    build_context_inline_pipeline, build_directive_options, build_heading_options,
+    build_img_options, build_list_options, build_marker_options, build_section_options,
+    build_table_options, has_plugin, latex_target_for_format, load_custom_spec, merge_solid_hints,
+    plugin_names, process_stateless_plugin, track_used_spec, DocumentContext,
 };
 use crate::utils::{extract_frontmatter_for_cite, maybe_pretty, merge_refs_for_context};
 
@@ -126,6 +128,71 @@ pub fn process_single_file(
         }
     };
 
+    let marker_options = match build_marker_options(task.marker.as_ref()) {
+        Ok(o) => o,
+        Err(msg) => {
+            eprintln!("Error: {}", msg);
+            return ProcessResult {
+                success: false,
+                bytes_written: 0,
+                cache_entry: None,
+                skipped_write: false,
+            };
+        }
+    };
+
+    let directive_options = match build_directive_options(task.directive.as_ref()) {
+        Ok(o) => o,
+        Err(msg) => {
+            eprintln!("Error: {}", msg);
+            return ProcessResult {
+                success: false,
+                bytes_written: 0,
+                cache_entry: None,
+                skipped_write: false,
+            };
+        }
+    };
+
+    let list_options = match build_list_options(task.list.as_ref()) {
+        Ok(o) => o,
+        Err(msg) => {
+            eprintln!("Error: {}", msg);
+            return ProcessResult {
+                success: false,
+                bytes_written: 0,
+                cache_entry: None,
+                skipped_write: false,
+            };
+        }
+    };
+
+    let blockquote_options = match build_blockquote_options(task.blockquote.as_ref()) {
+        Ok(o) => o,
+        Err(msg) => {
+            eprintln!("Error: {}", msg);
+            return ProcessResult {
+                success: false,
+                bytes_written: 0,
+                cache_entry: None,
+                skipped_write: false,
+            };
+        }
+    };
+
+    let section_options = match build_section_options(task.section.as_ref()) {
+        Ok(o) => o,
+        Err(msg) => {
+            eprintln!("Error: {}", msg);
+            return ProcessResult {
+                success: false,
+                bytes_written: 0,
+                cache_entry: None,
+                skipped_write: false,
+            };
+        }
+    };
+
     let inline_pipeline = build_context_inline_pipeline(
         img_options.clone(),
         task_wiki_opts.clone(),
@@ -144,6 +211,8 @@ pub fn process_single_file(
     let mut markdown_ran = false;
     let mut quiz_pending = false;
     let mut custom_cache: HashMap<String, PluginSpec> = HashMap::new();
+    // §13: report each unknown plugin name once per task.
+    let mut reported_plugins: HashSet<String> = HashSet::new();
 
     if let Some(pstr) = task.plugin.as_deref() {
         for name in plugin_names(Some(pstr)) {
@@ -232,7 +301,7 @@ pub fn process_single_file(
                     result
                 }
                 "heading" => {
-                    let opts = match build_heading_options(task.heading.as_ref()) {
+                    let mut opts = match build_heading_options(task.heading.as_ref()) {
                         Ok(o) => o,
                         Err(msg) => {
                             eprintln!("Error: {}", msg);
@@ -244,6 +313,9 @@ pub fn process_single_file(
                             };
                         }
                     };
+                    // §9.5: when the section outline owns the ids, the heading
+                    // yields its id (it transfers to the section).
+                    opts.section_owns_id = enabled_plugins.contains("section");
                     let result = pendon_plugin_heading::process(&events, &opts);
                     if let Some(hints) = pendon_plugin_heading::solid_hints(&opts) {
                         builtin_hints.push(hints);
@@ -257,6 +329,56 @@ pub fn process_single_file(
                 "cite" => {
                     cite_ran = true;
                     document_context.process_citations(&events)
+                }
+                "marker" => {
+                    // §10.1: markers are plain text patterns, so this plugin runs
+                    // before markdown like the other construct plugins.
+                    let result = pendon_plugin_marker::process(&events, &marker_options);
+                    if let Some(hints) = pendon_plugin_marker::solid_hints(&marker_options) {
+                        builtin_hints.push(hints);
+                    }
+                    result
+                }
+                "directive" => {
+                    // §10.2/§10.3: directives are text constructs, so this plugin
+                    // runs before markdown like the other construct plugins.
+                    let result = pendon_plugin_directive::process(&events, &directive_options);
+                    if let Some(hints) = pendon_plugin_directive::solid_hints(&directive_options) {
+                        builtin_hints.push(hints);
+                    }
+                    result
+                }
+                "blockquote" => {
+                    // §9.2: `>` stays plain Markdown; this plugin only binds the
+                    // extras a quote may carry, so it runs before markdown re-lexes
+                    // the stripped body as blocks.
+                    let result = pendon_plugin_blockquote::process(&events, &blockquote_options);
+                    if let Some(hints) = pendon_plugin_blockquote::solid_hints(&blockquote_options)
+                    {
+                        builtin_hints.push(hints);
+                    }
+                    result
+                }
+                "section" => {
+                    // §9.5: the section outline runs before markdown so it can see
+                    // the raw heading text, the section decorator and the level
+                    // markers (`>---<` would otherwise be a blockquote). Markdown
+                    // then parses the interior of every `Section` it emits.
+                    let result = pendon_plugin_section::process(&events, &section_options);
+                    if let Some(hints) = pendon_plugin_section::solid_hints(&section_options) {
+                        builtin_hints.push(hints);
+                    }
+                    result
+                }
+                "list" => {
+                    // §9.3: the list markers stay plain Markdown; this plugin only
+                    // binds a container decorator to the list below it, so it runs
+                    // before markdown parses the list.
+                    let result = pendon_plugin_list::process(&events, &list_options);
+                    if let Some(hints) = pendon_plugin_list::solid_hints(&list_options) {
+                        builtin_hints.push(hints);
+                    }
+                    result
                 }
                 "vicado" => {
                     used_vicado = true;
@@ -284,6 +406,14 @@ pub fn process_single_file(
                             &mut document_context,
                         )
                     } else {
+                        // §13: an unknown plugin name used to be ignored without a
+                        // word. Report it once per name; the build still succeeds.
+                        if reported_plugins.insert(other.to_string()) {
+                            eprintln!(
+                                "Warning: [{task_name}] unknown plugin '{other}' in task.plugin; \
+                                 it is ignored (§13)"
+                            );
+                        }
                         events
                     }
                 }

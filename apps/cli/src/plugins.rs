@@ -1,9 +1,14 @@
 use pendon_core::{ContextPipeline, Event};
 use pendon_plugin_anchor::{AnchorCustomNode, AnchorOptions};
+use pendon_plugin_blockquote::{BlockquoteCustomNode, BlockquoteOptions};
 use pendon_plugin_cite::{CitationContext, CiteCustomNode, CiteOptions};
 use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
+use pendon_plugin_directive::{DirectiveCustomNode, DirectiveOptions};
 use pendon_plugin_heading::{HeadingCustomNode, HeadingOptions};
 use pendon_plugin_img::{ImgCustomNode, ImgOptions};
+use pendon_plugin_list::{ListCustomNode, ListOptions};
+use pendon_plugin_marker::{MarkerCustomNode, MarkerOptions};
+use pendon_plugin_section::{SectionCustomNode, SectionOptions};
 use pendon_renderer_solid::{
     ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints, TypedComponent,
 };
@@ -11,8 +16,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::config::{
-    AnchorTaskConfig, CiteTaskConfig, HeadingTaskConfig, ImgTaskConfig, PluginCustomSection,
-    PluginVicadoSection, TableTaskConfig,
+    AnchorTaskConfig, BlockquoteTaskConfig, CiteTaskConfig, HeadingTaskConfig, ImgTaskConfig,
+    ListTaskConfig, PluginCustomSection, PluginVicadoSection, SectionTaskConfig, TableTaskConfig,
 };
 use crate::utils::substitute_output;
 
@@ -132,7 +137,6 @@ pub fn process_stateless_plugin(
             None => events.to_vec(),
         },
         "wiki" => pendon_plugin_wiki::process_with_options(events, wiki_options.clone()),
-        "sectionize" => pendon_plugin_sectionize::process(events),
         "extract-heading" => pendon_plugin_extract_heading::process(events),
         "syntect" => pendon_plugin_codeblock_syntect::process(events),
         _ => return None,
@@ -191,6 +195,8 @@ const CITE_LAYER: &str = "cite";
 /// rule 6 does not require a `{children}` token.
 const CITE_DEFAULT_TEMPLATE: &str =
     "<Citation index={attrs.index} id={attrs.id} loc={attrs.loc} />";
+/// §11 primary layer of `plugin-marker`: the node `{{type}}` renders.
+const MARKER_LAYER: &str = "marker";
 /// §11 layers of `plugin-table`, one per element it emits.
 const TABLE_LAYERS: [&str; 7] = ["table", "caption", "thead", "tbody", "tfoot", "row", "cell"];
 
@@ -453,6 +459,8 @@ pub fn build_heading_options(config: Option<&HeadingTaskConfig>) -> Result<Headi
         auto_number: config.auto_number.unwrap_or_default(),
         number_style: config.number_style.clone().unwrap_or_default(),
         custom,
+        // §9.5: the CLI flips this when `plugin-section` is enabled.
+        section_owns_id: false,
     })
 }
 
@@ -461,6 +469,133 @@ fn require(value: Option<&String>, key: &str) -> Result<String, String> {
     value
         .cloned()
         .ok_or_else(|| format!("{key} is required when a custom node is configured"))
+}
+
+/// §10.1/§11: the marker layer is addressed by the plugin's own key, so
+/// `[task.marker.custom]` and `[task.marker.custom.marker]` are equivalent.
+pub fn build_marker_options(
+    config: Option<&crate::config::MarkerTaskConfig>,
+) -> Result<MarkerOptions, String> {
+    let Some(config) = config else {
+        return Ok(MarkerOptions::default());
+    };
+    check_custom_node_removed("marker", config.custom_node.is_some())?;
+    let loaded = load_custom("marker", MARKER_LAYER, config.custom.as_ref())?;
+    check_layers("marker", loaded.as_ref(), &[MARKER_LAYER])?;
+    let custom = layer_set(loaded.as_ref(), MARKER_LAYER, |entry| {
+        Ok(MarkerCustomNode {
+            name: require(entry.name.as_ref(), "marker.custom.marker.name")?,
+            template: require(entry.template.as_ref(), "marker.custom.marker.template")?,
+            imports: entry.imports.clone(),
+        })
+    })?;
+    Ok(MarkerOptions { custom })
+}
+
+/// §10.2/§10.3/§11: the directive layer is addressed by the plugin's own key, so
+/// `[task.directive.custom]` and `[task.directive.custom.directive]` are
+/// equivalent.
+pub fn build_directive_options(
+    config: Option<&crate::config::DirectiveTaskConfig>,
+) -> Result<DirectiveOptions, String> {
+    let Some(config) = config else {
+        return Ok(DirectiveOptions::default());
+    };
+    let layer = pendon_plugin_directive::primary_layer();
+    check_custom_node_removed("directive", config.custom_node.is_some())?;
+    let loaded = load_custom("directive", layer, config.custom.as_ref())?;
+    check_layers("directive", loaded.as_ref(), &[layer])?;
+    let custom = layer_set(loaded.as_ref(), layer, |entry| {
+        Ok(DirectiveCustomNode {
+            name: require(entry.name.as_ref(), "directive.custom.directive.name")?,
+            template: require(
+                entry.template.as_ref(),
+                "directive.custom.directive.template",
+            )?,
+            imports: entry.imports.clone(),
+        })
+    })?;
+    Ok(DirectiveOptions { custom })
+}
+
+/// §9.3/§9.4/§11: the list layers. `list` is the primary layer (the `<li>`
+/// item), `unordered` / `ordered` the `<ul>` / `<ol>` container layers.
+pub fn build_list_options(config: Option<&ListTaskConfig>) -> Result<ListOptions, String> {
+    let Some(config) = config else {
+        return Ok(ListOptions::default());
+    };
+    let layers = pendon_plugin_list::layers();
+    check_custom_node_removed("list", config.custom_node.is_some())?;
+    let loaded = load_custom("list", layers[0], config.custom.as_ref())?;
+    check_layers("list", loaded.as_ref(), &layers)?;
+
+    let make = |layer: &'static str| {
+        move |entry: &crate::components::ComponentEntry| {
+            Ok::<_, String>(ListCustomNode {
+                name: require(entry.name.as_ref(), &format!("list.custom.{layer}.name"))?,
+                template: require(
+                    entry.template.as_ref(),
+                    &format!("list.custom.{layer}.template"),
+                )?,
+                imports: entry.imports.clone(),
+            })
+        }
+    };
+    let list = layer_set(loaded.as_ref(), layers[0], make(layers[0]))?;
+    let unordered = layer_set(loaded.as_ref(), layers[1], make(layers[1]))?;
+    let ordered = layer_set(loaded.as_ref(), layers[2], make(layers[2]))?;
+    Ok(ListOptions {
+        list,
+        unordered,
+        ordered,
+    })
+}
+
+/// §9.2/§11: the blockquote layer. `blockquote` is the plugin's only (primary)
+/// layer, so `[task.blockquote.custom]` and
+/// `[task.blockquote.custom.blockquote]` are equivalent.
+pub fn build_blockquote_options(
+    config: Option<&BlockquoteTaskConfig>,
+) -> Result<BlockquoteOptions, String> {
+    let Some(config) = config else {
+        return Ok(BlockquoteOptions::default());
+    };
+    let layer = pendon_plugin_blockquote::primary_layer();
+    check_custom_node_removed("blockquote", config.custom_node.is_some())?;
+    let loaded = load_custom("blockquote", layer, config.custom.as_ref())?;
+    check_layers("blockquote", loaded.as_ref(), &[layer])?;
+    let custom = layer_set(loaded.as_ref(), layer, |entry| {
+        Ok(BlockquoteCustomNode {
+            name: require(entry.name.as_ref(), "blockquote.custom.blockquote.name")?,
+            template: require(
+                entry.template.as_ref(),
+                "blockquote.custom.blockquote.template",
+            )?,
+            imports: entry.imports.clone(),
+        })
+    })?;
+    Ok(BlockquoteOptions { custom })
+}
+
+/// §9.5/§11: the `section` layer. `section` is the plugin's only (primary)
+/// layer, so `[task.section.custom]` and `[task.section.custom.section]` are
+/// equivalent.
+pub fn build_section_options(config: Option<&SectionTaskConfig>) -> Result<SectionOptions, String> {
+    let Some(config) = config else {
+        return Ok(SectionOptions::default());
+    };
+    let layer = pendon_plugin_section::primary_layer();
+    check_custom_node_removed("section", config.custom_node.is_some())?;
+    let loaded = load_custom("section", layer, config.custom.as_ref())?;
+    check_layers("section", loaded.as_ref(), &[layer])?;
+    let custom = layer_set(loaded.as_ref(), layer, |entry| {
+        Ok(SectionCustomNode {
+            name: require(entry.name.as_ref(), "section.custom.section.name")?,
+            template: require(entry.template.as_ref(), "section.custom.section.template")?,
+            imports: entry.imports.clone(),
+        })
+    })?;
+    Ok(SectionOptions { section: custom })
 }
 
 pub fn track_used_spec(list: &mut Vec<PluginSpec>, spec: PluginSpec) {
@@ -1013,5 +1148,70 @@ template = "<DocHeading>{children}</DocHeading>"
         let node = options.custom.default_component().expect("cite component");
         assert_eq!(node.name, "Cite");
         assert_eq!(node.template, CITE_DEFAULT_TEMPLATE);
+    }
+
+    /// `list` reads its three layers (§9.4) and `blockquote` its single layer
+    /// (§9.2); both reject an unwired layer (§14: no silent drops).
+    #[test]
+    fn list_and_blockquote_read_their_layers() {
+        let cfg: ListTaskConfig = toml::from_str(
+            r#"
+[custom.unordered]
+name = "UnorderedBox"
+template = "<ul {...attrs}>{children}</ul>"
+
+[[custom.ordered]]
+type = ["orderedA"]
+name = "OrderedA"
+template = "<OrderedA {...attrs}>{children}</OrderedA>"
+"#,
+        )
+        .expect("valid list config");
+        let options = build_list_options(Some(&cfg)).expect("valid list options");
+        assert_eq!(
+            options
+                .unordered
+                .default_component()
+                .expect("unordered component")
+                .name,
+            "UnorderedBox"
+        );
+        assert_eq!(
+            options
+                .ordered
+                .select(Some("orderedA"))
+                .expect("typed ordered component")
+                .name,
+            "OrderedA"
+        );
+        assert!(options.list.is_empty());
+
+        let cfg: ListTaskConfig = toml::from_str("[custom.figure]\nname = \"X\"\n").expect("toml");
+        let err = build_list_options(Some(&cfg)).expect_err("unsupported layer");
+        assert!(err.contains("unsupported layer for `list`"), "{err}");
+
+        let cfg: BlockquoteTaskConfig = toml::from_str(
+            r#"
+[[custom.blockquote]]
+type = ["bqA"]
+name = "QuoteA"
+template = "<QuoteA {...attrs}>{children}</QuoteA>"
+"#,
+        )
+        .expect("valid blockquote config");
+        let options = build_blockquote_options(Some(&cfg)).expect("valid blockquote options");
+        assert_eq!(
+            options
+                .custom
+                .select(Some("bqA"))
+                .expect("typed quote component")
+                .name,
+            "QuoteA"
+        );
+
+        let cfg: BlockquoteTaskConfig =
+            toml::from_str("[custom.figure]\nname = \"X\"\n").expect("toml");
+        let err = build_blockquote_options(Some(&cfg)).expect_err("unsupported layer");
+        assert!(err.contains("unsupported layer for `blockquote`"), "{err}");
     }
 }

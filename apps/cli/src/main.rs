@@ -179,9 +179,14 @@ fn main() -> ExitCode {
                     &inline_pipeline,
                     &mut document_context,
                 ),
-                "heading" => pendon_plugin_heading::process(
+                "heading" => {
+                    let mut opts = pendon_plugin_heading::HeadingOptions::default();
+                    opts.section_owns_id = enabled_plugins.contains("section");
+                    pendon_plugin_heading::process(&ev, &opts)
+                }
+                "section" => pendon_plugin_section::process(
                     &ev,
-                    &pendon_plugin_heading::HeadingOptions::default(),
+                    &pendon_plugin_section::SectionOptions::default(),
                 ),
                 "anchor" => pendon_plugin_anchor::process(&ev, &AnchorOptions::default()),
                 "cite" => document_context.process_citations(&ev),

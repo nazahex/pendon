@@ -148,3 +148,61 @@ fn golden_08_table_decl() {
 fn golden_09_table_layers() {
     assert_fixture("09-table-layers");
 }
+
+/// §16.3 fixture 10: general block decorators (§9.1) — a paragraph and a code
+/// fence each decorated by the line above them, the typed head's marker landing
+/// as a `type` attribute (§11 rule 3). A *heading* decorator belongs to
+/// `plugin-section` (§9.5), so it is not a `markdown` case.
+#[test]
+fn golden_10_decorator_blocks() {
+    assert_fixture("10-decorator-blocks");
+}
+
+/// §16.3 fixture 14: inline + block forms, `<span>`/`<div>` fallback (§10.1).
+#[test]
+fn golden_14_marker() {
+    assert_fixture("14-marker");
+}
+
+/// §16.3 fixture 15: `::…::` nesting 2..7, `bracket_key`/`parentheses_key`
+/// (§10.2).
+#[test]
+fn golden_15_directive_inline() {
+    assert_fixture("15-directive-inline");
+}
+
+/// §16.3 fixture 16: `==type`/`==` LIFO closing, nesting, EOF warning (§10.3).
+#[test]
+fn golden_16_directive_block() {
+    assert_fixture("16-directive-block");
+}
+
+/// §16.3 fixture 21: bare/typed/type-only/empty heads and strict adjacency across
+/// anchor, heading and table (§3–§4, §7.4, §8).
+#[test]
+fn golden_21_extras_forms() {
+    assert_fixture("21-extras-forms");
+}
+
+/// §16.3 fixture 11: the blockquote layer (§9.2) — inner head, decorator line,
+/// inner-wins, and the D8 element fallback for an unclaimed type.
+#[test]
+fn golden_11_blockquote() {
+    assert_fixture("11-blockquote");
+}
+
+/// §16.3 fixture 12: the list container merge (§9.3 L1, §9.4) — typed/untyped
+/// container decorators, marker-decides-layer, and the layer default.
+#[test]
+fn golden_12_list_container() {
+    assert_fixture("12-list-container");
+}
+
+/// §16.3 fixture 22: the `plugin-section` outline (§9.5) — the section decorator
+/// line binds to the section (not the heading), the id transfers off the heading
+/// through the priority chain, and the `<--->` / `>---<` level markers deepen and
+/// close the outline.
+#[test]
+fn golden_22_section() {
+    assert_fixture("22-section");
+}

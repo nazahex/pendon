@@ -28,6 +28,19 @@ pub fn run_from_config() -> ExitCode {
         }
     };
 
+    // §13: an unknown key inside a `[[task]]` table would otherwise be dropped
+    // silently. Report it and keep going, so a typo never changes the output
+    // without saying so.
+    for (index, task) in cfg.tasks.iter().enumerate() {
+        let name = task
+            .name
+            .clone()
+            .unwrap_or_else(|| format!("task-{}", index));
+        for key in task.unknown.keys() {
+            eprintln!("Warning: [{name}] unknown key '{key}' in pendon.toml; it is ignored (§13)");
+        }
+    }
+
     let custom_registry = match load_custom_registry(cfg.plugin_custom.as_ref()) {
         Ok(map) => map,
         Err(msg) => {
