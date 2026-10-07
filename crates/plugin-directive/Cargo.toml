@@ -1,0 +1,15 @@
+[package]
+name = "pendon-plugin-directive"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "The `::inline…::` and `==block…==` directive processor for Pendon (spec §10.2, §10.3)"
+
+[dependencies]
+pendon-core = { path = "../core" }
+pendon-extra = { path = "../extra" }
+pendon-renderer-solid = { path = "../renderer-solid" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+pendon-plugin-markdown = { path = "../plugin-markdown" }
