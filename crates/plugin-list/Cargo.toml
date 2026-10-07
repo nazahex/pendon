@@ -1,0 +1,15 @@
+[package]
+name = "pendon-plugin-list"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "The list layers of Pendon: `unordered` / `ordered` containers and `list` items (spec §9.3, §9.4)"
+
+[dependencies]
+pendon-core = { path = "../core" }
+pendon-extra = { path = "../extra" }
+pendon-renderer-solid = { path = "../renderer-solid" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+pendon-plugin-markdown = { path = "../plugin-markdown" }
