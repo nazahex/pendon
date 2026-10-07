@@ -1,0 +1,15 @@
+[package]
+name = "pendon-plugin-blockquote"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "The `>` blockquote layer of Pendon: decorator + inner-head binding (spec §9.1, §9.2)"
+
+[dependencies]
+pendon-core = { path = "../core" }
+pendon-extra = { path = "../extra" }
+pendon-renderer-solid = { path = "../renderer-solid" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+pendon-plugin-markdown = { path = "../plugin-markdown" }
