@@ -292,7 +292,11 @@ fn render_attrs(v: &Value, out: &mut String, skipped: &[&str]) {
     };
 
     for (name, value) in attrs {
-        if name == "name" || skipped.contains(&name.as_str()) {
+        // `name` is the AST node name, not an attribute, and a `__`-prefixed key
+        // is an internal marker (`__plugin_kind`, §11 rule 3). Neither may reach
+        // the output — the template path already skips them in
+        // `generate_spread_attrs`.
+        if name == "name" || name.starts_with("__") || skipped.contains(&name.as_str()) {
             continue;
         }
         out.push(' ');

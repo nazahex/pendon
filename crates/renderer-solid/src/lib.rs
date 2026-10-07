@@ -200,4 +200,31 @@ mod tests {
             "output = {output}"
         );
     }
+
+    /// §11 rule 3: a `__`-prefixed key is an internal marker (`__plugin_kind`),
+    /// never a real attribute. It must not reach the output even on a plain
+    /// `Element` node, where the template path's `{...attrs}` filter does not
+    /// apply.
+    #[test]
+    fn internal_marker_attributes_are_not_rendered() {
+        let mut events = vec![Event::StartNode(NodeKind::Document)];
+        events.extend(pendon_core::element_open("blockquote"));
+        events.push(Event::Attribute {
+            name: "__plugin_kind".to_string(),
+            value: "element".to_string(),
+        });
+        events.push(Event::Attribute {
+            name: "class".to_string(),
+            value: "outer".to_string(),
+        });
+        events.push(Event::Text("body".to_string()));
+        events.push(pendon_core::element_close("blockquote"));
+        events.push(Event::EndNode(NodeKind::Document));
+        let output = render_solid(&events);
+        assert!(!output.contains("__plugin_kind"), "output = {output}");
+        assert!(
+            output.contains("<blockquote class=\"outer\">"),
+            "output = {output}"
+        );
+    }
 }

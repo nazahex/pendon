@@ -23,7 +23,9 @@ pub(crate) fn render_attrs_except(v: &Value, out: &mut String, skip: &[&str]) {
         return;
     };
     for (name, value) in attrs {
-        if skip.contains(&name.as_str()) {
+        // A `__`-prefixed key is an internal marker (`__plugin_kind`, §11 rule 3)
+        // and must never reach the output, matching the JSX renderer.
+        if name.starts_with("__") || skip.contains(&name.as_str()) {
             continue;
         }
         out.push(' ');
