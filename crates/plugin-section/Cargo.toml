@@ -1,9 +1,12 @@
 [package]
-name = "pendon-plugin-sectionize"
+name = "pendon-plugin-section"
 version = "0.0.1"
 edition = "2021"
 license = "MIT"
-description = "Wrap headings into nested sections"
+description = "Wrap headings into nested sections (SDoc outline)"
 
 [dependencies]
 pendon-core = { path = "../core" }
+pendon-extra = { path = "../extra" }
+pendon-renderer-solid = { path = "../renderer-solid" }
+serde = { version = "1", features = ["derive"] }
