@@ -21,71 +21,37 @@ struct HeadingCapture {
 // --- Extras Parser (mirrors plugin-heading) ---
 
 /// Parses the heading head (§7.4 / §11) from the start of heading text:
-/// `[slug]`, `[.classes]`, `("title")`, the pre-§11 `{attrs}` block and the
-/// `@@type{…}` extras head.
+/// `[slug]`, an optional `("title")` and the `{…}` / `@@type{…}` extras head.
+///
+/// §4.1: the head touches the `#` run, so nothing is trimmed from the front;
+/// the retired `[.class]` / `{key: value}` forms are literal text (§14).
 /// Returns (custom_id, consumed_character_count).
 fn parse_heading_prefix(raw_text: &str) -> (Option<String>, usize) {
     let chars: Vec<char> = raw_text.chars().collect();
     let mut cursor = 0;
     let mut custom_id: Option<String> = None;
 
-    // Skip leading whitespace
-    while cursor < chars.len() && chars[cursor].is_whitespace() {
-        cursor += 1;
-    }
-
-    // Parse first bracket group: [id] or [.class]
-    if cursor < chars.len() && chars[cursor] == '[' {
+    // §7.4: an optional `[slug]` head, adjacent to the `#` run.
+    if chars.get(cursor) == Some(&'[') {
         if let Some(close) = find_char(&chars, cursor + 1, ']') {
             let content: String = chars[cursor + 1..close].iter().collect();
             let trimmed = content.trim();
-            if !trimmed.is_empty() && !trimmed.starts_with('.') {
+            if !trimmed.is_empty() && !trimmed.starts_with('.') && !trimmed.starts_with('#') {
                 custom_id = Some(trimmed.to_string());
+                cursor = close + 1;
             }
-            cursor = close + 1;
-        }
-    }
-
-    // Skip subsequent bracket groups: [.class,.extra]
-    loop {
-        while cursor < chars.len() && chars[cursor].is_whitespace() {
-            cursor += 1;
-        }
-        if cursor >= chars.len() || chars[cursor] != '[' {
-            break;
-        }
-        if let Some(close) = find_char(&chars, cursor + 1, ']') {
-            cursor = close + 1;
-        } else {
-            break;
-        }
-    }
-
-    // Skip curly brace attributes: { key: "val" }
-    while cursor < chars.len() && chars[cursor].is_whitespace() {
-        cursor += 1;
-    }
-    if cursor < chars.len() && chars[cursor] == '{' {
-        if let Some(close) = find_matching_brace(&chars, cursor) {
-            cursor = close + 1;
         }
     }
 
     // §7.4: an optional `("title")` head, never part of the heading text.
-    while cursor < chars.len() && chars[cursor].is_whitespace() {
-        cursor += 1;
-    }
-    if cursor < chars.len() && chars[cursor] == '(' {
+    if chars.get(cursor) == Some(&'(') {
         if let Some(close) = find_matching_paren(&chars, cursor) {
             cursor = close + 1;
         }
     }
 
-    // §7.4: an adjacent `@@type{…}` head attaches to the heading. `#id` beats
-    // the `[slug]` head, which beats the extras slug (§6.2).
-    while cursor < chars.len() && chars[cursor].is_whitespace() {
-        cursor += 1;
-    }
+    // §7.4/§11: an adjacent `{…}` / `@@type{…}` head. `#id` beats the `[slug]`
+    // head, which beats the extras slug (§6.2).
     if let Some((head, next)) = scan_extras_chars(&chars, cursor) {
         let parsed = to_attributes(&head, &ExtrasOptions::default());
         match parsed.value("id").map(|value| value.literal()) {
@@ -97,10 +63,11 @@ fn parse_heading_prefix(raw_text: &str) -> (Option<String>, usize) {
             }
         }
         cursor = next;
-        // The whitespace after the head is not part of the heading text.
-        while cursor < chars.len() && matches!(chars[cursor], ' ' | '\t') {
-            cursor += 1;
-        }
+    }
+
+    // §7.4: the whitespace between the head and the text is not part of it.
+    while matches!(chars.get(cursor), Some(' ' | '\t')) {
+        cursor += 1;
     }
 
     (custom_id, cursor)
@@ -128,21 +95,6 @@ fn find_char(chars: &[char], mut index: usize, wanted: char) -> Option<usize> {
             return Some(index);
         }
         index += 1;
-    }
-    None
-}
-
-fn find_matching_brace(chars: &[char], start: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    let mut i = start;
-    while i < chars.len() {
-        match chars[i] {
-            '{' => depth += 1,
-            '}' if depth == 1 => return Some(i),
-            '}' => depth -= 1,
-            _ => {}
-        }
-        i += 1;
     }
     None
 }
@@ -185,8 +137,9 @@ fn strip_heading_marker(input: &str, level: usize) -> &str {
     if marker_end != level {
         return input;
     }
-    let rest = &input[marker_end..];
-    rest.strip_prefix(' ').unwrap_or(rest)
+    // §4.1: the head must touch the marker, so the separating space is kept here
+    // and consumed by the head parser (or by the text trim).
+    &input[marker_end..]
 }
 
 fn strip_number_prefix(input: &str) -> &str {
@@ -251,8 +204,15 @@ fn collect_headings(events: &[Event]) -> Vec<PendonHeading> {
                 section_stack.pop();
                 idx += 1;
             }
-            Event::StartNode(NodeKind::Heading) => {
-                let (capture, consumed) = consume_heading(events, idx);
+            // §9.5/§11 rule 3: plugin-heading swaps `Heading` for
+            // `Custom(name)` when a custom template is configured, so those
+            // components are headings too (see `is_heading_component`).
+            Event::StartNode(kind)
+                if matches!(kind, NodeKind::Heading)
+                    || (matches!(kind, NodeKind::Custom(_))
+                        && is_heading_component(events, idx)) =>
+            {
+                let (capture, consumed) = consume_heading(events, idx, kind);
                 let section_id = section_stack.last().and_then(|id| id.clone());
                 let id = section_id
                     .or(capture.id)
@@ -276,11 +236,52 @@ fn collect_headings(events: &[Event]) -> Vec<PendonHeading> {
     roots
 }
 
-fn consume_heading(events: &[Event], start_idx: usize) -> (HeadingCapture, usize) {
+/// Returns true when the node opening at `start_idx` is a heading component.
+///
+/// `plugin-heading` replaces `NodeKind::Heading` with `NodeKind::Custom(name)`
+/// when a custom template is configured (§11 rule 3), so the metadata pass has
+/// to recognise those components as headings as well. `level` is heading's
+/// signature: no other plugin emits it on a `Custom` node — `plugin-markdown`
+/// only ever writes it on `Heading` — so its presence marks the component as a
+/// heading.
+///
+/// §13 warnings are pushed as `Diagnostic` events immediately after
+/// `StartNode` and *before* the attribute run, so they are skipped alongside
+/// the attributes; the first content event ends the look-ahead.
+fn is_heading_component(events: &[Event], start_idx: usize) -> bool {
+    for event in &events[start_idx + 1..] {
+        match event {
+            Event::Attribute { name, value } if name == "level" => {
+                return value.parse::<usize>().is_ok();
+            }
+            Event::Attribute { .. } | Event::AttributeFlag { .. } | Event::Diagnostic { .. } => {
+                continue
+            }
+            _ => return false,
+        }
+    }
+    false
+}
+
+/// Consumes the events of one heading node opening at `start_idx`.
+///
+/// Only nodes of the *same* kind as `start` are counted: a `Heading` closes at
+/// `EndNode(Heading)` exactly as before, and a `Custom(name)` component closes
+/// at its own `EndNode(Custom(name))` even when inline children (`Strong`,
+/// `Code`, …) are re-lexed inside it. Ignoring unrelated `StartNode`s keeps the
+/// scan from overrunning when markdown leaves an unbalanced non-heading node
+/// inside the heading.
+fn consume_heading(
+    events: &[Event],
+    start_idx: usize,
+    start: &NodeKind,
+) -> (HeadingCapture, usize) {
     let mut idx = start_idx + 1;
+    let mut depth = 1usize;
     let mut level: usize = 1;
     let mut text = String::new();
-    let mut heading_id: Option<String> = None;
+    let mut explicit_id: Option<String> = None;
+    let mut auto_slug: Option<String> = None;
 
     while idx < events.len() {
         match &events[idx] {
@@ -290,7 +291,9 @@ fn consume_heading(events: &[Event], start_idx: usize) -> (HeadingCapture, usize
                         level = parsed;
                     }
                 } else if name == "id" {
-                    heading_id = Some(value.clone());
+                    explicit_id = Some(value.clone());
+                } else if name == "slug" {
+                    auto_slug = Some(value.clone());
                 }
                 idx += 1;
             }
@@ -298,9 +301,16 @@ fn consume_heading(events: &[Event], start_idx: usize) -> (HeadingCapture, usize
                 text.push_str(t);
                 idx += 1;
             }
-            Event::EndNode(NodeKind::Heading) => {
+            Event::StartNode(k) if k == start => {
+                depth += 1;
                 idx += 1;
-                break;
+            }
+            Event::EndNode(k) if k == start => {
+                depth = depth.saturating_sub(1);
+                idx += 1;
+                if depth == 0 {
+                    break;
+                }
             }
             _ => {
                 idx += 1;
@@ -310,7 +320,7 @@ fn consume_heading(events: &[Event], start_idx: usize) -> (HeadingCapture, usize
 
     let visible_text = strip_number_prefix(strip_heading_marker(&text, level));
 
-    // Use the same prefix parser as plugin-heading to strip [id][.class]{attrs}
+    // Use the same prefix parser as plugin-heading to strip the head.
     let (prefix_id, consumed_len) = parse_heading_prefix(visible_text);
     let clean_text = visible_text[consumed_len..].trim().to_string();
 
@@ -324,7 +334,9 @@ fn consume_heading(events: &[Event], start_idx: usize) -> (HeadingCapture, usize
         HeadingCapture {
             text: final_text,
             level,
-            id: heading_id.or(prefix_id),
+            // §6.2/README: the explicit `id` beats the inline head, which beats
+            // heading's auto-slug; the caller falls back to the slugified text.
+            id: explicit_id.or(prefix_id).or(auto_slug),
         },
         idx,
     )
@@ -441,12 +453,35 @@ fn headings_node_kind() -> NodeKind {
 mod tests {
     use super::*;
 
+    /// §14: the retired `[.class]` / `{key: value}` forms are literal text.
     #[test]
-    fn strips_the_legacy_head() {
+    fn the_retired_legacy_head_is_literal_text() {
         let text = "[foo-bar][.extra]{ qux: \"anu\" } Foo Bar Barosa";
         let (id, consumed) = parse_heading_prefix(text);
         assert_eq!(id.as_deref(), Some("foo-bar"));
-        assert_eq!(&text[consumed..], "Foo Bar Barosa");
+        assert_eq!(&text[consumed..], "[.extra]{ qux: \"anu\" } Foo Bar Barosa");
+    }
+
+    /// §7.4: the whitespace after the head belongs to the head.
+    #[test]
+    fn strips_the_spaced_head() {
+        let text = "[slug] Title";
+        let (id, consumed) = parse_heading_prefix(text);
+        assert_eq!(id.as_deref(), Some("slug"));
+        assert_eq!(&text[consumed..], "Title");
+    }
+
+    /// §4.1/§3: a bare extras head is a head; a spaced one is not.
+    #[test]
+    fn handles_bare_and_spaced_extras_heads() {
+        let text = "{.extra} Body";
+        let (id, consumed) = parse_heading_prefix(text);
+        assert_eq!(id, None);
+        assert_eq!(&text[consumed..], "Body");
+
+        let text = "@@heading {.extra} Body";
+        let (_, consumed) = parse_heading_prefix(text);
+        assert_eq!(consumed, 0);
     }
 
     #[test]
@@ -482,5 +517,113 @@ mod tests {
         let (id, consumed) = parse_heading_prefix(text);
         assert_eq!(id, None);
         assert_eq!(consumed, 0);
+    }
+
+    fn attr(name: &str, value: &str) -> Event {
+        Event::Attribute {
+            name: name.to_string(),
+            value: value.to_string(),
+        }
+    }
+
+    /// §11 rule 3/§9.5: `plugin-heading` swaps `NodeKind::Heading` for
+    /// `NodeKind::Custom(name)` when a custom template is configured (the
+    /// heading demo renders `<DocHeading>`), so the metadata pass must still
+    /// extract it — otherwise `export const headings` disappears entirely.
+    #[test]
+    fn extracts_a_custom_heading_component() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Section),
+            attr("id", "foo-bar"),
+            Event::StartNode(NodeKind::Custom("DocHeading".to_string())),
+            attr("name", "DocHeading"),
+            attr("level", "2"),
+            attr("raw_title", "Foo Bar Barosa"),
+            Event::Text("Foo Bar Barosa\n".to_string()),
+            Event::EndNode(NodeKind::Custom("DocHeading".to_string())),
+            Event::EndNode(NodeKind::Section),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let headings = collect_headings(&events);
+        assert_eq!(headings.len(), 1);
+        // §9.5: the surrounding section owns the id.
+        assert_eq!(headings[0].id, "foo-bar");
+        assert_eq!(headings[0].text, "Foo Bar Barosa");
+        assert_eq!(headings[0].level, 2);
+    }
+
+    /// Without a section the component's own auto-slug is the id (§6.2).
+    #[test]
+    fn custom_heading_without_a_section_falls_back_to_the_slug() {
+        let events = vec![
+            Event::StartNode(NodeKind::Custom("DocHeading".to_string())),
+            attr("level", "3"),
+            attr("slug", "deep-title"),
+            Event::Text("Deep Title".to_string()),
+            Event::EndNode(NodeKind::Custom("DocHeading".to_string())),
+        ];
+
+        let headings = collect_headings(&events);
+        assert_eq!(headings.len(), 1);
+        assert_eq!(headings[0].id, "deep-title");
+        assert_eq!(headings[0].text, "Deep Title");
+        assert_eq!(headings[0].level, 3);
+    }
+
+    /// §13 warnings are pushed as `Diagnostic` events immediately after
+    /// `StartNode` and *before* the attribute run, so the look-ahead that
+    /// recognises the component must skip them.
+    #[test]
+    fn detects_a_custom_heading_component_after_diagnostics() {
+        let events = vec![
+            Event::StartNode(NodeKind::Custom("DocHeading".to_string())),
+            Event::Diagnostic {
+                severity: pendon_core::Severity::Warning,
+                message: "[heading] extras `#id` replaced the `[slug]` head (§6.2)".to_string(),
+                span: None,
+            },
+            attr("level", "4"),
+            Event::Text("Warned".to_string()),
+            Event::EndNode(NodeKind::Custom("DocHeading".to_string())),
+        ];
+
+        let headings = collect_headings(&events);
+        assert_eq!(headings.len(), 1);
+        assert_eq!(headings[0].level, 4);
+    }
+
+    /// A custom component without a `level` (a directive, table cell, …) is not
+    /// a heading and must never be extracted.
+    #[test]
+    fn ignores_non_heading_components() {
+        let events = vec![
+            Event::StartNode(NodeKind::Custom("Note".to_string())),
+            attr("name", "Note"),
+            Event::Text("hello".to_string()),
+            Event::EndNode(NodeKind::Custom("Note".to_string())),
+        ];
+
+        assert!(collect_headings(&events).is_empty());
+    }
+
+    /// The scan is depth-tracked, so inline children re-lexed inside the
+    /// component are traversed without ending the heading early.
+    #[test]
+    fn custom_heading_collects_text_across_inline_children() {
+        let events = vec![
+            Event::StartNode(NodeKind::Custom("DocHeading".to_string())),
+            attr("level", "2"),
+            Event::Text("Hello ".to_string()),
+            Event::StartNode(NodeKind::Strong),
+            Event::Text("World".to_string()),
+            Event::EndNode(NodeKind::Strong),
+            Event::EndNode(NodeKind::Custom("DocHeading".to_string())),
+        ];
+
+        let headings = collect_headings(&events);
+        assert_eq!(headings.len(), 1);
+        assert_eq!(headings[0].text, "Hello World");
     }
 }

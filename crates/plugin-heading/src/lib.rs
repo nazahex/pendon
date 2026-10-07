@@ -1,7 +1,5 @@
 use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::{
-    parse_property_block, scan_extras_chars, to_attributes, ExtrasAttr, ExtrasOptions,
-};
+use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr, ExtrasOptions};
 use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -25,10 +23,15 @@ impl Default for NumberStyle {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct HeadingOptions {
     pub auto_number: bool,
+    #[serde(default)]
     pub number_style: NumberStyle,
     /// §11 component set of the `heading` layer: typed entries plus at most one
     /// default, selected per instance by the `@@type{…}` marker (rule 3).
     pub custom: ComponentSet<HeadingCustomNode>,
+    /// §9.5: when `plugin-section` owns the outline the heading must not emit an
+    /// `id` — or its fallback `slug` — because the id transfers to the section.
+    #[serde(default)]
+    pub section_owns_id: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -89,8 +92,8 @@ impl HeadingCounters {
 
 // --- Extra Attributes Parsing ---
 
-/// The heading head: `[slug]`, `("title")`, the pre-§11 `[.class]{props}`
-/// fragments and the §11 `@@type{…}` extras (§7.4).
+/// The heading head: `[slug]`, `("title")` and the §11 `{…}` / `@@type{…}`
+/// extras (§7.4).
 struct HeadingHead {
     /// Element id. `#id` > `[slug]` > extras slug (§6.2).
     id: Option<String>,
@@ -108,59 +111,37 @@ struct HeadingHead {
 
 /// Parses the optional head of a heading.
 ///
-/// Input examples: `[foo][.class]{ qux: "rox" } Foo`, `[foo]("Title") Foo`, and
-/// either followed by `@@heading{…}`. Returns the id, the attributes, the flags
-/// and how much of the input the head consumed.
+/// §4.1: the head touches the `#` run, so nothing is trimmed from the front.
+/// The whitespace that separates the head from the heading text belongs to the
+/// head and never becomes part of the title (§7.4).
+///
+/// Input examples: `[foo]("Title")@@heading{…} Foo` and `@@heading{…} Foo`.
+/// The retired pre-§11 forms (`[.class]`, `{key: value}`) are literal text
+/// (§14). Returns the id, the attributes, the flags and how much of the input
+/// the head consumed.
 fn parse_heading_head(raw_text: &str) -> HeadingHead {
     let chars: Vec<char> = raw_text.chars().collect();
     let mut cursor = 0;
     let mut head_id: Option<String> = None;
-    let mut classes: Vec<String> = Vec::new();
     let mut attrs = BTreeMap::new();
     let mut warnings: Vec<String> = Vec::new();
 
-    // Skip leading whitespace
-    while cursor < chars.len() && chars[cursor].is_whitespace() {
-        cursor += 1;
-    }
-
-    // Parse first bracket group: [id]
-    if cursor < chars.len() && chars[cursor] == '[' {
+    // §7.4: an optional `[slug]` head, adjacent to the `#` run.
+    if chars.get(cursor) == Some(&'[') {
         if let Some(close) = find_char(&chars, cursor + 1, ']') {
             let content: String = chars[cursor + 1..close].iter().collect();
             let trimmed = content.trim();
-            // Only treat as ID if it doesn't start with '.' (which is a class-only bracket)
-            if !trimmed.is_empty() && !trimmed.starts_with('.') {
+            // A `.`-bracket (or `#`-bracket) is not a slug head: literal text.
+            if !trimmed.is_empty() && !trimmed.starts_with('.') && !trimmed.starts_with('#') {
                 head_id = Some(trimmed.to_string());
-            } else if trimmed.starts_with('.') {
-                // First bracket is actually a class group
-                parse_class_tokens(trimmed, &mut classes);
+                cursor = close + 1;
             }
-            cursor = close + 1;
         }
     }
 
-    // Parse subsequent bracket groups: [.class,.extra]
-    while cursor < chars.len() {
-        // Skip whitespace between bracket groups
-        while cursor < chars.len() && chars[cursor].is_whitespace() {
-            cursor += 1;
-        }
-        if cursor >= chars.len() || chars[cursor] != '[' {
-            break;
-        }
-        if let Some(close) = find_char(&chars, cursor + 1, ']') {
-            let content: String = chars[cursor + 1..close].iter().collect();
-            parse_class_tokens(content.trim(), &mut classes);
-            cursor = close + 1;
-        } else {
-            break;
-        }
-    }
-
-    // §7.4: an optional `("title")` head. It is a separate attribute, never the
-    // heading text.
-    if cursor < chars.len() && chars[cursor] == '(' {
+    // §7.4: an optional `("title")` head, adjacent to the slug. It is a
+    // separate attribute, never the heading text.
+    if chars.get(cursor) == Some(&'(') {
         if let Some(close) = find_matching_paren(&chars, cursor) {
             let content: String = chars[cursor + 1..close].iter().collect();
             let title = content.trim().trim_matches('"').trim_matches('\'');
@@ -171,38 +152,8 @@ fn parse_heading_head(raw_text: &str) -> HeadingHead {
         }
     }
 
-    // Parse curly brace attributes: { qux: "rox", nor: 12 }
-    // Skip whitespace before brace
-    while cursor < chars.len() && chars[cursor].is_whitespace() {
-        cursor += 1;
-    }
-    if cursor < chars.len() && chars[cursor] == '{' {
-        if let Some(close) = find_matching_brace(&chars, cursor) {
-            let content: String = chars[cursor + 1..close].iter().collect();
-            attrs.extend(
-                parse_property_block(&format!("{{{content}}}"))
-                    .map(|(parsed, _)| parsed.properties)
-                    .unwrap_or_default(),
-            );
-            cursor = close + 1;
-            // The whitespace separating the attribute block from the heading
-            // text belongs to the block, not to the title (otherwise the
-            // auto-number prefix produces a double space).
-            while cursor < chars.len() && matches!(chars[cursor], ' ' | '\t') {
-                cursor += 1;
-            }
-            warnings.push(
-                "the `{key: value}` head block is deprecated; use `@@type{…}` (§14)".to_string(),
-            );
-        }
-    }
-
-    // Merge classes into attrs under "class" key
-    if !classes.is_empty() {
-        attrs.insert("class".to_string(), classes.join(" "));
-    }
-
-    // §7.4: an adjacent `@@type{…}` head attaches to the heading element.
+    // §7.4/§11: an adjacent `{…}` / `@@type{…}` head attaches to the heading.
+    // The retired `{key: value}` block is literal text (§14).
     let mut flags = Vec::new();
     let mut type_marker = None;
     if let Some((head, next)) = scan_extras_chars(&chars, cursor) {
@@ -266,10 +217,12 @@ fn parse_heading_head(raw_text: &str) -> HeadingHead {
                 }
             }
         }
-        // The whitespace after the head must not become part of the title.
-        while cursor < chars.len() && matches!(chars[cursor], ' ' | '\t') {
-            cursor += 1;
-        }
+    }
+
+    // §7.4: the whitespace that separates the head from the heading text
+    // belongs to the head, so it never becomes part of the title.
+    while matches!(chars.get(cursor), Some(' ' | '\t')) {
+        cursor += 1;
     }
 
     // §11 rule 3: the marker is the routing key of the instance; it is carried
@@ -307,37 +260,12 @@ fn find_matching_paren(chars: &[char], start: usize) -> Option<usize> {
     None
 }
 
-/// Splits comma-separated class tokens, stripping leading dots.
-fn parse_class_tokens(input: &str, out: &mut Vec<String>) {
-    for part in input.split(',') {
-        let token = part.trim().trim_start_matches('.');
-        if !token.is_empty() {
-            out.push(token.to_string());
-        }
-    }
-}
-
 fn find_char(chars: &[char], mut index: usize, wanted: char) -> Option<usize> {
     while index < chars.len() {
         if chars[index] == wanted {
             return Some(index);
         }
         index += 1;
-    }
-    None
-}
-
-fn find_matching_brace(chars: &[char], start: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    let mut i = start;
-    while i < chars.len() {
-        match chars[i] {
-            '{' => depth += 1,
-            '}' if depth == 1 => return Some(i),
-            '}' => depth -= 1,
-            _ => {}
-        }
-        i += 1;
     }
     None
 }
@@ -453,23 +381,26 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
                     value: heading_level.to_string(),
                 });
 
-                // Emit id: explicit custom_id or auto-generated slug
-                if let Some(id) = &custom_id {
-                    out.push(Event::Attribute {
-                        name: "id".to_string(),
-                        value: id.clone(),
-                    });
-                } else {
-                    let clean_text = raw_text[consumed_len..].trim();
-                    let slug = slug_regex
-                        .replace_all(&clean_text.to_lowercase(), "-")
-                        .trim_matches('-')
-                        .to_string();
-                    if !slug.is_empty() {
+                // Emit id: explicit custom_id or auto-generated slug. §9.5: when
+                // the section owns the ids, neither is emitted.
+                if !options.section_owns_id {
+                    if let Some(id) = &custom_id {
                         out.push(Event::Attribute {
-                            name: "slug".to_string(),
-                            value: slug,
+                            name: "id".to_string(),
+                            value: id.clone(),
                         });
+                    } else {
+                        let clean_text = raw_text[consumed_len..].trim();
+                        let slug = slug_regex
+                            .replace_all(&clean_text.to_lowercase(), "-")
+                            .trim_matches('-')
+                            .to_string();
+                        if !slug.is_empty() {
+                            out.push(Event::Attribute {
+                                name: "slug".to_string(),
+                                value: slug,
+                            });
+                        }
                     }
                 }
 
@@ -501,10 +432,12 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
                     value: heading_level.to_string(),
                 });
                 if let Some(id) = custom_id {
-                    out.push(Event::Attribute {
-                        name: "id".to_string(),
-                        value: id,
-                    });
+                    if !options.section_owns_id {
+                        out.push(Event::Attribute {
+                            name: "id".to_string(),
+                            value: id,
+                        });
+                    }
                 }
                 for (key, value) in &extra_attrs {
                     out.push(Event::Attribute {
@@ -593,18 +526,40 @@ mod tests {
     }
 
     #[test]
-    fn parses_slug_class_and_props() {
+    fn parses_the_slug_head_adjacent_to_the_marker() {
+        let text = "[foo-bar] Foo";
+        let head = parse_heading_head(text);
+        assert_eq!(head.id.as_deref(), Some("foo-bar"));
+        assert_eq!(consumed_len(text, &head), "[foo-bar] ".len());
+        assert!(head.warnings.is_empty(), "{:?}", head.warnings);
+    }
+
+    /// §14: the retired `[.class]` / `{key: value}` forms are literal text.
+    #[test]
+    fn the_retired_legacy_forms_are_literal_text() {
         let text = "[foo-bar][.extra]{ qux: \"anu\" } Foo";
         let head = parse_heading_head(text);
         assert_eq!(head.id.as_deref(), Some("foo-bar"));
-        assert_eq!(head.attrs.get("class").map(String::as_str), Some("extra"));
-        assert_eq!(head.attrs.get("qux").map(String::as_str), Some("anu"));
-        assert_eq!(
-            consumed_len(text, &head),
-            "[foo-bar][.extra]{ qux: \"anu\" } ".len()
-        );
-        // The legacy block is reported, not silently accepted (§14).
-        assert!(head.warnings.iter().any(|w| w.contains("deprecated")));
+        assert_eq!(head.attrs.get("class"), None);
+        assert_eq!(head.attrs.get("qux"), None);
+        assert!(head.warnings.is_empty(), "{:?}", head.warnings);
+        assert_eq!(consumed_len(text, &head), "[foo-bar]".len());
+
+        // A `.`-bracket alone is not a head either.
+        let head = parse_heading_head("[.extra] Foo");
+        assert_eq!(head.id, None);
+        assert_eq!(head.consumed, 0);
+    }
+
+    /// §4.1: `@@type {…}` is not a head, and neither is a spaced head.
+    #[test]
+    fn a_spaced_head_is_literal_text() {
+        let text = "@@heading {.c} Title";
+        let head = parse_heading_head(text);
+        assert!(head.attrs.is_empty());
+        assert_eq!(head.flags, Vec::<String>::new());
+        // Only the separator space is consumed.
+        assert_eq!(consumed_len(text, &head), 0);
     }
 
     #[test]
@@ -628,12 +583,10 @@ mod tests {
     }
 
     #[test]
-    fn extras_class_accumulates_after_the_head_classes() {
-        let head = parse_heading_head("[slug][.head]@@heading{.extra}");
-        assert_eq!(
-            head.attrs.get("class").map(String::as_str),
-            Some("head extra")
-        );
+    fn a_bare_head_attaches_like_the_prefixed_one() {
+        let head = parse_heading_head("[slug]{.extra}");
+        assert_eq!(head.id.as_deref(), Some("slug"));
+        assert_eq!(head.attrs.get("class").map(String::as_str), Some("extra"));
     }
 
     #[test]

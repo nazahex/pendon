@@ -12,11 +12,21 @@ Builds a nested outline of document headings and injects it as a `Custom("Headin
 ## ID and text rules
 
 - Preferred ID sources (first match wins):
-  1. Surrounding `Section` node `id` (works best when `sectionize` runs earlier).
+  1. Surrounding `Section` node `id` (works best when `section` runs earlier).
   2. Explicit heading `id` attribute.
   3. Inline `{#custom}` marker inside heading text.
-  4. Slugified heading text.
+  4. The heading component's auto-generated `slug` attribute.
+  5. Slugified heading text.
 - Heading text is stripped of inline `{#id}` markers before serialization.
+
+## Custom heading components
+
+`plugin-heading` swaps `NodeKind::Heading` for `NodeKind::Custom(name)` when a
+`[task.heading.custom]` template is configured (§11 rule 3), so those components
+are recognised as headings too — identified by their `level` attribute, which
+heading emits and no other `Custom` node does. §13 `Diagnostic` warnings are
+skipped while looking ahead for it. Without this, a configured custom template
+(e.g. `sandbox/heading`'s `<DocHeading>`) produced no `Headings` node at all.
 
 ## Placement
 
@@ -28,7 +38,7 @@ Builds a nested outline of document headings and injects it as a `Custom("Headin
 Recommended pipeline:
 
 ```bash
-pendon --plugin micromatter,markdown,sectionize,extract-heading --format json --input ./doc.md
+pendon --plugin micromatter,section,markdown,extract-heading --format json --input ./doc.md
 ```
 
 Library:
