@@ -3,10 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::{
-    legacy_extras_warning, parse_attrs, scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead,
-    ExtrasOptions,
-};
+use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead, ExtrasOptions};
 use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde_json::{Map, Value};
 
@@ -42,14 +39,14 @@ impl Default for CiteOptions {
     }
 }
 
-/// Extra attributes parsed from the `[.class,#id]{key: val}` block (§14) and the
-/// §7.3 `@@type{…}` extras head after cite args.
+/// Extra attributes parsed from the §7.3 `{…}` / `@@type{…}` extras head after
+/// the cite args. The retired `[.class,#id]{key: val}` block is literal text
+/// (§14).
 #[derive(Debug, Clone, Default)]
 struct CiteExtraAttrs {
     classes: Vec<String>,
     id: Option<String>,
     data: Vec<(String, String)>,
-    styles: Vec<(String, String)>,
     /// The `style` value the extras head merged from `--var` items (§6.3).
     extras_style: Option<String>,
     /// Bare flags of the extras head (§6.3), emitted as bare attributes.
@@ -58,8 +55,6 @@ struct CiteExtraAttrs {
     warnings: Vec<String>,
     /// The `@@type{…}` marker, when present: the §11 routing key (rule 3).
     type_marker: Option<String>,
-    /// Whether the deprecated block was read and must be reported (§14).
-    legacy: bool,
 }
 
 impl CiteExtraAttrs {
@@ -68,7 +63,7 @@ impl CiteExtraAttrs {
         match key {
             "id" => self.id.is_some(),
             "class" => !self.classes.is_empty(),
-            "style" => self.extras_style.is_some() || !self.styles.is_empty(),
+            "style" => self.extras_style.is_some(),
             _ => self.data.iter().any(|(name, _)| name == key),
         }
     }
@@ -286,10 +281,6 @@ fn emit_text(text: &str, ctx: &mut CitationContext, out: &mut Vec<Event>) {
             if let Some((end, id, props, mut extra)) = parse_citation(&chars, cursor) {
                 flush_text(&mut normal, out);
 
-                // §14: the deprecated block is reported, not applied silently.
-                if extra.legacy {
-                    out.push(legacy_extras_warning("cite"));
-                }
                 // §7.3/§6.2: the cite args are the construct head and win over
                 // a same-named extras prop.
                 let head_keys: Vec<String> = props.keys().cloned().collect();
@@ -484,18 +475,11 @@ fn emit_extra_attrs(out: &mut Vec<Event>, extra: &CiteExtraAttrs) {
     }
 }
 
-/// The `style` value of a citation: the `--var` properties of the deprecated
-/// block, followed by the `style` value the extras head merged (§6.3).
+/// The `style` value of a citation: the `--var` items and the `style:` prop the
+/// extras head merged (§6.3).
 fn cite_style(extra: &CiteExtraAttrs) -> String {
-    let mut styles: String = extra
-        .styles
-        .iter()
-        .map(|(k, v)| format!("{}:{};", k, v))
-        .collect();
+    let mut styles = String::new();
     if let Some(value) = &extra.extras_style {
-        if !styles.is_empty() {
-            styles.push(' ');
-        }
         styles.push_str(value);
         if !styles.ends_with(';') {
             styles.push(';');
@@ -506,89 +490,84 @@ fn cite_style(extra: &CiteExtraAttrs) -> String {
 
 // --- Parsing Helpers ---
 
-/// Parses [^^]("id", "loc")[.class,#id]{key: val} syntax.
+/// Parses `[^^](ref "loc")` (§7.3) plus an adjacent extras head.
+///
+/// The reference is an **unquoted** token and the location is an optional
+/// **quoted** string. Everything else stays literal text: a quoted reference
+/// (`[^^](book)`), the retired `("ref", "loc")` form, a `loc=` prop and an
+/// empty `[^^]()` are not citations.
+///
 /// Returns (total_end_position, cite_id, cite_props, extra_attrs).
 fn parse_citation(
     chars: &[char],
     start: usize,
 ) -> Option<(usize, String, BTreeMap<String, String>, CiteExtraAttrs)> {
-    // Parse the cite arguments: [^^]("id", "loc")
-    let mut end = start + 5;
-    let mut quote = false;
-    while end < chars.len() {
-        match chars[end] {
-            '"' => quote = !quote,
-            ')' if !quote => break,
-            _ => {}
+    // `[^^](` is five characters.
+    let mut cursor = start + 5;
+
+    while matches!(chars.get(cursor), Some(ch) if ch.is_whitespace()) {
+        cursor += 1;
+    }
+    let reference_start = cursor;
+    while let Some(&ch) = chars.get(cursor) {
+        if ch == ')' || ch.is_whitespace() {
+            break;
         }
-        end += 1;
+        if ch == '"' || ch == ',' {
+            return None;
+        }
+        cursor += 1;
     }
-    if end >= chars.len() {
+    if cursor == reference_start {
         return None;
     }
-    let args = split_args(&chars[start + 5..end]);
-    if args.is_empty() {
-        return None;
-    }
-    let id = parse_value(args[0].trim())?;
-    let mut positional = 0usize;
+    let id: String = chars[reference_start..cursor].iter().collect();
     let mut props = BTreeMap::new();
-    for raw in args.into_iter().skip(1) {
-        let part = raw.trim();
-        if let Some(eq) = part.find('=') {
-            let key = part[..eq].trim();
-            if key.is_empty() {
-                return None;
+
+    // An optional quoted location, separated from the reference by whitespace.
+    let mut after_space = cursor;
+    while matches!(chars.get(after_space), Some(ch) if ch.is_whitespace()) {
+        after_space += 1;
+    }
+    if after_space > cursor {
+        if chars.get(after_space) != Some(&'"') {
+            return None;
+        }
+        let mut quote_end = after_space + 1;
+        while let Some(&ch) = chars.get(quote_end) {
+            if ch == '"' {
+                break;
             }
-            props.insert(key.to_string(), parse_value(part[eq + 1..].trim())?);
-        } else {
-            if positional == 0 {
-                props.insert("loc".to_string(), parse_value(part)?);
-                positional += 1;
-            } else {
-                return None;
-            }
+            quote_end += 1;
+        }
+        if chars.get(quote_end) != Some(&'"') {
+            return None;
+        }
+        let loc: String = chars[after_space + 1..quote_end].iter().collect();
+        props.insert("loc".to_string(), loc);
+        cursor = quote_end + 1;
+        while matches!(chars.get(cursor), Some(ch) if ch.is_whitespace()) {
+            cursor += 1;
         }
     }
 
-    // Move past the closing ')'
-    let mut cursor = end + 1;
+    if chars.get(cursor) != Some(&')') {
+        return None;
+    }
+    cursor += 1;
 
-    // Parse optional extra attrs: [.class,#id]{key: val}
     let extra = parse_cite_extra_attrs(chars, &mut cursor);
-
     Some((cursor, id, props, extra))
 }
 
-/// Parses the blocks attached to a citation: `[.class,#id]{key: val}` and the
-/// adjacent §7.3 `@@type{…}` extras head. Both attach to the citation node; the
-/// construct head (the citation args) wins.
+/// Parses the blocks attached to a citation: the adjacent §7.3 `{…}` /
+/// `@@type{…}` extras head. It attaches to the citation node; the construct head
+/// (the citation args) wins (§6.2). The retired `[.class,#id]{key: val}` block is
+/// literal text (§14).
 fn parse_cite_extra_attrs(chars: &[char], cursor: &mut usize) -> CiteExtraAttrs {
     let mut extra = CiteExtraAttrs::default();
-    let source: String = chars[*cursor..].iter().collect();
-    let starts_with_valid_block = source.starts_with('{')
-        || (source.starts_with('[')
-            && source
-                .chars()
-                .nth(1)
-                .is_some_and(|character| character == '.' || character == '#'));
-    if starts_with_valid_block {
-        let parsed = parse_attrs(&source);
-        let consumed = source.len().saturating_sub(parsed.rest.len());
-        *cursor += source[..consumed].chars().count();
-        extra.id = parsed.attrs.id;
-        extra.classes = parsed.attrs.classes;
-        extra.legacy = parsed.had_attrs;
-        for (key, value) in parsed.attrs.properties {
-            if key.starts_with("--") {
-                extra.styles.push((key, value));
-            } else {
-                extra.data.push((key, value));
-            }
-        }
-    }
 
-    // §7.3: the extras head must be adjacent (`[^^]("book")@@cite{…}`).
+    // §7.3/§4.1: the extras head must be adjacent (`[^^](book)@@cite{…}`).
     let rest: Vec<char> = chars[*cursor..].to_vec();
     if let Some((head, next)) = scan_extras_chars(&rest, 0) {
         *cursor += next;
@@ -673,35 +652,6 @@ fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead) {
         if !extra.has_key("type") {
             extra.data.push(("type".to_string(), marker.clone()));
         }
-    }
-}
-
-fn split_args(chars: &[char]) -> Vec<String> {
-    let mut result = Vec::new();
-    let mut start = 0usize;
-    let mut quote = false;
-    for (index, ch) in chars.iter().enumerate() {
-        match ch {
-            '"' => quote = !quote,
-            ',' if !quote => {
-                result.push(chars[start..index].iter().collect());
-                start = index + 1;
-            }
-            _ => {}
-        }
-    }
-    result.push(chars[start..].iter().collect());
-    result
-}
-
-fn parse_value(value: &str) -> Option<String> {
-    let value = value.trim();
-    if value.len() >= 2 && value.starts_with('"') && value.ends_with('"') {
-        serde_json::from_str::<String>(value).ok()
-    } else if !value.is_empty() {
-        Some(value.to_string())
-    } else {
-        None
     }
 }
 
@@ -866,9 +816,7 @@ mod tests {
             },
             Event::EndNode(NodeKind::Frontmatter),
             Event::StartNode(NodeKind::Paragraph),
-            Event::Text(
-                r#"A [^^]("book", "p. 1") B [^^]("book", "p. 1") C [^^]("book", "p. 2")."#.into(),
-            ),
+            Event::Text(r#"A [^^](book "p. 1") B [^^](book "p. 1") C [^^](book "p. 2")."#.into()),
             Event::EndNode(NodeKind::Paragraph),
             Event::EndNode(NodeKind::Document),
         ]
@@ -900,7 +848,7 @@ mod tests {
         let events_a = vec![
             Event::StartNode(NodeKind::Document),
             Event::StartNode(NodeKind::Paragraph),
-            Event::Text(r#"[^^]("book", "p. 1")"#.into()),
+            Event::Text(r#"[^^](book "p. 1")"#.into()),
             Event::EndNode(NodeKind::Paragraph),
             Event::EndNode(NodeKind::Document),
         ];
@@ -909,7 +857,7 @@ mod tests {
         let events_b = vec![
             Event::StartNode(NodeKind::Document),
             Event::StartNode(NodeKind::Paragraph),
-            Event::Text(r#"[^^]("book", "p. 2")"#.into()),
+            Event::Text(r#"[^^](book "p. 2")"#.into()),
             Event::EndNode(NodeKind::Paragraph),
             Event::EndNode(NodeKind::Document),
         ];
@@ -941,7 +889,7 @@ mod tests {
     #[test]
     fn parses_extra_attrs_after_cite_args() {
         let chars: Vec<char> =
-            r#"[^^]("book", "p. 1")[.highlight,.urgent,#my-cite]{ foo: "bar", --color: "red" }"#
+            r#"[^^](book "p. 1"){.highlight, .urgent, #my-cite, foo: "bar", --color: "red"}"#
                 .chars()
                 .collect();
         let (end, id, props, extra) = parse_citation(&chars, 0).unwrap();
@@ -950,11 +898,43 @@ mod tests {
         assert_eq!(extra.classes, vec!["highlight", "urgent"]);
         assert_eq!(extra.id, Some("my-cite".to_string()));
         assert_eq!(extra.data, vec![("foo".to_string(), "bar".to_string())]);
-        assert_eq!(
-            extra.styles,
-            vec![("--color".to_string(), "red".to_string())]
-        );
+        assert_eq!(extra.extras_style.as_deref(), Some("--color: red"));
         assert!(end > 0);
+    }
+
+    /// §7.3/D5: the only accepted forms are an unquoted ref and an optional
+    /// quoted loc. Everything else is literal text.
+    #[test]
+    fn the_retired_cite_forms_are_literal_text() {
+        for source in [
+            concat!("[^^](", "\"book\"", ")"),
+            concat!("[^^](book, ", "\"p. 1\"", ")"),
+            concat!("[^^](book, loc=", "\"p. 1\"", ")"),
+            "[^^]()",
+        ] {
+            let chars: Vec<char> = source.chars().collect();
+            assert!(
+                parse_citation(&chars, 0).is_none(),
+                "{source} must stay literal"
+            );
+        }
+
+        // …and none of them renders a citation.
+        let result = process(
+            &events_with_text(concat!(
+                "[^^](",
+                "\"book\"",
+                ") and [^^](book, ",
+                "\"p. 1\"",
+                ") and [^^]()"
+            )),
+            &CiteOptions::default(),
+        );
+        assert!(html_text(&result).is_empty(), "{}", html_text(&result));
+        assert!(result.iter().any(|event| matches!(
+            event,
+            Event::Text(text) if text.contains("book")
+        )));
     }
 
     #[test]
@@ -976,7 +956,7 @@ mod tests {
             },
             Event::EndNode(NodeKind::Frontmatter),
             Event::StartNode(NodeKind::Paragraph),
-            Event::Text(r#"[^^]("book")[.hero]{ foo: "bar" }"#.into()),
+            Event::Text(r#"[^^](book){.hero, foo: "bar"}"#.into()),
             Event::EndNode(NodeKind::Paragraph),
             Event::EndNode(NodeKind::Document),
         ];
@@ -1022,7 +1002,7 @@ mod tests {
     #[test]
     fn parses_the_extras_head_after_cite_args() {
         let chars: Vec<char> =
-            r#"[^^]("book")@@cite{.highlight, #short, note: "x", --color: "red"} tail"#
+            r#"[^^](book)@@cite{.highlight, #short, note: "x", --color: "red"} tail"#
                 .chars()
                 .collect();
         let (end, id, props, extra) = parse_citation(&chars, 0).unwrap();
@@ -1040,13 +1020,12 @@ mod tests {
             ]
         );
         assert_eq!(extra.extras_style.as_deref(), Some("--color: red"));
-        assert!(!extra.legacy);
 
         // Only the citation and its head are consumed, the trailing text stays.
         let consumed: String = chars[..end].iter().collect();
         assert_eq!(
             consumed,
-            r#"[^^]("book")@@cite{.highlight, #short, note: "x", --color: "red"}"#
+            r#"[^^](book)@@cite{.highlight, #short, note: "x", --color: "red"}"#
         );
     }
 
@@ -1061,7 +1040,7 @@ mod tests {
             })]);
 
         let result = process(
-            &events_with_text(r#"[^^]("book")@@cite{.hero, citeId: "short", isFoo}"#),
+            &events_with_text(r#"[^^](book)@@cite{.hero, citeId: "short", isFoo}"#),
             &options,
         );
 
@@ -1087,7 +1066,7 @@ mod tests {
     #[test]
     fn cite_args_win_over_extras_props() {
         let result = process(
-            &events_with_text(r#"[^^]("book", "p. 1")@@cite{loc: "p. 9", note: "n"}"#),
+            &events_with_text(r#"[^^](book "p. 1")@@cite{loc: "p. 9", note: "n"}"#),
             &CiteOptions::default(),
         );
 
@@ -1104,7 +1083,7 @@ mod tests {
     #[test]
     fn extras_style_and_flags_reach_the_markup() {
         let result = process(
-            &events_with_text(r#"[^^]("book")@@cite{.hero, --color: "red", isFoo}"#),
+            &events_with_text(r#"[^^](book)@@cite{.hero, --color: "red", isFoo}"#),
             &CiteOptions::default(),
         );
 
@@ -1117,23 +1096,29 @@ mod tests {
     #[test]
     fn cites_extras_id_lands_in_the_cite_id_slot() {
         let result = process(
-            &events_with_text(r#"[^^]("book")@@cite{`short-slug`}"#),
+            &events_with_text(r#"[^^](book)@@cite{`short-slug`}"#),
             &CiteOptions::default(),
         );
         // §6.2: `#id` > extras `slug`.
         assert!(html_text(&result).contains("data-cite-id=\"short-slug\""));
     }
 
+    /// §14/D3: the retired `[.class,#id]{k:v}` block is literal text.
     #[test]
-    fn the_deprecated_block_is_reported() {
+    fn the_retired_block_is_literal_text() {
         let result = process(
-            &events_with_text(r#"[^^]("book")[#short]"#),
+            &events_with_text(r#"[^^](book)[#short]"#),
             &CiteOptions::default(),
         );
+        assert!(
+            html_text(&result).starts_with("<sup"),
+            "{:?}",
+            html_text(&result)
+        );
+        assert!(!html_text(&result).contains("[#short]"));
         assert!(result.iter().any(|event| matches!(
             event,
-            Event::Diagnostic { message, .. }
-                if message.contains("[cite]") && message.contains("deprecated")
+            Event::Text(text) if text.contains("[#short]")
         )));
     }
 
@@ -1156,7 +1141,7 @@ mod tests {
             },
             Event::EndNode(NodeKind::Frontmatter),
             Event::StartNode(NodeKind::Paragraph),
-            Event::Text(r#"[^^]("book")[#short]"#.into()),
+            Event::Text(r#"[^^](book){#short}"#.into()),
             Event::EndNode(NodeKind::Paragraph),
             Event::EndNode(NodeKind::Document),
         ];
