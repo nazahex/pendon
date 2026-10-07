@@ -144,13 +144,8 @@ fn emit_custom_table_inner<C, P>(
     }
 }
 
-/// The `<table>` extras: the §8 declaration line, or the pre-§8 caption line.
+/// The `<table>` extras: the §8 declaration line.
 fn table_layer_attrs(table_block: &TableBlock) -> LayerAttrs {
-    if let Some(caption) = &table_block.caption {
-        if !caption.new_form && table_block.attrs.is_empty() {
-            return caption.attrs.clone();
-        }
-    }
     table_block.attrs.clone()
 }
 

@@ -25,14 +25,8 @@ pub fn emit_table_elements<C, P>(
         &table_block.footer_rows,
     );
 
-    // §8: the declaration line carries the `<table>` extras; the pre-§8 caption
-    // form keeps putting its extras on the `<table>` (its documented shape).
-    let mut table_attrs = table_block.attrs.clone();
-    if let Some(caption) = &table_block.caption {
-        if !caption.new_form && table_attrs.is_empty() {
-            table_attrs = caption.attrs.clone();
-        }
-    }
+    // §8: the declaration line carries the `<table>` extras.
+    let table_attrs = table_block.attrs.clone();
 
     open(out, "table");
     push_common_attrs(out, &table_attrs);
@@ -41,9 +35,7 @@ pub fn emit_table_elements<C, P>(
     if let Some(caption) = &table_block.caption {
         text(out, "  ");
         open(out, "caption");
-        if caption.new_form {
-            push_common_attrs(out, &caption.attrs);
-        }
+        push_common_attrs(out, &caption.attrs);
         let rendered = render_inline_events(&caption.text, inline_pipeline, context);
         out.extend(rendered);
         close(out, "caption");

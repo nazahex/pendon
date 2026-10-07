@@ -208,10 +208,10 @@ mod tests {
         let pipeline = Pipeline::default();
         let events = paragraph_events(
             "|-[sales](\"Laporan\")@@tableX{.striped}-|\n\
-             || @@captionX{.cap} Caption ||\n\
+             ||@@captionX{.cap} Caption||\n\
              | A | B |\n\
-             | @@cellA{.v-top} :--- | :--- |\n\
-             | @@cellB{.lead} 1 | 2 |@@rowB{.info}\n\
+             | :---@@cellA{.v-top} | :--- |\n\
+             |@@cellB{.lead} 1 | 2 |@@rowB{.info}\n\
              |===|@@tfootX{.total}\n\
              | Total | > |\n",
         );
@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn cell_extras_before_a_span_marker_merge_into_the_spanned_cell() {
         let pipeline = Pipeline::default();
-        let events = paragraph_events("| A | B |\n| --- | --- |\n| 1 | @@cellA{.wide} > |\n");
+        let events = paragraph_events("| A | B |\n| --- | --- |\n| 1 |@@cellA{.wide} >|\n");
         let out = process(&events, &TableOptions::default(), &pipeline);
 
         assert!(has_attribute(&out, "colspan", "2"));
@@ -437,7 +437,7 @@ mod tests {
     /// Caption, header, body and footer all present, so every configured layer
     /// is exercised by a single input.
     const CUSTOM_TABLE_INPUT: &str =
-        "[Judul Tabel]\n| Produk | Stok |\n| --- | --- |\n| Laptop | 15 |\n|===|\n| Total | 15 |\n";
+        "|| Judul Tabel ||\n| Produk | Stok |\n| --- | --- |\n| Laptop | 15 |\n|===|\n| Total | 15 |\n";
 
     #[test]
     fn custom_node_replaces_every_table_layer() {

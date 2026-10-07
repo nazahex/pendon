@@ -1,51 +1,32 @@
 // src/attrs.rs
 use pendon_core::Event;
-use pendon_extra::{
-    parse_attrs, to_attributes, ExtraAttrs as AttrSpec, ExtrasAttr, ExtrasHead, ExtrasOptions,
-};
+use pendon_extra::{to_attributes, ExtrasAttr, ExtrasHead, ExtrasOptions};
 
 /// The attributes of one table layer (table/caption/thead/tbody/tfoot/row/cell).
 ///
-/// §8 sources them from the `@@type{…}` heads (§11) and, for compatibility, the
-/// pre-§11 `[.class,#id]{key: value}` blocks. Bare flags (§6.3) and the routing
-/// marker (§11 rule 3) have no place in [`AttrSpec`], so they travel alongside.
+/// §8 sources them from the `{…}` / `@@type{…}` extras heads (§11); the pre-§11
+/// `[.class,#id]{key: value}` blocks are retired and stay literal text (§14).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LayerSpec {
+    pub id: Option<String>,
+    pub classes: Vec<String>,
+    pub properties: Vec<(String, String)>,
+}
+
+/// One table layer's extras: the values above, plus the §6.3 bare flags and the
+/// §11 routing marker.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LayerAttrs {
-    pub attrs: AttrSpec,
+    pub attrs: LayerSpec,
     /// Bare flags of the extras head, emitted as bare attributes (§6.3).
     pub flags: Vec<String>,
-    /// The `@@type{…}` marker: the §11 routing key of this layer instance.
+    /// The `type` marker: the §11 routing key of this layer instance.
     pub type_marker: Option<String>,
-}
-
-impl LayerAttrs {
-    pub fn is_empty(&self) -> bool {
-        self.attrs.id.is_none()
-            && self.attrs.classes.is_empty()
-            && self.attrs.properties.is_empty()
-            && self.flags.is_empty()
-    }
-}
-
-/// Parses the pre-§11 `[.class,#id]{key: value}` suffix (§14) and returns the
-/// attributes plus the unconsumed text.
-pub fn parse_attr_block(input: &str) -> (AttrSpec, &str) {
-    let parsed = parse_attrs(input);
-    (parsed.attrs, parsed.rest)
-}
-
-pub fn attr_block(input: &str) -> LayerAttrs {
-    let (attrs, _) = parse_attr_block(input);
-    LayerAttrs {
-        attrs,
-        flags: Vec::new(),
-        type_marker: None,
-    }
 }
 
 /// Maps a §11 extras head onto the layer's attributes (§6).
 ///
-/// `class` accumulates head-first (§6.4), `#id`/`slug` fill the element id
+/// `class` accumulates (§6.4), `#id`/`slug` fill the element id
 /// (`#id` > slug, §6.2), `--var` items merge into `style` (§6.3) and bare flags
 /// stay bare attributes. The marker is carried as a `type` property (first) so
 /// both renderers see it; an explicit `type:` prop keeps its own value.

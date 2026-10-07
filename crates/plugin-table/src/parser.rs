@@ -1,4 +1,4 @@
-use crate::attrs::{attr_block, extras_to_layer, LayerAttrs};
+use crate::attrs::{extras_to_layer, LayerAttrs};
 use pendon_core::{Event, NodeKind};
 use pendon_extra::scan_extras_chars;
 
@@ -23,10 +23,6 @@ pub struct TableBlock {
 pub struct CaptionSpec {
     pub text: String,
     pub attrs: LayerAttrs,
-    /// `true` for the §8 `|| … ||` form (its extras belong to `<caption>`), and
-    /// `false` for the pre-§8 `[…]` form (whose extras historically configure
-    /// the `<table>` itself).
-    pub new_form: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -177,115 +173,48 @@ fn parse_table_from_lines(lines: &[&str]) -> Option<TableBlock> {
     })
 }
 
-/// Parses the caption line: the §8 `|| extras? content ||` form, or the
-/// pre-§8 `[content][.class,#id]{key: value}` form.
+/// Parses the caption line: the §8 `|| extras? content ||` form.
 ///
 /// Returns the caption and how many lines it consumed (0 when the line is not a
-/// caption).
+/// caption). The retired pre-§8 `[content][.class,#id]{k:v}` form is literal
+/// text (§14), so only `||…||` is a caption.
 fn parse_caption_line(line: &str) -> Option<(CaptionSpec, usize)> {
     let trimmed = line.trim();
-
-    // §8: `|| @@type{…} content ||`.
-    if let Some(body) = trimmed.strip_prefix("||") {
-        let body = body.strip_suffix("||").unwrap_or(body);
-        let (attrs, _marker, content) = parse_front_extras(body);
-        return Some((
-            CaptionSpec {
-                text: content.trim().to_string(),
-                attrs,
-                new_form: true,
-            },
-            1,
-        ));
-    }
-
-    if !trimmed.starts_with('[') {
-        return None;
-    }
-
-    // Search for the matching closing bracket, taking into account nested brackets
-    let mut depth = 0;
-    let mut close_br = None;
-    let chars: Vec<char> = trimmed.chars().collect();
-
-    for (i, &ch) in chars.iter().enumerate() {
-        match ch {
-            '[' => depth += 1,
-            ']' => {
-                depth -= 1;
-                if depth == 0 {
-                    close_br = Some(i);
-                    break;
-                }
-            }
-            _ => {}
-        }
-    }
-
-    let close_br = close_br?;
-    let caption_text = &trimmed[1..close_br];
-    let rest = &trimmed[close_br + 1..];
-
-    // The line may carry a §11 extras head right after the legacy block.
-    let mut layer = LayerAttrs::default();
-    let rest = match scan_extras_chars(&rest.chars().collect::<Vec<char>>(), 0) {
-        Some((head, next)) if rest.chars().count() >= next => {
-            let bytes: usize = rest.chars().take(next).map(char::len_utf8).sum();
-            crate::attrs::merge_layer(&mut layer, &extras_to_layer(&head));
-            &rest[bytes..]
-        }
-        _ => rest,
-    };
-    let (attrs, remaining) = crate::attrs::parse_attr_block(rest);
-    if !remaining.trim().is_empty() {
-        return None;
-    }
-    layer.attrs = attrs;
-
+    let body = trimmed.strip_prefix("||")?;
+    let body = body.strip_suffix("||").unwrap_or(body);
+    // §8/D4: the extras head touches the opening `||`.
+    let (attrs, _marker, content) = parse_front_extras(body);
     Some((
         CaptionSpec {
-            text: caption_text.to_string(),
-            attrs: layer,
-            new_form: false,
+            text: content.trim().to_string(),
+            attrs,
         },
         1,
     ))
 }
 
-/// Splits a leading §11 `@@type{…}` head (or `[.c]{k:v}` block) off a cell,
-/// returning the layer attributes, the marker and the remaining content.
+/// Splits a leading extras head off a cell (§8/D4).
+///
+/// The head must touch the cell's opening `|`, so nothing is trimmed from the
+/// front: `|{.x} text` and `|@@cellB{.lead} text` are heads, `| {.x} text` is
+/// literal text. Returns the layer attributes, the marker and the remaining
+/// content.
 fn parse_front_extras(text: &str) -> (LayerAttrs, Option<String>, String) {
-    let trimmed = text.trim_start();
-    if trimmed.starts_with("@@") {
-        let chars: Vec<char> = trimmed.chars().collect();
-        if let Some((head, next)) = scan_extras_chars(&chars, 0) {
-            let bytes: usize = chars[..next].iter().map(|ch| ch.len_utf8()).sum();
-            let layer = extras_to_layer(&head);
-            let marker = layer.type_marker.clone();
-            return (layer, marker, trimmed[bytes..].to_string());
-        }
-    }
-    // Pre-§11 cell form: a leading `[.class,#id]{k:v}` block.
-    if trimmed.starts_with('[')
-        && trimmed
-            .chars()
-            .nth(1)
-            .is_some_and(|ch| ch == '.' || ch == '#')
-    {
-        let (attrs, rest) = crate::attrs::parse_attr_block(trimmed);
-        if attrs.id.is_some() || !attrs.classes.is_empty() || !attrs.properties.is_empty() {
-            let consumed = trimmed.len().saturating_sub(rest.len());
-            return (attr_block(&trimmed[..consumed]), None, rest.to_string());
-        }
+    let chars: Vec<char> = text.chars().collect();
+    if let Some((head, next)) = scan_extras_chars(&chars, 0) {
+        let bytes: usize = chars[..next].iter().map(|ch| ch.len_utf8()).sum();
+        let layer = extras_to_layer(&head);
+        let marker = layer.type_marker.clone();
+        return (layer, marker, text[bytes..].to_string());
     }
     (LayerAttrs::default(), None, text.to_string())
 }
 
-/// Splits the trailing `@@type{…}` / `[.c,#id]{k:v}` block off a table line.
+/// Splits the trailing extras head off a table line (§8/D4).
 ///
-/// The block must sit **after** the last `|` of the line and be the only thing
-/// there (`| a | b |@@rowB{.x}`), so cell content ending in braces is untouched.
-/// Returns the line without the block and the parsed layer attributes.
+/// The head must sit **after** the last `|` of the line and be the only thing
+/// there (`| a | b |{.row}`), so cell content ending in braces is untouched.
+/// Returns the line without the head and the parsed layer attributes.
 fn split_trailing_extras(line: &str) -> (&str, Option<LayerAttrs>) {
     let trimmed = line.trim_end();
     let Some(pipe) = trimmed.rfind('|') else {
@@ -297,62 +226,47 @@ fn split_trailing_extras(line: &str) -> (&str, Option<LayerAttrs>) {
     }
 
     match parse_layer_block(tail) {
-        Some(attrs) if !attrs.is_empty() || attrs.type_marker.is_some() => {
-            (&line[..pipe + 1], Some(attrs))
-        }
-        _ => (line, None),
+        Some(attrs) => (&line[..pipe + 1], Some(attrs)),
+        None => (line, None),
     }
 }
 
-/// Parses one layer's attribute block: a §11 `@@type{…}` head, or the pre-§11
-/// `[.class,#id]{key: value}` form. `None` when `input` is neither.
+/// Parses one layer's trailing attribute block: a `{…}` / `@@type{…}` head that
+/// must touch the `|` before it. `None` when `input` is not exactly one head.
 fn parse_layer_block(input: &str) -> Option<LayerAttrs> {
-    let input = input.trim();
-    if input.starts_with("@@") {
-        let chars: Vec<char> = input.chars().collect();
-        return match scan_extras_chars(&chars, 0) {
-            Some((head, next)) if next == chars.len() => Some(extras_to_layer(&head)),
-            _ => None,
-        };
+    let chars: Vec<char> = input.chars().collect();
+    match scan_extras_chars(&chars, 0) {
+        Some((head, next)) if chars[next..].iter().all(|ch| ch.is_whitespace()) => {
+            Some(extras_to_layer(&head))
+        }
+        _ => None,
     }
-    if input.starts_with('{') || input.starts_with('[') {
-        let (attrs, rest) = crate::attrs::parse_attr_block(input);
-        let has_attrs =
-            attrs.id.is_some() || !attrs.classes.is_empty() || !attrs.properties.is_empty();
-        return (has_attrs && rest.trim().is_empty()).then_some(attr_block(input));
-    }
-    None
 }
 
 /// Parses the §8 declaration line: `|-` `[slug]` `("title")` `extras?` `-|`.
 ///
 /// Returns the `<table>` attributes and how many lines it consumed (0 when the
 /// line is not a declaration). The declaration is childless: text that is not
-/// part of a head or the extras is discarded.
+/// part of a head or the extras is discarded. The retired `[.class]` bracket is
+/// literal text (§14).
 fn parse_decl_line(line: &str) -> Option<(LayerAttrs, usize)> {
     let body = line.trim().strip_prefix("|-")?;
     let mut rest = body;
 
     let mut layer = LayerAttrs::default();
 
-    // §8: the head uses the standard `[slug]` / `("title")` form.
+    // §8: the head uses the standard `[slug]` / `("title")` form, adjacent to
+    // the opening `|-`.
     if let Some(stripped) = rest.strip_prefix('[') {
         if let Some(close) = stripped.find(']') {
             let slug = stripped[..close].trim();
-            if !slug.is_empty() && !slug.starts_with('.') {
+            if !slug.is_empty() && !slug.starts_with('.') && !slug.starts_with('#') {
                 layer.attrs.id = Some(slug.to_string());
-            } else if slug.starts_with('.') {
-                layer.attrs.classes.extend(
-                    slug.trim_start_matches('.')
-                        .split('.')
-                        .filter(|token| !token.is_empty())
-                        .map(str::to_string),
-                );
+                rest = &stripped[close + 1..];
             }
-            rest = &stripped[close + 1..];
         }
     }
-    if let Some(stripped) = rest.trim_start().strip_prefix('(') {
+    if let Some(stripped) = rest.strip_prefix('(') {
         if let Some(close) = stripped.find(')') {
             let title = stripped[..close]
                 .trim()
@@ -368,19 +282,19 @@ fn parse_decl_line(line: &str) -> Option<(LayerAttrs, usize)> {
         }
     }
 
-    // The trailing `-|` closes the declaration; the extras head precedes it.
-    let rest = rest.trim();
-    let extras_part = rest.strip_suffix("-|").unwrap_or(rest);
-    if !extras_part.trim().is_empty() {
-        let (head, marker, _content) = parse_front_extras(extras_part.trim());
-        let mut head = head;
-        if head.type_marker.is_none() {
-            head.type_marker = marker;
-        }
-        crate::attrs::merge_layer(&mut layer, &head);
+    // §8/D4: the extras head touches the closing `-|`.
+    let chars: Vec<char> = rest.chars().collect();
+    if let Some((head, next)) = scan_extras_chars(&chars, 0) {
+        let bytes: usize = chars[..next].iter().map(|ch| ch.len_utf8()).sum();
+        crate::attrs::merge_layer(&mut layer, &extras_to_layer(&head));
+        rest = &rest[bytes..];
     }
 
-    Some((layer, 1))
+    // The trailing `-|` closes the declaration (a bare `|` is accepted too).
+    match rest.trim() {
+        "-|" | "|" | "" => Some((layer, 1)),
+        _ => None,
+    }
 }
 
 fn parse_delimiter_cells(
@@ -390,12 +304,11 @@ fn parse_delimiter_cells(
     let mut columns = Vec::new();
 
     for (i, delim) in delim_cells.iter().enumerate() {
-        let text = delim.trim();
         let header_text = header_cells.get(i).cloned().unwrap_or_default();
 
-        // §8: cell-front extras (`| @@type{…} :--- |`).
-        let (layer, _marker, cell) = parse_front_extras(text);
-        let mut core = cell.trim();
+        // §8/D4: a delimiter cell is only alignment, an optional width and (after
+        // them) the extras head; a head in front of the alignment code is text.
+        let mut core = delim.trim();
 
         // 1. Check left alignment (prefix ':')
         let align_left = core.starts_with(':');
@@ -440,69 +353,48 @@ fn parse_delimiter_cells(
             }
         }
 
-        // 6. Parse the deprecated trailing attribute block (§14).
-        let (trailing, remaining) = crate::attrs::parse_attr_block(rest);
-        if !remaining.trim().is_empty() {
-            return None;
-        }
-        // The column attributes are the front extras followed by the legacy
-        // block: classes accumulate in source order (§6.4).
-        let mut merged = layer;
-        merged.attrs.classes.extend(trailing.classes);
-        for (key, value) in trailing.properties {
-            merged.attrs.properties.retain(|(name, _)| *name != key);
-            merged.attrs.properties.push((key, value));
-        }
-        if trailing.id.is_some() {
-            merged.attrs.id = trailing.id;
-        }
+        // 6. §8/D4: the extras head goes **after** the alignment/width code and
+        // touches it (`:---(200px)@@cellA{.v-top}`). Anything left over is not
+        // rendered, so it is ignored.
+        let attrs = if rest.trim().is_empty() {
+            LayerAttrs::default()
+        } else {
+            let (layer, _marker, _leftover) = parse_front_extras(rest);
+            layer
+        };
 
         columns.push(ColumnSpec {
             header_text,
             align,
             width,
-            attrs: merged,
+            attrs,
         });
     }
 
     Some(columns)
 }
 
+/// Parses the cells of one body/footer row.
+///
+/// Row extras come from the trailing head after the last `|` (§8), never from a
+/// cell, so the returned [`LayerAttrs`] is always empty here.
 fn parse_body_cells(
     cells: &[String],
     _expected_cols: usize,
 ) -> Option<(LayerAttrs, Vec<CellSpec>)> {
     let mut parsed_cells = Vec::new();
-    let mut row_attrs = LayerAttrs::default();
 
-    for (i, cell) in cells.iter().enumerate() {
-        let mut text = cell.trim();
-
-        if i == cells.len() - 1 {
-            if text.starts_with('-') {
-                text = text[1..].trim();
-            }
-            let (attrs, content) = crate::attrs::parse_attr_block(text);
-            if content.trim().is_empty()
-                && (!attrs.classes.is_empty() || !attrs.properties.is_empty() || attrs.id.is_some())
-            {
-                row_attrs = attr_block(text);
-                continue;
-            }
-        }
-
-        let parsed_cell = parse_cell_content(cell.trim())?;
-        parsed_cells.push(parsed_cell);
+    for cell in cells {
+        parsed_cells.push(parse_cell_content(cell)?);
     }
 
-    Some((row_attrs, parsed_cells))
+    Some((LayerAttrs::default(), parsed_cells))
 }
 
-fn parse_cell_content(text: &str) -> Option<CellSpec> {
-    let text = text.trim();
-
-    // §8: cell-front extras (`| @@cellA{.x} content |`).
-    let (front, _marker, rest) = parse_front_extras(text);
+fn parse_cell_content(cell: &str) -> Option<CellSpec> {
+    // §8/D4: the extras head touches the cell's opening `|`, so the raw cell is
+    // passed in untrimmed and the head is scanned at the very front.
+    let (front, _marker, rest) = parse_front_extras(cell);
     let rest = rest.trim();
 
     // The `>` (colspan) / `^` (rowspan) markers are still recognised behind an
@@ -524,57 +416,9 @@ fn parse_cell_content(text: &str) -> Option<CellSpec> {
         });
     }
 
-    let mut content = rest.to_string();
-    let mut attrs = front;
-
-    // Pre-§11 trailing form: `content [.class]{key: value}`.
-    let mut attr_start = None;
-    for i in (0..rest.len()).rev() {
-        if rest.as_bytes()[i] == b'[' || rest.as_bytes()[i] == b'{' {
-            if i == 0 || rest.as_bytes()[i - 1] == b' ' || rest.as_bytes()[i - 1] == b'-' {
-                attr_start = Some(i);
-                break;
-            }
-        }
-    }
-
-    if let Some(start) = attr_start {
-        let (parsed_attrs, tail) = crate::attrs::parse_attr_block(&rest[start..]);
-        // Only treat the trailing block as attributes when it actually carries
-        // an id, class, or property. A bare `{foo}` / `[]` is literal text.
-        let has_attrs = parsed_attrs.id.is_some()
-            || !parsed_attrs.classes.is_empty()
-            || !parsed_attrs.properties.is_empty();
-        if has_attrs && tail.trim().is_empty() {
-            // The canonical (front) extras win over the deprecated block.
-            let mut legacy = attr_block(&rest[start..]);
-            legacy.attrs.classes.extend(attrs.attrs.classes);
-            for (key, value) in attrs.attrs.properties {
-                legacy.attrs.properties.retain(|(name, _)| *name != key);
-                legacy.attrs.properties.push((key, value));
-            }
-            if attrs.attrs.id.is_some() {
-                legacy.attrs.id = attrs.attrs.id;
-            }
-            for flag in attrs.flags {
-                if !legacy.flags.contains(&flag) {
-                    legacy.flags.push(flag);
-                }
-            }
-            legacy.type_marker = legacy.type_marker.or(attrs.type_marker);
-            attrs = legacy;
-
-            let mut c = rest[..start].to_string();
-            if c.ends_with('-') || c.ends_with(' ') {
-                c.pop();
-            }
-            content = c.trim().to_string();
-        }
-    }
-
     Some(CellSpec {
-        text: content,
-        attrs,
+        text: rest.to_string(),
+        attrs: front,
         is_colspan_marker: false,
         is_rowspan_marker: false,
     })
@@ -729,26 +573,27 @@ fn find_matching_end(events: &[Event], start_idx: usize, kind: NodeKind) -> Opti
 mod tests {
     use super::*;
 
+    /// §8/D2: a bare `{…}` cell head is parsed; the retired `[.class]` form and
+    /// a trailing block stay literal text (§14).
     #[test]
-    fn keeps_bare_braces_as_literal_text() {
+    fn bare_heads_are_parsed_and_retired_blocks_are_text() {
         let cell = parse_cell_content("{foo}").unwrap();
-        assert_eq!(cell.text, "{foo}");
-        assert!(cell.attrs.attrs.properties.is_empty());
-        assert!(cell.attrs.attrs.classes.is_empty());
-        assert!(cell.attrs.attrs.id.is_none());
-    }
+        assert_eq!(cell.text, "");
+        assert_eq!(cell.attrs.flags, vec!["foo".to_string()]);
 
-    #[test]
-    fn still_strips_valid_attribute_blocks() {
-        let cell = parse_cell_content("[.text-red]").unwrap();
+        let cell = parse_cell_content("{.text-red}").unwrap();
         assert_eq!(cell.text, "");
         assert_eq!(cell.attrs.attrs.classes, vec!["text-red".to_string()]);
 
+        let cell = parse_cell_content("[.text-red]").unwrap();
+        assert_eq!(cell.text, "[.text-red]");
+        assert!(cell.attrs.attrs.id.is_none());
+        assert!(cell.attrs.attrs.classes.is_empty());
+        assert!(cell.attrs.attrs.properties.is_empty());
+
+        // A trailing block is not a head: the head touches the `|`.
         let cell = parse_cell_content("Nilai { rox: \"rox\" }").unwrap();
-        assert_eq!(cell.text, "Nilai");
-        assert_eq!(
-            cell.attrs.attrs.properties,
-            vec![("rox".to_string(), "rox".to_string())]
-        );
+        assert_eq!(cell.text, "Nilai { rox: \"rox\" }");
+        assert!(cell.attrs.attrs.properties.is_empty());
     }
 }
