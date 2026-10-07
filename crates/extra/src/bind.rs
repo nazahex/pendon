@@ -80,19 +80,6 @@ pub fn warning_message(warning: &ExtrasWarning) -> String {
     }
 }
 
-/// The pending extras syntax replaced by `@@type{…}` (§14). Emitted by every
-/// construct plugin that still reads the legacy form.
-pub fn legacy_extras_warning(context: &str) -> Event {
-    Event::Diagnostic {
-        severity: Severity::Warning,
-        message: format!(
-            "[{context}] the `[.class,#id]{{key: value}}` extras form is deprecated; \
-             use `@@type{{…}}` (§14)"
-        ),
-        span: None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,6 +95,27 @@ mod tests {
         let (head, cursor) = scan_extras_chars(&text, 4).expect("head");
         assert_eq!(head.type_marker.as_deref(), Some("note"));
         assert_eq!(cursor, 4 + "@@note{.a,`slug-a`}".chars().count());
+    }
+
+    #[test]
+    fn scans_a_bare_and_a_type_only_head() {
+        // §3: the `@@` prefix is optional.
+        let text = chars("x{.a} rest");
+        let (head, cursor) = scan_extras_chars(&text, 1).expect("head");
+        assert_eq!(head.type_marker, None);
+        assert_eq!(cursor, 1 + "{.a}".chars().count());
+
+        // §4.1: a type may stand alone; the symbol after it stays literal.
+        let text = chars("x@@anchorA. rest");
+        let (head, cursor) = scan_extras_chars(&text, 1).expect("head");
+        assert_eq!(head.type_marker.as_deref(), Some("anchorA"));
+        assert!(head.items.is_empty());
+        assert_eq!(cursor, 1 + "@@anchorA".chars().count());
+        assert_eq!(text[cursor], '.');
+
+        // §4.1: `@@type {…}` is not a head.
+        let text = chars("x@@anchorA {.a}");
+        assert!(scan_extras_chars(&text, 1).is_none());
     }
 
     #[test]
@@ -164,17 +172,6 @@ mod tests {
                 assert_eq!(*severity, Severity::Warning);
                 assert!(message.starts_with("[anchor] `title`"), "{message}");
                 assert!(span.is_none());
-            }
-            other => panic!("unexpected event {other:?}"),
-        }
-    }
-
-    #[test]
-    fn legacy_warning_names_the_replacement() {
-        match legacy_extras_warning("cite") {
-            Event::Diagnostic { message, .. } => {
-                assert!(message.contains("[cite]"), "{message}");
-                assert!(message.contains("@@type"), "{message}");
             }
             other => panic!("unexpected event {other:?}"),
         }

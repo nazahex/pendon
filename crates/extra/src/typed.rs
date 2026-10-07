@@ -1,13 +1,19 @@
-//! Parser for the typed extras head (`@@type{…}` / `@@{…}`) and for directive
-//! heads, implementing `docs/spec/SYNTAX.md` §4–§6.
+//! Parser for the typed extras head (`@@type{…}` / `{…}` / `@@type`) and for
+//! directive heads, implementing `docs/spec/SYNTAX.md` §4–§6.
 //!
-//! Two rules dominate this module:
+//! Three rules dominate this module:
 //!
-//! * **Literal fallback** (§4.3): a head that looks like a head but is malformed
+//! * **Two spellings (§3).** The bare `{…}` head and the `@@`-prefixed head
+//!   (`@@type{…}`, `@@{…}`, `@@type`) are equivalent; the prefix only adds the
+//!   optional type marker.
+//! * **Literal fallback (§4.3):** a head that looks like a head but is malformed
 //!   is never dropped and never partially applied. The caller gets
 //!   [`ExtrasMatch::Malformed`] and MUST render the original text verbatim.
-//! * **Adjacency** (§4.1): nothing is trimmed from the front. The caller passes
-//!   the text at the exact cursor position, so `x@@type{…}` is *not* a head.
+//! * **Adjacency (§4.1):** nothing is trimmed from the front, and a type is not
+//!   separated from its `{` by whitespace. The caller passes the text at the
+//!   exact cursor position, so `x@@type{…}` and `@@type {…}` are *not* heads.
+//!   A type that ends on a symbol (`@@anchorA.`) is a type-only head and the
+//!   symbol stays literal text.
 
 use crate::value::{classify_scalar, AttrValue};
 
@@ -233,22 +239,41 @@ impl Attrs {
 
 // ---------------------------------------------------------------- extras head
 
-/// Scans `@@type{…}` / `@@{…}` off the front of `input` (spec §5).
+/// Scans an extras head off the front of `input` (spec §4–§5).
+///
+/// Both spellings are heads, and both are canonical (§3):
+///
+/// * `{…}` / `{}` — a bare extras head;
+/// * `@@type{…}` / `@@{…}` / `@@type` — the `@@`-prefixed form, where the type
+///   may stand alone as a **type-only head** (§4.1).
+///
+/// Text that is not a head — including a type that is separated from its `{`
+/// by whitespace — is [`ExtrasMatch::Absent`] or [`ExtrasMatch::Malformed`], and
+/// is rendered verbatim (§4.3).
 pub fn parse_extras(input: &str) -> ExtrasMatch<'_> {
-    if !input.starts_with("@@") {
-        return ExtrasMatch::Absent { rest: input };
+    if let Some(after) = input.strip_prefix("@@") {
+        return match read_head(after) {
+            Ok((head, consumed)) => ExtrasMatch::Head {
+                head,
+                rest: &input[2 + consumed..],
+            },
+            Err(error) => ExtrasMatch::Malformed { error, rest: input },
+        };
     }
-    match read_head(&input[2..]) {
-        Ok((head, consumed)) => ExtrasMatch::Head {
-            head,
-            rest: &input[2 + consumed..],
-        },
-        Err(error) => ExtrasMatch::Malformed { error, rest: input },
+    if input.starts_with('{') {
+        return match read_body(input) {
+            Ok((head, consumed)) => ExtrasMatch::Head {
+                head,
+                rest: &input[consumed..],
+            },
+            Err(error) => ExtrasMatch::Malformed { error, rest: input },
+        };
     }
+    ExtrasMatch::Absent { rest: input }
 }
 
-/// Reads the type name and `{…}` body of a head, returning the bytes consumed
-/// after `@@`.
+/// Reads the type name and optional `{…}` body of a `@@` head, returning the
+/// bytes consumed **after** the `@@`.
 fn read_head(after: &str) -> Result<(ExtrasHead, usize), ExtrasError> {
     let bytes = after.as_bytes();
     let mut cursor = 0;
@@ -259,34 +284,59 @@ fn read_head(after: &str) -> Result<(ExtrasHead, usize), ExtrasError> {
         }
     }
     let type_marker = (cursor > 0).then(|| after[..cursor].to_string());
-    if bytes.get(cursor) != Some(&b'{') {
-        return Err(if type_marker.is_none() {
-            ExtrasError::InvalidHead
-        } else {
-            ExtrasError::UnterminatedHead
-        });
+
+    if bytes.get(cursor) == Some(&b'{') {
+        let (mut head, consumed) = read_body(&after[cursor..])?;
+        head.type_marker = type_marker;
+        return Ok((head, cursor + consumed));
     }
 
-    let body_start = cursor + 1;
-    // A head may not span lines (§4.3): only the current line is searched.
-    let line = match after[body_start..].split_once('\n') {
-        Some((line, _)) => line,
-        None => &after[body_start..],
+    // No `{` follows. Only a type can carry the head on its own (§4.1).
+    let Some(type_marker) = type_marker else {
+        return Err(ExtrasError::InvalidHead);
     };
-    let close = find_closing_unquoted(line, b'}').ok_or(ExtrasError::UnterminatedHead)?;
-    let mut head = parse_extras_body(&line[..close])?;
-    head.type_marker = type_marker;
-    if head.type_marker.is_none() && head.items.is_empty() {
-        // `@@{}` carries neither a type nor items: literal text (§4.3).
-        return Err(ExtrasError::InvalidItem);
+    // §4.1: `@@type {…}` is not a head — the `{` must touch the type.
+    if matches!(bytes.get(cursor), Some(b' ' | b'\t')) && opens_brace_on_line(&after[cursor..]) {
+        return Err(ExtrasError::InvalidHead);
     }
-    Ok((head, body_start + close + 1))
+    // A type-only head: the type run ends at the first symbol (or the end of
+    // input) and only the type is consumed. `@@anchorA.` keeps the `.` as text.
+    Ok((
+        ExtrasHead {
+            type_marker: Some(type_marker),
+            items: Vec::new(),
+        },
+        cursor,
+    ))
 }
 
-/// Reads only the type marker of a head (`@@type`), without parsing the body.
-///
-/// The returned slice starts at the opening `{`. Used by the decorator binder,
-/// which needs the type before it knows what it decorates.
+/// Reads a bare `{…}` head, returning the head and the bytes it consumed
+/// (including both braces).
+fn read_body(input: &str) -> Result<(ExtrasHead, usize), ExtrasError> {
+    // A head may not span lines (§4.3): only the current line is searched.
+    let body = &input[1..];
+    let line = match body.split_once('\n') {
+        Some((line, _)) => line,
+        None => body,
+    };
+    let close = find_closing_unquoted(line, b'}').ok_or(ExtrasError::UnterminatedHead)?;
+    let head = parse_extras_body(&line[..close])?;
+    Ok((head, 1 + close + 1))
+}
+
+/// `true` when only spaces or tabs separate the cursor from a `{` on the same
+/// line, i.e. the `{` is *not* adjacent to the type (§4.1).
+fn opens_brace_on_line(rest: &str) -> bool {
+    let line = match rest.split_once('\n') {
+        Some((line, _)) => line,
+        None => rest,
+    };
+    line.trim_start_matches([' ', '\t']).starts_with('{')
+}
+
+/// Reads only the type marker of a `@@` head (`@@type`), without parsing the
+/// body. The returned slice starts just past the type run: it is empty for a
+/// type-only head and starts with `{` for a typed head.
 pub fn parse_type_marker(input: &str) -> Option<(String, &str)> {
     let after = input.strip_prefix("@@")?;
     let bytes = after.as_bytes();
@@ -297,7 +347,7 @@ pub fn parse_type_marker(input: &str) -> Option<(String, &str)> {
     while matches!(bytes.get(cursor), Some(byte) if byte.is_ascii_alphanumeric()) {
         cursor += 1;
     }
-    (bytes.get(cursor) == Some(&b'{')).then(|| (after[..cursor].to_string(), &after[cursor..]))
+    Some((after[..cursor].to_string(), &after[cursor..]))
 }
 
 /// Parses the body of a head, i.e. everything between `{` and `}`.

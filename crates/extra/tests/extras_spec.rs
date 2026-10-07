@@ -68,7 +68,6 @@ fn malformed_heads_fall_back_to_literal_text() {
 
     assert_eq!(literal_error("@@type{"), UnterminatedHead);
     assert_eq!(literal_error("@@type{.hero"), UnterminatedHead);
-    assert_eq!(literal_error("@@{}"), InvalidItem);
     assert_eq!(literal_error("@@type{foo: }"), EmptyValue);
     assert_eq!(literal_error("@@type{1x: 2}"), InvalidItem);
     assert_eq!(literal_error("@@type{\"a\" junk}"), TrailingCharacters);
@@ -83,9 +82,64 @@ fn malformed_heads_fall_back_to_literal_text() {
     );
     // §4.4: the type charset is ASCII alphanumeric.
     assert_eq!(literal_error("@@1x{a}"), InvalidHead);
-    assert_eq!(literal_error("@@foo-bar{a}"), UnterminatedHead);
+    // §4.1: the `{` must touch the type.
+    assert_eq!(literal_error("@@type {a}"), InvalidHead);
     // §4.3: a head may not span lines.
     assert_eq!(literal_error("@@type{a\nb}"), UnterminatedHead);
+}
+
+#[test]
+fn a_type_only_head_carries_the_type_and_nothing_else() {
+    // §4.1: the run after the type is literal text, the type is kept.
+    let ExtrasMatch::Head { head, rest } = parse_extras("@@anchorA. tail") else {
+        panic!("expected a type-only head");
+    };
+    assert_eq!(head.type_marker.as_deref(), Some("anchorA"));
+    assert!(head.items.is_empty());
+    assert_eq!(rest, ". tail");
+
+    // `@@type-x{.x}` is the type `type` plus literal text.
+    let ExtrasMatch::Head { head, rest } = parse_extras("@@type-x{.x}") else {
+        panic!("expected a type-only head");
+    };
+    assert_eq!(head.type_marker.as_deref(), Some("type"));
+    assert_eq!(rest, "-x{.x}");
+
+    // …and a type at the very end of the text.
+    let ExtrasMatch::Head { head, rest } = parse_extras("@@anchorA") else {
+        panic!("expected a type-only head");
+    };
+    assert_eq!(head.type_marker.as_deref(), Some("anchorA"));
+    assert_eq!(rest, "");
+}
+
+#[test]
+fn empty_heads_are_valid() {
+    // §3: `{}` and `@@{}` are the same empty head, no warning.
+    for source in ["{}", "@@{}", "@@type{}"] {
+        let ExtrasMatch::Head { head, rest } = parse_extras(source) else {
+            panic!("expected a head for {source:?}");
+        };
+        assert!(head.items.is_empty(), "{source:?}");
+        assert_eq!(rest, "", "{source:?}");
+    }
+}
+
+#[test]
+fn the_bare_spelling_is_a_head() {
+    // §3: `{…}` and `@@{…}` are equivalent, type marker aside.
+    let ExtrasMatch::Head { head, rest } = parse_extras("{.hero, #id} tail") else {
+        panic!("expected a bare head");
+    };
+    assert_eq!(head.type_marker, None);
+    assert_eq!(head.items.len(), 2);
+    assert_eq!(rest, " tail");
+
+    let ExtrasMatch::Head { head, .. } = parse_extras("@@{.hero}") else {
+        panic!("expected a prefixed head");
+    };
+    assert_eq!(head.type_marker, None);
+    assert_eq!(head.items.len(), 1);
 }
 
 #[test]
