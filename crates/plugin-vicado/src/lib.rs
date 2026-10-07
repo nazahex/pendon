@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use pendon_core::{Event, NodeKind};
-use pendon_extra::{parse_property_block, split_csv};
 use pendon_renderer_solid::{ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde_json::Value;
 
@@ -210,16 +209,64 @@ fn parse_class_block(input: &str) -> (Vec<String>, Option<String>) {
 }
 
 fn parse_props_block(input: &str) -> BTreeMap<String, Value> {
-    parse_property_block(&format!("{{{input}}}"))
-        .map(|(attrs, _)| {
-            attrs
-                .properties
-                .into_iter()
-                .filter(|(key, _)| is_valid_prop_key(key))
-                .map(|(key, value)| (key, parse_value(&value)))
-                .collect()
-        })
-        .unwrap_or_default()
+    let mut props = BTreeMap::new();
+    for pair in split_csv(input) {
+        let Some((key, value)) = split_key_value(pair.trim()) else {
+            continue;
+        };
+        let key = key.trim();
+        if !key.is_empty() && is_valid_prop_key(key) {
+            props.insert(key.to_string(), parse_value(&unquote(value.trim())));
+        }
+    }
+    props
+}
+
+/// Splits comma-separated text while preserving commas inside quoted values.
+fn split_csv(input: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut start = 0usize;
+    let mut quote: Option<char> = None;
+
+    for (index, character) in input.char_indices() {
+        match character {
+            '\'' | '"' if quote == Some(character) => quote = None,
+            '\'' | '"' if quote.is_none() => quote = Some(character),
+            ',' if quote.is_none() => {
+                parts.push(input[start..index].trim());
+                start = index + character.len_utf8();
+            }
+            _ => {}
+        }
+    }
+
+    parts.push(input[start..].trim());
+    parts
+}
+
+/// Splits `key: value` on the first `:` outside quotes.
+fn split_key_value(text: &str) -> Option<(&str, &str)> {
+    let mut quote: Option<char> = None;
+    for (index, character) in text.char_indices() {
+        match character {
+            '\'' | '"' if quote == Some(character) => quote = None,
+            '\'' | '"' if quote.is_none() => quote = Some(character),
+            ':' if quote.is_none() => return Some((&text[..index], &text[index + 1..])),
+            _ => {}
+        }
+    }
+    None
+}
+
+fn unquote(value: &str) -> String {
+    let bytes = value.as_bytes();
+    if bytes.len() >= 2
+        && ((bytes[0] == b'"' && bytes[bytes.len() - 1] == b'"')
+            || (bytes[0] == b'\'' && bytes[bytes.len() - 1] == b'\''))
+    {
+        return value[1..value.len() - 1].to_string();
+    }
+    value.to_string()
 }
 
 fn parse_value(input: &str) -> Value {
