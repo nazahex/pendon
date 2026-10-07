@@ -88,6 +88,24 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind) {
                     }
                 }
             }
+            // §9.3/§9.4: a list whose container node was a `plugin-list` wrapper
+            // ends together with that wrapper — otherwise the stale frame would
+            // let the next list continue inside the already closed container.
+            loop {
+                let closes_wrapper = ctx
+                    .list_frames
+                    .last()
+                    .and_then(|frame| frame.container.as_ref())
+                    .map(|container| container == kind)
+                    .unwrap_or(false);
+                if !closes_wrapper {
+                    break;
+                }
+                let frame = ctx.list_frames.pop().expect("frame checked above");
+                if frame.item_open {
+                    ctx.emit_end(NodeKind::ListItem);
+                }
+            }
             ctx.emit_end(kind.clone());
         }
     }

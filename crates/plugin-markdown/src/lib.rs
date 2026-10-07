@@ -1,4 +1,5 @@
 use pendon_core::{Event, NodeKind};
+use pendon_extra::{bind_decorators, BoundDecorator, ExtrasOptions};
 
 mod context;
 mod end;
@@ -9,8 +10,16 @@ mod text;
 
 use context::ParseContext;
 
-/// How a `NodeKind::Custom` node should be treated by the Markdown pass, as
-/// declared by its `__plugin_kind` attribute.
+/// §9.3/§9.4: the list **container** a `plugin-list` wrapper stands for. Layer
+/// `unordered` owns the `<ul>`, layer `ordered` the `<ol>`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ContainerLayer {
+    Unordered,
+    Ordered,
+}
+
+/// How a `NodeKind::Custom` / `NodeKind::Element` node should be treated by the
+/// Markdown pass, as declared by its `__plugin_kind` attribute (§11 rule 3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CustomPlacement {
     /// Block content: re-lexed as blocks, closing open quotes/lists/tables.
@@ -20,6 +29,12 @@ pub(crate) enum CustomPlacement {
     Element,
     /// Inline content inside the current line.
     Inline,
+    /// §9.3/§9.4: the wrapper `plugin-list` puts around a decorated list
+    /// (`__plugin_kind = unordered | ordered`). Its body is re-lexed as blocks
+    /// and its node **is** the list container: the list is built inside it
+    /// instead of in a `<ul>`/`<ol>` of its own, so the wrapper's attributes
+    /// land on the container instead of around it.
+    ListContainer(ContainerLayer),
 }
 
 pub fn process(events: &[Event]) -> Vec<Event> {
@@ -42,30 +57,42 @@ impl Default for MarkdownOptions {
 }
 
 pub fn process_with_options(events: &[Event], opts: MarkdownOptions) -> Vec<Event> {
-    let mut ctx = ParseContext::new(events.len(), opts);
+    // §9.1: decorator lines that decorate the blocks this pass owns — paragraphs
+    // and code fences — are bound here. `plugin-list` and `plugin-blockquote`
+    // run first and have already consumed the decorators of the lists and quotes
+    // they own, and a heading's decorator belongs to `plugin-section`, so
+    // `markdown_target` declines those and leaves any still-present one in the
+    // stream for the right binder.
+    let extras = ExtrasOptions::default();
+    let bindings = bind_decorators(events, &extras, markdown_target);
+    let decorators: std::collections::HashMap<usize, &BoundDecorator> = bindings
+        .bound
+        .iter()
+        .map(|bound| (bound.target_index, bound))
+        .collect();
+
+    let mut ctx = ParseContext::new(bindings.events.len(), opts);
+    // §9.1: a decorator that bound to nothing is dropped with a warning.
+    for dropped in &bindings.dropped {
+        ctx.push_event(&Event::Diagnostic {
+            severity: pendon_core::Severity::Warning,
+            message: format!(
+                "[markdown] a decorator line bound to no block and was dropped ({:?})",
+                dropped.reason
+            ),
+            span: None,
+        });
+    }
+
     let mut i = 0;
-    while i < events.len() {
-        let ev = &events[i];
+    while i < bindings.events.len() {
+        let ev = &bindings.events[i];
         match ev {
             Event::StartNode(kind) => {
-                let mut placement = CustomPlacement::Inline;
-                if matches!(kind, NodeKind::Custom(_)) {
-                    // Look ahead untuk mencari atribut __plugin_kind
-                    for j in (i + 1)..events.len() {
-                        match &events[j] {
-                            Event::Attribute { name, value } if name == "__plugin_kind" => {
-                                placement = match value.as_str() {
-                                    "block" | "codefence" | "blockquote" => CustomPlacement::Block,
-                                    "element" => CustomPlacement::Element,
-                                    _ => CustomPlacement::Inline,
-                                };
-                                break;
-                            }
-                            Event::Attribute { .. } => continue,
-                            _ => break,
-                        }
-                    }
+                if let Some(decorator) = decorators.get(&i) {
+                    ctx.arm_block_decorator(decorator.type_marker.clone(), decorator.attrs.clone());
                 }
+                let placement = resolve_placement(kind, &bindings.events[(i + 1)..]);
                 start::handle(&mut ctx, kind, placement);
             }
             Event::EndNode(kind) => end::handle(&mut ctx, kind),
@@ -77,6 +104,119 @@ pub fn process_with_options(events: &[Event], opts: MarkdownOptions) -> Vec<Even
         i += 1;
     }
     ctx.finalize()
+}
+
+/// §9.1: the `target` rule the decorator binder uses for this pass. The blocks a
+/// decorator may decorate here are the ones `plugin-markdown` emits — a
+/// paragraph or a code fence. A heading owns its extras on its own `#` run and a
+/// table parses its own heads, so both are declined; a paragraph that opens a
+/// list item or a blockquote is declined too, because it belongs to
+/// `plugin-list` / `plugin-blockquote`. A binder must never steal another
+/// plugin's decorator (§9.1), so a declined target leaves the line in the stream.
+///
+/// The returned indentation is the block's own, the value §9.1 compares each
+/// decorator's indentation against.
+fn markdown_target(events: &[Event], index: usize) -> Option<usize> {
+    match &events[index] {
+        Event::StartNode(NodeKind::CodeFence) => Some(block_indent(events, index)),
+        Event::StartNode(NodeKind::Paragraph) => {
+            if opens_construct(events, index) {
+                None
+            } else {
+                Some(block_indent(events, index))
+            }
+        }
+        _ => None,
+    }
+}
+
+/// The leading spaces of the first text line of the block node at `index`.
+fn block_indent(events: &[Event], index: usize) -> usize {
+    for event in events.iter().skip(index + 1) {
+        match event {
+            Event::Text(text) => {
+                let trimmed = text.trim_start_matches(' ');
+                return text.len() - trimmed.len();
+            }
+            Event::Attribute { .. } | Event::AttributeFlag { .. } => continue,
+            _ => break,
+        }
+    }
+    0
+}
+
+/// §9.1: whether a `Paragraph` node opens a construct another binder owns — a
+/// list item (`- `, `* `, `+ `, `1. `) or a blockquote (`>`).
+fn opens_construct(events: &[Event], index: usize) -> bool {
+    let Some(line) = first_text(events, index + 1) else {
+        return false;
+    };
+    let trimmed = line.trim_start();
+    trimmed.starts_with('>')
+        || trimmed.starts_with("- ")
+        || trimmed.starts_with("* ")
+        || trimmed.starts_with("+ ")
+        || ordered_marker(trimmed)
+}
+
+/// The first `Text` event at or after `index`, skipping attributes.
+fn first_text<'a>(events: &'a [Event], index: usize) -> Option<&'a str> {
+    for event in events.iter().skip(index) {
+        match event {
+            Event::Text(text) => return Some(text),
+            Event::Attribute { .. } | Event::AttributeFlag { .. } => continue,
+            _ => return None,
+        }
+    }
+    None
+}
+
+/// §9.3: whether `line` opens an ordered list item (`1. ` or `1) `).
+fn ordered_marker(line: &str) -> bool {
+    let digits = line.chars().take_while(|c| c.is_ascii_digit()).count();
+    if digits == 0 {
+        return false;
+    }
+    let rest = &line[digits..];
+    rest.starts_with(". ") || rest.starts_with(") ")
+}
+
+/// §11 rule 3: the placement of a construct node is declared by the emitting
+/// plugin through the hidden `__plugin_kind` attribute it writes first
+/// (`plugin-custom`, `plugin-directive`, `plugin-table`).
+///
+/// Both `Custom` and `Element` nodes honour it. `Element` nodes are also how
+/// `plugin-img` / `plugin-table` emit structured HTML whose children are already
+/// rendered, so an `Element` **without** the attribute stays verbatim
+/// ([`CustomPlacement::Element`]); a `Custom` node without it keeps the historic
+/// inline default. Any other attribute may precede it — the very first event
+/// that is not an attribute ends the look-ahead.
+fn resolve_placement(kind: &NodeKind, following: &[Event]) -> CustomPlacement {
+    let default = match kind {
+        NodeKind::Element(_) => CustomPlacement::Element,
+        _ => CustomPlacement::Inline,
+    };
+    if !matches!(kind, NodeKind::Custom(_) | NodeKind::Element(_)) {
+        return default;
+    }
+    for event in following {
+        match event {
+            Event::Attribute { name, value } if name == "__plugin_kind" => {
+                return match value.as_str() {
+                    "block" | "codefence" | "blockquote" => CustomPlacement::Block,
+                    "element" => CustomPlacement::Element,
+                    "inline" => CustomPlacement::Inline,
+                    // §9.4: the layers of `plugin-list` own the list container.
+                    "unordered" => CustomPlacement::ListContainer(ContainerLayer::Unordered),
+                    "ordered" => CustomPlacement::ListContainer(ContainerLayer::Ordered),
+                    _ => default,
+                };
+            }
+            Event::Attribute { .. } => continue,
+            _ => break,
+        }
+    }
+    default
 }
 
 #[cfg(test)]
@@ -605,5 +745,231 @@ mod tests {
         let src = "```sh\n  echo hi\n```\n";
         let events = run_markdown(src, MarkdownOptions::default());
         assert_eq!(node_text(&events, NodeKind::CodeFence), "  echo hi\n");
+    }
+
+    fn plugin_kind(value: &str) -> Event {
+        Event::Attribute {
+            name: "__plugin_kind".to_string(),
+            value: value.to_string(),
+        }
+    }
+
+    /// Mirrors the events `plugin-directive` emits for one directive: the node
+    /// (an `Element` fallback for an unclaimed type, §10.2/§10.3 + D8) followed
+    /// by `__plugin_kind` as its first attribute and the raw body text.
+    fn directive(kind: &str, node: &str, body: &[&str]) -> Vec<Event> {
+        let node = NodeKind::Element(node.to_string());
+        let mut events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(node.clone()),
+            plugin_kind(kind),
+            Event::Attribute {
+                name: "type".to_string(),
+                value: "aside".to_string(),
+            },
+        ];
+        events.extend(body.iter().map(|chunk| Event::Text((*chunk).to_string())));
+        events.push(Event::EndNode(node));
+        events.push(Event::EndNode(NodeKind::Document));
+        events
+    }
+
+    /// §11 rule 3: the placement of an `Element` node is read from the hidden
+    /// `__plugin_kind` attribute, exactly like a `Custom` node. Only a node that
+    /// declares nothing (or `element`) is a pre-rendered subtree.
+    #[test]
+    fn resolve_placement_reads_the_hidden_attribute() {
+        let custom = NodeKind::Custom("Note".to_string());
+        let element = NodeKind::Element("div".to_string());
+        let plain = [Event::Text("body".to_string())];
+
+        assert_eq!(
+            resolve_placement(&custom, &[plugin_kind("block")]),
+            CustomPlacement::Block
+        );
+        assert_eq!(
+            resolve_placement(&element, &[plugin_kind("block")]),
+            CustomPlacement::Block
+        );
+        assert_eq!(
+            resolve_placement(&element, &[plugin_kind("blockquote")]),
+            CustomPlacement::Block
+        );
+        assert_eq!(
+            resolve_placement(&element, &[plugin_kind("inline")]),
+            CustomPlacement::Inline
+        );
+        assert_eq!(
+            resolve_placement(&element, &[plugin_kind("element")]),
+            CustomPlacement::Element
+        );
+        // §11 rule 3: another attribute may precede it (`plugin-custom` writes
+        // `__plugin_kind` first, but nothing guarantees it).
+        assert_eq!(
+            resolve_placement(
+                &element,
+                &[
+                    Event::Attribute {
+                        name: "class".to_string(),
+                        value: "k".to_string(),
+                    },
+                    plugin_kind("block"),
+                ]
+            ),
+            CustomPlacement::Block
+        );
+        // Nothing declared: an `Element` is a pre-rendered subtree (the img /
+        // table containers), a `Custom` node keeps the historic inline default.
+        assert_eq!(
+            resolve_placement(&element, &plain),
+            CustomPlacement::Element
+        );
+        assert_eq!(resolve_placement(&custom, &plain), CustomPlacement::Inline);
+        // An unknown value never overrides the node's own default.
+        assert_eq!(
+            resolve_placement(&element, &[plugin_kind("nonsense")]),
+            CustomPlacement::Element
+        );
+    }
+
+    /// §9.3/§9.4: the `unordered` and `ordered` layers of `plugin-list` are
+    /// container placements, not plain block nodes.
+    #[test]
+    fn resolve_placement_reads_the_list_layers() {
+        let element = NodeKind::Element("ul".to_string());
+        assert_eq!(
+            resolve_placement(&element, &[plugin_kind("unordered")]),
+            CustomPlacement::ListContainer(ContainerLayer::Unordered)
+        );
+        assert_eq!(
+            resolve_placement(&element, &[plugin_kind("ordered")]),
+            CustomPlacement::ListContainer(ContainerLayer::Ordered)
+        );
+    }
+
+    /// §9.3/§9.4: the wrapper **is** the list container — the items are built
+    /// inside it, and no `<ul>` of its own is opened around them.
+    #[test]
+    fn a_list_container_wrapper_is_the_container() {
+        let events = directive("unordered", "ul", &["- one", "\n", "- two", "\n"]);
+        let out = process_with_options(&events, MarkdownOptions::default());
+        assert!(!has_node(&out, NodeKind::BulletList), "{out:?}");
+        assert_eq!(
+            out.iter()
+                .filter(|event| matches!(event, Event::StartNode(NodeKind::ListItem)))
+                .count(),
+            2,
+            "{out:?}"
+        );
+        // The wrapper comes first and the items follow it directly.
+        let wrapper = out
+            .iter()
+            .position(
+                |event| matches!(event, Event::StartNode(NodeKind::Element(name)) if name == "ul"),
+            )
+            .expect("wrapper");
+        let item = out
+            .iter()
+            .position(|event| matches!(event, Event::StartNode(NodeKind::ListItem)))
+            .expect("item");
+        assert!(wrapper < item, "{out:?}");
+        assert!(pendon_core::validate_events(&out).is_empty(), "{out:?}");
+    }
+
+    /// The wrapper's declared layer decides: an `ordered` wrapper adopts the
+    /// ordered list and keeps the `start` offset `plugin-markdown` found (§9.4).
+    #[test]
+    fn an_ordered_wrapper_keeps_the_start_offset() {
+        let events = directive("ordered", "ol", &["6. Goo", "\n"]);
+        let out = process_with_options(&events, MarkdownOptions::default());
+        assert!(!has_node(&out, NodeKind::OrderedList), "{out:?}");
+        assert!(
+            out.iter().any(|event| matches!(
+                event,
+                Event::Attribute { name, value } if name == "start" && value == "6"
+            )),
+            "{out:?}"
+        );
+        assert!(pendon_core::validate_events(&out).is_empty(), "{out:?}");
+    }
+
+    /// A wrapper whose body turns out not to be a list stays an ordinary block
+    /// node, so its attributes and component are never dropped.
+    #[test]
+    fn a_list_container_wrapper_without_a_list_stays_a_block() {
+        let events = directive("unordered", "ul", &["plain text", "\n"]);
+        let out = process_with_options(&events, MarkdownOptions::default());
+        assert!(has_node(&out, NodeKind::Paragraph), "{out:?}");
+        assert!(
+            has_node(&out, NodeKind::Element("ul".to_string())),
+            "{out:?}"
+        );
+        assert!(all_text(&out).contains("plain text"), "{out:?}");
+        assert!(pendon_core::validate_events(&out).is_empty(), "{out:?}");
+    }
+
+    /// A block directive whose `type` no component claims renders `<div>`; its
+    /// body must still be re-lexed as block content (§10.3), so lists and inline
+    /// markup inside it are not left as raw text.
+    #[test]
+    fn element_block_directive_body_is_relexed() {
+        let events = directive(
+            "block",
+            "div",
+            &["\n", "*a* and **b**", "\n", "- one", "\n", "- two", "\n"],
+        );
+        let out = process_with_options(&events, MarkdownOptions::default());
+        assert!(has_node(&out, NodeKind::BulletList), "{out:?}");
+        assert!(has_node(&out, NodeKind::Emphasis), "{out:?}");
+        assert!(has_node(&out, NodeKind::Strong), "{out:?}");
+        assert!(!text_contains(&out, "**b**"), "raw markup leaked: {out:?}");
+    }
+
+    /// An inline directive whose `type` no component claims renders `<span>`;
+    /// its body stays inline content (§10.2) and is re-lexed in place.
+    #[test]
+    fn element_inline_directive_body_is_relexed() {
+        let events = directive("inline", "span", &[" *i* content", "\n"]);
+        let out = process_with_options(&events, MarkdownOptions::default());
+        assert!(has_node(&out, NodeKind::Emphasis), "{out:?}");
+        // Inline content never opens a block inside the span.
+        assert!(!has_node(&out, NodeKind::BulletList), "{out:?}");
+        assert!(all_text(&out).contains("content"));
+    }
+
+    /// An `Element` that declares nothing is a structured HTML container whose
+    /// children were already rendered: its text is never re-lexed.
+    #[test]
+    fn element_without_plugin_kind_stays_verbatim() {
+        let td = NodeKind::Element("td".to_string());
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(td.clone()),
+            Event::Text("*a* and **b**".to_string()),
+            Event::EndNode(td),
+            Event::EndNode(NodeKind::Document),
+        ];
+        let out = process_with_options(&events, MarkdownOptions::default());
+        assert!(!has_node(&out, NodeKind::Emphasis), "{out:?}");
+        assert!(!has_node(&out, NodeKind::Strong), "{out:?}");
+        assert!(all_text(&out).contains("*a* and **b**"));
+    }
+
+    /// The `element` placement marks the same pre-rendered subtrees when the
+    /// attribute is present (`plugin-table`).
+    #[test]
+    fn element_placement_keeps_pre_rendered_children() {
+        let td = NodeKind::Element("td".to_string());
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(td.clone()),
+            plugin_kind("element"),
+            Event::Text("*a*".to_string()),
+            Event::EndNode(td),
+            Event::EndNode(NodeKind::Document),
+        ];
+        let out = process_with_options(&events, MarkdownOptions::default());
+        assert!(!has_node(&out, NodeKind::Emphasis), "{out:?}");
+        assert!(all_text(&out).contains("*a*"));
     }
 }

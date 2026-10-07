@@ -4,7 +4,6 @@ use crate::context::{ListFrame, ParseContext};
 use crate::helpers::{
     adjust_blockquote, capture_html_block, close_table, emit_html_event, emit_inline,
     emit_table_row, is_table_row, is_table_separator, parse_blockquote_prefix, split_table_cells,
-    start_table,
 };
 use crate::math::toggle_display_math_on_line;
 
@@ -179,10 +178,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                 while let Some(frame) = ctx.list_frames.last() {
                     if frame.blockquote_depth > 0 {
                         let popped = ctx.list_frames.pop().unwrap();
-                        if popped.item_open {
-                            ctx.out.push(Event::EndNode(NodeKind::ListItem));
-                        }
-                        ctx.out.push(Event::EndNode(popped.kind));
+                        ctx.close_list_frame(popped);
                     } else {
                         break;
                     }
@@ -274,6 +270,13 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
 
         let content_indent = leading_spaces + marker_width;
 
+        // §9.3/§9.4: a container wrapper only decorates the list directly below
+        // it. Any other block line ends the window, so a later list outside the
+        // wrapper never adopts it.
+        if !is_list_marker {
+            ctx.pending_list_container = None;
+        }
+
         while let Some(frame) = ctx.list_frames.last() {
             let can_contain = if is_list_marker {
                 leading_spaces == frame.indent || leading_spaces >= frame.content_indent
@@ -283,10 +286,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
 
             if !can_contain {
                 let popped = ctx.list_frames.pop().unwrap();
-                if popped.item_open {
-                    ctx.out.push(Event::EndNode(NodeKind::ListItem));
-                }
-                ctx.out.push(Event::EndNode(popped.kind));
+                ctx.close_list_frame(popped);
             } else {
                 break;
             }
@@ -298,10 +298,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
         while let Some(frame) = ctx.list_frames.last() {
             if frame.blockquote_depth > depth {
                 let popped = ctx.list_frames.pop().unwrap();
-                if popped.item_open {
-                    ctx.out.push(Event::EndNode(NodeKind::ListItem));
-                }
-                ctx.out.push(Event::EndNode(popped.kind));
+                ctx.close_list_frame(popped);
             } else {
                 break;
             }
@@ -336,7 +333,11 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                 if leading_spaces == frame.indent {
                     if frame.kind == list_kind {
                         if frame.item_open {
-                            ctx.out.push(Event::EndNode(NodeKind::ListItem));
+                            // Close through `emit_end` so `ctx.stack` stays in
+                            // sync with the frames; a raw `out.push` left a stale
+                            // `ListItem` behind that a block wrapper around the
+                            // list later closed a second time.
+                            ctx.emit_end(NodeKind::ListItem);
                             if let Some(f) = ctx.list_frames.last_mut() {
                                 f.item_open = false;
                             }
@@ -344,17 +345,21 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                         need_new_list = false;
                     } else {
                         let popped = ctx.list_frames.pop().unwrap();
-                        if popped.item_open {
-                            ctx.out.push(Event::EndNode(NodeKind::ListItem));
-                        }
-                        ctx.out.push(Event::EndNode(popped.kind));
+                        ctx.close_list_frame(popped);
                     }
                 }
             }
 
             if need_new_list {
-                ctx.out.push(Event::StartNode(list_kind.clone()));
-                ctx.stack.push(list_kind.clone());
+                // §9.3/§9.4: when `plugin-list` wrapped this list in a container
+                // node (`__plugin_kind = unordered | ordered`) that node **is** the
+                // container, so the list is built inside it instead of in a new
+                // `<ul>`/`<ol>`: the extras land on the container, not around it.
+                let merged = ctx.take_list_container(&list_kind);
+                if merged.is_none() {
+                    ctx.out.push(Event::StartNode(list_kind.clone()));
+                    ctx.stack.push(list_kind.clone());
+                }
                 if let (NodeKind::OrderedList, Some(n)) = (&list_kind, start_attr) {
                     ctx.out.push(Event::Attribute {
                         name: "start".to_string(),
@@ -367,6 +372,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                     content_indent,
                     item_open: false,
                     blockquote_depth: ctx.blockquote_depth,
+                    container: merged,
                 });
             }
 
@@ -438,7 +444,9 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                 if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
                     ctx.emit_end(NodeKind::Paragraph);
                 }
-                start_table(&mut ctx.out);
+                ctx.out.push(Event::StartNode(NodeKind::Table));
+                ctx.flush_block_decorator();
+                ctx.out.push(Event::StartNode(NodeKind::TableHead));
                 emit_table_row(trimmed_for_table, true, &mut ctx.out, ctx.options);
                 ctx.out.push(Event::EndNode(NodeKind::TableHead));
                 ctx.out.push(Event::StartNode(NodeKind::TableBody));
@@ -460,6 +468,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                         ctx.emit_end(NodeKind::Paragraph);
                     }
                     ctx.emit_start(NodeKind::Heading);
+                    ctx.flush_block_decorator();
                     ctx.in_heading = true;
                     ctx.heading_prefix_consumed = true;
                     ctx.skip_para_open = ctx.skip_para_open.saturating_add(1);
@@ -491,6 +500,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                     ctx.emit_end(NodeKind::Paragraph);
                 }
                 ctx.emit_start(NodeKind::CodeFence);
+                ctx.flush_block_decorator();
                 ctx.in_code_fence = true;
                 // Raw indentation of the fence marker: content lines are raw too,
                 // so this is the exact amount CommonMark removes from them.
@@ -525,10 +535,12 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
         if ctx.pending_para_start {
             if !matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
                 ctx.emit_start(NodeKind::Paragraph);
+                ctx.flush_block_decorator();
             }
             ctx.pending_para_start = false;
         } else if !matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {
             ctx.emit_start(NodeKind::Paragraph);
+            ctx.flush_block_decorator();
         }
         emit_line_content(ctx, trimmed_for_block);
 

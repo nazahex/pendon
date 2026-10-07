@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 ammonia = "3"
 pendon-core = { path = "../core" }
+pendon-extra = { path = "../extra" }

@@ -62,11 +62,6 @@ fn contains_wiki_pipe(line: &str) -> bool {
     line[open + 2..open + 2 + close].contains('|')
 }
 
-pub fn start_table(out: &mut Vec<Event>) {
-    out.push(Event::StartNode(NodeKind::Table));
-    out.push(Event::StartNode(NodeKind::TableHead));
-}
-
 pub fn close_table(out: &mut Vec<Event>, in_table: &mut bool) {
     if *in_table {
         out.push(Event::EndNode(NodeKind::TableBody));

@@ -24,6 +24,7 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind, placement: CustomPlacemen
             ctx.close_all_lists();
             ctx.close_table_if_open();
             ctx.emit_start(NodeKind::Heading);
+            ctx.flush_block_decorator();
             ctx.in_heading = true;
             ctx.heading_prefix_consumed = true;
             ctx.heading_prefix_from_input = true;
@@ -34,6 +35,7 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind, placement: CustomPlacemen
             ctx.close_all_lists();
             ctx.close_table_if_open();
             ctx.emit_start(NodeKind::CodeFence);
+            ctx.flush_block_decorator();
             ctx.in_code_fence = true;
             // A fence that reaches `plugin-markdown` as a `CodeFence` node starts
             // at column 0; indented fences are detected on the raw line instead.
@@ -55,23 +57,31 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind, placement: CustomPlacemen
             }
             ctx.at_line_start = true;
         }
-        // Structured HTML element containers emitted by the img/table plugins.
-        // Their children are already rendered events (including custom
-        // components), so the whole subtree is passed through verbatim.
-        NodeKind::Element(_) => {
-            if ctx.pending_para_start {
-                ctx.emit_start(NodeKind::Paragraph);
-                ctx.pending_para_start = false;
-            }
-            ctx.emit_start_element(kind.clone());
-        }
-        // Handle Custom nodes explicitly based on __plugin_kind metadata
-        NodeKind::Custom(_) => match placement {
-            CustomPlacement::Block => {
+        // Structured HTML element containers emitted by the img/table plugins
+        // (their children are already rendered events) and `Element` nodes an
+        // unclaimed directive/marker falls back to (§10.2/§10.3, D8). Both carry
+        // their placement in `__plugin_kind` (§11 rule 3), so an `Element` is
+        // re-lexed exactly like a `Custom` node when it declares `block` or
+        // `inline`; only the undeclared/`element` case stays verbatim.
+        NodeKind::Element(_) | NodeKind::Custom(_) => match placement {
+            CustomPlacement::Block | CustomPlacement::ListContainer(_) => {
                 ctx.close_blockquotes();
                 ctx.close_all_lists();
                 ctx.close_table_if_open();
                 ctx.emit_start(kind.clone());
+                // §9.3/§9.4: a list-container wrapper (the `unordered` and
+                // `ordered` layers of `plugin-list`) is the container node of the
+                // list below it — the list build adopts it instead of opening a
+                // `<ul>`/`<ol>` of its own, so the wrapper's attributes land on
+                // the container. Without a list in the body the wrapper stays an
+                // ordinary block node.
+                if let CustomPlacement::ListContainer(layer) = placement {
+                    ctx.arm_list_container(layer, kind.clone());
+                    // `plugin-list` consumed the paragraph that held the marker
+                    // lines, so without this the first marker line would be
+                    // emitted as inline text of the container.
+                    ctx.at_line_start = true;
+                }
             }
             CustomPlacement::Element => {
                 // Children were already rendered by the emitting plugin (table
