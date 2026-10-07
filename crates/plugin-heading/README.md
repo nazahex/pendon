@@ -6,8 +6,8 @@ Heading processing, auto-numbering, and custom component plugin for Pendon.
 
 ## What This Plugin Does
 
-- Extracts custom IDs from `[id]` prefix syntax in heading text
-- Parses extra classes, IDs, and key-value attributes from `[.class]{key: val}` blocks
+- Extracts custom IDs from the `[id]` prefix syntax in heading text
+- Parses extra classes, IDs, key-value attributes and flags from a `{…}` extras head
 - Provides hierarchical auto-numbering with two styles: nested (`1.2.3.`) and flat (`3.`)
 - Suppresses leading zeros when documents start below H1 (e.g., H2-first documents produce `1.` not `0.1.`)
 - Auto-generates URL-safe slugs as fallback IDs when no custom ID is provided
@@ -42,6 +42,9 @@ number_style = "nested-number"
 
 ## Heading Extras Syntax
 
+A heading head touches the `#` run; the extras head is a single `{…}` block
+further items may follow inside it.
+
 ### Custom ID
 
 ```md
@@ -50,37 +53,34 @@ number_style = "nested-number"
 
 Produces `<h2 id="introduction">` (or custom component with `id="introduction"`).
 
-### Classes Only
+### Classes and ID in the extras head
 
 ```md
-##[.hero,.featured] Featured Section
+##{.hero, .featured} Featured Section
+
+##[intro]{.hero, .dark} Introduction
 ```
 
-Produces heading with `class="hero featured"`.
-
-### Custom ID with Classes
-
-```md
-##[intro][.hero,.dark] Introduction
-```
-
-Produces heading with `id="intro"` and `class="hero dark"`.
+The first heading has `class="hero featured"`; the second has `id="intro"` and
+`class="hero dark"` (§6.2: the `[slug]` head beats a positional slug).
 
 ### Key-Value Attributes
 
 ```md
-##[intro]{ data-section: "overview", --accent: "blue" } Overview
+##[intro]{data-section: "overview", --accent: "blue"} Overview
 ```
 
-Produces heading with `data-section="overview"` and `style="--accent:blue;"`.
+Produces heading with `data-section="overview"` and `style="--accent: blue;"`.
 
 ### Full Combined Syntax
 
 ```md
-##[intro][.hero,.dark]{ data-section: "overview", --accent: "blue" } Introduction
+##[intro]("Heading X"){.hero, .dark, data-section: "overview", --accent: "blue"} Introduction
 ```
 
-All three parts are independent and optional. Bracket groups and brace blocks can appear in any combination.
+`[slug]`, `("title")` and the extras head are all optional and must be adjacent,
+in that order. The retired `[.class]` bracket and `{key: value}` blocks written
+apart from the head are literal text.
 
 ## Auto-Numbering
 
@@ -157,7 +157,7 @@ coming from the same module are merged into a single `import` statement.
 | `{attrs.slug}`      | Auto-generated slug (only when no custom ID is provided)        |
 | `{attrs.number}`    | Formatted number string without trailing space (`"1"`, `"1.2"`) |
 | `{attrs.raw_title}` | Heading text without extras prefix or number                    |
-| `{attrs.class}`     | Space-separated class list from `[.class]` blocks               |
+| `{attrs.class}`     | Space-separated class list from the extras head                 |
 | `{attrs.data-*}`    | Any extra data attributes from `{key: val}`                     |
 | `{attrs.style}`     | Inline style string from `{--var: val}`                         |
 | `{children}`        | Heading inline content (extras stripped, number NOT prepended)  |
@@ -185,8 +185,8 @@ Without a custom node, the plugin emits standard `Heading` nodes with `level` an
 ## Behavioral Notes
 
 - This plugin processes **structured Heading nodes** — it must run after `plugin-markdown`
-- Extras syntax (`[id][.class]{attrs}`) is stripped from visible text in all modes
-- Multiple bracket groups are supported: `[id][.a][.b]` merges all classes
+- Extras syntax (the `[id]` / `("title")` head and the `{…}` extras head) is stripped from visible text in all modes
+- The head must be adjacent: `## Title {.x}`, `##[id]{.class}` and `{key: val}` written apart are literal text
 - Unquoted values in `{key: val}` are accepted (numbers, booleans stored as strings)
 - Slug generation uses lowercase alphanumeric characters and hyphens only
 - Empty headings (after extras stripping) still receive numbering and ID/slug
@@ -194,7 +194,8 @@ Without a custom node, the plugin emits standard `Heading` nodes with `level` an
 
 ## Scope and Limitations
 
-- Extras parsing is positional: `[id]` must come before `[.class]` which must come before `{attrs}`
+- Extras parsing is positional: `[slug]`, then `("title")`, then the `{…}` extras head
+- Punctuation that does not start `(`, `{` or `@@` right after the head is literal text
 - Nested braces inside `{key: val}` are not supported
 - Comma-separated values inside attribute values are not supported (commas delimit pairs)
 - The plugin does not generate anchor links or permalink icons — use a custom component for those patterns

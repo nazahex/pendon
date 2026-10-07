@@ -12,7 +12,7 @@ export default function PendonView() { return (<>
 </p>
 <Hint type="!"><p>In amet deserunt consequat cupidatat laboris cupidatat.
 </p>
-</Hint><figure class="extra class or" data-baz="23" data-foo="bar" id="custom-id" style="--wix:sum;--rotate:5deg;"><img alt="lorem ipsum" decoding="async" loading="lazy" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" /><figcaption>Proident ex incididunt non sunt ad deserunt proident ex et in fugiat.</figcaption></figure>
+</Hint><figure class="extra class or" data-baz="23" data-foo="bar" id="custom-id" style="--wix: sum; --rotate: 5deg;"><img alt="lorem ipsum" decoding="async" loading="lazy" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" /><figcaption>Proident ex incididunt non sunt ad deserunt proident ex et in fugiat.</figcaption></figure>
 </Parego></section>
 <section id="joo">
 <h2 gaz="12">2. Foo</h2>

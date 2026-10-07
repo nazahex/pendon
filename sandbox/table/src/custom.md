@@ -2,12 +2,12 @@
 
 Adipisicing mollit dolore aute consequat culpa nisi consectetur.
 
-[Laporan Penjualan 2026][.striped,#sales-table,.foo]{sortable: "true", qux: true}
+||{.striped, #sales-table, .foo, sortable: "true", qux: true} Laporan Penjualan 2026||
 | Produk | Stok | Harga | Status |
-| :---(200px)[.v-top] | :---:[.v-top] | ---:(30%)[.v-bottom] | :---: |
+| :---(200px){.v-top} | :---:{.v-top} | ---:(30%){.v-bottom} | :---: |
 | Laptop Pro | 15 | 15.000.000 | Tersedia |
-| Mouse Wireless | > | 250.000 { rox: "rox" } | Tersedia |
-| Keyboard Mekanikal | 0 [.text-red] | 850.000 | Habis | -[.row-danger]
+| Mouse Wireless | > |{rox: "rox"} 250.000 | Tersedia |
+| Keyboard Mekanikal |{.text-red} 0 | 850.000 | Habis |{.row-danger}
 | ^ | 5 | 5.200.000 | Tersedia |
 |===|
 | Total Inventaris | > | 21.300.000 | - |

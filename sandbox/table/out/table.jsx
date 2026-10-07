@@ -2,8 +2,8 @@ export default function PendonView() { return (<>
 <h2>Table Demo</h2>
 <p>Adipisicing mollit dolore aute consequat culpa nisi consectetur.
 </p>
-<table class="striped foo" id="sales-table" qux="true" sortable="true">
-  <caption>Laporan Penjualan 2026</caption>
+<table>
+  <caption class="striped foo" id="sales-table" qux="true" sortable="true">Laporan Penjualan 2026</caption>
   <thead>
     <tr>
       <th class="v-top" style="text-align: left; width: 200px;">Produk</th>

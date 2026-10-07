@@ -8,7 +8,7 @@ export const headings = [{"id":"image","text":"Image","level":2},{"id":"anchor",
 export default function PendonView() { return (<>
 <section id="image">
 <h2>1. Image</h2>
-<figure class="extra class or" data-baz="23" data-foo="bar" id="custom-id" style="--wix:sum;--rotate:5deg;"><img alt="lorem ipsum" decoding="async" height="300" loading="lazy" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" width="800" /><figcaption>Exercitation qui <strong>exercitation</strong> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>o</mi><mi>l</mi><mi>o</mi><mi>r</mi></mrow><annotation encoding="application/x-tex">dolor</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal">o</span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="mord mathnormal" style="margin-right:0.02778em;">or</span></span></span></span>`}></span> &#123;velit&#125; <i>aliqua</i> <a href="/Anim_Esta_(Officia)" title="Anim Esta (Officia)">Anim</a> consectetur <Cite reference={frontmatter.references["suryana-2026"]} index={1} /> voluptate <a href="/foo/bar" rel="noopener noreferrer sponsored nofollow" target="_blank" title="Buy Foo!">labore</a> labore elit non esse occaecat. <Cite reference={frontmatter.references["suryana-2026"]} index={2} loc={"hlm. 45"} /> <Epis level={2}>Et deserunt sunt consectetur elit.</Epis></figcaption></figure>
+<figure class="extra class or" data-baz="23" data-foo="bar" id="custom-id" style="--wix: sum; --rotate: 5deg;"><img alt="lorem ipsum" decoding="async" height="300" loading="lazy" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" width="800" /><figcaption>Exercitation qui <strong>exercitation</strong> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>o</mi><mi>l</mi><mi>o</mi><mi>r</mi></mrow><annotation encoding="application/x-tex">dolor</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal">o</span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="mord mathnormal" style="margin-right:0.02778em;">or</span></span></span></span>`}></span> &#123;velit&#125; <i>aliqua</i> <a href="/Anim_Esta_(Officia)" title="Anim Esta (Officia)">Anim</a> consectetur <Cite reference={frontmatter.references["suryana-2026"]} index={1} /> voluptate <a href="/foo/bar" rel="noopener noreferrer sponsored nofollow" target="_blank" title="Buy Foo!">labore</a> labore elit non esse occaecat. <Cite reference={frontmatter.references["suryana-2026"]} index={2} loc={"hlm. 45"} /> <Epis level={2}>Et deserunt sunt consectetur elit.</Epis></figcaption></figure>
 </section>
 <section id="anchor">
 <h2>2. Anchor</h2>
@@ -28,8 +28,8 @@ export default function PendonView() { return (<>
 </section>
 <section id="table">
 <h2>5. Table</h2>
-<table class="striped foo" id="sales-table" qux="true" sortable="true">
-  <caption>Laporan <a href="https://foo.com" rel="noopener" target="_blank" title="Foo">Penjualan</a> 2026 <a href="/Foo" title="Foo">Foo Bar</a></caption>
+<table>
+  <caption class="striped foo" id="sales-table" qux="true" sortable="true">Laporan <a href="https://foo.com" rel="noopener" target="_blank" title="Foo">Penjualan</a> 2026 <a href="/Foo" title="Foo">Foo Bar</a></caption>
   <thead>
     <tr>
       <th class="v-top" style="text-align: left; width: 200px;">Produk</th>
@@ -41,14 +41,14 @@ export default function PendonView() { return (<>
   <tbody>
     <tr>
       <td class="v-top" style="text-align: left; width: 200px;"><a href="/Laptop_(Pro)" title="Laptop (Pro)">Pro</a></td>
-      <td class="v-top" style="text-align: center;">Foo <img alt="Aternative Text" class="extra class or" data-baz="23" data-foo="bar" id="custom-id" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" style="--wix:sum;--rotate:5deg;" /> Bar</td>
+      <td class="v-top" style="text-align: center;">Foo <img alt="Aternative Text" class="extra class or" data-baz="23" data-foo="bar" id="custom-id" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" style="--wix: sum; --rotate: 5deg;" /> Bar</td>
       <td class="v-bottom" style="text-align: right; width: 30%;">15.000.000</td>
       <td style="text-align: center;"><a href="/foo" rel="nofollow sponsored" target="_self">Tersedia</a></td>
     </tr>
     <tr>
       <td class="v-top" colspan="2" style="text-align: left; width: 200px;">Mouse <a href="/Wireless" title="Wireless">Wireless</a></td>
       <td class="v-bottom" rox="rox" style="text-align: right; width: 30%;">250.000</td>
-      <td style="text-align: center;"><img alt="Aternative Text" class="extra class or" data-baz="23" data-foo="bar" id="custom-id" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" style="--wix:sum;--rotate:5deg;" />
+      <td style="text-align: center;"><img alt="Aternative Text" class="extra class or" data-baz="23" data-foo="bar" id="custom-id" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" style="--wix: sum; --rotate: 5deg;" />
 </td>
     </tr>
     <tr class="row-danger">
@@ -60,7 +60,7 @@ export default function PendonView() { return (<>
     <tr>
       <td class="v-top" style="text-align: center;">5</td>
       <td class="v-bottom" style="text-align: right; width: 30%;">5.200.000</td>
-      <td style="text-align: center;"><img alt="lorem ipsum" class="extra class or" data-baz="23" data-foo="bar" decoding="async" height="300" id="custom-id" loading="lazy" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" style="--wix:sum;--rotate:5deg;" width="800" />Exercitation qui <strong>exercitation</strong> dolor velit <i>aliqua</i> <a href="/Anim_Esta_(Officia)" title="Anim Esta (Officia)">Anim</a> consectetur <Cite reference={frontmatter.references["suryana-2026"]} index={1} /> voluptate <a href="/foo/bar" rel="noopener noreferrer sponsored nofollow" target="_blank" title="Buy Foo!">labore</a> labore elit non esse occaecat. <Cite reference={frontmatter.references["suryana-2026"]} index={2} loc={"hlm. 45"} /></td>
+      <td style="text-align: center;"><img alt="lorem ipsum" class="extra class or" data-baz="23" data-foo="bar" decoding="async" height="300" id="custom-id" loading="lazy" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" style="--wix: sum; --rotate: 5deg;" width="800" />Exercitation qui <strong>exercitation</strong> dolor velit <i>aliqua</i> <a href="/Anim_Esta_(Officia)" title="Anim Esta (Officia)">Anim</a> consectetur <Cite reference={frontmatter.references["suryana-2026"]} index={1} /> voluptate <a href="/foo/bar" rel="noopener noreferrer sponsored nofollow" target="_blank" title="Buy Foo!">labore</a> labore elit non esse occaecat. <Cite reference={frontmatter.references["suryana-2026"]} index={2} loc={"hlm. 45"} /></td>
     </tr>
   </tbody>
   <tfoot>
@@ -135,8 +135,8 @@ export default function PendonView() { return (<>
 <li>Ad excepteur nulla amet cupidatat aliqua.</li>
 <li>Velit adipisicing officia mollit aliquip anim cupidatat aute ad labore.</li>
 </ul>
-</Parego><table class="striped" id="list-table" sortable="true">
-  <caption>Lists in table cells</caption>
+</Parego><table>
+  <caption class="striped" id="list-table" sortable="true">Lists in table cells</caption>
   <thead>
     <tr>
       <th style="text-align: left; width: 160px;">Jenis</th>

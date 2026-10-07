@@ -3,8 +3,8 @@ export default function PendonView() { return (<>
 <h2>Custom Table Demo</h2>
 <p>Adipisicing mollit dolore aute consequat culpa nisi consectetur.
 </p>
-<table class="striped foo" id="sales-table" qux="true" sortable="true">
-  <caption>Laporan <a href="https://foo.com" rel="noopener" target="_blank" title="Foo">Penjualan</a> 2026</caption>
+<table>
+  <caption class="striped foo" id="sales-table" qux="true" sortable="true">Laporan <a href="https://foo.com" rel="noopener" target="_blank" title="Foo">Penjualan</a> 2026</caption>
   <thead>
     <tr>
       <th class="v-top" style="text-align: left; width: 200px;">Produk</th>
@@ -26,7 +26,7 @@ export default function PendonView() { return (<>
       <td style="text-align: center;">Tersedia</td>
     </tr>
     <tr class="row-danger">
-      <td class="v-top" rowspan="2" style="text-align: left; width: 200px;">Keyboard Mekanikal<a href="" title="suryana-2016">^^</a></td>
+      <td class="v-top" rowspan="2" style="text-align: left; width: 200px;">Keyboard Mekanikal<a href="suryana-2016">^^</a></td>
       <td class="v-top text-red" style="text-align: center;">0</td>
       <td class="v-bottom" style="text-align: right; width: 30%;">850.000</td>
       <td style="text-align: center;">Habis</td>

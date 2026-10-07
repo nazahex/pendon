@@ -6,7 +6,7 @@ Citation and bibliography plugin for Pendon.
 
 ## What This Plugin Does
 
-- Parses `[^^]("ref-id")` and `[^^]("ref-id", "location")` inline citation syntax
+- Parses `[^^](ref-id)` and `[^^](ref-id "location")` inline citation syntax
 - Maintains a **shared citation context** so citations in image captions, blockquotes, and other sub-pipelines share the same global index counter
 - Injects `cites` and `references` arrays into the document frontmatter
 - Replaces `{{ footnote }}` section markers with a custom bibliography component
@@ -44,27 +44,33 @@ format = "solid"
 ### Basic Citation
 
 ```md
-According to recent research [^^]("suryana-2026"), software engineering is evolving.
+According to recent research [^^](suryana-2026), software engineering is evolving.
 ```
 
 ### Citation with Location
 
 ```md
-As noted in the literature [^^]("suryana-2026", "hlm. 45"), this trend is accelerating.
+As noted in the literature [^^](suryana-2026 "hlm. 45"), this trend is accelerating.
 ```
 
 ### Citation with Extra Attributes
 
 ```md
-See [^^]("suryana-2026", "hlm. 123")[.highlight,.urgent,#my-cite]{ foo: "bar", --color: "red" }
+See [^^](suryana-2026 "hlm. 123"){.highlight, .urgent, #my-cite, foo: "bar", --color: "red"}
 ```
 
-Extra attribute syntax follows the same convention as `plugin-heading` and `plugin-img`:
+The citation head is the adjacent `[^^](ref "loc")` call: an **unquoted**
+reference and an optional **quoted** location. The extras head that may follow it
+uses the shared `{…}` syntax:
 
-- `[.class1,.class2,#id]` — classes and optional ID
-- `{ key: "value", --css-var: "value" }` — extra properties and CSS custom properties
+- `.class` — appended to the class list; `#id` — the extra ID
+- `key: "value"` — extra props; `--css-var: "value"` — CSS custom properties
 - Keys starting with `--` become inline style entries
 - Values can be quoted or unquoted
+
+The extras head must touch the closing `)` of the call. Retired spellings
+(`[^^]("ref")`, `[^^](ref, "loc")`, `loc=…`, `[^^]()`) are not citations and stay
+literal text.
 
 How the remaining keys are emitted depends on the render target:
 
@@ -80,8 +86,8 @@ How the remaining keys are emitted depends on the render target:
 Identical citations (same reference ID and same location) receive the same index:
 
 ```md
-First mention [^^]("book", "p. 1") and second mention [^^]("book", "p. 1") both get [1].
-Different location [^^]("book", "p. 2") gets [2].
+First mention [^^](book "p. 1") and second mention [^^](book "p. 1") both get [1].
+Different location [^^](book "p. 2") gets [2].
 ```
 
 ## References Configuration
@@ -239,7 +245,7 @@ After processing, the plugin injects or updates the document frontmatter with:
 
 ## Scope and Limitations
 
-- Only supports the `[^^]("id")` and `[^^]("id", "loc")` citation forms
+- Only supports the `[^^](id)` and `[^^](id "loc")` citation forms
 - Named parameters beyond `loc` are not supported (use extra attrs instead)
 - Reference files must be valid YAML with string keys at the top level
 - The plugin does not format bibliography entries — that responsibility belongs to the custom bibliography component

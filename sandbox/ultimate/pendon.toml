@@ -1,0 +1,317 @@
+# =============================================================================
+# PENDON.TOML: CONFIG COMPANION OF ULTIMATE.MD
+# =============================================================================
+# PURPOSE
+#   Drives the combinatorial stress test in src/ultimate.md. One input, three
+#   tasks, so config variations are covered without extra files. Output goes to
+#   out/{full,default,subset}/ultimate.jsx and is compared against frozen
+#   renders (the diff is the test). Run: pendon run -F
+#
+# TASKS (each one verifies a different promise)
+#   1. "Unified Full"     all plugins, custom components on every layer.
+#                         Verifies routing: typed entry, default entry, string
+#                         vs array `type`, string vs array `imports`, custom
+#                         bracket_key/parentheses_key, attrs placeholders.
+#   2. "Unified Defaults" all plugins, NO custom at all. Verifies that every
+#                         construct falls back to built-in elements (directives
+#                         to <span>/<div>, like markers) and that extras still
+#                         become attributes. Keep it empty on purpose.
+#   3. "Unified Subset"   only a few plugins, html off, comments kept.
+#                         Verifies that syntax of a disabled plugin stays
+#                         literal text and never crashes.
+#
+# RULES THAT KEEP THIS FILE USEFUL
+#   - Component names/imports are fake placeholders. Nothing is resolved; they
+#     only need to appear correctly in the generated JSX.
+#   - Every `type` here must match an @@type / ::type / ==type / {{type}} used
+#     in ultimate.md (anchorA/B/C, headingX/Y, imageX/thumb, figureX, citeX,
+#     markerA/footnote/bibliography, asideA/B, note, tableX, tbodyX, tfootX,
+#     rowA/B, cellA/B). Types are ASCII alphanumeric only.
+#   - Some types are intentionally NOT configured (anchorZ, anchor1, headingZ,
+#     figureZ, citeZ, tableZ, captionZ, zzz...) to test the "unclaimed type ->
+#     layer default" path. Do not "fix" them.
+#   - Directive has NO default entry on purpose: unclaimed directives must
+#     render as built-in <span> (inline) / <div> (block).
+#   - Within one layer, use either [table] or [[array of tables]], never both.
+#     Both forms are used across layers on purpose.
+#   - Layer layout follows the latest demo (task.<plugin>.custom.<layer>).
+#     The wiki custom block is commented out because its key is unconfirmed.
+#   - Blockquote and list are NOT configured and NOT in the plugin lists until
+#     Phase 4. Unknown plugin names / unknown task.* keys must not be silent.
+#
+# WHEN THE PROJECT CHANGES
+#   New plugin/layer : add its plugin id to Tasks 1 and 2 (Task 3 only if it
+#                      should be enabled in the subset); in Task 1 add one typed
+#                      entry + one default entry using the types you put in
+#                      ultimate.md; leave Task 2 empty.
+#   New config key   : add one use in Task 1; if it changes fallback behavior,
+#                      also set it in Task 2 or 3.
+#   Renamed/removed  : update every entry and every matching type in
+#                      ultimate.md in the same commit.
+#   Always           : regenerate, review the diff for all 3 tasks by hand,
+#                      then freeze.
+# =============================================================================
+
+# ============================================================================
+# TASK 1: FULL CUSTOM
+# ============================================================================
+
+[[task]]
+name = "Unified Full"
+input = "./src/[slug].md"
+output = "./out/full/[slug].jsx"
+plugin = "micromatter,heading,table,img,directive,cite,wiki,anchor,marker,markdown,latex,syntect,sectionize,extract-heading"
+format = "solid"
+markdown_strip_comments = true
+markdown_allow_html = true
+wiki_link_prefix = "/wiki"
+
+# --- ANCHOR: type array + type string + default; imports string & array -----
+
+[[task.anchor.custom]]
+type = ["anchorA", "anchorB"]
+name = "AnchorAB"
+imports = "import { AnchorAB } from '@comp/shared/Anchor'"
+template = "<AnchorAB type={\"{attrs.type}\"} {...attrs}>{children}</AnchorAB>"
+
+[[task.anchor.custom]]
+type = "anchorC"
+name = "AnchorC"
+imports = ["import { AnchorC } from '@comp/shared/Anchor'", "import '@comp/shared/anchor-c.css'"]
+template = "<AnchorC slug={\"{attrs.slug}\"} title={\"{attrs.title}\"} id={\"{attrs.id}\"} {...attrs}>{children}</AnchorC>"
+
+[[task.anchor.custom]]
+name = "AnchorDefault"
+imports = "import { AnchorDefault } from '@comp/shared/Anchor'"
+template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
+
+# --- HEADING ----------------------------------------------------------------
+
+[task.heading]
+auto_number = true
+number_style = "nested-number"
+
+[[task.heading.custom]]
+type = ["headingX", "headingY"]
+name = "HeadingXY"
+imports = "import { HeadingXY } from '@comp/content/Heading'"
+template = "<HeadingXY level={\"{attrs.level}\"} type={\"{attrs.type}\"} number={\"{attrs.number}\"} {...attrs}>{children}</HeadingXY>"
+
+[[task.heading.custom]]
+name = "HeadingDefault"
+imports = "import { HeadingDefault } from '@comp/content/Heading'"
+template = "<HeadingDefault {...attrs}>{children}</HeadingDefault>"
+
+# --- IMAGE: typed + default for both img and figure -------------------------
+
+[[task.img.custom.img]]
+type = ["imageX", "thumb"]
+name = "ImageThumb"
+imports = "import { ImageThumb } from '@comp/content/AdvancedImage'"
+template = "<ImageThumb type={\"{attrs.type}\"} {...attrs}>{children}</ImageThumb>"
+
+[[task.img.custom.img]]
+name = "AdvancedImage"
+imports = "import AdvancedImage from '@comp/content/AdvancedImage'"
+template = "<AdvancedImage {...attrs}>{children}</AdvancedImage>"
+
+[[task.img.custom.figure]]
+type = ["figureX"]
+name = "FigureX"
+imports = "import { FigureX } from '@comp/content/Figure'"
+template = "<FigureX {...attrs}>{children}</FigureX>"
+
+[[task.img.custom.figure]]
+name = "Figure"
+imports = "import Figure from '@comp/content/Figure'"
+template = "<Figure {...attrs}>{children}</Figure>"
+
+# --- CITE: typed + default --------------------------------------------------
+
+[task.cite]
+reference_source = "internal"
+prefix = "cite-"
+class = "cite-ref"
+id_prefix = "cra-"
+
+[[task.cite.custom]]
+type = ["citeX"]
+name = "CiteX"
+imports = "import { CiteX } from '@comp/content/Cite'"
+template = "<CiteX reference={frontmatter.references[\"{attrs.id}\"]} {...attrs} />"
+
+[[task.cite.custom]]
+name = "Cite"
+imports = "import { Cite } from '@comp/content/Cite'"
+template = "<Cite reference={frontmatter.references[\"{attrs.id}\"]} {...attrs} />"
+
+# --- WIKI: opsional, layout key belum pasti. Aktifkan bila spec mendukung ---
+# [task.wiki.custom.anchor]
+# name = "WikiLink"
+# imports = "import { WikiLink } from '@comp/content/Wiki'"
+# template = "<WikiLink href={\"{attrs.href}\"} {...attrs}>{children}</WikiLink>"
+
+# --- MARKER: type string, type array (self-closing), default ----------------
+
+[[task.marker.custom]]
+type = "bibliography"
+name = "Bibliography"
+imports = "import { Bibliography } from '@comp/content/Cite'"
+template = "<Bibliography cites={frontmatter.cites} references={frontmatter.references} />"
+
+[[task.marker.custom]]
+type = ["markerA", "footnote"]
+name = "MarkerA"
+imports = "import { MarkerA } from '@comp/content/Marker'"
+template = "<MarkerA type={\"{attrs.type}\"} {...attrs}>{children}</MarkerA>"
+
+[[task.marker.custom]]
+name = "MarkerDefault"
+imports = "import { MarkerDefault } from '@comp/content/Marker'"
+template = "<MarkerDefault {...attrs}>{children}</MarkerDefault>"
+
+# --- DIRECTIVE: custom bracket/parentheses keys, no default -> built-in span/div
+
+[[task.directive.custom]]
+type = ["asideA", "asideB"]
+name = "AsideAB"
+bracket_key = "slug"
+parentheses_key = "title"
+imports = "import { AsideAB } from '@comp/content/AsideAB'"
+template = "<AsideAB slug={\"{attrs.slug}\"} title={\"{attrs.title}\"} type={\"{attrs.type}\"} {...attrs}>{children}</AsideAB>"
+
+[[task.directive.custom]]
+type = ["note"]
+name = "Note"
+bracket_key = "id"
+parentheses_key = "level"
+imports = "import Note from '@comp/content/Note'"
+template = "<Note {...attrs}>{children}</Note>"
+
+# --- BLOCKQUOTE / LIST: removed until Phase 4 (plugin-blockquote and plugin-list do not exist).
+#     Q and L sections of ultimate.md are frozen as plain text. Re-add entries when implemented.
+
+# --- TABLE: 7 layers. table/tbody/tfoot typed+default; caption/thead single;
+#            row/cell typed+default -----------------------------------------
+
+[[task.table.custom.table]]
+type = ["tableX"]
+name = "TableX"
+imports = "import { TableX } from '@comp/content/Table'"
+template = "<TableX {...attrs}>{children}</TableX>"
+
+[[task.table.custom.table]]
+name = "Table"
+imports = "import Table from '@comp/content/Table'"
+template = "<Table {...attrs}>{children}</Table>"
+
+[task.table.custom.caption]
+name = "TableCaption"
+imports = "import { TableCaption } from '@comp/content/Table'"
+template = "<TableCaption {...attrs}>{children}</TableCaption>"
+
+[task.table.custom.thead]
+name = "TableHead"
+imports = "import { TableHead } from '@comp/content/Table'"
+template = "<TableHead {...attrs}>{children}</TableHead>"
+
+[[task.table.custom.tbody]]
+type = ["tbodyX"]
+name = "TableBodyX"
+imports = "import { TableBodyX } from '@comp/content/Table'"
+template = "<TableBodyX {...attrs}>{children}</TableBodyX>"
+
+[[task.table.custom.tbody]]
+name = "TableBody"
+imports = "import { TableBody } from '@comp/content/Table'"
+template = "<TableBody {...attrs}>{children}</TableBody>"
+
+[[task.table.custom.tfoot]]
+type = ["tfootX"]
+name = "TableFootX"
+imports = "import { TableFootX } from '@comp/content/Table'"
+template = "<TableFootX {...attrs}>{children}</TableFootX>"
+
+[[task.table.custom.tfoot]]
+name = "TableFoot"
+imports = "import { TableFoot } from '@comp/content/Table'"
+template = "<TableFoot {...attrs}>{children}</TableFoot>"
+
+[[task.table.custom.row]]
+type = ["rowA", "rowB"]
+name = "TableRowAB"
+imports = "import { TableRowAB } from '@comp/content/Table'"
+template = "<TableRowAB type={\"{attrs.type}\"} {...attrs}>{children}</TableRowAB>"
+
+[[task.table.custom.row]]
+name = "TableRowDefault"
+imports = "import { TableRowDefault } from '@comp/content/Table'"
+template = "<TableRowDefault {...attrs}>{children}</TableRowDefault>"
+
+[[task.table.custom.cell]]
+type = ["cellA", "cellB"]
+name = "TableCellAB"
+imports = "import { TableCellAB } from '@comp/content/Table'"
+template = "<TableCellAB type={\"{attrs.type}\"} {...attrs}>{children}</TableCellAB>"
+
+[[task.table.custom.cell]]
+name = "TableCellDefault"
+imports = "import { TableCellDefault } from '@comp/content/Table'"
+template = "<TableCellDefault {...attrs}>{children}</TableCellDefault>"
+
+# ============================================================================
+# TASK 2: DEFAULTS. Semua plugin aktif, TIDAK ada custom sama sekali.
+# Semua konstruk harus jatuh ke elemen HTML bawaan; extras tetap harus
+# muncul sebagai atribut (class, id, data, style var, dst).
+# ============================================================================
+
+[[task]]
+name = "Unified Defaults"
+input = "./src/[slug].md"
+output = "./out/default/[slug].jsx"
+plugin = "micromatter,heading,table,img,directive,cite,wiki,anchor,marker,markdown,latex,syntect,sectionize,extract-heading"
+format = "solid"
+markdown_strip_comments = true
+markdown_allow_html = true
+
+[task.heading]
+auto_number = false
+
+[task.cite]
+reference_source = "internal"
+
+# ============================================================================
+# TASK 3: SUBSET. Plugin dikurangi, html off, comment dipertahankan.
+# Konstruk milik plugin yang tidak aktif (img, cite, wiki, marker, directive) harus tetap jadi teks biasa, tanpa crash. Anchor, heading,
+# table memakai config yang berbeda dari Task 1.
+# ============================================================================
+
+[[task]]
+name = "Unified Subset"
+input = "./src/[slug].md"
+output = "./out/subset/[slug].jsx"
+plugin = "micromatter,heading,table,anchor,markdown"
+format = "solid"
+markdown_strip_comments = false
+markdown_allow_html = false
+
+[task.heading]
+auto_number = true
+number_style = "nested-number"
+
+[[task.anchor.custom]]
+type = ["anchorA", "anchorB", "anchorC", "anchorZ"]
+name = "AnchorAll"
+imports = ["import { AnchorAll } from '@comp/shared/Anchor'"]
+template = "<AnchorAll {...attrs}>{children}</AnchorAll>"
+
+[task.table.custom.table]
+name = "Table"
+imports = "import Table from '@comp/content/Table'"
+template = "<Table {...attrs}>{children}</Table>"
+
+[[task.table.custom.cell]]
+type = ["cellA"]
+name = "TableCellA"
+imports = "import { TableCellA } from '@comp/content/Table'"
+template = "<TableCellA {...attrs}>{children}</TableCellA>"

@@ -2,9 +2,6 @@
 name = "List Inside Plugins (Solid)"
 input = "./src/inside.md"
 output = "./out/inside.jsx"
-plugin = "epis,parego,markdown,hint"
+plugin = "directive,markdown"
 format = "solid"
 markdown_allow_html = true
-
-[plugin-custom]
-source = ["./plugins/index.toml"]

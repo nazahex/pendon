@@ -5,13 +5,3 @@ output = "./out/list.jsx"
 plugin = "markdown"
 format = "solid"
 description = "Vanila List Syntax"
-
-[[task]]
-name = "List Inside Plugins (Solid)"
-input = "./src/inside.md"
-output = "./out/inside.jsx"
-plugin = "epis,parego,markdown,hint"
-format = "solid"
-
-[plugin-custom]
-source = ["./plugins/index.toml"]

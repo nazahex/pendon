@@ -44,7 +44,7 @@ pretty = true
 The core image shape is:
 
 ```text
-<marker>[alt](src)[.class,#id]{key: "val"} <optional-caption>
+<marker>[alt](src){.class, #id, key: "val"} <optional-caption>
 ```
 
 Where:
@@ -52,7 +52,8 @@ Where:
 - `marker` must contain at least one `!`
 - `alt` is the image alt text (can be empty)
 - `src` is the image URL or path
-- `[.class,#id]{key: "val"}` is an optional attribute block
+- `{.class, #id, key: "val"}` is an optional extras head (§5); it must touch the
+  closing `)` of the `(src)` block
 - `caption` is trailing text allowed only in figure mode (`!!`)
 
 ## Marker Rules
@@ -96,22 +97,22 @@ Default HTML output:
 </figure>
 ```
 
-Figure with full attribute block:
+Figure with a full extras head:
 
 ```md
-~?!!h300w800[Alt](https://example.com/image.webp)[.hero,#cover]{foo: "bar", --rotate: "5deg"} A rich caption with [[Wiki Link]] and [^^]("ref-id")
+~?!!h300w800[Alt](https://example.com/image.webp){.hero, #cover, foo: "bar", --rotate: "5deg"} A rich caption with **markup** and a [[Wiki Link]]
 ```
 
 ### 2. Decorated Single Image with Attributes
 
 ```md
-![Alt](https://example.com/image.webp)[.hero,#cover]{foo: "bar", --rotate: "5deg"}
+![Alt](https://example.com/image.webp){.hero, #cover, foo: "bar", --rotate: "5deg"}
 ```
 
 Default HTML output:
 
 ```html
-<img alt="Alt" id="cover" class="hero" data-foo="bar" style="--rotate:5deg;" src="https://example.com/image.webp" />
+<img alt="Alt" class="hero" data-foo="bar" id="cover" src="https://example.com/image.webp" style="--rotate: 5deg;" />
 ```
 
 ### 3. Single Image with Marker Modifiers Only
@@ -133,8 +134,8 @@ Default HTML output:
 Wrap a non-figure image in a `<p>` or `<div>`:
 
 ```md
-p![Alt](https://example.com/image.webp)[.wrapper]
-d~!w300[Alt](https://example.com/image.webp){data-section: "hero"}
+p![Alt](https://example.com/image.webp){.wrapper}
+d~!w300[Alt](https://example.com/image.webp){section: "hero"}
 ```
 
 Output:
@@ -150,13 +151,13 @@ An advanced image can be embedded inside a paragraph alongside other text. It is
 transformed in place, so the surrounding text is preserved:
 
 ```md
-Ad ex tempor !?~[Alt](https://example.com/image.webp)[.foo]{con: "jux"} consectetur.
+Ad ex tempor !?~[Alt](https://example.com/image.webp){.foo, con: "jux"} consectetur.
 ```
 
 Default HTML output:
 
 ```html
-<p>Ad ex tempor <img decoding="async" loading="lazy" alt="Alt" class="foo" data-con="jux" src="https://example.com/image.webp" /> consectetur.</p>
+<p>Ad ex tempor <img alt="Alt" class="foo" data-con="jux" decoding="async" loading="lazy" src="https://example.com/image.webp" /> consectetur.</p>
 ```
 
 Only bare (`<img>`) markers are eligible for inline transformation. Figure (`!!`)
@@ -166,28 +167,28 @@ attribute block is left untouched for `plugin-markdown` to handle.
 
 ## Attribute Block Format
 
-The attribute block has two independent parts:
+The extras head is a single `{…}` block:
 
 ```text
-[.class1,.class2,#id]{key: "value", --var: "value"}
+{.class1, .class2, #id, key: "value", --var: "value"}
 ```
 
-**Class/ID section** (`[...]`):
+**Class/ID items:**
 
 - `.name` → added to class list
 - `#name` → sets the `id` attribute
 - Comma-separated, whitespace-tolerant
 
-**Key/value section** (`{...}`):
+**Key/value items:**
 
-- Keys starting with `--` → inline style entries (`style="--var:value;"`)
+- Keys starting with `--` → inline style entries (`style="--var: value;"`)
 - All other keys → `data-{key}="value"` attributes in the default HTML output
 - With a `custom_node`, all other keys are passed through verbatim as component
   props (`key={...}`) instead, since Solid components expect plain props without
   a `data-` prefix
 - Comma-separated, quoted or unquoted values accepted
 
-Both sections are optional and can appear independently.
+Every item is optional.
 
 ## Custom Solid Component
 
@@ -254,7 +255,7 @@ Boolean flags (`lazy`, `async_decoding`) are emitted as `"1"` strings. Cast them
 Caption content is processed through the shared inline pipeline **before** markdown rendering. This means captions can contain:
 
 - **Wiki links**: `[[Target | Label]]` → processed by `plugin-wiki`
-- **Citations**: `[^^]("ref-id", "loc")` → processed by `plugin-cite` with shared index counter
+- **Citations**: `[^^](ref-id "loc")` → processed by `plugin-cite` with shared index counter
 - **Anchor links**: `[text](url^--$!)` → processed by `plugin-anchor` with modifier support
 - **Standard markdown**: `**bold**`, `*italic*`, `` `code` `` → processed by `plugin-markdown`
 

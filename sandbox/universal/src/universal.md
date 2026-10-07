@@ -37,33 +37,33 @@ references:
 
 ## Image
 
-~?!!h300w800[lorem ipsum](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp)[.extra,.class,.or,#custom-id]{foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg"} Exercitation qui **exercitation** $dolor$ {velit} _aliqua_ [[Anim Esta (Officia) | Anim]] consectetur [^^]("suryana-2026") voluptate [labore](/foo/bar^--$! "Buy Foo!") labore elit non esse occaecat. [^^]("suryana-2026", "hlm. 45") ::[ep2] Et deserunt sunt consectetur elit.::
+~?!!h300w800[lorem ipsum](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp){.extra, .class, .or, #custom-id, foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg"} Exercitation qui **exercitation** $dolor$ {velit} _aliqua_ [[Anim Esta (Officia) | Anim]] consectetur [^^](suryana-2026) voluptate [labore](/foo/bar^--$! "Buy Foo!") labore elit non esse occaecat. [^^](suryana-2026 "hlm. 45") ::[ep2] Et deserunt sunt consectetur elit.::
 
 ## Anchor
 
-[consectetur](https://foo.com/bar--!~$ "Title Foo")[.extra,.qur,#rew]{rel: "prefetch", hreflang: "en", qux: "rox"} Incididunt {cupidatat} quis et pariatur commodo laborum consectetur anim do minim anim in.
+[consectetur](https://foo.com/bar--!~$ "Title Foo"){.extra, .qur, #rew, rel: "prefetch", hreflang: "en", qux: "rox"} Incididunt {cupidatat} quis et pariatur commodo laborum consectetur anim do minim anim in.
 
 ## Cite
 
-Minim [^^]("paper-smith")[.paper,#smith]{rox:"hen"} esse do ut anim proident est qui $F$ magna non elit quis eiusmod dolore.
+Minim [^^](paper-smith){.paper, #smith, rox:"hen"} esse do ut anim proident est qui $F$ magna non elit quis eiusmod dolore.
 
 ##[heading-slug] Heading
 
-###[foo-bar][.hoo]{ qun: "anu" } Foo Bar Barosa
+###[foo-bar]{.hoo, qun: "anu"} Foo Bar Barosa
 
 ## Table
 
-[Laporan [Penjualan](https://foo.com "Foo") 2026 [[Foo | Foo Bar]]][.striped,#sales-table,.foo]{sortable: "true", qux: true}
+||{.striped, #sales-table, .foo, sortable: "true", qux: true} Laporan [Penjualan](https://foo.com "Foo") 2026 [[Foo | Foo Bar]]||
 | Produk | Stok | Harga | Status |
-| :---(200px)[.v-top] | :---:[.v-top] | ---:(30%)[.v-bottom] | :---: |
-| [[Laptop (Pro) | Pro]] | Foo ![Aternative Text](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp)[.extra,.class,.or,#custom-id]{foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg" } Bar | 15.000.000 | [Tersedia](/foo!~$) |
-| Mouse [[Wireless]] | > | 250.000 { rox: "rox" } | ![Aternative Text](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp)[.extra,.class,.or,#custom-id]{foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg" } |
-| {Keyboard} Mekanikal[^^]("suryana-2026") | 0 [.text-red] | $850.000$ | Habis | -[.row-danger]
-| ^ | 5 | 5.200.000 | ~?!h300w800[lorem ipsum](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp)[.extra,.class,.or,#custom-id]{foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg"} Exercitation qui **exercitation** dolor velit _aliqua_ [[Anim Esta (Officia) | Anim]] consectetur [^^]("suryana-2026") voluptate [labore](/foo/bar^--$! "Buy Foo!") labore elit non esse occaecat. [^^]("suryana-2026", "hlm. 45") |
+| :---(200px){.v-top} | :---:{.v-top} | ---:(30%){.v-bottom} | :---: |
+| [[Laptop (Pro) | Pro]] | Foo ![Aternative Text](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp){.extra, .class, .or, #custom-id, foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg"} Bar | 15.000.000 | [Tersedia](/foo!~$) |
+| Mouse [[Wireless]] | > |{rox: "rox"} 250.000 | ![Aternative Text](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp){.extra, .class, .or, #custom-id, foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg"} |
+| {Keyboard} Mekanikal[^^](suryana-2026) |{.text-red} 0 | $850.000$ | Habis |{.row-danger}
+| ^ | 5 | 5.200.000 | ~?!h300w800[lorem ipsum](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp){.extra, .class, .or, #custom-id, foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg"} Exercitation qui **exercitation** dolor velit _aliqua_ [[Anim Esta (Officia) | Anim]] consectetur [^^](suryana-2026) voluptate [labore](/foo/bar^--$! "Buy Foo!") labore elit non esse occaecat. [^^](suryana-2026 "hlm. 45") |
 |===|
 | Total Inventaris | > | 21.300.000 | - |
 
-[^^]("suryana-2026")
+[^^](suryana-2026)
 
 ## Latex
 
@@ -77,7 +77,7 @@ Rumus ini dibaca: bila $H$ mengimplikasikan $O$ dan $O$ tidak terjadi, maka $H$ 
 
 :::note["Foo Bar"]("Bax Xo")
 
-Ullamco excepteur adipisicing quis ullamco ea mollit et nulla sint non et id commodo commodo [^^]("suryana-2026", "hlm. 45")[.suyn,#surya]{rox:"hen"}::[ep3] Aliquip commodo commodo et ut reprehenderit qui magna laboris et.::.
+Ullamco excepteur adipisicing quis ullamco ea mollit et nulla sint non et id commodo commodo [^^](suryana-2026 "hlm. 45"){.suyn, #surya, rox:"hen"}::[ep3] Aliquip commodo commodo et ut reprehenderit qui magna laboris et.::.
 
 > ! In amet deserunt consequat cupidatat laboris cupidatat.
 
@@ -131,7 +131,7 @@ Ullamco excepteur adipisicing quis ullamco ea mollit et nulla sint non et id com
 
 :::
 
-[Lists in table cells][.striped,#list-table]{sortable: "true"}
+||{.striped, #list-table, sortable: "true"} Lists in table cells||
 | Jenis | Isi Sel |
 | :---(160px) | :--- |
 | Bullet | - Alpha\n- Beta\n- Gamma |

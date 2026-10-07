@@ -47,28 +47,31 @@ The plugin replaces rigid Markdown tables with a flexible, attribute-rich struct
 
 ### Caption & Table Attributes
 
-Place the caption and global table attributes on the line immediately preceding the table header.
+Place the caption on the line immediately preceding the table header: the caption
+text sits between the `||` markers and an optional extras head touches the
+opening `||` (§8).
 
 ```md
-[Laporan Penjualan 2026][.striped,#sales-table]{sortable: "true", qux: true}
+||{.striped, #sales-table, sortable: "true", qux: true} Laporan Penjualan 2026||
 | Produk | Stok | Harga |
 ```
 
-- **Caption text** goes in the first bracket pair.
-- **Classes and IDs** go in the second bracket pair.
-- **Extra attributes** go in the curly braces.
+- **Caption text** goes between the `||` markers.
+- **Classes, IDs and extra attributes** go in the extras head in front of the
+  caption, which must touch the opening `||`.
 
 ### Alignment & Column Specs
 
 Column alignment, width, and default classes are controlled via the delimiter row.
 
 ```md
-| :---(200px)[.v-top] | :---:[.v-top] | ---:(30%)[.v-bottom] |
+| :---(200px){.v-top} | :---:{.v-top} | ---:(30%){.v-bottom} |
 ```
 
 - **Horizontal alignment** follows GFM rules (`:---` left, `:---:` center, `---:` right).
 - **Width specifiers** use parentheses `(200px)` immediately after the dashes.
-- **Column classes** use brackets `[.v-top]` to inject attributes into every cell in that column.
+- **Column classes** use an extras head `{.v-top}` after the alignment and width
+  code, touching it; it injects attributes into every cell in that column.
 
 ### Colspan & Rowspan Merging
 
@@ -87,11 +90,12 @@ Use special single-character markers to merge cells across the 2D grid.
 Inject granular attributes directly into specific cells or entire rows.
 
 ```md
-| Keyboard | 0 [.text-red] | 850.000 | Habis | -[.row-danger]
+| Keyboard |{.text-red} 0 | 850.000 | Habis |{.row-danger}
 ```
 
-- **Cell attributes** are placed inside the cell, separated by a space.
-- **Row attributes** are placed at the very end of the row, optionally prefixed with a dash `-`.
+- **Cell attributes** go in an extras head in front of the cell content, touching
+  the opening `|` of that cell.
+- **Row attributes** go in an extras head after the last `|` of the row.
 
 ### Multi-Line Cells
 
@@ -227,7 +231,7 @@ This is where the plugin truly shines. Text inside captions and cells is not tre
 It is routed through the **shared inline pipeline** before final rendering. This means your table cells natively support:
 
 - **Wiki links**: `[[Target | Label]]`
-- **Citations**: `[^^]("ref-id", "loc")`
+- **Citations**: `[^^](ref-id "loc")`
 - **Advanced images**: `~?!!h300[Alt](src)`
 - **Standard Markdown**: `**bold**`, `*italic*`, `` `code` ``
 
