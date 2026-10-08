@@ -12,10 +12,12 @@ then parses the interior of every `Section` this plugin emits.
   or shallower heading closes the open sections first.
 - Content before the first heading is wrapped in a preface `Section` (level 0).
 - **Section decorator.** A decorator line directly above a heading
-  (`@@sectionA{…}` / `{…}`, optional indentation, blank line allowed) decorates
-  the **section**, not the heading — the heading already owns its extras on its
-  `#` run. The decorator is bound through `pendon-extra` like the other block
-  binders.
+  (`@@sectionA[intro]("title"){.x}` / `@@[intro]("title"){.x}` / `{…}`, optional
+  indentation, blank line allowed) decorates the **section**, not the heading —
+  the heading already owns its extras on its `#` run. The decorator is bound
+  through `pendon-extra` like the other block binders, and may carry positional
+  groups (`[…]` / `(…)`) that are resolved via the section type's
+  `bracket_key`/`parentheses_key`.
 - **ID priority.** The section id is the first available of `#sectionID`
   (decorator `#id`) > `` `slug-section` `` (decorator slug) > `` `slug-head` ``
   (heading `[slug]`) > `` `slug-head-extras` `` (heading extras slug) > the slug
@@ -53,3 +55,10 @@ template = "<DocSection {...attrs}>{children}</DocSection>"
 `section` is the plugin's only (primary) layer, so `[task.section.custom]` and
 `[task.section.custom.section]` are equivalent. Without a component the built-in
 `<section>` element is used.
+
+### Positional keys (§6.1 / §11 rule 5)
+
+An entry may rename the §6.1 positional slots in its extras head: `backtick_key`
+(default `slug`) for a `` `slug` `` item and `quote_key` (default `title`) for a
+`"title"` item. Keys the entry leaves unset keep the built-in default, so an
+entry with no overrides behaves exactly as before.

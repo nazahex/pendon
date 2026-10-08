@@ -62,9 +62,10 @@ pub fn process_with_options(events: &[Event], opts: MarkdownOptions) -> Vec<Even
     // run first and have already consumed the decorators of the lists and quotes
     // they own, and a heading's decorator belongs to `plugin-section`, so
     // `markdown_target` declines those and leaves any still-present one in the
-    // stream for the right binder.
-    let extras = ExtrasOptions::default();
-    let bindings = bind_decorators(events, &extras, markdown_target);
+    // stream for the right binder. Its blocks carry no §11 component set, so the
+    // §6.1 positional keys stay the built-in `slug` / `title`.
+    let keys = |_: Option<&str>| ExtrasOptions::default();
+    let bindings = bind_decorators(events, &keys, markdown_target);
     let decorators: std::collections::HashMap<usize, &BoundDecorator> = bindings
         .bound
         .iter()

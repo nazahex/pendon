@@ -42,7 +42,7 @@
 use std::collections::HashMap;
 
 use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::{bind_decorators, emit_attrs, warning_message, BoundDecorator, ExtrasOptions};
+use pendon_extra::{bind_decorators, emit_attrs, warning_message, BoundDecorator};
 use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
 
@@ -83,8 +83,17 @@ pub fn primary_layer() -> &'static str {
 
 /// §9.3 L1: binds a container decorator line to the list below it.
 pub fn process(events: &[Event], options: &ListOptions) -> Vec<Event> {
-    let extras = ExtrasOptions::default();
-    let bindings = bind_decorators(events, &extras, list_target);
+    // §6.1/§11 rule 5: a decorator's positional keys come from the container
+    // entry it names, across the three layers `plugin-list` owns.
+    let keys = |target: Option<&str>| {
+        options
+            .unordered
+            .keys_for_opt(target)
+            .or_else(|| options.ordered.keys_for_opt(target))
+            .or_else(|| options.list.keys_for_opt(target))
+            .unwrap_or_default()
+    };
+    let bindings = bind_decorators(events, &keys, list_target);
     let decorators: HashMap<usize, &BoundDecorator> = bindings
         .bound
         .iter()

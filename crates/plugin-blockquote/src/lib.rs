@@ -29,7 +29,7 @@ use std::collections::HashMap;
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
     bind_decorators, emit_attrs, parse_extras, to_attributes, warning_message, Attrs,
-    BoundDecorator, ExtrasMatch, ExtrasOptions,
+    BoundDecorator, ExtrasMatch,
 };
 use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
@@ -57,9 +57,9 @@ pub struct BlockquoteOptions {
 /// §9.2: preprocess every blockquote so its extras are attributes of the quote
 /// node.
 pub fn process(events: &[Event], options: &BlockquoteOptions) -> Vec<Event> {
-    let extras = ExtrasOptions::default();
     // §9.1: a decorator line directly above the quote decorates it too.
-    let bindings = bind_decorators(events, &extras, quote_target);
+    let keys = |target: Option<&str>| options.custom.keys_for(target);
+    let bindings = bind_decorators(events, &keys, quote_target);
     let decorators: HashMap<usize, &BoundDecorator> = bindings
         .bound
         .iter()
@@ -89,7 +89,6 @@ pub fn process(events: &[Event], options: &BlockquoteOptions) -> Vec<Event> {
             &bindings.events[(i + 1)..end],
             decorators.get(&i).copied(),
             options,
-            &extras,
             &mut out,
         );
         i = end + 1;
@@ -199,7 +198,6 @@ fn emit_quote(
     paragraph: &[Event],
     decorator: Option<&BoundDecorator>,
     options: &BlockquoteOptions,
-    extras: &ExtrasOptions,
     out: &mut Vec<Event>,
 ) {
     let mut inner = Attrs::default();
@@ -224,7 +222,8 @@ fn emit_quote(
                 // space between the head and the content is allowed here.
                 ExtrasMatch::Head { head, rest } => {
                     type_marker = head.type_marker.clone();
-                    inner = to_attributes(&head, extras);
+                    inner =
+                        to_attributes(&head, &options.custom.keys_for(head.type_marker.as_deref()));
                     body.push(Event::Text(rest.trim_start_matches(' ').to_string()));
                 }
                 // §4.3: an absent or malformed head stays literal text.

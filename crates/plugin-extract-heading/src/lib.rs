@@ -240,27 +240,37 @@ fn collect_headings(events: &[Event]) -> Vec<PendonHeading> {
 ///
 /// `plugin-heading` replaces `NodeKind::Heading` with `NodeKind::Custom(name)`
 /// when a custom template is configured (§11 rule 3), so the metadata pass has
-/// to recognise those components as headings as well. `level` is heading's
-/// signature: no other plugin emits it on a `Custom` node — `plugin-markdown`
-/// only ever writes it on `Heading` — so its presence marks the component as a
-/// heading.
+/// to recognise those components as headings as well.
+///
+/// `level` marks the component as a heading *unless* the node also carries the
+/// internal `__plugin_kind` marker. §11 rule 5 lets any layer rename a positional
+/// slot to `level` (`parentheses_key = "level"`), and directives/customs always
+/// emit `__plugin_kind` first, so the marker keeps them out of the outline while
+/// heading components (which never emit it) stay recognised.
 ///
 /// §13 warnings are pushed as `Diagnostic` events immediately after
 /// `StartNode` and *before* the attribute run, so they are skipped alongside
 /// the attributes; the first content event ends the look-ahead.
 fn is_heading_component(events: &[Event], start_idx: usize) -> bool {
+    let mut saw_level = false;
+    let mut has_plugin_marker = false;
     for event in &events[start_idx + 1..] {
         match event {
             Event::Attribute { name, value } if name == "level" => {
-                return value.parse::<usize>().is_ok();
+                saw_level = value.parse::<usize>().is_ok();
+            }
+            Event::Attribute { name, .. } | Event::AttributeFlag { name }
+                if name == "__plugin_kind" =>
+            {
+                has_plugin_marker = true;
             }
             Event::Attribute { .. } | Event::AttributeFlag { .. } | Event::Diagnostic { .. } => {
                 continue
             }
-            _ => return false,
+            _ => break,
         }
     }
-    false
+    saw_level && !has_plugin_marker
 }
 
 /// Consumes the events of one heading node opening at `start_idx`.

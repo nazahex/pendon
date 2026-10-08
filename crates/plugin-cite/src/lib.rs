@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead, ExtrasOptions};
+use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead};
 use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde_json::{Map, Value};
 
@@ -278,7 +278,8 @@ fn emit_text(text: &str, ctx: &mut CitationContext, out: &mut Vec<Event>) {
 
     while cursor < chars.len() {
         if chars[cursor..].starts_with(&['[', '^', '^', ']', '(']) {
-            if let Some((end, id, props, mut extra)) = parse_citation(&chars, cursor) {
+            if let Some((end, id, props, mut extra)) = parse_citation(&chars, cursor, ctx.options())
+            {
                 flush_text(&mut normal, out);
 
                 // §7.3/§6.2: the cite args are the construct head and win over
@@ -501,6 +502,7 @@ fn cite_style(extra: &CiteExtraAttrs) -> String {
 fn parse_citation(
     chars: &[char],
     start: usize,
+    options: &CiteOptions,
 ) -> Option<(usize, String, BTreeMap<String, String>, CiteExtraAttrs)> {
     // `[^^](` is five characters.
     let mut cursor = start + 5;
@@ -556,7 +558,7 @@ fn parse_citation(
     }
     cursor += 1;
 
-    let extra = parse_cite_extra_attrs(chars, &mut cursor);
+    let extra = parse_cite_extra_attrs(chars, &mut cursor, options);
     Some((cursor, id, props, extra))
 }
 
@@ -564,14 +566,18 @@ fn parse_citation(
 /// `@@type{…}` extras head. It attaches to the citation node; the construct head
 /// (the citation args) wins (§6.2). The retired `[.class,#id]{key: val}` block is
 /// literal text (§14).
-fn parse_cite_extra_attrs(chars: &[char], cursor: &mut usize) -> CiteExtraAttrs {
+fn parse_cite_extra_attrs(
+    chars: &[char],
+    cursor: &mut usize,
+    options: &CiteOptions,
+) -> CiteExtraAttrs {
     let mut extra = CiteExtraAttrs::default();
 
     // §7.3/§4.1: the extras head must be adjacent (`[^^](book)@@cite{…}`).
     let rest: Vec<char> = chars[*cursor..].to_vec();
     if let Some((head, next)) = scan_extras_chars(&rest, 0) {
         *cursor += next;
-        merge_cite_extras(&mut extra, &head);
+        merge_cite_extras(&mut extra, &head, options);
     }
 
     extra
@@ -582,18 +588,22 @@ fn parse_cite_extra_attrs(chars: &[char], cursor: &mut usize) -> CiteExtraAttrs 
 /// The construct side wins (§6.2): a slot the head or the deprecated block
 /// already set is kept and the extras value is reported as dropped. `class`
 /// accumulates (§6.4) and bare flags stay bare attributes (§6.3).
-fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead) {
-    let parsed = to_attributes(head, &ExtrasOptions::default());
+fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead, options: &CiteOptions) {
+    // §6.1/§11 rule 5: the entry answering this marker names the extras keys.
+    let keys = options.custom.keys_for(head.type_marker.as_deref());
+    let parsed = to_attributes(head, &keys);
     for warning in &parsed.warnings {
         extra.warnings.push(pendon_extra::warning_message(warning));
     }
 
     // §6.2: `#id` > extras `slug`; both feed the `cite-id` slot.
     let extras_id = parsed.value("id").map(|value| value.literal());
-    let extras_slug = parsed.value("slug").map(|value| value.literal());
+    let extras_slug = parsed
+        .value(&keys.backtick_key)
+        .map(|value| value.literal());
 
     for (key, value) in &parsed.items {
-        if key == "id" || key == "slug" {
+        if key == "id" || key == &keys.backtick_key {
             continue;
         }
         match value {
@@ -892,7 +902,7 @@ mod tests {
             r#"[^^](book "p. 1"){.highlight, .urgent, #my-cite, foo: "bar", --color: "red"}"#
                 .chars()
                 .collect();
-        let (end, id, props, extra) = parse_citation(&chars, 0).unwrap();
+        let (end, id, props, extra) = parse_citation(&chars, 0, &CiteOptions::default()).unwrap();
         assert_eq!(id, "book");
         assert_eq!(props.get("loc").map(|s| s.as_str()), Some("p. 1"));
         assert_eq!(extra.classes, vec!["highlight", "urgent"]);
@@ -914,7 +924,7 @@ mod tests {
         ] {
             let chars: Vec<char> = source.chars().collect();
             assert!(
-                parse_citation(&chars, 0).is_none(),
+                parse_citation(&chars, 0, &CiteOptions::default()).is_none(),
                 "{source} must stay literal"
             );
         }
@@ -1005,7 +1015,7 @@ mod tests {
             r#"[^^](book)@@cite{.highlight, #short, note: "x", --color: "red"} tail"#
                 .chars()
                 .collect();
-        let (end, id, props, extra) = parse_citation(&chars, 0).unwrap();
+        let (end, id, props, extra) = parse_citation(&chars, 0, &CiteOptions::default()).unwrap();
         assert_eq!(id, "book");
         assert!(props.is_empty());
         assert_eq!(extra.classes, vec!["highlight"]);

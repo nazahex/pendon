@@ -7,8 +7,8 @@ Binds the **extras** a blockquote may carry to the quote node, before
 extras may use:
 
 ```text
-@@quoteA{.x}          ← §9.1 decorator line, directly above the quote
-> @@quoteA{.x} quoted ← §9.2 inner head, immediately inside the quote
+@@quoteA[intro]("title"){.x}          ← §9.1 decorator line with positional groups, directly above the quote
+> @@quoteA[intro]("title"){.x} quoted ← §9.2 inner head with positional groups, immediately inside the quote
 ```
 
 When both are present the **inner** head wins (§9.2).
@@ -55,6 +55,13 @@ let jsx = render_solid_with_hints(&markdown(&events), solid_hints(&options).as_r
 
 `primary_layer()` is `blockquote` — the key `[[task.blockquote.custom]]`
 addresses.
+
+### Positional keys (§6.1 / §11 rule 5)
+
+An entry may rename the §6.1 positional slots in its extras head: `backtick_key`
+(default `slug`) for a `` `slug` `` item and `quote_key` (default `title`) for a
+`"title"` item. Keys the entry leaves unset keep the built-in default, so an
+entry with no overrides behaves exactly as before.
 
 ## Notes
 

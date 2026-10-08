@@ -20,7 +20,10 @@
 //! ignored: a marker has exactly one type.
 
 use pendon_core::{element_close, element_open, Event, NodeKind, Severity};
-use pendon_extra::{scan_extras_chars, to_attributes, warning_message, ExtrasAttr, ExtrasOptions};
+use pendon_extra::{
+    read_positional_groups, scan_extras_chars, to_attributes, warning_message, ExtrasAttr,
+    ExtrasHead, ExtrasWarning,
+};
 use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
 
@@ -59,7 +62,8 @@ pub fn process(events: &[Event], options: &MarkerOptions) -> Vec<Event> {
             // marker node itself (no `<p>` wrapper, no absorbed next block).
             Event::StartNode(NodeKind::Paragraph) if excluded == 0 => {
                 if let Some(end) = matching_paragraph_end(&events, index) {
-                    if let Some((marker, children)) = block_marker(&events[index + 1..end]) {
+                    if let Some((marker, children)) = block_marker(&events[index + 1..end], options)
+                    {
                         emit_marker(&marker, true, options, children.as_deref(), &mut out);
                         index = end + 1;
                         continue;
@@ -131,7 +135,11 @@ fn is_verbatim(kind: &NodeKind) -> bool {
 ///
 /// `None` when the text is not a marker, which keeps `{{`, `{{}}`, a missing
 /// `}}` and a type with illegal characters as literal text (§10.1, §4.3).
-fn scan_marker(chars: &[char], start: usize) -> Option<(ParsedMarker, usize)> {
+fn scan_marker(
+    chars: &[char],
+    start: usize,
+    options: &MarkerOptions,
+) -> Option<(ParsedMarker, usize)> {
     if chars.get(start) != Some(&'{') || chars.get(start + 1) != Some(&'{') {
         return None;
     }
@@ -163,11 +171,52 @@ fn scan_marker(chars: &[char], start: usize) -> Option<(ParsedMarker, usize)> {
         ..ParsedMarker::default()
     };
 
+    // §6.1/§10.1: the positional groups sit directly after `}}`, before any
+    // extras head (`{{type}}[…](…){…}`). They are optional; a malformed group
+    // is not consumed and stays literal text with the marker (§4.3).
+    let mut group_bracket: Option<String> = None;
+    let mut group_parentheses: Option<String> = None;
+    if cursor < chars.len() {
+        let text: String = chars[cursor..].iter().collect();
+        if let Ok((bracket, parentheses, consumed)) = read_positional_groups(&text) {
+            if bracket.is_some() || parentheses.is_some() {
+                group_bracket = bracket;
+                group_parentheses = parentheses;
+                cursor += text[..consumed].chars().count();
+            }
+        }
+    }
+
+    // §6.1/§11 rule 5: the entry answering this marker `type` names the
+    // extras positional keys; the groups map through the same keys.
+    let keys = options.custom.keys_for(Some(marker.type_name.as_str()));
+
     // §4.1: the extras head must be adjacent; a malformed one is left alone
     // (the marker still renders, §4.3).
-    if let Some((head, next)) = scan_extras_chars(chars, cursor) {
+    if let Some((mut head, next)) = scan_extras_chars(chars, cursor) {
         cursor = next;
-        let parsed = to_attributes(&head, &ExtrasOptions::default());
+        // §6.2 head-wins: the marker's own groups beat the extras head's.
+        if group_bracket.is_some() && head.bracket.is_some() {
+            marker
+                .warnings
+                .push(warning_message(&ExtrasWarning::Overridden {
+                    key: keys.bracket_key.clone(),
+                }));
+        }
+        if group_parentheses.is_some() && head.parentheses.is_some() {
+            marker
+                .warnings
+                .push(warning_message(&ExtrasWarning::Overridden {
+                    key: keys.parentheses_key.clone(),
+                }));
+        }
+        if group_bracket.is_some() {
+            head.bracket = group_bracket.clone();
+        }
+        if group_parentheses.is_some() {
+            head.parentheses = group_parentheses.clone();
+        }
+        let parsed = to_attributes(&head, &keys);
         for warning in &parsed.warnings {
             marker.warnings.push(warning_message(warning));
         }
@@ -178,6 +227,18 @@ fn scan_marker(chars: &[char], start: usize) -> Option<(ParsedMarker, usize)> {
             );
         }
         marker.attrs = parsed.items;
+    } else if group_bracket.is_some() || group_parentheses.is_some() {
+        // Groups without an extras head still resolve to attributes (§6.1).
+        let head = ExtrasHead {
+            bracket: group_bracket,
+            parentheses: group_parentheses,
+            ..ExtrasHead::default()
+        };
+        let parsed = to_attributes(&head, &keys);
+        for warning in &parsed.warnings {
+            marker.warnings.push(warning_message(warning));
+        }
+        marker.attrs = parsed.items;
     }
 
     Some((marker, cursor))
@@ -186,7 +247,10 @@ fn scan_marker(chars: &[char], start: usize) -> Option<(ParsedMarker, usize)> {
 /// The block form: a paragraph whose text starts (after whitespace) with a
 /// marker. Returns the marker and the trailing text of the same line, which
 /// becomes its `children`.
-fn block_marker(inner: &[Event]) -> Option<(ParsedMarker, Option<String>)> {
+fn block_marker(
+    inner: &[Event],
+    options: &MarkerOptions,
+) -> Option<(ParsedMarker, Option<String>)> {
     if !inner
         .iter()
         .all(|event| matches!(event, Event::Text(_) | Event::Diagnostic { .. }))
@@ -206,7 +270,7 @@ fn block_marker(inner: &[Event]) -> Option<(ParsedMarker, Option<String>)> {
         .iter()
         .take_while(|character| character.is_whitespace())
         .count();
-    let (marker, next) = scan_marker(&chars, start)?;
+    let (marker, next) = scan_marker(&chars, start, options)?;
     let rest: String = chars[next..].iter().collect();
     let rest = rest.trim().to_string();
     Some((marker, (!rest.is_empty()).then_some(rest)))
@@ -220,7 +284,7 @@ fn emit_inline_text(text: &str, options: &MarkerOptions, out: &mut Vec<Event>) {
 
     while cursor < chars.len() {
         if chars[cursor] == '{' && chars.get(cursor + 1) == Some(&'{') {
-            if let Some((marker, next)) = scan_marker(&chars, cursor) {
+            if let Some((marker, next)) = scan_marker(&chars, cursor, options) {
                 flush(&mut plain, out);
                 emit_marker(&marker, false, options, None, out);
                 cursor = next;
@@ -485,6 +549,66 @@ mod tests {
         assert_eq!(attr(&out, "level").as_deref(), Some("2"));
         assert_eq!(attr(&out, "style").as_deref(), Some("--tone: red"));
         assert!(flag(&out, "isOpen"));
+    }
+
+    /// §6.1/§10.1: the positional groups sit directly after `}}`, before any
+    /// extras head, and map through the marker type's keys.
+    #[test]
+    fn groups_follow_the_marker_type() {
+        // Groups without an extras head still become attributes.
+        let out = run(
+            &paragraph("{{note}}[intro](\"A title\") trailing"),
+            &MarkerOptions::default(),
+        );
+        assert_eq!(attr(&out, "type").as_deref(), Some("note"));
+        assert_eq!(attr(&out, "slug").as_deref(), Some("intro"));
+        assert_eq!(attr(&out, "title").as_deref(), Some("A title"));
+        assert!(text_of(&out).contains("trailing"));
+
+        // The groups precede the extras head: {{type}}[…] (…)@@head{…}.
+        let out = run(
+            &paragraph("{{note}}[intro](\"T\")@@noteX{.hero}"),
+            &MarkerOptions::default(),
+        );
+        assert_eq!(attr(&out, "slug").as_deref(), Some("intro"));
+        assert_eq!(attr(&out, "title").as_deref(), Some("T"));
+        assert_eq!(attr(&out, "class").as_deref(), Some("hero"));
+
+        // Adjacency: a space before `[` keeps the rest literal.
+        let out = run(
+            &paragraph("{{note}} [intro] trailing"),
+            &MarkerOptions::default(),
+        );
+        assert_eq!(attr(&out, "slug"), None);
+        assert!(text_of(&out).contains("[intro]"), "{}", text_of(&out));
+    }
+
+    /// §6.2: the marker's own group beats the extras head's same-key group,
+    /// dropped with an `Overridden` warning; a malformed group stays literal.
+    #[test]
+    fn marker_groups_win_and_malformed_groups_stay_literal() {
+        let out = run(
+            &paragraph("{{note}}[mine]@@noteX[theirs]{}"),
+            &MarkerOptions::default(),
+        );
+        assert_eq!(attr(&out, "slug").as_deref(), Some("mine"));
+        assert!(
+            warnings(&out)
+                .iter()
+                .any(|message| message.contains("slug")),
+            "{:?}",
+            warnings(&out)
+        );
+
+        // §4.3: an unterminated group is not consumed; the marker still
+        // renders and the text stays literal.
+        let out = run(
+            &paragraph("{{note}}[unclosed trailing"),
+            &MarkerOptions::default(),
+        );
+        assert_eq!(attr(&out, "type").as_deref(), Some("note"));
+        assert_eq!(attr(&out, "slug"), None);
+        assert!(text_of(&out).contains("[unclosed"), "{}", text_of(&out));
     }
 
     /// §11 rule 3: the marker type routes to its own entry, an unclaimed type to

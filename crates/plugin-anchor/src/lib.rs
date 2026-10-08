@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead, ExtrasOptions};
+use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead, KeyResolver};
 use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 
 #[derive(Clone, Debug, Default)]
@@ -87,7 +87,8 @@ fn emit_text(text: &str, options: &AnchorOptions, out: &mut Vec<Event>) {
 
         if chars[cursor] == '[' && !is_image_syntax {
             if let Some(link) = parse_link(&chars, cursor) {
-                let built = build_attributes(&link.target, link.extras.as_ref());
+                let keys = |target: Option<&str>| options.custom.keys_for(target);
+                let built = build_attributes(&link.target, link.extras.as_ref(), &keys);
                 flush_text(&mut normal, out);
 
                 if let Some(message) = built.conflict.as_ref() {
@@ -177,7 +178,11 @@ struct AnchorAttrs {
     warnings: Vec<String>,
 }
 
-fn build_attributes(encoded_target: &str, extras: Option<&ExtrasHead>) -> AnchorAttrs {
+fn build_attributes(
+    encoded_target: &str,
+    extras: Option<&ExtrasHead>,
+    keys: KeyResolver,
+) -> AnchorAttrs {
     let (encoded_url, title) = encoded_target
         .split_once('\u{0}')
         .map(|(url, title)| (url, Some(title)))
@@ -244,13 +249,16 @@ fn build_attributes(encoded_target: &str, extras: Option<&ExtrasHead>) -> Anchor
     let mut flags = Vec::new();
     let mut warnings = Vec::new();
     if let Some(head) = extras {
-        let parsed = to_attributes(head, &ExtrasOptions::default());
+        let resolved = keys(head.type_marker.as_deref());
+        let parsed = to_attributes(head, &resolved);
         for warning in &parsed.warnings {
             warnings.push(pendon_extra::warning_message(warning));
         }
-        let positional_id = parsed.value("slug").map(|value| value.literal());
+        let positional_id = parsed
+            .value(&resolved.backtick_key)
+            .map(|value| value.literal());
         for (key, value) in &parsed.items {
-            if key == "slug" {
+            if key == &resolved.backtick_key {
                 continue;
             }
             if key == "href" {

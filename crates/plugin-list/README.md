@@ -79,6 +79,13 @@ template = "<LI {...attrs}>{children}</LI>"
 
 `primary_layer()` is `list`; `layers()` is `["list", "unordered", "ordered"]`.
 
+### Positional keys (§6.1 / §11 rule 5)
+
+An entry may rename the §6.1 positional slots in its extras head: `backtick_key`
+(default `slug`) for a `` `slug` `` item and `quote_key` (default `title`) for a
+`"title"` item. Keys the entry leaves unset keep the built-in default, so an
+entry with no overrides behaves exactly as before.
+
 ## Not yet wired
 
 This crate is not part of the CLI plugin list yet: `apps/cli` still has to learn

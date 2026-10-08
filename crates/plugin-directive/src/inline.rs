@@ -59,7 +59,7 @@ fn process_line(text: &str, options: &DirectiveOptions, out: &mut Vec<Event>) {
 
     while cursor < bytes.len() {
         if bytes[cursor] == b':' {
-            if let Some(found) = scan(text, cursor) {
+            if let Some(found) = scan(text, cursor, options) {
                 if cursor > plain_start {
                     out.push(Event::Text(text[plain_start..cursor].to_string()));
                 }
@@ -86,7 +86,7 @@ fn process_line(text: &str, options: &DirectiveOptions, out: &mut Vec<Event>) {
 ///
 /// Returns `None` when the text is not a directive, which keeps `::`, a bare
 /// `::`-plus-whitespace and an unterminated opener as literal text (§4.3).
-fn scan(text: &str, start: usize) -> Option<Found> {
+fn scan(text: &str, start: usize, options: &DirectiveOptions) -> Option<Found> {
     let bytes = text.as_bytes();
     let mut count = 0usize;
     while bytes.get(start + count) == Some(&b':') {
@@ -102,7 +102,7 @@ fn scan(text: &str, start: usize) -> Option<Found> {
     // §10.2/§10.3: the type is mandatory; only a head with one can open.
     head.type_marker.as_ref()?;
 
-    let (parsed, consumed_extras) = resolve_head(&head, rest);
+    let (parsed, consumed_extras) = resolve_head(&head, rest, options);
     let content_start = text.len() - rest.len() + consumed_extras;
 
     let (content_end, close_len) = closing_run(text, content_start, count)?;

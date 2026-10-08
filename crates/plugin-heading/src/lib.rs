@@ -1,5 +1,5 @@
 use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr, ExtrasOptions};
+use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr};
 use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -119,7 +119,7 @@ struct HeadingHead {
 /// The retired pre-§11 forms (`[.class]`, `{key: value}`) are literal text
 /// (§14). Returns the id, the attributes, the flags and how much of the input
 /// the head consumed.
-fn parse_heading_head(raw_text: &str) -> HeadingHead {
+fn parse_heading_head(raw_text: &str, options: &HeadingOptions) -> HeadingHead {
     let chars: Vec<char> = raw_text.chars().collect();
     let mut cursor = 0;
     let mut head_id: Option<String> = None;
@@ -159,14 +159,19 @@ fn parse_heading_head(raw_text: &str) -> HeadingHead {
     if let Some((head, next)) = scan_extras_chars(&chars, cursor) {
         cursor = next;
         type_marker = head.type_marker.clone();
-        let parsed = to_attributes(&head, &ExtrasOptions::default());
+        // §6.1/§11 rule 5: the entry answering this `type` names the extras
+        // positional keys (`backtick_key` for the slug, `quote_key` for the title).
+        let keys = options.custom.keys_for(head.type_marker.as_deref());
+        let parsed = to_attributes(&head, &keys);
         for warning in &parsed.warnings {
             warnings.push(pendon_extra::warning_message(warning));
         }
         let extras_id = parsed.value("id").map(|value| value.literal());
-        let extras_slug = parsed.value("slug").map(|value| value.literal());
+        let extras_slug = parsed
+            .value(&keys.backtick_key)
+            .map(|value| value.literal());
         for (key, value) in &parsed.items {
-            if key == "id" || key == "slug" {
+            if key == "id" || key == &keys.backtick_key {
                 continue;
             }
             match value {
@@ -316,7 +321,7 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
             } else {
                 0
             };
-            let head = parse_heading_head(&raw_text[marker_len..]);
+            let head = parse_heading_head(&raw_text[marker_len..], options);
             let custom_id = head.id.clone();
             let extra_attrs = head.attrs.clone();
             let consumed_len = marker_len + head.consumed;
@@ -528,7 +533,7 @@ mod tests {
     #[test]
     fn parses_the_slug_head_adjacent_to_the_marker() {
         let text = "[foo-bar] Foo";
-        let head = parse_heading_head(text);
+        let head = parse_heading_head(text, &HeadingOptions::default());
         assert_eq!(head.id.as_deref(), Some("foo-bar"));
         assert_eq!(consumed_len(text, &head), "[foo-bar] ".len());
         assert!(head.warnings.is_empty(), "{:?}", head.warnings);
@@ -538,7 +543,7 @@ mod tests {
     #[test]
     fn the_retired_legacy_forms_are_literal_text() {
         let text = "[foo-bar][.extra]{ qux: \"anu\" } Foo";
-        let head = parse_heading_head(text);
+        let head = parse_heading_head(text, &HeadingOptions::default());
         assert_eq!(head.id.as_deref(), Some("foo-bar"));
         assert_eq!(head.attrs.get("class"), None);
         assert_eq!(head.attrs.get("qux"), None);
@@ -546,7 +551,7 @@ mod tests {
         assert_eq!(consumed_len(text, &head), "[foo-bar]".len());
 
         // A `.`-bracket alone is not a head either.
-        let head = parse_heading_head("[.extra] Foo");
+        let head = parse_heading_head("[.extra] Foo", &HeadingOptions::default());
         assert_eq!(head.id, None);
         assert_eq!(head.consumed, 0);
     }
@@ -555,7 +560,7 @@ mod tests {
     #[test]
     fn a_spaced_head_is_literal_text() {
         let text = "@@heading {.c} Title";
-        let head = parse_heading_head(text);
+        let head = parse_heading_head(text, &HeadingOptions::default());
         assert!(head.attrs.is_empty());
         assert_eq!(head.flags, Vec::<String>::new());
         // Only the separator space is consumed.
@@ -565,7 +570,7 @@ mod tests {
     #[test]
     fn parses_the_title_head_apart_from_the_text() {
         let text = "[foo](\"Boom\") Foo Bar";
-        let head = parse_heading_head(text);
+        let head = parse_heading_head(text, &HeadingOptions::default());
         assert_eq!(head.id.as_deref(), Some("foo"));
         assert_eq!(head.attrs.get("title").map(String::as_str), Some("Boom"));
         assert_eq!(consumed_len(text, &head), "[foo](\"Boom\") ".len());
@@ -575,7 +580,7 @@ mod tests {
     #[test]
     fn extras_attach_to_the_heading_element() {
         let text = "@@heading{.c,isFoo} Title";
-        let head = parse_heading_head(text);
+        let head = parse_heading_head(text, &HeadingOptions::default());
         assert_eq!(head.id, None);
         assert_eq!(head.attrs.get("class").map(String::as_str), Some("c"));
         assert_eq!(head.flags, vec!["isFoo".to_string()]);
@@ -584,27 +589,30 @@ mod tests {
 
     #[test]
     fn a_bare_head_attaches_like_the_prefixed_one() {
-        let head = parse_heading_head("[slug]{.extra}");
+        let head = parse_heading_head("[slug]{.extra}", &HeadingOptions::default());
         assert_eq!(head.id.as_deref(), Some("slug"));
         assert_eq!(head.attrs.get("class").map(String::as_str), Some("extra"));
     }
 
     #[test]
     fn id_precedence_is_hash_id_then_slug_then_extras_slug() {
-        let head = parse_heading_head("[slug]@@heading{`extras-slug`}");
+        let head = parse_heading_head("[slug]@@heading{`extras-slug`}", &HeadingOptions::default());
         assert_eq!(head.id.as_deref(), Some("slug"));
 
-        let head = parse_heading_head("[slug]@@heading{#explicit}");
+        let head = parse_heading_head("[slug]@@heading{#explicit}", &HeadingOptions::default());
         assert_eq!(head.id.as_deref(), Some("explicit"));
         assert!(head.warnings.iter().any(|w| w.contains("#id")));
 
-        let head = parse_heading_head("@@heading{`extras-slug`}");
+        let head = parse_heading_head("@@heading{`extras-slug`}", &HeadingOptions::default());
         assert_eq!(head.id.as_deref(), Some("extras-slug"));
     }
 
     #[test]
     fn head_title_wins_over_extras_title() {
-        let head = parse_heading_head("[slug](\"Head\")@@heading{\"Extras\"}");
+        let head = parse_heading_head(
+            "[slug](\"Head\")@@heading{\"Extras\"}",
+            &HeadingOptions::default(),
+        );
         assert_eq!(head.attrs.get("title").map(String::as_str), Some("Head"));
         assert!(head.warnings.iter().any(|w| w.contains("`title`")));
     }
@@ -612,7 +620,7 @@ mod tests {
     #[test]
     fn malformed_extras_stay_literal_text() {
         let text = "@@heading{`unterminated} Foo";
-        let head = parse_heading_head(text);
+        let head = parse_heading_head(text, &HeadingOptions::default());
         assert_eq!(head.id, None);
         assert!(head.attrs.is_empty());
         assert_eq!(head.consumed, 0);

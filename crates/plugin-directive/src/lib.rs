@@ -27,7 +27,7 @@
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
     parse_extras, to_attributes, warning_message, AttrValue, Attrs, DirectiveHead, ExtrasAttr,
-    ExtrasMatch, ExtrasOptions,
+    ExtrasMatch,
 };
 use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
@@ -37,10 +37,6 @@ mod inline;
 
 /// §11 primary layer of `plugin-directive`: the node a directive renders.
 const DIRECTIVE_LAYER: &str = "directive";
-/// §10.2: key the head `[…]` slot maps to.
-const BRACKET_KEY: &str = "slug";
-/// §10.2: key the head `("…")` slot maps to.
-const PARENTHESES_KEY: &str = "title";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct DirectiveCustomNode {
@@ -111,28 +107,34 @@ pub(crate) fn is_verbatim(kind: &NodeKind) -> bool {
     )
 }
 
-/// Resolves a directive head into attributes.
-///
-/// The `[…]` slot maps to `bracket_key` (`slug`) and the `("…")` slot to
-/// `parentheses_key` (`title`), both winning over an extras head that sets the
-/// same key (§10.4). Returns the parsed directive and how many bytes of `rest`
-/// the adjacent extras head consumed (zero when there is none, §4.1/§4.3).
-pub(crate) fn resolve_head(head: &DirectiveHead, rest: &str) -> (ParsedDirective, usize) {
+/// §6.1/§11 rule 5: the entry that answers this directive `type` names the head
+/// slots — `bracket_key` (default `slug`) for `[…]` and `parentheses_key`
+/// (default `title`) for `("…")` — and the extras head's backtick/quote keys.
+/// Both head slots win over an extras head that sets the same key (§10.4).
+/// Returns the parsed directive and how many bytes of `rest` the adjacent extras
+/// head consumed (zero when there is none, §4.1/§4.3).
+pub(crate) fn resolve_head(
+    head: &DirectiveHead,
+    rest: &str,
+    options: &DirectiveOptions,
+) -> (ParsedDirective, usize) {
     let mut parsed = ParsedDirective {
         type_name: head.type_marker.clone().unwrap_or_default(),
         ..ParsedDirective::default()
     };
 
+    let keys = options.custom.keys_for(head.type_marker.as_deref());
+
     let mut head_attrs = Attrs::default();
     if let Some(bracket) = &head.bracket {
         head_attrs.push(
-            BRACKET_KEY,
+            keys.bracket_key.clone(),
             ExtrasAttr::Value(AttrValue::Str(bracket.clone())),
         );
     }
     if let Some(parentheses) = &head.parentheses {
         head_attrs.push(
-            PARENTHESES_KEY,
+            keys.parentheses_key.clone(),
             ExtrasAttr::Value(AttrValue::Str(parentheses.clone())),
         );
     }
@@ -144,7 +146,7 @@ pub(crate) fn resolve_head(head: &DirectiveHead, rest: &str) -> (ParsedDirective
             rest: after,
         } => {
             consumed = rest.len() - after.len();
-            to_attributes(&extras_head, &ExtrasOptions::default())
+            to_attributes(&extras_head, &keys)
         }
         ExtrasMatch::Malformed { error, .. } => {
             // §4.3: a malformed head is never dropped nor partially applied.

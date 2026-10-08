@@ -14,10 +14,13 @@
 //! [`ImportEntry`](crate::ImportEntry) because it is part of the custom
 //! component contract the plugins hand to the renderer.
 
+use pendon_extra::{ExtrasOptions, PositionalKeys};
 use serde::{Deserialize, Serialize};
 
-/// One entry of a §11 component set: the `type` markers it answers and the
-/// component it renders with.
+/// One entry of a §11 component set: the `type` markers it answers, the §6.1
+/// positional keys it names (its own `backtick_key` / `quote_key`, plus
+/// `bracket_key` / `parentheses_key` for a directive head) and the component it
+/// renders with.
 ///
 /// An empty `types` list marks the **layer default** (§11 rule 2).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -25,6 +28,11 @@ pub struct TypedComponent<C> {
     #[serde(default)]
     pub types: Vec<String>,
     pub component: C,
+    /// §6.1 / §11 rule 5: the positional overrides this entry contributes when
+    /// it answers a `@@type{…}` marker. All-`Option`, so leaving every key unset
+    /// keeps the built-in `slug` / `title`.
+    #[serde(default)]
+    pub positional: PositionalKeys,
 }
 
 impl<C> TypedComponent<C> {
@@ -37,6 +45,7 @@ impl<C> TypedComponent<C> {
         Self {
             types: types.into_iter().map(Into::into).collect(),
             component,
+            positional: PositionalKeys::default(),
         }
     }
 
@@ -45,7 +54,14 @@ impl<C> TypedComponent<C> {
         Self {
             types: Vec::new(),
             component,
+            positional: PositionalKeys::default(),
         }
+    }
+
+    /// Overrides the §6.1 positional keys the entry names (§11 rule 5).
+    pub fn with_positional(mut self, positional: PositionalKeys) -> Self {
+        self.positional = positional;
+        self
     }
 
     /// `true` for the single default entry of a layer.
@@ -85,7 +101,11 @@ impl<C> ComponentSet<C> {
 
     /// Appends one entry, optionally typed.
     pub fn push(&mut self, types: Vec<String>, component: C) {
-        self.entries.push(TypedComponent { types, component });
+        self.entries.push(TypedComponent {
+            types,
+            component,
+            positional: PositionalKeys::default(),
+        });
     }
 
     pub fn is_empty(&self) -> bool {
@@ -107,12 +127,14 @@ impl<C> ComponentSet<C> {
         self.entries.iter().map(|entry| &entry.component)
     }
 
+    /// The layer-default entry, when declared.
+    pub fn default_entry(&self) -> Option<&TypedComponent<C>> {
+        self.entries.iter().find(|entry| entry.is_default())
+    }
+
     /// The layer default, when declared.
     pub fn default_component(&self) -> Option<&C> {
-        self.entries
-            .iter()
-            .find(|entry| entry.is_default())
-            .map(|entry| &entry.component)
+        self.default_entry().map(|entry| &entry.component)
     }
 
     /// §11 rule 3: exact `type` match → layer default → `None` (built-in
@@ -124,6 +146,27 @@ impl<C> ComponentSet<C> {
             }
         }
         self.default_component()
+    }
+
+    /// §6.1 / §11 rules 3 and 5: the positional keys named by the entry that
+    /// answers `type_marker`. An exact `type` match wins, then the layer default,
+    /// then the built-in `slug` / `title`. The construct plugins pass the result
+    /// to `pendon_extra::to_attributes` when they map an extras head onto
+    /// attributes.
+    pub fn keys_for(&self, type_marker: Option<&str>) -> ExtrasOptions {
+        self.keys_for_opt(type_marker).unwrap_or_default()
+    }
+
+    /// Like [`keys_for`](Self::keys_for) but `None` when this set has neither an
+    /// exact-`type` entry nor a layer default — so a plugin that owns several
+    /// layers (`plugin-list`) can try each in turn before falling back.
+    pub fn keys_for_opt(&self, type_marker: Option<&str>) -> Option<ExtrasOptions> {
+        if let Some(marker) = type_marker {
+            if let Some(entry) = self.entries.iter().find(|entry| entry.matches_type(marker)) {
+                return Some(entry.positional.resolve());
+            }
+        }
+        self.default_entry().map(|entry| entry.positional.resolve())
     }
 
     /// The one component that applies to every instance: the layer default, or

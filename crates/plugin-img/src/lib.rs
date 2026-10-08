@@ -110,7 +110,7 @@ where
         if matches!(events.get(i), Some(Event::StartNode(NodeKind::Paragraph))) {
             if let Some(end) = find_matching_end(events, i, NodeKind::Paragraph) {
                 let block = &events[i + 1..end];
-                if let Some(parsed) = maybe_parse_advanced_image(block) {
+                if let Some(parsed) = maybe_parse_advanced_image(block, options) {
                     match route_image(&parsed, options) {
                         Some(route) => {
                             emit_custom_image(&parsed, &route, inline_pipeline, context, &mut out);
@@ -419,17 +419,17 @@ pub fn solid_hints(options: &ImgOptions) -> Option<SolidRenderHints> {
 
 // --- Unified Parsing (extracts structured data from paragraph text) ---
 
-fn maybe_parse_advanced_image(block_events: &[Event]) -> Option<ParsedImage> {
+fn maybe_parse_advanced_image(block_events: &[Event], options: &ImgOptions) -> Option<ParsedImage> {
     let raw = collect_text_only(block_events)?;
     let line = raw.trim();
     if line.is_empty() || line.contains('\n') {
         return None;
     }
 
-    parse_figure_syntax(line).or_else(|| parse_decorated_image_syntax(line))
+    parse_figure_syntax(line, options).or_else(|| parse_decorated_image_syntax(line, options))
 }
 
-fn parse_figure_syntax(line: &str) -> Option<ParsedImage> {
+fn parse_figure_syntax(line: &str, options: &ImgOptions) -> Option<ParsedImage> {
     let core = parse_image_core(line)?;
     if core.marker.container != Some(ContainerKind::Figure) {
         return None;
@@ -447,10 +447,11 @@ fn parse_figure_syntax(line: &str) -> Option<ParsedImage> {
         Some(ContainerKind::Figure),
         caption,
         blocks,
+        options,
     ))
 }
 
-fn parse_decorated_image_syntax(line: &str) -> Option<ParsedImage> {
+fn parse_decorated_image_syntax(line: &str, options: &ImgOptions) -> Option<ParsedImage> {
     let core = parse_image_core(line)?;
     if core.marker.container == Some(ContainerKind::Figure) {
         return None;
@@ -461,7 +462,13 @@ fn parse_decorated_image_syntax(line: &str) -> Option<ParsedImage> {
         if !blocks.rest.trim().is_empty() {
             return None;
         }
-        return Some(build_parsed_image(core, Some(container), None, blocks));
+        return Some(build_parsed_image(
+            core,
+            Some(container),
+            None,
+            blocks,
+            options,
+        ));
     }
 
     let blocks = parse_attached_blocks(core.rest);
@@ -475,7 +482,7 @@ fn parse_decorated_image_syntax(line: &str) -> Option<ParsedImage> {
         return None;
     }
 
-    Some(build_parsed_image(core, None, None, blocks))
+    Some(build_parsed_image(core, None, None, blocks, options))
 }
 
 // --- Structured Element Emission (used when no custom component is configured) ---
@@ -685,13 +692,23 @@ fn build_parsed_image(
     container: Option<ContainerKind>,
     caption: Option<String>,
     blocks: AttachedBlocks<'_>,
+    options: &ImgOptions,
 ) -> ParsedImage {
     let AttachedBlocks { extras, .. } = blocks;
     let mut flags = Vec::new();
     let mut warnings = Vec::new();
     let type_marker = extras.as_ref().and_then(|head| head.type_marker.clone());
     let mut attrs = match extras.as_ref() {
-        Some(head) => image_attrs_from_head(head, &mut flags, &mut warnings),
+        Some(head) => {
+            // §6.1/§11 rule 5: the entry answering this marker names the extras
+            // positional keys, across the `img` and `figure` layers.
+            let keys = options
+                .img
+                .keys_for_opt(head.type_marker.as_deref())
+                .or_else(|| options.figure.keys_for_opt(head.type_marker.as_deref()))
+                .unwrap_or_default();
+            image_attrs_from_head(head, &mut flags, &mut warnings, &keys)
+        }
         None => ImageAttrs::default(),
     };
     // §11 rule 3: the marker is the routing key of the instance; it is carried
@@ -735,16 +752,19 @@ fn image_attrs_from_head(
     head: &ExtrasHead,
     flags: &mut Vec<String>,
     warnings: &mut Vec<String>,
+    keys: &ExtrasOptions,
 ) -> ImageAttrs {
-    let parsed = to_attributes(head, &ExtrasOptions::default());
+    let parsed = to_attributes(head, keys);
     for warning in &parsed.warnings {
         warnings.push(pendon_extra::warning_message(warning));
     }
 
     let mut attrs = ImageAttrs::default();
     for (key, value) in &parsed.items {
+        if key == "id" || key == &keys.backtick_key {
+            continue;
+        }
         match (key.as_str(), value) {
-            ("id", _) | ("slug", _) => {}
             ("class", ExtrasAttr::Value(value)) => attrs
                 .classes
                 .extend(value.literal().split_whitespace().map(str::to_string)),
@@ -755,10 +775,10 @@ fn image_attrs_from_head(
         }
     }
 
-    // §6.2: `#id` beats the extras `slug`.
+    // §6.2: `#id` beats the extras `slug` (the resolved `backtick_key`).
     attrs.id = parsed
         .value("id")
-        .or_else(|| parsed.value("slug"))
+        .or_else(|| parsed.value(&keys.backtick_key))
         .map(|value| value.literal());
     attrs
 }
@@ -798,7 +818,11 @@ fn parse_inline_blocks(input: &str) -> (AttachedBlocks<'_>, usize) {
 /// marker describes an inline (non-figure, non-container) image, i.e. a bare
 /// `<img>` that is only considered "advanced" when it carries marker modifiers
 /// or an attached attribute block.
-fn parse_inline_image_at(chars: &[char], start: usize) -> Option<(usize, ParsedImage)> {
+fn parse_inline_image_at(
+    chars: &[char],
+    start: usize,
+    options: &ImgOptions,
+) -> Option<(usize, ParsedImage)> {
     if !is_inline_marker_char(*chars.get(start)?) {
         return None;
     }
@@ -839,7 +863,7 @@ fn parse_inline_image_at(chars: &[char], start: usize) -> Option<(usize, ParsedI
         rest: "",
         marker,
     };
-    Some((end, build_parsed_image(core, None, None, blocks)))
+    Some((end, build_parsed_image(core, None, None, blocks, options)))
 }
 
 /// Emits `text` while replacing any inline advanced image patterns with their
@@ -859,7 +883,7 @@ fn emit_text_with_inline_images<C, P>(
 
     while cursor < chars.len() {
         if is_inline_marker_char(chars[cursor]) {
-            if let Some((end, parsed)) = parse_inline_image_at(&chars, cursor) {
+            if let Some((end, parsed)) = parse_inline_image_at(&chars, cursor, options) {
                 if !normal.is_empty() {
                     out.push(Event::Text(std::mem::take(&mut normal)));
                 }
@@ -1344,8 +1368,11 @@ mod tests {
 
     #[test]
     fn extras_class_accumulates() {
-        let parsed = parse_figure_syntax("!![Alt](https://x.test/a.webp)@@figure{.head, .extra}")
-            .expect("figure");
+        let parsed = parse_figure_syntax(
+            "!![Alt](https://x.test/a.webp)@@figure{.head, .extra}",
+            &ImgOptions::default(),
+        )
+        .expect("figure");
         // §6.4: class accumulates.
         assert_eq!(parsed.attrs.classes, vec!["head", "extra"]);
     }
@@ -1366,8 +1393,11 @@ mod tests {
 
     #[test]
     fn extras_slug_fills_the_id_when_no_id_is_present() {
-        let parsed = parse_figure_syntax("!![Alt](https://x.test/a.webp)@@figure{`the-figure`}")
-            .expect("figure");
+        let parsed = parse_figure_syntax(
+            "!![Alt](https://x.test/a.webp)@@figure{`the-figure`}",
+            &ImgOptions::default(),
+        )
+        .expect("figure");
         // §6.2: `#id` > head slug > extras slug.
         assert_eq!(parsed.attrs.id.as_deref(), Some("the-figure"));
     }

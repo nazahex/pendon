@@ -269,6 +269,13 @@ pipeline.add(move |ev| pendon_plugin_wiki::process_with_options(&ev, wiki_opts.c
 let events = pendon_plugin_img::process(&events, &img_opts, &pipeline);
 ```
 
+### Positional keys (§6.1 / §11 rule 5)
+
+An entry may rename the §6.1 positional slots in its extras head: `backtick_key`
+(default `slug`) for a `` `slug` `` item and `quote_key` (default `title`) for a
+`"title"` item. Keys the entry leaves unset keep the built-in default, so an
+entry with no overrides behaves exactly as before.
+
 ## Behavioral Notes
 
 - A paragraph whose entire (trimmed) content is a single advanced image is transformed as a block and emitted as an `HtmlBlock` (or a `Custom(name)` node when a custom component is configured)

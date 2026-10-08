@@ -81,8 +81,27 @@ pub fn render_template(
                 if let Some(end) = tpl[i + 7..].find('}') {
                     let key = &tpl[i + 7..i + 7 + end];
                     let val = get_attr_value(attrs, key);
+                    let next = i + 7 + end + 1;
+                    // §6.3: a custom component must not receive an empty slot.
+                    // When `{attrs.X}` resolves to nothing, drop the whole
+                    // `X={…}` attribute instead of emitting `X=""` — a template
+                    // like `slug={"{attrs.slug}"}` only rides along when the
+                    // component config actually set `slug`. `alt` is exempt: an
+                    // empty `alt=""` is meaningful (a decorative image).
+                    if val.is_empty() && key != "alt" {
+                        if let Some((start, end)) = enclosing_attribute(tpl, i, next) {
+                            // `out` holds everything rendered for `tpl[..i]`, so a
+                            // template index maps back by that delta.
+                            out.truncate(out.len() - (i - start));
+                            while out.ends_with([' ', '\t', '\n', '\r']) {
+                                out.pop();
+                            }
+                            i = end;
+                            continue;
+                        }
+                    }
                     out.push_str(&val);
-                    i = i + 7 + end + 1;
+                    i = next;
                     continue;
                 }
             }
@@ -91,6 +110,46 @@ pub fn render_template(
         i += 1;
     }
     out
+}
+
+/// Locates the `name={…}` attribute in `tpl` that owns the `{attrs.X}` reference
+/// sitting at `attr_start`..`attr_end`.
+///
+/// Returns the template span to drop only when the value is *nothing but* that
+/// reference — i.e. the head between `=` and the reference holds only `{`/`"`
+/// wrappers, and the tail past it holds only the matching `}`/`"` closers. A
+/// value that mixes literals with `{attrs.X}` (or an `{attrs.X}` that is not an
+/// attribute value at all) is left untouched.
+fn enclosing_attribute(tpl: &str, attr_start: usize, attr_end: usize) -> Option<(usize, usize)> {
+    let bytes = tpl.as_bytes();
+
+    // Walk back over the wrappers, the `=` and the attribute name.
+    let mut start = attr_start;
+    while start > 0 {
+        let prev = bytes[start - 1];
+        if prev.is_ascii_whitespace() || prev == b'<' || prev == b'>' {
+            break;
+        }
+        start -= 1;
+    }
+    let head = &tpl[start..attr_start];
+    let eq = head.find('=')?;
+    if !head[eq + 1..].chars().all(|c| c == '{' || c == '"') {
+        return None;
+    }
+
+    // Walk forward over the value's closing quotes/braces.
+    let mut end = attr_end;
+    while end < bytes.len() && (bytes[end] == b'"' || bytes[end] == b'}') {
+        end += 1;
+    }
+    if end == attr_end {
+        return None;
+    }
+    if end < bytes.len() && !bytes[end].is_ascii_whitespace() && bytes[end] != b'>' {
+        return None;
+    }
+    Some((start, end))
 }
 
 pub fn select_template<'a>(
@@ -144,6 +203,12 @@ fn generate_spread_attrs(map: &Map<String, Value>, used_keys: &BTreeSet<String>)
         }
         // Skip keys that are already explicitly bound via {attrs.X} in the template
         if used_keys.contains(key) {
+            continue;
+        }
+        // §6.3: an attribute whose value is the empty string is not spread, so a
+        // component that leaves a slot unset does not emit `k=""`. `alt` is the
+        // one exception — an empty `alt=""` marks a decorative image.
+        if key != "alt" && matches!(val, Value::String(s) if s.is_empty()) {
             continue;
         }
 

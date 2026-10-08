@@ -50,7 +50,7 @@ pub fn process(events: &[Event], options: &DirectiveOptions) -> Vec<Event> {
                     // Nothing open: a bare fence is literal text (§10.3).
                 } else if let DirectiveMatch::Head { head, rest } = parse_directive_head(trimmed) {
                     if head.sigil == DirectiveSigil::Equal && head.type_marker.is_some() {
-                        open(head, rest, &mut stack, &mut out);
+                        open(head, rest, options, &mut stack, &mut out);
                         index += 1;
                         continue;
                     }
@@ -89,7 +89,13 @@ pub fn process(events: &[Event], options: &DirectiveOptions) -> Vec<Event> {
 }
 
 /// Opens a directive for a typed fence line.
-fn open(head: DirectiveHead, rest: &str, stack: &mut Vec<Open>, out: &mut Vec<Event>) {
+fn open(
+    head: DirectiveHead,
+    rest: &str,
+    options: &DirectiveOptions,
+    stack: &mut Vec<Open>,
+    out: &mut Vec<Event>,
+) {
     // Drop the `<p>` the core opened for the fence line so the directive is a
     // block node rather than a paragraph (mirrors `plugin-custom`).
     match stack.last_mut() {
@@ -97,7 +103,7 @@ fn open(head: DirectiveHead, rest: &str, stack: &mut Vec<Open>, out: &mut Vec<Ev
         None => pop_trailing_paragraph(out),
     }
 
-    let (parsed, consumed) = resolve_head(&head, rest);
+    let (parsed, consumed) = resolve_head(&head, rest, options);
     let mut inner = Vec::new();
     // §10.3 grammar: the opening fence line may carry body text.
     let trailing = rest[consumed..].trim();

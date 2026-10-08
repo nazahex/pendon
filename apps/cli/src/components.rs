@@ -40,15 +40,12 @@ impl fmt::Display for ConfigError {
 
 impl std::error::Error for ConfigError {}
 
-/// Positional naming (§6.1, §11 rule 5). `bracket_key`/`parentheses_key` only
-/// apply to directive heads.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PositionalKeys {
-    pub backtick_key: Option<String>,
-    pub quote_key: Option<String>,
-    pub bracket_key: Option<String>,
-    pub parentheses_key: Option<String>,
-}
+/// Positional naming (§6.1, §11 rule 5): the per-component `backtick_key` /
+/// `quote_key`, plus `bracket_key` / `parentheses_key` for directive heads.
+///
+/// Defined in `pendon-extra` (the all-`Option` config form) so the renderer, the
+/// plugins and the CLI share one shape and one `resolve`.
+pub use pendon_extra::PositionalKeys;
 
 /// One `custom` entry: the types it answers, its imports and its template.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -5,7 +5,7 @@ Markdown-to-Pendon transformer that turns raw parser events into structured bloc
 ## What it does
 
 - Builds block structure: paragraphs, headings (with `level` attrs), blockquotes, bullet/ordered lists (with `start` attr), table head/body from pipe rows, code fences (keeps `lang`), and thematic breaks.
-- §9.1 decorators: a decorator line above a **paragraph** or a **code fence** is bound here and consumed. A heading's decorator belongs to `plugin-section` (§9.5) and a table parses its own heads (§8), so both are declined; a list/quote opener is declined too, because `plugin-list` / `plugin-blockquote` own it.
+- §9.1 decorators: a decorator line above a **paragraph** or a **code fence** is bound here and consumed. The decorator line may carry positional groups (`[…]` / `(…)`) between its type and body, which are resolved via the built-in §6.1 keys. A heading's decorator belongs to `plugin-section` (§9.5) and a table parses its own heads (§8), so both are declined; a list/quote opener is declined too, because `plugin-list` / `plugin-blockquote` own it.
 - Parses inline formatting: `*em*`, `__bold__`, `**strong**`, `` `code` ``, links `[text](href)`, and line breaks from trailing double spaces or `\\` → emits `<br />` as `HtmlInline`.
 - Handles code fences: preserves fenced content verbatim; the leading newline after the fence is skipped to match Markdown expectations.
 - Optional HTML passthrough: when enabled, copies HTML blocks/inline segments as `HtmlBlock`/`HtmlInline` nodes; otherwise HTML-like text is treated as plain text.
@@ -39,6 +39,17 @@ use pendon_plugin_markdown::process;
 let parsed = parse("# Title\n\nText.", &Default::default());
 let normalized = process(&parsed);
 ```
+
+### Positional keys (§6.1 / §11 rule 5)
+
+`plugin-markdown` exposes no `[task.markdown.custom]` component set — its
+`MarkdownOptions` only carries `allow_html` / `strip_comments` — so the blocks
+it owns always use the built-in §6.1 keys (`slug` / `title`). The
+`bind_decorators` resolver this plugin passes therefore returns the defaults.
+
+Decorator lines bound by this plugin (above paragraphs and code fences) may
+carry positional groups (`[…]` / `(…)`) that are resolved via these same
+built-in keys.
 
 ## Notes
 

@@ -5,6 +5,7 @@
 //! mode (§10.2/§10.3).
 
 use pendon_core::{parse, Event, NodeKind, Options};
+use pendon_extra::PositionalKeys;
 use pendon_plugin_directive::{process, solid_hints, DirectiveCustomNode, DirectiveOptions};
 use pendon_renderer_solid::{render_solid_with_hints, ComponentSet, TypedComponent};
 
@@ -52,6 +53,61 @@ fn text_content(events: &[Event]) -> String {
             _ => None,
         })
         .collect()
+}
+
+/// The value of the first `name` attribute, `None` when nothing emitted it.
+fn attr(events: &[Event], name: &str) -> Option<String> {
+    events.iter().find_map(|event| match event {
+        Event::Attribute { name: key, value } if key == name => Some(value.clone()),
+        _ => None,
+    })
+}
+
+/// §6.1 + §11 rule 5: a component entry renames all four positional slots
+/// independently, and an entry that overrides none keeps `slug` / `title`.
+#[test]
+fn each_type_resolves_its_own_positional_keys() {
+    let opts = DirectiveOptions {
+        custom: ComponentSet::from_entries([
+            TypedComponent::typed(
+                vec!["note"],
+                component("Note", "<Note {...attrs}>{children}</Note>"),
+            )
+            .with_positional(PositionalKeys {
+                bracket_key: Some("label".into()),
+                parentheses_key: Some("kind".into()),
+                backtick_key: Some("author".into()),
+                quote_key: Some("summary".into()),
+            }),
+            TypedComponent::default_component(component(
+                "DirectiveDefault",
+                "<DirectiveDefault {...attrs}>{children}</DirectiveDefault>",
+            )),
+        ]),
+    };
+
+    let run = |src: &str| {
+        let events = parse(src, &Options::default());
+        process(&events, &opts)
+    };
+
+    // The overridden entry: every slot lands on its configured key…
+    let out = run("::note[A](\"B\"){`C`, \"D\"}Body::");
+    assert!(has(&out, NodeKind::Custom("Note".to_string())), "{out:?}");
+    assert_eq!(attr(&out, "label"), Some("A".to_string()));
+    assert_eq!(attr(&out, "kind"), Some("B".to_string()));
+    assert_eq!(attr(&out, "author"), Some("C".to_string()));
+    assert_eq!(attr(&out, "summary"), Some("D".to_string()));
+    // …and nothing spills onto the built-in slot the key was renamed away from.
+    assert_eq!(attr(&out, "slug"), None, "{out:?}");
+    assert_eq!(attr(&out, "title"), None, "{out:?}");
+
+    // A type with no positional override falls through to the layer default,
+    // which overrides nothing, so the §6.1 defaults apply (head > extras §6.2).
+    let out = run("::other[X](\"Y\"){`Z`, \"W\"}Body::");
+    assert_eq!(attr(&out, "slug"), Some("X".to_string()), "{out:?}");
+    assert_eq!(attr(&out, "title"), Some("Y".to_string()), "{out:?}");
+    assert_eq!(attr(&out, "label"), None, "{out:?}");
 }
 
 /// §10.3: the body is parsed as block content.

@@ -257,6 +257,7 @@ fn layer_set<C>(
         entries.push(TypedComponent {
             types: entry.types.clone(),
             component: make(entry)?,
+            positional: entry.positional.clone(),
         });
     }
     Ok(ComponentSet::from_entries(entries))

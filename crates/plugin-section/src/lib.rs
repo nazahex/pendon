@@ -48,7 +48,7 @@ use std::collections::HashMap;
 use pendon_core::{ensure_unique, slugify, Event, NodeKind, Severity};
 use pendon_extra::{
     bind_decorators, scan_extras_chars, to_attributes, warning_message, Attrs, BoundDecorator,
-    ExtrasAttr, ExtrasOptions,
+    ExtrasAttr,
 };
 use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
@@ -127,8 +127,8 @@ enum Marker {
 }
 
 pub fn process(events: &[Event], options: &SectionOptions) -> Vec<Event> {
-    let extras = ExtrasOptions::default();
-    let bindings = bind_decorators(events, &extras, section_target);
+    let keys = |target: Option<&str>| options.section.keys_for(target);
+    let bindings = bind_decorators(events, &keys, section_target);
     let decorators: HashMap<usize, &BoundDecorator> = bindings
         .bound
         .iter()
@@ -264,7 +264,7 @@ fn open_heading(
 ) {
     let level = heading_level(events, heading);
     let end = node_end(events, heading, NodeKind::Heading);
-    let chain = heading_chain(&heading_text(events, heading, end), level);
+    let chain = heading_chain(&heading_text(events, heading, end), level, options);
     if chain.extras_id.is_some() {
         out.push(diagnostic(
             "the heading's extras `#id` is ignored; the id transfers to the section",
@@ -437,7 +437,7 @@ struct HeadInfo {
 /// Parses the head of a raw core heading line (`##[slug]("t")@@type{…} Title`)
 /// into the pieces the id chain needs. Mirrors `plugin-heading`'s own parser, so
 /// the section and the heading agree on what the head is.
-fn heading_chain(raw: &str, level: usize) -> HeadInfo {
+fn heading_chain(raw: &str, level: usize, options: &SectionOptions) -> HeadInfo {
     let chars: Vec<char> = raw.chars().collect();
     let mut cursor = 0;
     while chars.get(cursor) == Some(&'#') {
@@ -467,9 +467,12 @@ fn heading_chain(raw: &str, level: usize) -> HeadInfo {
     let mut extras_slug = None;
     let mut extras_id = None;
     if let Some((head, next)) = scan_extras_chars(&chars, cursor) {
-        let parsed = to_attributes(&head, &ExtrasOptions::default());
+        let keys = options.section.keys_for(head.type_marker.as_deref());
+        let parsed = to_attributes(&head, &keys);
         extras_id = parsed.value("id").map(|value| value.literal());
-        extras_slug = parsed.value("slug").map(|value| value.literal());
+        extras_slug = parsed
+            .value(&keys.backtick_key)
+            .map(|value| value.literal());
         cursor = next;
     }
 

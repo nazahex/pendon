@@ -182,6 +182,16 @@ export default function DocHeading(props) {
 
 Without a custom node, the plugin emits standard `Heading` nodes with `level` and `id` attributes. The formatted number is prepended directly to the first text child. Extra attributes are emitted as node attributes for renderer consumption.
 
+### Positional keys (§6.1 / §11 rule 5)
+
+An entry may rename the §6.1 positional slots in its extras head: `backtick_key`
+(default `slug`) for a `` `slug` `` item and `quote_key` (default `title`) for a
+`"title"` item. Keys the entry leaves unset keep the built-in default, so an
+entry with no overrides behaves exactly as before.
+
+Only the **extras** head is affected: the heading's own `[slug]` bracket (§7.4
+`id`) and `("title")` parentheses are fixed slots and are not renamed.
+
 ## Behavioral Notes
 
 - This plugin processes **structured Heading nodes** — it must run after `plugin-markdown`
