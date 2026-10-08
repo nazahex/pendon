@@ -1,3 +1,5 @@
+<!-- WARNING: This is an obsolete TODO. -->
+
 Berikut rangkuman tindakan konkret (untuk tim) agar syntect men‑tokenize TypeScript + JavaScript (Babel) dengan benar. Kamu sudah punya "JavaScript (Babel).sublime-syntax" — bagus. Ikuti langkah di bawah ini.
 
 Tujuan singkat
