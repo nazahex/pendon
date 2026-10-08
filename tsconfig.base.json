@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Base Strict Modern 2025",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+
+    "noEmit": true,
+    "declaration": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitThis": true,
+    "noImplicitReturns": true,
+    "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "useUnknownInCatchVariables": true,
+
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false,
+    "noFallthroughCasesInSwitch": true,
+    "allowImportingTsExtensions": true,
+    "allowJs": false,
+    "checkJs": false,
+    "resolveJsonModule": true,
+    "esModuleInterop": false,
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+
+    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": true,
+    "isolatedDeclarations": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+
+    "baseUrl": ".",
+    "paths": {
+      "@repo/*": [
+        "./packages/*/src"
+      ]
+    },
+
+    "incremental": true,
+    "tsBuildInfoFile": "./.temp/tsbuildinfo/base.tsbuildinfo",
+
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable",
+      "ESNext.Intl"
+    ],
+    "types": [
+      "bun"
+    ],
+
+    "useDefineForClassFields": true,
+    "allowArbitraryExtensions": true
+  },
+
+  "watchOptions": {
+    "synchronousWatchDirectory": true,
+    "excludeDirectories": [
+      "**/node_modules",
+      "**/.git",
+      "**/dist",
+      "**/build",
+      "**/.cache",
+      "**/.turbo"
+    ]
+  }
+}

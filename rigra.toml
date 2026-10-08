@@ -1,0 +1,12 @@
+index = ".rigra/convention/index.toml"
+output = "human"
+
+[format]
+write = true
+
+[rules]
+pkgjson-root.patterns = ["package.json"]
+pkgjson-sub.patterns = ["packages/*/package.json", "apps/gen/package.json"]
+
+[sync]
+write = true

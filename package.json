@@ -1,0 +1,56 @@
+{
+  "name": "root",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "homepage": "https://github.com/nazahex/pendon",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nazahex/pendon.git"
+  },
+  "author": "Kazviz <kaz@kazviz.com> (https://kazviz.com)",
+  "bugs": {
+    "url": "https://github.com/nazahex/pendon/issues"
+  },
+
+  "scripts": {
+    "build": "cargo build --workspace",
+    "clean": "turbo run clean",
+
+    "check": "biome check && dprint check",
+    "format": "cargo fmt --all &&biome check --write && dprint fmt",
+
+    "test": "cargo test --workspace",
+    "bench": "bun run bench/tools/run-all.ts && bun run bench/tools/aggregate.ts",
+    "coverage": "cargo test --workspace -- --nocapture",
+
+    "ci": "bun run clean && bun run build && bun run check && bun run test",
+
+    "postinstall": "lefthook install"
+  },
+
+  "packageManager": "bun@1.3.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@changesets/cli": "^2.29.7",
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.0.0",
+    "lefthook": "^2.0.2",
+    "turbo": "^2.7.2"
+  },
+
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
+  }
+}
