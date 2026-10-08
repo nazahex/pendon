@@ -1,0 +1,24 @@
+[[task]]
+name = "Golden 12"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "list,markdown"
+format = "solid"
+
+# §9.3/§9.4: the `unordered` / `ordered` container layers. The primary `list`
+# layer (the `<li>` item, L2/L3) is not exercised here.
+[[task.list.custom.unordered]]
+type = ["unorderedA"]
+name = "UnorderedA"
+imports = "import { UnorderedA } from '@comp/content/List'"
+template = "<UnorderedA {...attrs}>{children}</UnorderedA>"
+
+[[task.list.custom.unordered]]
+name = "UnorderedDefault"
+imports = "import { UnorderedDefault } from '@comp/content/List'"
+template = "<UnorderedDefault {...attrs}>{children}</UnorderedDefault>"
+
+[[task.list.custom.ordered]]
+name = "OrderedDefault"
+imports = "import { OrderedDefault } from '@comp/content/List'"
+template = "<OrderedDefault {...attrs}>{children}</OrderedDefault>"

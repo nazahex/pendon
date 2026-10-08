@@ -29,9 +29,10 @@ Implementation units that own this grammar:
 | `crates/extra`                                               | extras scanners, `AttrValue`, `ExtrasHead`, `parse_type_marker` |
 | `crates/plugin-marker`                                       | `{{type}}` inline/block markers                                 |
 | `crates/plugin-directive`                                    | `::type` inline and `==type` block directives                   |
-| `crates/plugin-list`                                         | list + item extras binding                                      |
-| `crates/plugin-blockquote`                                   | blockquote extras binding                                       |
+| `crates/plugin-list` (Phase 4)                               | list + item extras binding                                      |
+| `crates/plugin-blockquote` (Phase 4)                         | blockquote extras binding                                       |
 | `crates/plugin-table`                                        | table head, declaration row, cell/row/section extras            |
+| `crates/plugin-section`                                      | heading-driven `Section` outline + section decorator / markers  |
 | `crates/plugin-img`, `-anchor`, `-cite`, `-heading`, `-wiki` | their own head + extras                                         |
 | `crates/plugin-custom`                                       | component rendering (`node = "Component"`)                      |
 
@@ -44,9 +45,10 @@ Implementation units that own this grammar:
 ## 2. Terminology
 
 - **head** — the construct-specific prefix that carries the construct's own
-  identity: `[slug]`, `("title")`, `[[…]]`, `[^^](…)`, `~?!…(…)`, `|-…-|`.
-- **extras** — the shared `@@type{…}` block: unordered positional values
-  (`` `slug` ``, `"title"`), classes, id, CSS variables, props and flags.
+  identity: `[slug]`, `("title")`, `[[…]]`, `[^^](ref "loc")`, `~?!…(…)`, `|-…-|`.
+- **extras** — the shared `{…}` head (optionally `@@`-prefixed, optionally typed):
+  unordered positional values (`` `slug` ``, `"title"`), classes, id, CSS
+  variables, props and flags.
 - **decorator** — an extras head that stands alone and applies to the next
   block instead of to an inline construct.
 - **marker** — `{{type}}`, an always-typed, extras-carrying node with no
@@ -60,12 +62,14 @@ Implementation units that own this grammar:
 
 | Token                       | Meaning                            | Owner               | Status                                   |
 | --------------------------- | ---------------------------------- | ------------------- | ---------------------------------------- |
-| `@@type`                    | extras head type marker            | `crates/extra`      | new                                      |
-| `@@{…}`                     | anonymous extras head              | `crates/extra`      | new                                      |
-| `{…}`                       | extras body                        | `crates/extra`      | new                                      |
+| `{…}`                       | extras head (canonical)            | `crates/extra`      | **current**                              |
+| `@@type{…}`                 | typed extras head                  | `crates/extra`      | **current**                              |
+| `@@type`                    | type-only head                     | `crates/extra`      | **current**                              |
+| `@@{…}`                     | untyped extras head (= `{…}`)      | `crates/extra`      | **current**                              |
+| `{}` / `@@{}`               | empty head                         | `crates/extra`      | **current**                              |
 | `` `x` `` / `"x"`           | positional slug / title            | `crates/extra`      | new                                      |
 | `.x` `#x` `--x:v` `k:v` `k` | class / id / CSS var / prop / flag | `crates/extra`      | extended                                 |
-| `[.c,#id]{k:v}`             | legacy extras fragment             | `crates/extra`      | deprecated (removed Phase 1)             |
+| `[.c,#id]{k:v}`             | legacy extras fragment             | —                   | **removed** (§14) — literal text         |
 | `{{type}}`                  | inline & block marker              | `plugin-marker`     | new (freed from `cite.section`)          |
 | `::type` … `::`             | inline directive, 2–7 colons       | `plugin-directive`  | new                                      |
 | `==type` … `==`             | block directive                    | `plugin-directive`  | new                                      |
@@ -74,33 +78,48 @@ Implementation units that own this grammar:
 | `\|\| cap \|\|`             | table caption line                 | `plugin-table`      | new                                      |
 | `\|===\|`                   | table foot separator               | `plugin-table`      | existing (kept)                          |
 | `~?!` / `~?!!`              | image / figure marker              | `plugin-img`        | existing                                 |
-| `[^^](…)`                   | citation                           | `plugin-cite`       | existing                                 |
+| `[^^](ref "loc")`           | citation                           | `plugin-cite`       | **current** (§7.3)                       |
 | `[[…]]`                     | wiki link                          | `plugin-wiki`       | existing                                 |
-| `>`                         | blockquote                         | `plugin-blockquote` | existing (+extras)                       |
-| `-` `*` `+`                 | unordered list item                | `plugin-list`       | existing (+extras)                       |
-| `1.`                        | ordered list item                  | `plugin-list`       | existing (+extras)                       |
+| `>`                         | blockquote                         | `plugin-blockquote` | Phase 4 (+extras)                        |
+| `-` `*` `+`                 | unordered list item                | `plugin-list`       | Phase 4 (+extras)                        |
+| `1.`                        | ordered list item                  | `plugin-list`       | Phase 4 (+extras)                        |
 | `:::name`                   | legacy custom block                | `plugin-custom`     | superseded by `==type`                   |
 | `o.`                        | ordered list offset                | —                   | **retired**                              |
 | `===` (bare, below table)   | legacy table foot separator        | —                   | **retired**                              |
 | `{{section}}`               | legacy section marker              | —                   | **retired** (with `[task.cite.section]`) |
 | `@@`                        | _no other meaning_                 | —                   | reserved for Pendon                      |
 
-`@@` is reserved: no plugin may claim it for another purpose.
+`@@` is reserved: no plugin may claim it for another purpose. `plugin-list` and
+`plugin-blockquote` do **not** exist yet: until Phase 4 the `>` / `-` sigils are
+plain markdown, and a plugin list naming them is reported (§13).
 
 ## 4. Lexical rules
 
 ### 4.1 Adjacency
 
-An extras head MUST be adjacent to the construct it belongs to, with **no
-whitespace** between the construct and `@@`:
+An extras head MUST be adjacent to the construct it belongs to, and to its own
+parts:
 
 ```text
 ~?!h300w800[alt](url)@@type{`slug`, .hero}   correct
+[alt](url){`slug`}                           correct (bare spelling)
+[alt](url)@@anchorA.                          correct: type-only head, `.` stays text
 ~?!h300w800[alt](url) @@type{`slug`}         wrong → literal text
+~?!h300w800[alt](url)@@type {`slug`}         wrong → literal text (space before `{`)
+@@type[…](…)                                 wrong → the groups must touch the type
 ```
 
-Whitespace _inside_ `{…}` is free. Exception: list, blockquote and decorator
-forms (§9) MAY be written on their own line.
+Whitespace _inside_ `{…}` is free. The `@@type {…}` form (whitespace between the
+type and its `{`) is **not** a head: the whole run stays literal, so a head never
+silently detaches from its type. The positional groups (§6.1) follow the same
+rule: `[` and `(` must touch what precedes them, so `@@type […](…)` is a
+type-only head followed by literal text.
+
+Two exceptions exist, both for block constructs whose marker must be followed by
+a space anyway: a **list item** and a **blockquote** MAY write a space between the
+marker, the head and the content (`> {.x} text`, `- {.x} item`, §9). Every other
+construct — including table cells — requires strict adjacency. Decorator lines
+(§9.1) stand on their own line instead.
 
 ### 4.2 Escaping
 
@@ -123,29 +142,57 @@ processed at all.
 A malformed head MUST fall back to literal text; it MUST NOT abort the build:
 
 - `@@type{` without a closing `}` on the same line → literal text;
-- `@@` followed by a character that is not an ASCII letter and not `{` →
-  literal text;
-- extras whose type is missing and whose body is empty (`@@{}`) → literal text;
+- `@@` followed by a character that is not an ASCII letter, not `{`, not `[`
+  and not `(` → literal text (`@@1anchor{.x}`, `@@.x`);
+- `[…]` or `(…)` opened without its closer → the **whole head** is literal
+  text (`@@type[…`, `{{type}}[…`, §4.1);
+- `@@type {…}` — whitespace between the type and its `{` → literal text (§4.1);
 - an item that is _malformed_ (unterminated `` ` `` or quote, a trailing
   character after a quoted value, an empty `key:` value, an invalid `key`)
   makes the **whole head** literal text — items are never dropped silently;
 - a head separated from its construct by whitespace → literal text.
 
+Note what is **not** text: `{}`, `@@{}` and `@@type{}` are valid empty heads
+(§3), and `@@type` alone is a valid type-only head (§4.4).
+
 ### 4.4 Type names
 
 ```ebnf
-type = ALPHA ( ALPHA | DIGIT )*
+type        = ALPHA ( ALPHA | DIGIT )*
+extras-head = type-only | typed | untyped
+type-only   = "@@" type group?                 # ends at the first non-alphanumeric
+typed       = "@@" type group? "{" body "}"
+untyped     = "@@" group+ | ( ( "@@" )? "{" body "}" )
+group       = [ "[" bracket "]" ] [ "(" paren ")" ]   # each part adjacent, §6.1
 ```
 
-ASCII only, case-sensitive, no space, no `-`, no `_`, no other symbols
-(`fooBar` is valid, `foo-bar` is not). A non-matching name makes the whole head
-literal text. Unicode lookalikes (`＠`, `｛`, `．`) MUST NOT be treated as
-sigils. Widening this charset is a breaking change and requires a spec update.
+ASCII only, case-insensitive in effect (`@@Type` and `@@TYPE` are both types),
+no space, no `-`, no `_`, no other symbols (`fooBar` and `anchor2` are valid,
+`foo-bar` and `foo_bar` are not). A type always starts with a letter: `@@1anchor`
+is not a head. Widening this charset is a breaking change and requires a spec
+update.
+
+The alphanumeric run ends at the first symbol. What follows decides the head:
+
+| Character after the type run             | Result                                                           |
+| ---------------------------------------- | ---------------------------------------------------------------- |
+| `{` (adjacent)                           | typed head — the body is parsed                                  |
+| `[` or `(` (adjacent)                    | the positional group is parsed (§6.1), then `{` or the head ends |
+| whitespace, EOL or EOF                   | **type-only head** — only the type is consumed                   |
+| whitespace then `{`                      | literal text (§4.1)                                              |
+| any other symbol (`-`, `_`, `.`, `,`, …) | **type-only head**; the symbol stays literal text                |
+
+```text
+[t](/a)@@anchorA.    → <a type="anchorA" …>t</a> + literal "."
+@@type-x{.x}         → type `type` + literal "-x{.x}"
+@@anchorA            → type-only head (end of the line)
+```
 
 ## 5. Extras head grammar
 
 ```ebnf
-extras-head = "@@" [ type ] "{" [ ws items ] ws "}"
+extras-head = ( "@@" )? [ type ] "{" [ ws items ] ws "}"    # typed / untyped / empty
+            | "@@" type                                     # type-only (§4.4)
 items       = item { ws "," ws item } [ ws "," ]
 item        = slug | title | class | id | cssvar | prop | flag
 slug        = "`" { char } "`"
@@ -163,7 +210,8 @@ name        = 1*( ALPHA | DIGIT | "_" | "-" | ":" )
 ws          = 1*( " " | "\t" )
 ```
 
-- Item order is free; extras are completely optional.
+- Item order is free; extras are completely optional. `{}` is a valid (empty)
+  head: it adds no attribute and raises no warning.
 - Duplicate handling: `class` accumulates; `id`, `slug`, `title`, `prop`,
   `flag` and `cssvar` are last-wins; a duplicate `id` emits `Severity::Warning`.
   A duplicate key collapses to one attribute (§6.4), and a `class:` prop
@@ -204,13 +252,32 @@ ws          = 1*( " " | "\t" )
 
 Positional items are named through per-component config (§11):
 
-| item      | config key     | default | meaning         |
-| --------- | -------------- | ------- | --------------- |
-| `` `x` `` | `backtick_key` | `slug`  | construct slug  |
-| `"x"`     | `quote_key`    | `title` | construct title |
+| item      | config key        | default | meaning          |
+| --------- | ----------------- | ------- | ---------------- |
+| `` `x` `` | `backtick_key`    | `slug`  | construct slug   |
+| `"x"`     | `quote_key`       | `title` | construct title  |
+| `[x]`     | `bracket_key`     | `slug`  | bracket slot     |
+| `("x")`   | `parentheses_key` | `title` | parentheses slot |
 
-Directive **heads** keep their own keys: `bracket_key` (default `slug`) for
-`[x]`, `parentheses_key` (default `title`) for `("x")`.
+Every `@@` head may carry the `[x]` / `("x")` groups between its type and its
+`{…}` body (`@@type[x]("y"){…}`, `@@type[x]("y")`, `@@[x]("y")`), each part
+adjacent (§4.1). Markers place the groups directly after `}}`, before any
+adjacent extras head: `{{type}}[x]("y"){…}` / `{{type}}[x]("y")@@head{…}`
+(§10.1). The groups' contents behave exactly like a directive head's: `[x]`
+stays raw, `("x")` is trimmed and unquoted. The keys are resolved per `type`
+like every other positional key (§11 rules 3 and 5).
+
+The groups are read by the layer that owns the construct, in the order of the
+task's plugin list: more than one enabled layer can read the same `[x]("y")`
+text, and **the layer that runs first wins**. With the canonical order
+(`anchor` before `marker`, the order every sandbox uses) a marker therefore
+keeps only a `[x]` that no `(` follows — `{{type}}[x]("y")` is already an anchor
+head by the time `plugin-marker` runs, so the marker renders without those
+attributes and the anchor component follows it. Listing `marker` before `anchor`
+hands the marker both groups instead (`{{type}}[x]("y")` → `slug` + `title`).
+The single-group and type-only forms (`{{type}}[x]`, `{{type}}("y")`,
+`@@type[x]`, `@@type("y")`) parse the same way in either order: nothing else
+claims them before their layer runs.
 
 ### 6.2 head vs extras priority
 
@@ -247,6 +314,9 @@ Mapping to the event IR (`Event::Attribute { name, value: String }`):
   merged with an explicit `style:` prop. Raw `--x` keys MUST NOT be emitted as
   attributes. `v` is unquoted like any other value, so `--tone: "red"` becomes
   `--tone: red`;
+- **empty string** (`k: ""`) → the attribute is omitted, so a node that leaves a
+  slot unset does not emit `k=""`. `alt` is the single exception: an empty
+  `alt=""` is meaningful (a decorative image) and always renders.
 
 Renderers:
 
@@ -263,6 +333,11 @@ Custom components receive the **typed** form through the `attrs` map
 > Rationale: bare flags render exactly as authored (`isFoo`) in every renderer;
 > the DOM fallback path stays stringly-typed by design.
 
+Omission scope: it applies to plain-element attributes and `{...attrs}` spreads
+in `renderer-solid` and `renderer-html`. An **explicit** template binding
+(`k={attrs.k}`) is untouched — the template author asked for that slot, so it
+keeps rendering `k={""}`.
+
 ### 6.4 Emission order (deterministic)
 
 Attributes MUST be emitted in this canonical order so golden fixtures are
@@ -270,7 +345,8 @@ stable:
 
 1. `class` (single joined value, head classes then `.x` items in source order);
 2. `id`;
-3. positional keys (`slug`, then `title`, using `backtick_key`/`quote_key`);
+3. positional keys — the groups first (`bracket_key`, then `parentheses_key`),
+   then `slug` and `title` (using `backtick_key`/`quote_key`);
 4. all remaining props and flags in source order, with `style` where the first
    `style:` prop or `--var` item appeared.
 
@@ -278,7 +354,9 @@ Duplicates collapse to one attribute: the position of the first occurrence
 wins, the value of the last occurrence wins. `class` accumulates instead
 (a `class:` prop joins the `.x` items). A positional item and a same-named prop
 are such a duplicate: the positional slot keeps its place and the later value
-wins. Whitespace-only differences MUST NOT change the output.
+wins. One exception: a positional **group** (`[…]` / `(…)`, §6.1) beats a
+same-key body item outright — the body value is dropped with an §13 `Warning`
+(§6.2 head-wins style). Whitespace-only differences MUST NOT change the output.
 
 ## 7. Construct grammars
 
@@ -296,7 +374,8 @@ size   = ( "w" | "h" ) DIGIT+
 - `w800` / `h300` map to `width` / `height` on the inner image (unchanged).
 - `#id`/`slug` set the outer node id; `class` goes to the outer node.
 - Trailing text on the same line is the figure caption (`children` of `Figure`).
-- Legacy `[.c,#id]{k:v}` after `(…)` is deprecated; Phase 1 removes it.
+- The extras head MUST touch the closing `)` of the `(url)` block (§4.1). The
+  retired `[.c,#id]{k:v}` block is literal text (§14).
 
 ### 7.2 Anchor (`plugin-anchor`)
 
@@ -304,7 +383,7 @@ size   = ( "w" | "h" ) DIGIT+
 anchor = "[" text "]" "(" url title? ")" extras?
 ```
 
-- Extras attach to the `<a>` element.
+- Extras attach to the `<a>` element and MUST touch the closing `)`.
 - The head `("title")` wins over extras `"…"` (§6.2).
 - URL modifier suffixes stay part of the URL token and are parsed **before**
   extras (unchanged behaviour): `^` → `target="_blank"`, `~` → `target="_self"`,
@@ -313,19 +392,26 @@ anchor = "[" text "]" "(" url title? ")" extras?
   Warning. `rel:`/`target:` extras merge with (do not replace) the modifier
   result, as today.
 - `slug` → `id` when `#id` is absent.
-- Legacy `[.c,#id]{k:v}` after `)` is deprecated; Phase 1 removes it.
+- The retired `[.c,#id]{k:v}` block after `)` is literal text (§14).
 
 ### 7.3 Cite (`plugin-cite`)
 
 ```ebnf
-cite = "[^^]" "(" ref [ "," loc ] ")" extras?
+cite = "[^^]" "(" ref [ ws dquote loc dquote ] ")" extras?
+ref  = 1*( any char except ws, ")", ",", dquote )
 ```
 
-- First head positional → `id`; second (or `loc=`) → `loc`.
-- Extras merge into the citation node; head values win.
+- The reference is **unquoted** and the location is an optional **quoted**
+  string. `[^^](book)` and `[^^](book "hlm. 45")` are the only two forms.
+- Everything else is literal text (no citation, no warning):
+  `[^^]("book")`, `[^^](book, "hlm. 45")`, `[^^](book loc="x")` and `[^^]()`.
+- Extras attach to the citation node and MUST touch the closing `)`; the head
+  values (`id`, `loc`) win over same-named extras props (§6.2).
+- First head positional → `id`; the quoted location → `loc`. There is no `loc=`
+  prop form of the head: the quoted string after the reference is the only
+  location syntax.
 - `{{section}}` and `[task.cite.section]` are **gone** (removed in Phase 1;
-  §12, §14). The bibliography section returns as a `plugin-marker` block
-  (Phase 3).
+  §12, §14). The bibliography section returns as a `plugin-marker` block.
 
 ### 7.4 Heading (`plugin-heading`)
 
@@ -333,12 +419,15 @@ cite = "[^^]" "(" ref [ "," loc ] ")" extras?
 heading = "#"(1..6) [ "[" slug "]" ] [ "(" title ")" ] extras? text
 ```
 
-- `[slug]` and `("title")` are both optional and independent.
+- `[slug]` and `("title")` are both optional and independent, and the whole head
+  MUST touch the `#` run (§4.1); the extras head follows them adjacently.
 - `("title")` is **not** the `innerText`; it is a separate attribute.
-- Whitespace between the attr block and the heading text is consumed by the
-  block (it MUST NOT become part of the title).
+- Whitespace between the head and the heading text is consumed by the head (it
+  MUST NOT become part of the title).
 - Extras attach to the heading element; extras `slug` is ignored when `[slug]`
   exists.
+- The retired pre-§11 forms (`[.class]` brackets, a `{key: value}` block written
+  apart from the head) are literal text (§14).
 
 ### 7.5 Wiki (`plugin-wiki`)
 
@@ -355,11 +444,11 @@ wikilink = "[[" target [ "|" label ] "]]" extras?
 
 ```ebnf
 table       = decl? caption? header-row row* [ foot ]
-decl        = "|-" [ head ] extras? ["-"] "|"        # declares table extras
+decl        = "|-" [ "[" slug "]" ] [ "(" title ")" ] extras? ( "-|" | "|" )
 caption     = "||" extras? content "||"
 header-row  = "|" cell ( "|" cell )* "|" extras?     # alignment/width row
 row         = "|" cell ( "|" cell )* "|" extras?      # body row
-foot        = ("|===|" | "===") extras? row*
+foot        = "|===|" extras? row*
 cell        = "|" extras? content
 ```
 
@@ -380,24 +469,39 @@ Mapping to table layers:
 
 Rules:
 
+- **Slot placement (§4.1).** A table has **no** adjacency exception: every head
+  touches the `|` (or the `||`) it belongs to.
+  - A cell head sits directly after its opening `|`: `|{.x} text |`,
+    `|@@cellB{.lead} text |`; `| {.x} text |` is literal text.
+  - A caption head sits directly after `||`: `||{.c} caption ||`.
+  - A trailing row/section head sits directly after the line's **last** `|`:
+    `| a | b |{.row}` and `|===|@@tfootX{.total}`.
+  - The head of a **delimiter cell goes after the alignment code and touches it**:
+
+    ```text
+    | :---(200px)@@cellA{.v-top} | :---:{.c} | ---:(30%) | :---@@cellB{.a, #i, k: "v", n: 2} |@@tbodyX{.tb}
+    ```
+
 - The declaration line is **childless**: any non-extras/head text inside it is
   discarded (a `Severity::Warning` MAY be emitted).
 - The declaration line is optional; when absent the table is untyped.
 - `head` inside `decl` uses the standard `[slug]` / `("title")` form:
   `|-[slug-foo]@@type{…}-|`.
-- Legacy bare `===` as a foot separator is **retired**; only `|===|` remains.
+- Bare `===` as a foot separator is **retired**; only `|===|` remains.
 - Alignment/width tokens (`:---:`, `(200px)`) and the `>` (colspan `+1`) / `^`
-  (rowspan `+1`) cell markers are unchanged and are parsed **before** extras.
+  (rowspan `+1`) cell markers are unchanged and come **before** the cell extras.
 - Cell content may be empty; empty cells become `<td></td>`.
+- The retired `[.class,#id]{k:v}` blocks (inside a cell, after a delimiter code,
+  before the closing `-|`, and the `-[.row]` last-cell form) are literal text (§14).
 
 ## 9. Decorators, blockquotes and lists
 
 ### 9.1 The decorator rule (general)
 
-A **decorator line** is a line whose entire content is `@@type{…}` or `@@{…}`
-(optional leading indentation, no trailing text other than whitespace). It
-decorates the **next block node** at the same nesting level and is consumed
-(MUST NOT be rendered):
+A **decorator line** is a line whose entire content is a head — `type?{…}` with
+the `@@` sigil optional (§3, §9.3) — with optional leading indentation and no
+trailing text other than whitespace. It decorates the **next block node** at the
+same nesting level and is consumed (MUST NOT be rendered):
 
 ````text
 @@{`intro`, .lead}
@@ -414,18 +518,45 @@ First paragraph with extras on the paragraph node.
 - Beta
 ````
 
+Positional groups (§6.1) are part of the head, between the type and the body:
+
+```text
+@@aside[intro]("Aside title"){.lead}
+Decorated with the bracket / parentheses slots too.
+
+@@[intro]("Aside title")
+The untyped form: `@@` is required, so the line can never be a link.
+
+[intro](url)
+A paragraph line like this stays a link — without `@@` it is not a decorator.
+```
+
 - The decorator's `type` (when present) is the **type marker** of the decorated
   node and drives per-type component selection (§11).
-- A decorator applies to a blockquote, list, code fence, paragraph, table or
-  heading. Anything else (inline constructs) uses the adjacent form (§4.1).
+- The `@@` sigil is what separates a decorator from a link at the start of a
+  line: the groups need it (`@@[…]`), the bare forms do not gain it (`[…]` is
+  never a decorator, §4.1).
+
+- The decorator's `type` (when present) is the **type marker** of the decorated
+  node and drives per-type component selection (§11).
+- A decorator applies to a **paragraph** or a **code fence** (`plugin-markdown`),
+  a **list container** (§9.3) or a **blockquote** (§9.2). A decorator line above
+  a **heading** decorates the **section** (§9.5), and a **table** parses its own
+  heads (§8); neither is a `plugin-markdown` target. Anything else (inline
+  constructs) uses the adjacent form (§4.1).
 - If no following block exists (end of input, or the next sibling is not a
-  block), the decorator is dropped with a `Severity::Warning`.
+  block), an **explicit** `@@…` decorator is dropped with a `Severity::Warning`.
+  A bare `@@`-less `{…}` line is ambiguous with literal text (§4.3), so when it
+  has no block to bind it stays literal instead of being dropped.
 - Consecutive decorators: only the **last** one applies; earlier ones are
   dropped with a `Severity::Warning` (MAY be an error later).
 - Indentation MUST be `<=` the indentation of the decorated block; a decorator
   indented deeper than the following block is literal text.
 
-### 9.2 Blockquote (`plugin-blockquote`)
+### 9.2 Blockquote (`plugin-blockquote`) — Phase 4
+
+`plugin-blockquote` does not exist yet. Until it lands, `>` is plain markdown and
+the syntax below is a **plan**, not current behaviour:
 
 ```ebnf
 blockquote = ">" ws [ extras ] content
@@ -433,19 +564,24 @@ blockquote = ">" ws [ extras ] content
 
 - Extras written immediately inside the quote (`> @@type{…} text`) attach to the
   **blockquote** node, not to the paragraph inside it.
+- Blockquote is one of the two adjacency exceptions (§4.1): a space between the
+  marker, the head and the content is allowed.
 - A decorator line directly above `>` attaches to the blockquote as well; when
   both exist the inner one wins.
 - Nested quotes follow the same rule for their own node.
 
-### 9.3 List (`plugin-list`)
+### 9.3 List (`plugin-list`) — Phase 4
+
+`plugin-list` does not exist yet. Until it lands, `-` / `1.` are plain markdown
+and the design below is a **plan**, not current behaviour.
 
 Design A: extras are carried by **decorator lines**, never by a swallowed
 carrier list.
 
 ```ebnf
-list-decorator = "@@" type? "{" … "}"                 # own line, above the list
+list-decorator = ( "@@" )? type? "{" … "}"             # own line, above the list
 item           = marker ws [ item-decorator ws ] content
-item-decorator = "@@" type? "{" … "}"
+item-decorator = ( "@@" )? type? "{" … "}"
 marker         = "-" | "*" | "+" | DIGIT+ "."
 ```
 
@@ -487,22 +623,67 @@ own the containers (`<ul>`/`<ol>`). Config: `[task.list.list.custom]`,
 `start` for `ol` comes from the first item's number and MUST NOT be
 overridable by extras (`start:` prop is rejected with a `Severity::Warning`).
 
+### 9.5 Section (`plugin-section`)
+
+`plugin-section` wraps each heading and the content under it in a nested
+`Section` node, giving renderers a clean outline. It runs **before**
+`plugin-markdown` and `plugin-heading`: the level markers collide with Markdown
+(`>---<` is a blockquote), so the raw heading text, the decorator line and the
+markers are read before Markdown runs. Markdown then parses the interior of
+every `Section`.
+
+- A decorator line directly above a heading — `@@type{…}` / `{…}` (optional
+  indentation; a blank line before the heading is allowed) — decorates the
+  **section**, not the heading: the heading already owns its extras on its `#`
+  run (§7.4), so a second head above it would be redundant.
+
+  ```text
+  @@sectionA{`slug-section`, #sectionID}
+  ###[slug-head]("Heading X")@@headingX{`slug-head-extras`, #headingID} Title
+  ```
+
+- The section **id** is the first available of `#sectionID` (the decorator's
+  `#id`) > `` `slug-section` `` (the decorator's slug) > `` `slug-head` `` (the
+  heading's `[slug]`) > `` `slug-head-extras` `` (the heading's extras slug) >
+  the slug of the heading title. A heading's own extras `#id` is **not** part of
+  the chain; it is ignored with a `Warning`.
+- When `plugin-section` owns the outline the heading never emits an `id` (or its
+  fallback `slug`): the id always transfers to the section.
+- The decorator's `type` selects a §11 `section`-layer component; without one the
+  built-in `<section>` element is used (D8).
+- **Level markers.** A line whose trimmed content is exactly `<--->` deepens the
+  outline by one nested section (capped at level 6); a line that is exactly
+  `>---<` closes the innermost section (a no-op once only the preface is open).
+  Both are consumed and never rendered.
+- Content before the first heading is wrapped in a preface `Section` (level 0).
+
+Config: `[task.section.custom.section]` (`name` / `template` / `imports`), the
+plugin's only (primary) layer.
+
 ## 10. Markers and directives
 
 ### 10.1 Marker (`plugin-marker`)
 
 ```ebnf
-marker-inline = "{{" type "}}" extras?            # inside inline content
-marker-block  = "{{" type "}}" extras?            # own line (block context)
+marker-inline = "{{" type "}}" groups? extras?   # inside inline content
+marker-block  = "{{" type "}}" groups? extras?   # own line (block context)
 ```
 
 - `type` is **mandatory** for markers; `{{}}` is literal text.
 - Extras are optional but must be adjacent.
+- The positional groups (§6.1) sit directly after `}}`, **before** any extras
+  head: `{{type}}[x]("y"){…}` and `{{type}}[x]("y")@@head{…}`. They map through
+  the marker type's `bracket_key` / `parentheses_key`. A marker-level group
+  beats a same-key group of the extras head (§6.2, dropped with a §13 Warning);
+  a malformed group stays literal text while the marker still renders (§4.3).
+  A `[x]("y")` pair is also a legal anchor head, so which layer reads it first
+  decides: §6.1's layer-order rule applies (in the canonical order the anchor
+  layer claims it and the marker keeps no attribute from it).
 - Inline form emits an inline node; block form emits a block node.
 - The block form carries the same line's trailing text as its `children` and
   does not absorb the following block.
 - With no custom component, the inline form renders `<span>` and the block form
-  renders `<div>` (both without children).
+  renders `<div>`, both carrying the extras of the head (§6).
 - The `{{…}}` sigil is free: `[task.cite.section]` and the legacy
   `{{section}}` usage are removed (§12).
 
@@ -518,7 +699,8 @@ colons           = "::" up to ":::::::" (2..7)
 - The closing run MUST be `>=` the opening run (nesting depth = colon count).
   An inner directive with fewer colons closes implicitly at the outer's close.
 - Content is parsed as inline content.
-- No custom component → `<span>`.
+- No custom component → `<span>` (an `Element` node, exactly like a marker), so
+  no extra of the head is dropped.
 
 ### 10.3 Block directive (`plugin-directive`)
 
@@ -537,15 +719,20 @@ close        = fences (alone on its line)
   `====`) and MAY nest deeper (limit 7).
 - Unclosed at end of input → closed implicitly with a `Severity::Warning`.
 
+A directive whose type no component claims — including a layer with no default —
+falls back to `<span>` / `<div>` with the instance's `type` and extras, exactly
+like a marker (§11 rule 3). The node is never rendered as a bare child container.
+
 ### 10.4 Priority summary
 
-| Slot                     | Winner                                                |
-| ------------------------ | ----------------------------------------------------- |
-| element `id`             | `#id` > head slug > extras slug                       |
-| `title`                  | head `("…")` > extras `"…"`                           |
-| `class`                  | union of head classes and `.x` items, in source order |
-| `href` / `src` / `start` | construct-owned, never overridable                    |
-| any other key            | head prop > extras prop                               |
+| Slot                     | Winner                                                    |
+| ------------------------ | --------------------------------------------------------- |
+| element `id`             | `#id` > head slug > extras slug                           |
+| `title`                  | head `("…")` > extras `"…"`                               |
+| `class`                  | union of head classes and `.x` items, in source order     |
+| `href` / `src` / `start` | construct-owned, never overridable                        |
+| positional group vs body | the group (`[…]` / `(…)`) wins; body value dropped (§6.4) |
+| any other key            | head prop > extras prop                                   |
 
 ## 11. Custom component config
 
@@ -670,21 +857,24 @@ silent data-loss bug. Minimum requirement: the fallback path emits `id`,
 
 ## 13. Diagnostics
 
-| Condition                                                | Severity                 |
-| -------------------------------------------------------- | ------------------------ |
-| malformed head / missing `}` / whitespace-separated head | none (literal text)      |
-| duplicate `#id` in one extras block                      | Warning                  |
-| extras `id` overriding a head slug                       | Warning                  |
-| decorator with no following block                        | Warning                  |
-| dropped decorator (consecutive decorators)               | Warning                  |
-| dropped extras value because a head value won            | Warning                  |
-| unclosed block directive at EOF                          | Warning                  |
-| template without `{children}` (non-void element)         | Error (config load)      |
-| unbalanced template element                              | Error (config load)      |
-| two default components for one layer                     | Error (config load)      |
-| `start:` prop on `ol` extras                             | Warning (ignored)        |
-| literal `U+E000` sentinel character in source            | Warning (stripped)       |
-| unknown key outside a known layer                        | Warning (passed through) |
+| Condition                                                 | Severity                 |
+| --------------------------------------------------------- | ------------------------ |
+| malformed head / missing `}` / whitespace-separated head  | none (literal text)      |
+| a retired legacy form (`[.c,#id]{k:v}`, `[^^]("ref")`, …) | none (literal text)      |
+| duplicate `#id` in one extras block                       | Warning                  |
+| extras `id` overriding a head slug                        | Warning                  |
+| decorator with no following block                         | Warning                  |
+| dropped decorator (consecutive decorators)                | Warning                  |
+| dropped extras value because a head value won             | Warning                  |
+| unclosed block directive at EOF                           | Warning                  |
+| unknown plugin name in `task.plugin`                      | Warning                  |
+| unknown `task.<plugin>` key in `pendon.toml`              | Warning                  |
+| template without `{children}` (non-void element)          | Error (config load)      |
+| unbalanced template element                               | Error (config load)      |
+| two default components for one layer                      | Error (config load)      |
+| `start:` prop on `ol` extras                              | Warning (ignored)        |
+| literal `U+E000` sentinel character in source             | Warning (stripped)       |
+| unknown key outside a known layer                         | Warning (passed through) |
 
 Config-load errors MUST abort the build before any file is processed.
 
@@ -698,7 +888,7 @@ Config-load errors MUST abort the build before any file is processed.
 | bare `===` table footer       | `\|===\|`                            | Phase 2                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `o.` ordered-list offset      | first item's number                  | Phase 3                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `plugin-quiz` (`:::quiz`)     | —                                    | retired from the pipeline; plugin code stays, deep rework later                                                                                                                                                                                                                                                                                                                                                |
-| legacy `[.c,#id]{k:v}`        | `@@type{…}`                          | Phase 1, deprecated not silent                                                                                                                                                                                                                                                                                                                                                                                 |
+| legacy `[.c,#id]{k:v}`        | `{…}` / `@@type{…}`                  | **removed** (D3): plain literal text, no warning, no deprecation path. Gone from the code (`parse_attrs`, `ExtraAttrs`, `legacy_extras_warning`), the docs, every sandbox and the plugin READMEs                                                                                                                                                                                                               |
 | `import = "…"` (string)       | `imports = ["…"]`                    | done: accepted with a Warning (§15 OPEN-C2)                                                                                                                                                                                                                                                                                                                                                                    |
 | `[task.<plugin>.custom_node]` | `[task.<plugin>.custom.<layer>]`     | **removed**: `custom.<layer>` is read for `anchor`, `img` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`) and every sandbox/fixture config is migrated. The stale key is still parsed so it fails the build with a migration message instead of being ignored. Unwired layers (`task.img.custom.img`) and layers that need per-type routing (OPEN-C3) are config errors |
 
@@ -748,7 +938,7 @@ objects**; the spec text above already assumes the recommendation.
   **Recommendation: alias with Warning** — `sandbox/universal`,
   `sandbox/custom` and `apps/cli/tests/fixtures` still use `:::`.
 - **OPEN-S1 (sectionize/`[task.cite.section]` removal order) — resolved
-  (done).** Verified `plugin-sectionize` is heading/icon based and never
+  (done).** Verified `plugin-section` is heading/icon based and never
   references `cite.section`, so the removal landed with the cite change:
   `CiteOptions.section`, `CitationContext::replace_section_markers`, the
   section branch of `cite::solid_hints` and the `[task.cite.section]` blocks in
@@ -785,35 +975,41 @@ the existing `assert_cmd` style (`apps/cli/tests/custom_spec.rs`,
   `tests/extras_spec.rs` (one case per rule of §4–§6, including the §5.1 worked
   example) land green in Phase 0 and are the primary gate for the foundation.
 
-Status: fixtures **01–09** are frozen and green
-(`cargo test -p pendon --test syntax_spec`, none ignored), 17–20 are covered by
-the unit tests of the renderer/CLI crates (§17), and 10–16 wait for the Phase 3
-plugins.
+Status: fixtures **01–09** are frozen and green, **10–12** (`decorator-blocks`,
+`blockquote`, `list-container`) and **14–16** (`marker`, `directive-inline`,
+`directive-block`) are green too, **21** (`extras-forms`) locks the two
+spellings, the type-only head, the empty head and strict adjacency, and **22**
+(`section`) freezes the §9.5 outline (`cargo test -p pendon --test syntax_spec`,
+none ignored); 17–20 are covered by the unit tests of the renderer/CLI crates
+(§17), and 13 (`list-item`) waits for the remaining Phase 4 work (list-item
+decorators, L2/L3).
 
 ### 16.3 Minimum fixture list
 
-| #  | Fixture                   | Covers                                                            |
-| -- | ------------------------- | ----------------------------------------------------------------- |
-| 01 | `extras-head`             | all item kinds, ordering, duplicates, escaping                    |
-| 02 | `extras-literal`          | malformed heads → literal text, adjacency failures                |
-| 03 | `img-figure`              | `~?!` / `~?!!` + extras + caption                                 |
-| 04 | `anchor`                  | head `("title")` vs extras `"title"` priority                     |
-| 05 | `cite`                    | `[^^](ref "loc")` + extras, `loc=` prop form                      |
-| 06 | `heading`                 | `[slug]` + `("title")` + extras, auto-number interaction          |
-| 07 | `wiki`                    | `[[…]]` + extras, `href` not overridable                          |
-| 08 | `table-decl`              | `\|-…-\|`, `\|\| caption \|\|`, decl head `[slug]`                |
-| 09 | `table-layers`            | column/th/td/tr/tbody/tfoot extras routing                        |
-| 10 | `decorator-blocks`        | paragraph, code fence, heading decorators                         |
-| 11 | `blockquote`              | inner extras + decorator above                                    |
-| 12 | `list-container`          | L1 decorator → `ul`/`ol` + `start`                                |
-| 13 | `list-item`               | L2 item-decorator → `li`, nesting                                 |
-| 14 | `marker`                  | inline + block forms, `<span>`/`<div>` fallback                   |
-| 15 | `directive-inline`        | `::…::` nesting 2..7, `bracket_key`/`parentheses_key`             |
-| 16 | `directive-block`         | `==type`/`==` LIFO closing, nesting, EOF warning                  |
-| 17 | `flags`                   | bare flags through solid/html/json/ast                            |
-| 18 | `fallback-attrs`          | extras on list/blockquote/paragraph/code fence without components |
-| 19 | `template-children-error` | `template` without `{children}` → hard error                      |
-| 20 | `component-selection`     | type match → default → fallback, two defaults error               |
+| #  | Fixture                   | Covers                                                                           |
+| -- | ------------------------- | -------------------------------------------------------------------------------- |
+| 01 | `extras-head`             | all item kinds, ordering, duplicates, escaping                                   |
+| 02 | `extras-literal`          | malformed heads → literal text, adjacency failures                               |
+| 03 | `img-figure`              | `~?!` / `~?!!` + extras + caption                                                |
+| 04 | `anchor`                  | head `("title")` vs extras `"title"` priority                                    |
+| 05 | `cite`                    | `[^^](ref "loc")` + extras, retired forms stay literal                           |
+| 06 | `heading`                 | `[slug]` + `("title")` + extras, auto-number interaction                         |
+| 07 | `wiki`                    | `[[…]]` + extras, `href` not overridable                                         |
+| 08 | `table-decl`              | `\|-…-\|`, `\|\| caption \|\|`, decl head `[slug]`                               |
+| 09 | `table-layers`            | column/th/td/tr/tbody/tfoot extras routing                                       |
+| 10 | `decorator-blocks`        | paragraph + code fence decorators, typed / bare / `@@[…]` group lines            |
+| 11 | `blockquote`              | inner extras + decorator above                                                   |
+| 12 | `list-container`          | L1 decorator → `ul`/`ol` + `start`                                               |
+| 13 | `list-item`               | L2 item-decorator → `li`, nesting                                                |
+| 14 | `marker`                  | inline + block forms, `<span>`/`<div>` fallback                                  |
+| 15 | `directive-inline`        | `::…::` nesting 2..7, `bracket_key`/`parentheses_key`                            |
+| 16 | `directive-block`         | `==type`/`==` LIFO closing, nesting, EOF warning                                 |
+| 17 | `flags`                   | bare flags through solid/html/json/ast                                           |
+| 18 | `fallback-attrs`          | extras on list/blockquote/paragraph/code fence without components                |
+| 19 | `template-children-error` | `template` without `{children}` → hard error                                     |
+| 20 | `component-selection`     | type match → default → fallback, two defaults error                              |
+| 21 | `extras-forms`            | bare / typed / type-only / empty head, strict adjacency (anchor, heading, table) |
+| 22 | `section`                 | §9.5 outline: decorator above a heading → section, id chain, `<--->` / `>---<`   |
 
 ## 17. Migration phases
 
@@ -877,19 +1073,16 @@ All five construct plugins of Phase 1 read and merge the extras head:
 - `plugin-img` (§7.1) — extras attach to the **outermost** node (`<figure>` for
   `~?!!`, else the `<img>`); `w`/`h` stay on the inner image, `--var` items
   merge into `style`.
-- `plugin-cite` (§7.3) — extras merge into the citation node; the cite args
-  (`loc=`) win, `#id`/`slug` feed the `cite-id` slot (the reference `id` is
+- `plugin-cite` (§7.3) — extras merge into the citation node; the head values
+  (`id`, `loc`) win, `#id`/`slug` feed the `cite-id` slot (the reference `id` is
   never replaced).
 
 Shared rules implemented through `crates/extra`: `#id` > head slug > extras
 slug, `class` accumulates (head first, §6.4), head wins for every other key
 (dropped with a §13 Warning), bare flags become `Event::AttributeFlag`
-(§6.3), and the pre-§11 `[.c,#id]{k:v}` block still works but is reported
-(`legacy_extras_warning`, §14). Extras must be adjacent (§4.1); a malformed
-head stays literal text (§4.3).
-
-Still open for Phase 1: the golden fixtures 01–07 (`docs/spec/golden/` +
-`apps/cli/tests/syntax_spec.rs`).
+(§6.3). Extras must be adjacent (§4.1) and the pre-§11 `[.c,#id]{k:v}` block is
+**gone**: it is literal text, with no warning (§14). A malformed head stays
+literal text (§4.3).
 
 ### 17.3 Progress after the §11 component-set routing and the §8 table layers
 
@@ -919,14 +1112,14 @@ pre-cutover configs are unchanged.
 **§8 table layers** parse:
 
 - the declaration line `|-[slug]("title")@@type{…}-|` → the `<table>` layer;
-- the caption line `|| extras? content ||` → the `<caption>` layer (the pre-§8
-  `[caption][.c]{k:v}` form keeps its historical meaning: its extras configure
-  the `<table>`);
-- cell-front extras (`| @@cellA{.x} content |`, also in front of the `>`/`^`
+- the caption line `||extras? content||` → the `<caption>` layer (the retired
+  pre-§8 `[caption][.c]{k:v}` form is literal text, §14);
+- cell-front extras (`|@@cellA{.x} content |`, also in front of the `>`/`^`
   markers, whose extras merge into the spanned cell) → the `cell` layer of that
-  `<th>`/`<td>`; the column marker of the alignment row routes the column's cells;
-- row end-of-line extras (`… |@@rowB{.x}`) → the `<tr>`; the legacy
-  `-[.row-danger]` last-cell form still works;
+  `<th>`/`<td>`; the delimiter cell carries its head after the alignment code and
+  the column marker routes the column's cells;
+- row end-of-line extras (`… |@@rowB{.x}`) → the `<tr>`; the retired
+  `-[.row-danger]` last-cell form is literal text;
 - the alignment row's end-of-line extras → the `<tbody>`; the `|===|` line's
   extras → the `<tfoot>`. Bare `===` is **retired**.
 - `thead` has no extras slot of its own in §8, so its set is used as a default.
@@ -941,22 +1134,26 @@ Two robustness notes:
   pass) until the pre-markdown protect stage lands.
 
 Not yet wired: `task.wiki.custom.anchor` / `task.wiki.custom.infobox` (the wiki
-plugin emits no custom node yet and `ConfigTask` does not read those keys), the
-`marker` / `directive` / `list` / `blockquote` layers (their plugins land in
-Phase 3). `sandbox/unified` therefore configures only the plugins that exist.
+plugin emits no custom node yet and `ConfigTask` does not read those keys), and
+the `list` / `blockquote` layers (their plugins are Phase 4). `sandbox/unified`
+therefore configures only the plugins that exist.
 
 ### 17.4 Golden fixtures
 
 `docs/spec/golden/` holds fixtures **01–09** — `extras-head`, `extras-literal`,
-`img-figure`, `anchor`, `cite`, `heading`, `wiki`, `table-decl`, `table-layers`
-— each with the input markdown, the task config that renders it and the frozen
+`img-figure`, `anchor`, `cite`, `heading`, `wiki`, `table-decl`, `table-layers` —
+plus **10–12** (`decorator-blocks`, `blockquote`, `list-container`), **14–16**
+(`marker`, `directive-inline`, `directive-block`), **21** (`extras-forms`) and
+**22** (`section`),
+each with the input markdown, the task config that renders it and the frozen
 `.jsx` output. `apps/cli/tests/syntax_spec.rs` copies the fixture into a temp
 project, runs `pendon run -F` and compares the output byte for byte, so the
 fixtures also cover config loading and the CLI path, not just the parsers.
 
-**No fixture is `#[ignore]`d**, which closes the Phase 1 gate (01–07) and the
-Phase 2 table gate (08–09). Fixtures 10–16 stay open until the Phase 3 plugins
-(`marker`, `directive`, `list`, `blockquote`) exist; 17–20 are pinned by unit
+**No fixture is `#[ignore]`d**, which closes the Phase 1 gate (01–07), the Phase 2
+table gate (08–09), the block-decorator gate (10–12) and the marker/directive
+gate (14–16) and the head-forms gate (21). Fixture 13 (`list-item`) stays open
+until the Phase 4 list-item decorators (L2/L3) exist; 17–20 are pinned by unit
 tests inside the crates they exercise (§17.0/§17.1).
 
 Two fixture findings worth keeping in mind when reading the goldens:
@@ -964,9 +1161,40 @@ Two fixture findings worth keeping in mind when reading the goldens:
 - A `Link` node produced by the core lexer inside the extras head is rebuilt by
   `plugin-table` before the table is parsed, so a long `("title")` in the
   declaration line still works (fixture 08).
-- The cite head's prop form is `loc=value` (not `loc: value`), the same key the
-  extras use, so both fill the same `loc` slot with the head winning
-  (fixture 05).
+- The cite head's location is the quoted string after the unquoted reference
+  (`[^^](book "hlm. 45")`); it fills the same `loc` slot as an extras `loc:` prop,
+  with the head winning (fixture 05).
+
+### 17.5 Positional groups on heads and markers (done)
+
+Every `@@` head accepts the `[x]` / `("x")` groups between its type and its
+`{…}` body (§4.4/§6.1), and markers accept them directly after `}}`
+(`{{type}}[…](…){…}`, §10.1). The groups map through `bracket_key` /
+`parentheses_key` (resolved per `type`, §11 rule 5), win a key collision with a
+body item (§6.2/§6.4) and fall back to literal text when malformed (§4.3).
+Decorators gained the `@@[…]` untyped spelling; a `[x](y)` line without `@@`
+stays a link by construction (§9.1). Pinned by
+`crates/extra/tests/extras_spec.rs` (`heads_carry_positional_groups`,
+`groups_must_be_adjacent`, `groups_map_through_the_positional_keys`),
+`decorator.rs` (`positional_groups_make_a_decorator_line`,
+`a_group_decorator_binds_its_attributes`), `plugin-marker`
+(`groups_follow_the_marker_type`,
+`marker_groups_win_and_malformed_groups_stay_literal`), and by golden fixtures 10
+(the typed `@@aside[intro]("Aside title"){.lead}` line and the untyped
+`@@[intro]("…")` spelling) and 14
+(`{{bibliography}}[refs]("Cited sources"){…}` with its body items dropped, and a
+malformed group staying literal while the marker renders).
+
+The §6.1 layer-order rule is part of the note: a `[x]("y")` pair is read by
+whichever enabled layer runs first, so under the sandbox's canonical order
+(`anchor` before `marker`) a marker keeps no attribute from that pair — verified
+by rendering the `sandbox/ultimate` config with the two entries swapped.
+
+`sandbox/ultimate` carries the group cases too: M13–M19 (bracket → `slug`,
+parentheses → `title`, group + extras head, malformed, the anchor layer winning
+an adjacent pair, an unclaimed type, one inline pair) and Q25/Q26 in the quote
+section. The pair cases need an enabled `anchor` layer, which golden 14 (markers
+only) does not have, so they live in the sandbox instead.
 
 ## 18. Acceptance criteria
 

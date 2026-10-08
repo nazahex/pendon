@@ -1,0 +1,25 @@
+[[task]]
+name = "Golden 15"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "micromatter,directive,markdown"
+format = "solid"
+
+# §10.2: the `directive` primary layer, addressed by the plugin's own key.
+# §11: the entry renames the positional slots — `[bracket]`→`id`,
+# `("paren")`→`level`, a backticked item→`author`, a quoted item→`summary`.
+[[task.directive.custom]]
+type = ["note"]
+name = "Note"
+bracket_key = "id"
+parentheses_key = "level"
+backtick_key = "author"
+quote_key = "summary"
+imports = "import { Note } from '@comp/content/Directive'"
+template = "<Note {...attrs}>{children}</Note>"
+
+# An unclaimed type routes here (§11 rule 3).
+[[task.directive.custom]]
+name = "DirectiveDefault"
+imports = "import { DirectiveDefault } from '@comp/content/Directive'"
+template = "<DirectiveDefault {...attrs}>{children}</DirectiveDefault>"

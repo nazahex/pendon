@@ -1,0 +1,19 @@
+[[task]]
+name = "Golden 14"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "micromatter,marker,markdown"
+format = "solid"
+
+[[task.marker.custom]]
+type = ["note", "aside"]
+name = "NoteAside"
+imports = "import { NoteAside } from '@comp/content/Marker'"
+template = "<NoteAside {...attrs} />"
+
+# A block marker owns a caption, so this entry is not childless (§11 rule 6).
+[[task.marker.custom]]
+type = ["bibliography"]
+name = "Bibliography"
+imports = "import { Bibliography } from '@comp/content/Marker'"
+template = "<Bibliography {...attrs}>{children}</Bibliography>"

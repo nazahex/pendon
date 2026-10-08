@@ -1,0 +1,9 @@
+[[task]]
+name = "Golden 10"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "markdown"
+format = "solid"
+
+# §9.1/§11: no custom component set, so a decorator's typed head falls back to
+# the built-in node and keeps its `type` marker as a plain attribute (D8).

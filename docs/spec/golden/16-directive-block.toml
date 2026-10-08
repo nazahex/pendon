@@ -1,0 +1,19 @@
+[[task]]
+name = "Golden 16"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "micromatter,directive,markdown"
+format = "solid"
+
+# §10.3: the `directive` primary layer, addressed by the plugin's own key.
+[[task.directive.custom]]
+type = ["note"]
+name = "Note"
+imports = "import { Note } from '@comp/content/Directive'"
+template = "<Note {...attrs}>{children}</Note>"
+
+# An unclaimed type routes here (§11 rule 3).
+[[task.directive.custom]]
+name = "DirectiveDefault"
+imports = "import { DirectiveDefault } from '@comp/content/Directive'"
+template = "<DirectiveDefault {...attrs}>{children}</DirectiveDefault>"

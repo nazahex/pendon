@@ -1,0 +1,11 @@
+[[task]]
+name = "Golden 22"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "micromatter,section,heading,markdown"
+format = "solid"
+
+# §9.5: `section` runs before `heading` (and `heading` before `markdown`) so the
+# section sees the raw heading head, the section decorator and the `>---<` level
+# marker; `heading` then strips the head and yields its id to the section before
+# `markdown` could lex `[slug]("title")` as a link.

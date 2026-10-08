@@ -1,0 +1,14 @@
+[[task]]
+name = "Golden 11"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "blockquote,markdown"
+format = "solid"
+
+# §9.2/§11: the blockquote primary layer. There is deliberately NO default
+# entry, so an unclaimed type falls back to the built-in `<blockquote>` (D8).
+[[task.blockquote.custom]]
+type = ["quoteA"]
+name = "QuoteA"
+imports = "import { QuoteA } from '@comp/content/Quote'"
+template = "<QuoteA {...attrs}>{children}</QuoteA>"
