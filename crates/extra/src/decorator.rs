@@ -23,7 +23,8 @@
 
 use pendon_core::{Event, NodeKind};
 
-use crate::typed::{parse_extras, to_attributes, Attrs, ExtrasMatch, ExtrasOptions};
+use crate::typed::{parse_extras, to_attributes, Attrs, ExtrasMatch};
+use crate::KeyResolver;
 
 /// Nodes whose text is copied verbatim (§4.3): a decorator-looking line inside
 /// a code fence or raw HTML is literal text.
@@ -98,7 +99,7 @@ pub struct Bindings {
 /// Returns `None` for a blank line, for a line that is not a head at all and for
 /// a malformed head (§4.3 keeps those literal). Trailing text after the head
 /// also disqualifies the line: a decorator is the line's *entire* content.
-pub fn parse_decorator_line(line: &str, options: &ExtrasOptions) -> Option<DecoratorLine> {
+pub fn parse_decorator_line(line: &str, keys: KeyResolver) -> Option<DecoratorLine> {
     let trimmed = line.trim();
     if trimmed.is_empty() {
         return None;
@@ -112,7 +113,7 @@ pub fn parse_decorator_line(line: &str, options: &ExtrasOptions) -> Option<Decor
     Some(DecoratorLine {
         indent: line.len() - line.trim_start_matches(' ').len(),
         type_marker: head.type_marker.clone(),
-        attrs: to_attributes(&head, options),
+        attrs: to_attributes(&head, &keys(head.type_marker.as_deref())),
         explicit: trimmed.starts_with("@@"),
     })
 }
@@ -155,7 +156,7 @@ fn decorator_paragraph(events: &[Event], line: usize) -> Option<(usize, usize)> 
 /// The decorator lines of `events`, each with the paragraph it owns.
 fn decorator_lines(
     events: &[Event],
-    options: &ExtrasOptions,
+    keys: KeyResolver,
 ) -> Vec<(usize, DecoratorLine, (usize, usize))> {
     let mut excluded = 0usize;
     let mut raw: Vec<(usize, DecoratorLine)> = Vec::new();
@@ -164,7 +165,7 @@ fn decorator_lines(
             Event::StartNode(kind) if is_verbatim(kind) => excluded += 1,
             Event::EndNode(kind) if is_verbatim(kind) => excluded = excluded.saturating_sub(1),
             Event::Text(text) if excluded == 0 => {
-                if let Some(line) = parse_decorator_line(text, options) {
+                if let Some(line) = parse_decorator_line(text, keys) {
                     raw.push((i, line));
                 }
             }
@@ -209,7 +210,7 @@ fn mark_removed(removed: &mut [bool], (start, end): (usize, usize)) {
 /// such a paragraph into two. A paragraph that is *only* decorator lines (the
 /// blank-line spelling) or that has no non-blank content after the run is left
 /// untouched, so the transform is idempotent.
-fn split_leading_decorator_paragraphs(events: &[Event], options: &ExtrasOptions) -> Vec<Event> {
+fn split_leading_decorator_paragraphs(events: &[Event], keys: KeyResolver) -> Vec<Event> {
     let mut out: Vec<Event> = Vec::with_capacity(events.len() + 4);
     let mut i = 0;
     while i < events.len() {
@@ -225,7 +226,7 @@ fn split_leading_decorator_paragraphs(events: &[Event], options: &ExtrasOptions)
             i += 1;
             continue;
         };
-        match leading_decorator_split(&events[i + 1..end], options) {
+        match leading_decorator_split(&events[i + 1..end], keys) {
             Some(content_start) => {
                 out.push(Event::StartNode(NodeKind::Paragraph));
                 out.extend(events[i + 1..i + 1 + content_start].iter().cloned());
@@ -244,12 +245,12 @@ fn split_leading_decorator_paragraphs(events: &[Event], options: &ExtrasOptions)
 /// The offset inside a paragraph's inner events where a leading run of decorator
 /// lines ends and the decorated block begins. `None` when the paragraph does not
 /// start with a decorator run or has no non-blank content after it.
-fn leading_decorator_split(inner: &[Event], options: &ExtrasOptions) -> Option<usize> {
+fn leading_decorator_split(inner: &[Event], keys: KeyResolver) -> Option<usize> {
     let mut k = 0;
     let mut run_end = None;
     while k < inner.len() {
         match &inner[k] {
-            Event::Text(line) if parse_decorator_line(line, options).is_some() => {
+            Event::Text(line) if parse_decorator_line(line, keys).is_some() => {
                 k += 1;
                 // The separator newline belongs to the decorator line.
                 if matches!(inner.get(k), Some(Event::Text(text)) if text == "\n") {
@@ -297,7 +298,7 @@ fn leading_decorator_split(inner: &[Event], options: &ExtrasOptions) -> Option<u
 /// nothing is bound.
 pub fn bind_decorators(
     events: &[Event],
-    options: &ExtrasOptions,
+    keys: KeyResolver,
     target: impl Fn(&[Event], usize) -> Option<usize>,
 ) -> Bindings {
     // §9.1: the canonical spelling puts the decorator line *touching* its block
@@ -306,9 +307,9 @@ pub fn bind_decorators(
     // binder sees a decorator-only paragraph followed by the block, exactly as
     // it does for the blank-line spelling. Without this, a touching decorator
     // shared its paragraph with the block and was silently treated as text.
-    let normalized = split_leading_decorator_paragraphs(events, options);
+    let normalized = split_leading_decorator_paragraphs(events, keys);
     let events: &[Event] = &normalized;
-    let candidates = decorator_lines(events, options);
+    let candidates = decorator_lines(events, keys);
     let inside = |index: usize| {
         candidates
             .iter()
@@ -429,6 +430,7 @@ pub fn bind_decorators(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ExtrasOptions;
     use pendon_core::{parse, Options};
 
     fn document(src: &str) -> Vec<Event> {
@@ -473,7 +475,11 @@ mod tests {
 
     fn bind(src: &str) -> Bindings {
         let events = document(src);
-        bind_decorators(&events, &ExtrasOptions::default(), list_target)
+        bind_decorators(
+            &events,
+            &|_: Option<&str>| ExtrasOptions::default(),
+            list_target,
+        )
     }
 
     /// §9.1: a decorator line decorates the next block and is consumed.
@@ -618,17 +624,70 @@ mod tests {
 
     #[test]
     fn parse_decorator_line_rejects_non_heads() {
-        let options = ExtrasOptions::default();
-        assert!(parse_decorator_line("", &options).is_none());
-        assert!(parse_decorator_line("   ", &options).is_none());
-        assert!(parse_decorator_line("plain text", &options).is_none());
-        assert!(parse_decorator_line("@@{.a", &options).is_none());
-        assert!(parse_decorator_line("@@{.a} tail", &options).is_none());
+        let keys = |_: Option<&str>| ExtrasOptions::default();
+        assert!(parse_decorator_line("", &keys).is_none());
+        assert!(parse_decorator_line("   ", &keys).is_none());
+        assert!(parse_decorator_line("plain text", &keys).is_none());
+        assert!(parse_decorator_line("@@{.a", &keys).is_none());
+        assert!(parse_decorator_line("@@{.a} tail", &keys).is_none());
 
-        let line = parse_decorator_line("  @@note{.a}", &options).expect("decorator line");
+        let line = parse_decorator_line("  @@note{.a}", &keys).expect("decorator line");
         assert_eq!(line.indent, 2);
         assert_eq!(line.type_marker.as_deref(), Some("note"));
         assert!(line.attrs.has("class"));
+    }
+
+    /// §9.1/§6.1: `@@type[…](…){…}` and the untyped `@@[…]` are decorator
+    /// lines; a plain `[x](y)` line is not (omitting `@@` means link, §4.1).
+    #[test]
+    fn positional_groups_make_a_decorator_line() {
+        let keys = |_: Option<&str>| ExtrasOptions::default();
+
+        let line =
+            parse_decorator_line("@@aside[intro](\"T\"){.box}", &keys).expect("decorator line");
+        assert_eq!(line.type_marker.as_deref(), Some("aside"));
+        assert_eq!(
+            line.attrs.value("slug").map(|value| value.literal()),
+            Some("intro".to_string())
+        );
+        assert_eq!(
+            line.attrs.value("title").map(|value| value.literal()),
+            Some("T".to_string())
+        );
+        assert!(line.attrs.has("class"));
+
+        // Groups without a body and the untyped `@@[…]` form.
+        let line = parse_decorator_line("@@aside[intro]", &keys).expect("decorator line");
+        assert_eq!(line.type_marker.as_deref(), Some("aside"));
+        assert!(line.attrs.has("slug"));
+
+        let line = parse_decorator_line("@@[intro](\"T\")", &keys).expect("decorator line");
+        assert_eq!(line.type_marker, None);
+        assert!(line.explicit, "the bare form must not go ambiguous");
+        assert!(line.attrs.has("slug"));
+        assert!(line.attrs.has("title"));
+
+        // A link paragraph is never a decorator line (§4.1: no `@@`, no head).
+        assert!(parse_decorator_line("[intro](url)", &keys).is_none());
+        assert!(parse_decorator_line("[]{.box}", &keys).is_none());
+        // Trailing text still disqualifies the line (§4.3 / §9.1).
+        assert!(parse_decorator_line("@@aside[intro] tail", &keys).is_none());
+        // A malformed group keeps the whole line literal (§4.3).
+        assert!(parse_decorator_line("@@aside[intro{.box}", &keys).is_none());
+    }
+
+    /// End to end: a group-carrying decorator binds its attributes to the
+    /// decorated block.
+    #[test]
+    fn a_group_decorator_binds_its_attributes() {
+        let bindings = bind("@@aside[intro](\"T\"){.u}\n\n- one\n");
+        assert_eq!(bindings.bound.len(), 1, "{:?}", bindings.bound);
+        let bound = &bindings.bound[0];
+        assert_eq!(bound.type_marker.as_deref(), Some("aside"));
+        assert!(bound.attrs.has("class"));
+        assert!(bound.attrs.has("slug"));
+        assert!(bound.attrs.has("title"));
+        assert!(!texts(&bindings.events).contains("@@aside"));
     }
 
     /// §9.1 canonical spelling: the decorator line touches its block, so the

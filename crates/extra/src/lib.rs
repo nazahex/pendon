@@ -27,10 +27,19 @@ pub use decorator::{
 };
 
 pub use typed::{
-    parse_directive_head, parse_extras, parse_extras_body, parse_type_marker, to_attributes, Attrs,
-    DirectiveHead, DirectiveMatch, DirectiveSigil, ExtrasAttr, ExtrasError, ExtrasHead, ExtrasItem,
-    ExtrasMatch, ExtrasOptions, ExtrasWarning,
+    parse_directive_head, parse_extras, parse_extras_body, parse_type_marker,
+    read_positional_groups, to_attributes, Attrs, DirectiveHead, DirectiveMatch, DirectiveSigil,
+    ExtrasAttr, ExtrasError, ExtrasHead, ExtrasItem, ExtrasMatch, ExtrasOptions, ExtrasWarning,
+    PositionalKeys,
 };
+
+/// Resolves the §6.1 [`ExtrasOptions`] for a node's `type` marker (§11 rule 5).
+///
+/// The construct plugins own the component set that answers the marker, so they
+/// provide this callback: an exact `type` match resolves to that entry's keys, an
+/// unclaimed marker to the layer default's, and a marker with no entry at all to
+/// the built-in `slug` / `title` (§11 rule 3).
+pub type KeyResolver<'a> = &'a dyn Fn(Option<&str>) -> ExtrasOptions;
 pub use value::{classify_scalar, number_kind, AttrValue, NumberKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

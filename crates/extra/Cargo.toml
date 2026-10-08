@@ -7,3 +7,4 @@ description = "Shared attribute parsing primitives for Pendon plugins"
 
 [dependencies]
 pendon-core = { path = "../core" }
+serde = { version = "1", features = ["derive"] }

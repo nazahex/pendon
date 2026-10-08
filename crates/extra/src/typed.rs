@@ -57,18 +57,31 @@ pub enum ExtrasItem {
 }
 
 /// A parsed `@@type{…}` / `@@{…}` head.
+///
+/// The positional groups of §6.1 may sit between the type and the body:
+/// `@@type[…](…){…}` (and `@@[…](…)` without a type or a body).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ExtrasHead {
     /// `type` of `@@type{…}`; `None` for `@@{…}`.
     pub type_marker: Option<String>,
+    /// Raw contents of the optional `[…]` group (key = `bracket_key`).
+    pub bracket: Option<String>,
+    /// Raw contents of the optional `(\u2026)` group, unquoted
+    /// (key = `parentheses_key`).
+    pub parentheses: Option<String>,
     pub items: Vec<ExtrasItem>,
 }
 
-/// Positional names, per component (`backtick_key` / `quote_key`, §6.1).
+/// Positional names, per component (§6.1).
+///
+/// `` `x` `` → `backtick_key` and `"x"` → `quote_key`; a directive **head**
+/// additionally maps `[x]` to `bracket_key` and `("x")` to `parentheses_key`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExtrasOptions {
     pub backtick_key: String,
     pub quote_key: String,
+    pub bracket_key: String,
+    pub parentheses_key: String,
 }
 
 impl Default for ExtrasOptions {
@@ -76,6 +89,8 @@ impl Default for ExtrasOptions {
         Self {
             backtick_key: "slug".to_string(),
             quote_key: "title".to_string(),
+            bracket_key: "slug".to_string(),
+            parentheses_key: "title".to_string(),
         }
     }
 }
@@ -85,6 +100,46 @@ impl ExtrasOptions {
         Self {
             backtick_key: backtick_key.into(),
             quote_key: quote_key.into(),
+            ..Self::default()
+        }
+    }
+}
+
+/// The per-component §11 positional overrides: `backtick_key` / `quote_key`
+/// (§6.1) and — for directive heads — `bracket_key` / `parentheses_key`.
+///
+/// Every field is optional, so a component entry that overrides none keeps the
+/// built-in default for each key (§11 rule 5); [`resolve`](Self::resolve) fills
+/// the gaps. This is the config-side (all-`Option`) form of [`ExtrasOptions`].
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct PositionalKeys {
+    pub backtick_key: Option<String>,
+    pub quote_key: Option<String>,
+    pub bracket_key: Option<String>,
+    pub parentheses_key: Option<String>,
+}
+
+impl PositionalKeys {
+    /// `true` when the entry overrides no positional key at all.
+    pub fn is_empty(&self) -> bool {
+        self.backtick_key.is_none()
+            && self.quote_key.is_none()
+            && self.bracket_key.is_none()
+            && self.parentheses_key.is_none()
+    }
+
+    /// Fills the §6.1 default for every key the entry left unset.
+    pub fn resolve(&self) -> ExtrasOptions {
+        let default = ExtrasOptions::default();
+        ExtrasOptions {
+            backtick_key: self.backtick_key.clone().unwrap_or(default.backtick_key),
+            quote_key: self.quote_key.clone().unwrap_or(default.quote_key),
+            bracket_key: self.bracket_key.clone().unwrap_or(default.bracket_key),
+            parentheses_key: self
+                .parentheses_key
+                .clone()
+                .unwrap_or(default.parentheses_key),
         }
     }
 }
@@ -272,8 +327,42 @@ pub fn parse_extras(input: &str) -> ExtrasMatch<'_> {
     ExtrasMatch::Absent { rest: input }
 }
 
-/// Reads the type name and optional `{…}` body of a `@@` head, returning the
-/// bytes consumed **after** the `@@`.
+/// Reads the optional positional groups of a head: an immediate `[…]` followed
+/// by an immediate `(\u2026)` (§6.1), returning them and the bytes consumed.
+///
+/// Adjacency is strict — a space before `[` means no group — and a group that
+/// opens without its closer is [`ExtrasError::UnterminatedHead`] (§4.3: the
+/// caller keeps the whole head literal). The `[…]` contents stay raw, the
+/// `(\u2026)` contents are trimmed and unquoted, exactly like a directive head.
+pub fn read_positional_groups(
+    after: &str,
+) -> Result<(Option<String>, Option<String>, usize), ExtrasError> {
+    let mut cursor = 0usize;
+    let mut bracket = None;
+    if let Some(remainder) = after[cursor..].strip_prefix('[') {
+        let Some(close) = remainder.find(']') else {
+            return Err(ExtrasError::UnterminatedHead);
+        };
+        bracket = Some(remainder[..close].to_string());
+        cursor = after.len() - remainder[close + 1..].len();
+    }
+    let mut parentheses = None;
+    if let Some(remainder) = after[cursor..].strip_prefix('(') {
+        let Some(close) = remainder.find(')') else {
+            return Err(ExtrasError::UnterminatedHead);
+        };
+        parentheses = Some(unquote_wrapping(remainder[..close].trim()));
+        cursor = after.len() - remainder[close + 1..].len();
+    }
+    Ok((bracket, parentheses, cursor))
+}
+
+/// Reads the type name and optional positional groups / `{…}` body of a `@@`
+/// head, returning the bytes consumed **after** the `@@`.
+///
+/// The grammar is `@@` type? `[…]`? `(\u2026)`? `{…}?` — each part must touch
+/// the previous one (§4.1). A head without a `{` stands alone when it carries a
+/// type or at least one positional group; a bare `@@` is still not a head.
 fn read_head(after: &str) -> Result<(ExtrasHead, usize), ExtrasError> {
     let bytes = after.as_bytes();
     let mut cursor = 0;
@@ -285,25 +374,34 @@ fn read_head(after: &str) -> Result<(ExtrasHead, usize), ExtrasError> {
     }
     let type_marker = (cursor > 0).then(|| after[..cursor].to_string());
 
+    let (bracket, parentheses, groups) = read_positional_groups(&after[cursor..])?;
+    cursor += groups;
+
     if bytes.get(cursor) == Some(&b'{') {
         let (mut head, consumed) = read_body(&after[cursor..])?;
         head.type_marker = type_marker;
+        head.bracket = bracket;
+        head.parentheses = parentheses;
         return Ok((head, cursor + consumed));
     }
 
-    // No `{` follows. Only a type can carry the head on its own (§4.1).
-    let Some(type_marker) = type_marker else {
+    // No `{` follows. A type or a positional group can carry the head on its
+    // own (§4.1/§6.1); a bare `@@` cannot.
+    if type_marker.is_none() && bracket.is_none() && parentheses.is_none() {
         return Err(ExtrasError::InvalidHead);
-    };
+    }
     // §4.1: `@@type {…}` is not a head — the `{` must touch the type.
     if matches!(bytes.get(cursor), Some(b' ' | b'\t')) && opens_brace_on_line(&after[cursor..]) {
         return Err(ExtrasError::InvalidHead);
     }
-    // A type-only head: the type run ends at the first symbol (or the end of
-    // input) and only the type is consumed. `@@anchorA.` keeps the `.` as text.
+    // A type-only (or groups-only) head: the run ends at the first symbol (or
+    // the end of input) and only the type / groups are consumed.
+    // `@@anchorA.` keeps the `.` as text.
     Ok((
         ExtrasHead {
-            type_marker: Some(type_marker),
+            type_marker,
+            bracket,
+            parentheses,
             items: Vec::new(),
         },
         cursor,
@@ -361,6 +459,8 @@ pub fn parse_extras_body(body: &str) -> Result<ExtrasHead, ExtrasError> {
     }
     Ok(ExtrasHead {
         type_marker: None,
+        bracket: None,
+        parentheses: None,
         items,
     })
 }
@@ -589,9 +689,14 @@ fn find_closing_unquoted(text: &str, closing: u8) -> Option<usize> {
 // ----------------------------------------------------- extras → attributes
 
 /// Maps a head onto attributes in the deterministic §6.4 order: `class`, `id`,
-/// the positional keys (`backtick_key` then `quote_key`), then every remaining
-/// prop and flag in source order with `style` where the first `style:` prop or
-/// `--var` item appeared.
+/// the positional keys (`bracket_key`, `parentheses_key`, `backtick_key`, then
+/// `quote_key`), then every remaining prop and flag in source order with `style`
+/// where the first `style:` prop or `--var` item appeared.
+///
+/// A positional **group** (`[…]` / `(…)` of §6.1) wins over a same-key item of
+/// the `{…}` body: the item is dropped with an `Overridden` warning (§6.2
+/// head-wins style). A `class` / `id` collision is left to the §6.4 collapse
+/// below, where the later group value wins at the first occurrence's position.
 pub fn to_attributes(head: &ExtrasHead, options: &ExtrasOptions) -> Attrs {
     let mut classes: Vec<String> = Vec::new();
     let mut id: Option<String> = None;
@@ -602,6 +707,26 @@ pub fn to_attributes(head: &ExtrasHead, options: &ExtrasOptions) -> Attrs {
     let mut style_pos: Option<usize> = None;
     let mut warnings = Vec::new();
 
+    // §6.1: the positional groups of the head itself, mapped through their
+    // keys. They occupy the §6.4 slot before the body's positional items and
+    // win every key collision with them.
+    let mut group_keys: Vec<&str> = Vec::new();
+    let mut groups: Vec<(String, ExtrasAttr)> = Vec::new();
+    if let Some(bracket) = &head.bracket {
+        groups.push((
+            options.bracket_key.clone(),
+            ExtrasAttr::Value(AttrValue::Str(bracket.clone())),
+        ));
+        group_keys.push(&options.bracket_key);
+    }
+    if let Some(parentheses) = &head.parentheses {
+        groups.push((
+            options.parentheses_key.clone(),
+            ExtrasAttr::Value(AttrValue::Str(parentheses.clone())),
+        ));
+        group_keys.push(&options.parentheses_key);
+    }
+
     for item in &head.items {
         match item {
             // `class` accumulates; every other kind is last-wins (§5).
@@ -611,8 +736,24 @@ pub fn to_attributes(head: &ExtrasHead, options: &ExtrasOptions) -> Attrs {
                     warnings.push(ExtrasWarning::DuplicateId);
                 }
             }
-            ExtrasItem::Slug(value) => slug = Some(value.clone()),
-            ExtrasItem::Title(value) => title = Some(value.clone()),
+            ExtrasItem::Slug(value) => {
+                if group_keys.contains(&options.backtick_key.as_str()) {
+                    warnings.push(ExtrasWarning::Overridden {
+                        key: options.backtick_key.clone(),
+                    });
+                } else {
+                    slug = Some(value.clone());
+                }
+            }
+            ExtrasItem::Title(value) => {
+                if group_keys.contains(&options.quote_key.as_str()) {
+                    warnings.push(ExtrasWarning::Overridden {
+                        key: options.quote_key.clone(),
+                    });
+                } else {
+                    title = Some(value.clone());
+                }
+            }
             ExtrasItem::CssVar { name, value } => {
                 style_pos.get_or_insert(rest.len());
                 style.push(format!("--{name}: {value}"));
@@ -625,8 +766,14 @@ pub fn to_attributes(head: &ExtrasHead, options: &ExtrasOptions) -> Attrs {
                 style_pos.get_or_insert(rest.len());
                 style.push(value.literal());
             }
+            ExtrasItem::Prop { key, value: _ } if group_keys.contains(&key.as_str()) => {
+                warnings.push(ExtrasWarning::Overridden { key: key.clone() });
+            }
             ExtrasItem::Prop { key, value } => {
                 set(&mut rest, key, ExtrasAttr::Value(value.clone()))
+            }
+            ExtrasItem::Flag { name } if group_keys.contains(&name.as_str()) => {
+                warnings.push(ExtrasWarning::Overridden { key: name.clone() });
             }
             ExtrasItem::Flag { name } => set(&mut rest, name, ExtrasAttr::Flag),
         }
@@ -642,6 +789,7 @@ pub fn to_attributes(head: &ExtrasHead, options: &ExtrasOptions) -> Attrs {
     if let Some(id) = id {
         items.push(("id".to_string(), ExtrasAttr::Value(AttrValue::Str(id))));
     }
+    items.extend(groups);
     if let Some(slug) = slug {
         items.push((
             options.backtick_key.clone(),
@@ -730,29 +878,11 @@ pub fn parse_directive_head(input: &str) -> DirectiveMatch<'_> {
     let type_marker = (cursor > 0).then(|| rest[..cursor].to_string());
     rest = &rest[cursor..];
 
-    let mut bracket = None;
-    if let Some(remainder) = rest.strip_prefix('[') {
-        let Some(close) = remainder.find(']') else {
-            return DirectiveMatch::Malformed {
-                error: ExtrasError::UnterminatedHead,
-                rest: input,
-            };
-        };
-        bracket = Some(remainder[..close].to_string());
-        rest = &remainder[close + 1..];
-    }
-
-    let mut parentheses = None;
-    if let Some(remainder) = rest.strip_prefix('(') {
-        let Some(close) = remainder.find(')') else {
-            return DirectiveMatch::Malformed {
-                error: ExtrasError::UnterminatedHead,
-                rest: input,
-            };
-        };
-        parentheses = Some(unquote_wrapping(remainder[..close].trim()));
-        rest = &remainder[close + 1..];
-    }
+    let (bracket, parentheses, groups) = match read_positional_groups(rest) {
+        Ok(groups) => groups,
+        Err(error) => return DirectiveMatch::Malformed { error, rest: input },
+    };
+    rest = &rest[groups..];
 
     if type_marker.is_none() && bracket.is_none() && parentheses.is_none() && !rest.is_empty() {
         // `==5` / `::= x`: an opening fence needs a type name (§10.1).

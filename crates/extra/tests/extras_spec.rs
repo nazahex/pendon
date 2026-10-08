@@ -5,7 +5,7 @@
 use pendon_extra::{
     parse_directive_head, parse_extras, parse_type_marker, to_attributes, AttrValue, Attrs,
     DirectiveMatch, DirectiveSigil, ExtrasAttr, ExtrasError, ExtrasHead, ExtrasMatch,
-    ExtrasOptions, ExtrasWarning,
+    ExtrasOptions, ExtrasWarning, PositionalKeys,
 };
 
 /// Parses `input` as a complete head and maps it to attributes.
@@ -219,6 +219,47 @@ fn positional_keys_follow_component_config() {
     assert_eq!(items[1].0, "label");
 }
 
+/// §11 rule 5: the config-side overrides are all optional, so an entry that
+/// overrides nothing keeps every built-in §6.1 key, and a partial override
+/// fills only the gaps it left.
+#[test]
+fn positional_key_overrides_resolve_unset_keys_to_the_defaults() {
+    let empty = PositionalKeys::default();
+    assert!(empty.is_empty());
+    assert_eq!(empty.resolve(), ExtrasOptions::default());
+
+    let partial = PositionalKeys {
+        parentheses_key: Some("level".into()),
+        ..PositionalKeys::default()
+    };
+    assert!(!partial.is_empty());
+    assert_eq!(
+        partial.resolve(),
+        ExtrasOptions {
+            parentheses_key: "level".into(),
+            ..ExtrasOptions::default()
+        }
+    );
+
+    // The four slots stay independent: overriding one never touches the others.
+    let all = PositionalKeys {
+        backtick_key: Some("ref".into()),
+        quote_key: Some("blurb".into()),
+        bracket_key: Some("label".into()),
+        parentheses_key: Some("kind".into()),
+    };
+    assert!(!all.is_empty());
+    assert_eq!(
+        all.resolve(),
+        ExtrasOptions {
+            backtick_key: "ref".into(),
+            quote_key: "blurb".into(),
+            bracket_key: "label".into(),
+            parentheses_key: "kind".into(),
+        }
+    );
+}
+
 #[test]
 fn css_vars_and_style_props_merge_into_one_style_attribute() {
     let (items, _) = attrs_of(r#"@@type{.a, --tone: red, style: "color: blue", --size: 2rem}"#);
@@ -429,4 +470,111 @@ fn scans_the_type_marker_without_parsing_the_body() {
     );
     assert_eq!(parse_type_marker("@@{.a}"), None);
     assert_eq!(parse_type_marker("@@123"), None);
+}
+
+// ------------------------------------------------- positional groups (§6.1)
+
+/// §9.1/§6.1: `@@type[…](…){…}` — the groups sit between the type and the
+/// body, each part touching the previous one.
+#[test]
+fn heads_carry_positional_groups() {
+    let head = head_of("@@aside[intro](\"A title\"){.box, #a1}");
+    assert_eq!(head.type_marker.as_deref(), Some("aside"));
+    assert_eq!(head.bracket.as_deref(), Some("intro"));
+    assert_eq!(head.parentheses.as_deref(), Some("A title"));
+    assert_eq!(head.items.len(), 2);
+
+    // Each group is optional, in either combination, with or without a body.
+    let head = head_of("@@aside[intro]{.box}");
+    assert_eq!(head.bracket.as_deref(), Some("intro"));
+    assert_eq!(head.parentheses, None);
+
+    let head = head_of("@@aside(\"T\")");
+    assert_eq!(head.bracket, None);
+    assert_eq!(head.parentheses.as_deref(), Some("T"));
+    assert!(head.items.is_empty());
+
+    // §9.1: the untyped decorator `@@[…]` — the groups alone carry the head.
+    let head = head_of("@@[intro](\"T\"){.box}");
+    assert_eq!(head.type_marker, None);
+    assert_eq!(head.bracket.as_deref(), Some("intro"));
+    assert_eq!(head.parentheses.as_deref(), Some("T"));
+
+    // Groups without a type or body are still a head (`@@[…]` / `@@(…)`).
+    let head = head_of("@@[intro]");
+    assert_eq!(head.bracket.as_deref(), Some("intro"));
+    assert!(head.items.is_empty());
+}
+
+/// §4.1 adjacency applies to the groups too.
+#[test]
+fn groups_must_be_adjacent() {
+    // A space before `[` ends the head; the rest stays literal.
+    let ExtrasMatch::Head { head, rest } = parse_extras("@@aside [intro]") else {
+        panic!("expected a type-only head");
+    };
+    assert_eq!(head.type_marker.as_deref(), Some("aside"));
+    assert_eq!(head.bracket, None);
+    assert_eq!(rest, " [intro]");
+
+    // `@@type {…}` is still not a head, groups or not.
+    use ExtrasError::*;
+    assert_eq!(literal_error("@@aside[intro] {.box}"), InvalidHead);
+    // An unterminated group falls back to literal text (§4.3).
+    assert_eq!(literal_error("@@aside[unclosed{.box}"), UnterminatedHead);
+    assert_eq!(literal_error("@@aside(\"unclosed{.box}"), UnterminatedHead);
+    // A bare `@@` is still not a head.
+    assert_eq!(literal_error("@@ plain"), InvalidHead);
+}
+
+/// §6.1/§6.4: the groups map through `bracket_key` / `parentheses_key`, sit
+/// with the positional keys, and win a collision with a body item (§6.2).
+#[test]
+fn groups_map_through_the_positional_keys() {
+    let head = head_of("@@aside[intro](\"T\"){.c, `body-slug`, slug: \"p\"}");
+    let attrs = to_attributes(&head, &ExtrasOptions::default());
+    let keys: Vec<String> = attrs.items.iter().map(|(key, _)| key.clone()).collect();
+    // class, then the group keys, and the colliding body items are dropped.
+    assert_eq!(keys, vec!["class", "slug", "title"]);
+    assert_eq!(
+        attrs.value("slug").map(AttrValue::literal),
+        Some("intro".to_string())
+    );
+    assert_eq!(
+        attrs.value("title").map(AttrValue::literal),
+        Some("T".to_string())
+    );
+    assert_eq!(
+        attrs
+            .warnings
+            .iter()
+            .filter(|warning| matches!(warning, ExtrasWarning::Overridden { .. }))
+            .count(),
+        2,
+        "{:?}",
+        attrs.warnings
+    );
+
+    // The keys follow the component config like every other positional.
+    let head = head_of("@@note[n](\"T\")");
+    let options = ExtrasOptions {
+        bracket_key: "level".into(),
+        parentheses_key: "summary".into(),
+        ..ExtrasOptions::default()
+    };
+    let attrs = to_attributes(&head, &options);
+    assert_eq!(
+        attrs.value("level").map(AttrValue::literal),
+        Some("n".to_string())
+    );
+    assert_eq!(
+        attrs.value("summary").map(AttrValue::literal),
+        Some("T".to_string())
+    );
+
+    // Without a body the groups still emit, in §6.4 order.
+    let head = head_of("@@[s](\"t\")");
+    let attrs = to_attributes(&head, &ExtrasOptions::default());
+    let keys: Vec<String> = attrs.items.iter().map(|(key, _)| key.clone()).collect();
+    assert_eq!(keys, vec!["slug", "title"]);
 }
