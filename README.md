@@ -18,6 +18,12 @@ The CLI binary is `pendon`. It reads from stdin by default or from a file via `-
 # From stdin
 echo "Hello" | pendon
 
+# Full run with pendon.toml config
+pendon run
+
+# Bypass cache and renew it
+pendon run -F
+
 # From a file
 pendon --input ./README.md
 
@@ -33,6 +39,8 @@ pendon --format ast --input ./doc.md
 # Pretty HTML renderer (indented, one child per line)
 pendon --plugin markdown --format html --pretty --input ./doc.md
 ```
+
+Reminder: use `cargo run --bin pendon` instead of `pendon` during development to run the current code rather than an old build.
 
 ### Flags
 
