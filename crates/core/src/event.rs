@@ -134,6 +134,48 @@ pub enum Severity {
     Error,
 }
 
+/// Private-Use-Area sentinel that prefixes an [`Event::Attribute`] value when it
+/// carries an **encoded JSON literal** — a bound object, array, or non-string
+/// scalar produced by a data-binding transform (e.g. `plugin-bind`,
+/// `docs/rfc/plugin-bind.md`).
+///
+/// `Event::Attribute.value` is a `String`, so a structured value is transported
+/// as `JSON_ATTR_PREFIX` + compact JSON. The AST builder
+/// (`renderer-ast`) strips the prefix and re-hydrates the payload into a real
+/// JSON value, which the Solid spread path then emits as `={…}`.
+/// Distinct from the `U+E000` pre-markdown protect sentinel (§12.1); no other
+/// stage may emit `U+E001`.
+pub const JSON_ATTR_PREFIX: &str = "\u{E001}";
+
+/// Private-Use-Area sentinel that prefixes an [`Event::Attribute`] value when it
+/// carries a **raw JSX expression** — an already-rendered fragment (e.g. Pendon
+/// Markdown rendered to JSX by `plugin-bind`) that must reach Solid wrapped in
+/// parentheses: `name={( … )}`. Other renderers strip the prefix and treat the
+/// payload as text (the data-binding surface is Solid-first).
+pub const JSX_ATTR_PREFIX: &str = "\u{E002}";
+
+/// `true` when `value` carries an encoded JSON literal ([`JSON_ATTR_PREFIX`]).
+pub fn is_json_attr(value: &str) -> bool {
+    value.starts_with(JSON_ATTR_PREFIX)
+}
+
+/// The compact-JSON payload of an encoded JSON literal, or `None` when `value`
+/// is not one.
+pub fn json_attr_payload(value: &str) -> Option<&str> {
+    value.strip_prefix(JSON_ATTR_PREFIX)
+}
+
+/// `true` when `value` carries a raw JSX expression ([`JSX_ATTR_PREFIX`]).
+pub fn is_jsx_attr(value: &str) -> bool {
+    value.starts_with(JSX_ATTR_PREFIX)
+}
+
+/// The JSX fragment of a raw-JSX-expression attribute, or `None` when `value`
+/// is not one.
+pub fn jsx_attr_payload(value: &str) -> Option<&str> {
+    value.strip_prefix(JSX_ATTR_PREFIX)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
     StartNode(NodeKind),
