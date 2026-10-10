@@ -1,34 +1,49 @@
-# Parser Spec: Paragraph Invariants
+# Parser & IR Contract
 
-Status: Draft (MVP)
+The parser (`crates/core`) turns input text into a stream of `Event` values. This
+is the boundary every plugin and renderer speaks. (This file is the short contract;
+the surface syntax that feeds it is [`SYNTAX.md`](SYNTAX.md).)
 
-## Paragraph Boundaries
+## Event IR
 
-- Open: first non-newline character after zero or more newlines starts a paragraph and emits `StartNode(Paragraph)`.
-- Close: a blank line (two consecutive newline tokens) closes the current paragraph via `EndNode(Paragraph)`.
-- Trailing close: at end-of-input, any open paragraph is closed.
+```text
+StartNode(kind)
+Attribute(name, value) / AttributeFlag(name)
+Text(...) / child nodes
+EndNode(kind)
+```
 
-## Newlines
+Rules (from `CONTRIBUTORS.md`):
 
-- CRLF (\r\n) is normalized to a single LF (\n) at tokenization.
-- Every newline is preserved as a `Text("\n")` event for output fidelity, regardless of paragraph state (leading/trailing newlines are retained).
+- Attributes appear after their owning `StartNode` and before content.
+- Every transformed node preserves balanced start/end structure.
+- Preserve text unless the plugin explicitly owns the syntax being removed.
+- Do not emit renderer-specific markup when a structured event or custom node is
+  available.
+- Do not treat diagnostics as ordinary document content.
 
-## Leading/Trailing Blank Lines
+## Behaviour & invariants
 
-- Leading newlines before the first paragraph are emitted as `Text("\n")` but do not open a paragraph.
-- Trailing newlines after the last paragraph are emitted as `Text("\n")` but do not open a paragraph.
+- Newlines are preserved as text (`"\n"`) for fidelity.
+- Paragraphs open on the first non-blank line and close on a blank run ≥ 2.
+- In strict mode, diagnostics become errors; the CLI exits non-zero if any errors
+  occurred.
 
-## Blank Run Guard
+## Node kinds (representative)
 
-- Option `max_blank_run: Option<usize>` controls diagnostics for consecutive newlines.
-- When set and a newline sequence exceeds the limit, a single `Event::Diagnostic { severity: Warning }` is emitted at the first exceedance.
-- Text is not altered by this guard; concatenation remains identical. In strict mode (future), this may become an error.
+`Paragraph`, `Heading`, `CodeFence`, `ThematicBreak`, `Blockquote`, `BulletList`,
+`OrderedList`, `ListItem`, `Table`, `TableHead`, `TableBody`, `TableRow`, `Cell`,
+`Custom(name)` (a configured component), `Element(name)` (a built-in HTML element),
+plus `HtmlBlock` / `HtmlInline`. The `__plugin_kind` attribute on a `Custom` /
+`Element` node tells `plugin-markdown` how to re-lex its body.
 
-## Line Length Guard
+## Value typing
 
-- Option `max_line_len: Option<usize>` compares the number of non-newline characters between newline tokens.
-- When exceeded, a `Diagnostic { severity: Warning }` is emitted at newline time.
+Extras map to `AttrValue { Str, Int, Float, Bool, Raw }` (`crates/extra`), then to
+`Event::Attribute { name, value: String }`; bare flags emit `Event::AttributeFlag`.
+See `SYNTAX.md` §6.3 for the full mapping and per-renderer behaviour.
 
-## Document Events
+## Not in this contract
 
-- Stream always begins with `StartNode(Document)` and ends with `EndNode(Document)`.
+- Setext headings (never existed; `---` is micromatter / `<hr />` only).
+- The retired legacy `[.class,#id]{k:v}` extras form.

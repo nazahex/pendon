@@ -55,6 +55,9 @@ An entry may rename the §6.1 positional slots in its extras head: `bracket_key`
 - Nesting is not special for markers; they are replaced in a single pass.
 - Malformed positional groups (missing closing `]` or `)`) cause the marker to still render, but the group stays as literal text (§4.3).
 
-## Not yet wired
+## CLI wiring
 
-This crate is not part of the CLI plugin list yet: `apps/cli` still has to learn `marker` (options + dispatch + `solid_hints`). Run `cargo test -p pendon-plugin-marker` for the crate-level and end-to-end coverage.
+This crate is wired into the CLI plugin list: `marker` builds its `MarkerOptions`
+from `[[task.marker.custom]]` and dispatches `process` in the config runner
+(`apps/cli/src/plugins.rs`, `apps/cli/src/process.rs`). Run `cargo test -p
+pendon-plugin-marker` for crate-level and end-to-end coverage.

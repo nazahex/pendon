@@ -2,15 +2,14 @@
 
 Citation and bibliography plugin for Pendon.
 
-`pendon-plugin-cite` transforms inline citation syntax into structured citation nodes, manages a global citation index across the entire document (including sub-pipelines like image captions), and generates bibliography metadata in the frontmatter. It supports custom Solid components, extra HTML attributes, external reference files, and section markers for automated bibliography placement.
+`pendon-plugin-cite` transforms inline citation syntax into structured citation nodes, manages a global citation index across the entire document (including sub-pipelines like image captions), and generates bibliography metadata in the frontmatter. It supports custom Solid components, extra HTML attributes, and external reference files.
 
 ## What This Plugin Does
 
 - Parses `[^^](ref-id)` and `[^^](ref-id "location")` inline citation syntax
 - Maintains a **shared citation context** so citations in image captions, blockquotes, and other sub-pipelines share the same global index counter
 - Injects `cites` and `references` arrays into the document frontmatter
-- Replaces `{{ footnote }}` section markers with a custom bibliography component
-- Supports custom Solid components for both individual citations and bibliography sections
+- Supports custom Solid components for citations
 - Supports extra classes, IDs, data attributes, and CSS custom properties on each citation
 - Loads references from frontmatter YAML or external YAML files
 - Deduplicates identical citations (same ID + same location = same index)
@@ -23,6 +22,7 @@ micromatter,img,cite,wiki,anchor,markdown
 ```
 
 **Why this order matters:**
+`
 
 1. `micromatter` **must** run first — it parses the `---` delimited frontmatter block into a `Frontmatter` node that cite needs to read references from
 2. `img` runs before cite so image captions can use the shared citation context
@@ -74,9 +74,9 @@ literal text.
 
 How the remaining keys are emitted depends on the render target:
 
-- **Default HTML** (no `custom_node`): non-`--` keys become `data-{key}`
+- **Default HTML** (no custom component): non-`--` keys become `data-{key}`
   attributes, and `#id` is emitted as `data-cite-id`.
-- **Custom component** (`custom_node`): keys are passed through verbatim as
+- **Custom component** (`[task.cite.custom]`): keys are passed through verbatim as
   component props (`key={...}`), since Solid components expect plain props
   without a `data-` prefix. `#id` is emitted as `cite-id` so it stays distinct
   from the citation reference `id`.
@@ -133,18 +133,11 @@ The `reference_file` path supports the same capture group substitution as `input
 Replace the default `<sup><a>...</a></sup>` output with a custom Solid component:
 
 ```toml
-[task.cite.custom_node]
+[task.cite.custom]
 name = "Citation"
+imports = "import Citation from '@comp/citation';"
 template = "<Citation index={attrs.index} id={attrs.id} loc={attrs.loc} class=\"{attrs.class}\" />"
-
-[[task.cite.custom_node.imports]]
-module = "@comp/citation"
-default = "Citation"
 ```
-
-`imports` also accepts a raw import line
-(`imports = ["import Citation from '@comp/citation';"]`). Entries coming from the
-same module are merged into a single `import` statement.
 
 Available template attributes:
 
@@ -157,26 +150,6 @@ Available template attributes:
 | `{attrs.cite-id}` | Extra `#id` from the attribute block                                 |
 | `{attrs.<key>}`   | Extra prop passed verbatim (e.g. `{attrs.foo}` for `{ foo: "val" }`) |
 | `{attrs.style}`   | Inline style string from `{ --var: "val" }`                          |
-
-### Custom Bibliography Section
-
-Replace the `{{ footnote }}` marker with a custom bibliography component:
-
-```toml
-[task.cite.section]
-marker = "{{ footnote }}"
-node = "Bibliography"
-template = "<Bibliography cites={frontmatter.cites} references={frontmatter.references} />"
-
-[[task.cite.section.imports]]
-module = "@comp/citation"
-default = "Bibliography"
-```
-
-The bibliography component receives two props via frontmatter:
-
-- `frontmatter.cites` — JSON array of all cited references with their indices
-- `frontmatter.references` — JSON object containing only the references that were actually cited
 
 ### Default HTML Output (No Custom Node)
 
@@ -247,7 +220,6 @@ entry with no overrides behaves exactly as before.
 - Citations inside code fences, inline code, HTML blocks, and HTML inline elements are ignored
 - Citations inside frontmatter blocks are ignored
 - Unresolvable reference IDs emit an `Error` diagnostic and the raw syntax is preserved as-is
-- The `{{ footnote }}` marker must be the **only content** of a paragraph to be replaced
 - Extra attributes are optional — citations work without them
 
 ## Scope and Limitations

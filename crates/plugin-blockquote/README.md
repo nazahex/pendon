@@ -71,8 +71,10 @@ entry with no overrides behaves exactly as before.
 - Nesting is preserved one level at a time: `>> inner` leaves `> inner` for the
   Markdown pass, which then builds the second `<blockquote>`.
 
-## Not yet wired
+## CLI wiring
 
-This crate is not part of the CLI plugin list yet: `apps/cli` still has to learn
-`blockquote` (options + dispatch + `solid_hints`). Run `cargo test -p
-pendon-plugin-blockquote` for the crate-level and end-to-end coverage.
+This crate is wired into the CLI plugin list: `blockquote` builds its
+`BlockquoteOptions` from `[[task.blockquote.custom]]` and dispatches `process`
+in the config runner (`apps/cli/src/plugins.rs`, `apps/cli/src/process.rs`).
+Run `cargo test -p pendon-plugin-blockquote` for crate-level and end-to-end
+coverage.

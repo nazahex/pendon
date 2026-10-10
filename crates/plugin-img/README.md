@@ -183,7 +183,7 @@ The extras head is a single `{…}` block:
 
 - Keys starting with `--` → inline style entries (`style="--var: value;"`)
 - All other keys → `data-{key}="value"` attributes in the default HTML output
-- With a `custom_node`, all other keys are passed through verbatim as component
+- With a custom component, all other keys are passed through verbatim as component
   props (`key={...}`) instead, since Solid components expect plain props without
   a `data-` prefix
 - Comma-separated, quoted or unquoted values accepted
@@ -195,11 +195,11 @@ Every item is optional.
 Replace the default HTML output with a custom Solid component:
 
 ```toml
-[task.img.custom_node]
+[task.img.custom.figure]
 name = "AdvancedImage"
 template = "<AdvancedImage id=\"{attrs.id}\" src=\"{attrs.src}\" alt=\"{attrs.alt}\" class=\"{attrs.class}\">{children}</AdvancedImage>"
 
-[[task.img.custom_node.imports]]
+[[task.img.custom.figure.imports]]
 module = "@/components/AdvancedImage"
 default = "AdvancedImage"
 ```

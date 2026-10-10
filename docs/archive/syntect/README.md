@@ -1,6 +1,6 @@
 # Using External Grammars with Syntect
 
-Pendon can load additional grammars (Sublime `.sublime-syntax` or TextMate `.tmLanguage`) for better language coverage like TypeScript/TSX.
+Pendon plugin-codeblock-syntect can load additional grammars (Sublime `.sublime-syntax` or TextMate `.tmLanguage`) for better language coverage like TypeScript/TSX.
 
 How to enable:
 

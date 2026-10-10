@@ -1,7 +1,3 @@
-Berikut adalah draf README untuk `pendon-plugin-table`. Saya menyusunnya dalam bahasa Inggris agar selaras dengan dokumentasi `plugin-cite` Anda, namun menerapkan prinsip editorial premium: paragraf yang sangat ringkas, ide yang terfokus, dan tipografi yang memandu mata pembaca.
-
----
-
 # pendon-plugin-table
 
 Advanced, AsciiDoc-inspired table syntax plugin for Pendon.
@@ -135,42 +131,48 @@ layer of the table: `table`, `caption`, `thead`, `tbody`, `tfoot`, `row`, and
 keep rendering as plain elements, so a partial config degrades gracefully.
 
 ```toml
-[task.table.custom_node]
-# Shared by every component below; a component's own list is added on top.
-imports = ["import { TableCaption } from '@/components/table';"]
-
-[task.table.custom_node.table]
+[task.table.custom.table]
 name = "CustomTable"
 template = "<CustomTable id=\"{attrs.id}\" class=\"{attrs.class}\">{children}</CustomTable>"
+imports = [
+  "import { TableCaption } from '@/components/table';",
+  { module = "@/components/CustomTable", default = "CustomTable" },
+]
 
-[[task.table.custom_node.table.imports]]
-module = "@/components/CustomTable"
-default = "CustomTable"
-
-[task.table.custom_node.caption]
+[task.table.custom.caption]
 name = "TableCaption"
 template = "<TableCaption>{children}</TableCaption>"
+imports = ["import { TableCaption } from '@/components/table';"]
 
-[task.table.custom_node.thead]
+[task.table.custom.thead]
 name = "TableHead"
 template = "<TableHead>{children}</TableHead>"
+imports = [{ module = "@/components/table", names = ["TableHead"] }]
 
-[task.table.custom_node.tbody]
+[task.table.custom.tbody]
 name = "TableBody"
 template = "<TableBody>{children}</TableBody>"
+imports = [{ module = "@/components/table", names = ["TableBody"] }]
 
-[task.table.custom_node.tfoot]
+[task.table.custom.tfoot]
 name = "TableFoot"
 template = "<TableFoot>{children}</TableFoot>"
+imports = [{ module = "@/components/table", names = ["TableFoot"] }]
 
-[task.table.custom_node.row]
+[task.table.custom.row]
 name = "TableRow"
 template = "<TableRow class=\"{attrs.class}\">{children}</TableRow>"
+imports = [{ module = "@/components/table", names = ["TableRow"] }]
 
-[task.table.custom_node.cell]
+[task.table.custom.cell]
 name = "TableCell"
 template = "<TableCell align=\"{attrs.align}\" class=\"{attrs.class}\" colspan=\"{attrs.colspan}\" rowspan=\"{attrs.rowspan}\" width=\"{attrs.width}\">{children}</TableCell>"
+imports = [{ module = "@/components/table", names = ["TableCell"] }]
 ```
+
+Each layer's `imports` may mix a raw line and structured entries; entries are
+deduplicated per module. Imports are only emitted for components actually used by
+the document.
 
 ### Imports Syntax
 
@@ -181,7 +183,7 @@ table:
 ```toml
 imports = ["import { TableCaption } from '@/components/table';"] # raw line
 
-[[task.table.custom_node.cell.imports]] # structured
+[[task.table.custom.cell.imports]] # structured
 module = "@/components/table"
 default = "TableCell" # optional default import
 names = ["TableHead"] # optional named imports
@@ -215,11 +217,11 @@ unknown keys from `{key: "value"}` blocks — as component props. Keys already
 written explicitly in the template are not duplicated:
 
 ```toml
-[task.table.custom_node.table]
+[task.table.custom.table]
 name = "CustomTable"
 template = "<CustomTable {...attrs}>{children}</CustomTable>"
 
-[task.table.custom_node.cell]
+[task.table.custom.cell]
 name = "TableCell"
 template = "<TableCell {...attrs} colspan=\"{attrs.colspan}\" rowspan=\"{attrs.rowspan}\">{children}</TableCell>"
 ```

@@ -183,17 +183,26 @@ Focused validation is preferred after each edit. Use the smallest relevant packa
 
 ## Documentation and Handoffs
 
-Update documentation when architecture or public behavior changes.
+Docs are split by concern; each fact lives in exactly one file and the rest link
+to it. The full map is [`docs/INDEX.md`](docs/INDEX.md); AI-agent routing is
+[`AGENTS.md`](AGENTS.md).
 
-For incomplete multi-step work, update the relevant file under `docs/todo/` with:
+Update documentation when architecture or public behavior changes:
 
-- completed work;
-- current architecture;
-- remaining tasks;
-- known blockers;
-- exact validation commands.
+- **Grammar changed?** Update [`docs/spec/SYNTAX.md`](docs/spec/SYNTAX.md), and add
+  an ADR in [`docs/decisions/`](docs/decisions/) if it is a _decision_ (the "why").
+- **Behaviour verified by a fixture?** Re-freeze the golden (see
+  [`docs/spec/golden/README.md`](docs/spec/golden/README.md)) — the test is the
+  record; don't hand-edit docs to match output.
+- **Work started / blocked / finished?** Update [`STATUS.md`](STATUS.md) only
+  (one or two lines; delete done lines — do not restate history).
+- **A plugin's public behaviour changed?** Update that crate's
+  `crates/<plugin>/README.md`, referencing the spec section rather than restating
+  the grammar.
+- **CLI flags / architecture conventions?** `docs/guides/cli.md` / this file.
 
-The active plugin refactor is tracked in [`docs/todo/plugins-refactor.md`](docs/todo/plugins-refactor.md).
+Do not reintroduce a large mixed-concern file; add a focused file and link it from
+`docs/INDEX.md` instead.
 
 ## Pull Request Checklist
 

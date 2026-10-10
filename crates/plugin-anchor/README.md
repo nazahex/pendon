@@ -142,11 +142,11 @@ retired `[.class,#id]{key: value}` block is literal text too.
 Replace the default `Link` node with a custom Solid component:
 
 ```toml
-[task.anchor.custom_node]
+[task.anchor.custom]
 name = "Anchor"
 template = "<Anchor href={attrs.href} target={attrs.target} rel={attrs.rel} class=\"{attrs.class}\">{children}</Anchor>"
 
-[[task.anchor.custom_node.imports]]
+[[task.anchor.custom.imports]]
 module = "@comp/shared/Anchor"
 default = "Anchor"
 ```

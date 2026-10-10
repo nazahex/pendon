@@ -1,9 +1,12 @@
 # Syntax Spec: Unified Typed Extras
 
-Status: Frozen (target grammar, Phase 0 in progress — `crates/extra` v2 landed)
+Status: **Frozen normative grammar.** This file is the target reference for the
+surface markup syntax and stays free of per-phase progress (that lives in
+[`STATUS.md`](../../STATUS.md) and [`decisions/`](../decisions/)). Rationale for
+the rules is in [ADR-0001](../decisions/0001-typed-extras-reconciliation.md).
 
-Supersedes (grammar only): `docs/rfc/unified-syntax.md`, `docs/rfc/table.md`,
-`docs/rfc/micomatter.md` (extras fragments only).
+Supersedes (grammar only): the archived `docs/rfc/{unified-syntax,table,micomatter}.md`
+(extras fragments).
 
 Normative keywords **MUST**, **MUST NOT**, **SHOULD**, **MAY** follow RFC 2119.
 
@@ -29,8 +32,8 @@ Implementation units that own this grammar:
 | `crates/extra`                                               | extras scanners, `AttrValue`, `ExtrasHead`, `parse_type_marker` |
 | `crates/plugin-marker`                                       | `{{type}}` inline/block markers                                 |
 | `crates/plugin-directive`                                    | `::type` inline and `==type` block directives                   |
-| `crates/plugin-list` (Phase 4)                               | list + item extras binding                                      |
-| `crates/plugin-blockquote` (Phase 4)                         | blockquote extras binding                                       |
+| `crates/plugin-list`                                         | list container + item extras binding (item layer L2/L3 pending) |
+| `crates/plugin-blockquote`                                   | blockquote extras binding                                       |
 | `crates/plugin-table`                                        | table head, declaration row, cell/row/section extras            |
 | `crates/plugin-section`                                      | heading-driven `Section` outline + section decorator / markers  |
 | `crates/plugin-img`, `-anchor`, `-cite`, `-heading`, `-wiki` | their own head + extras                                         |
@@ -60,38 +63,32 @@ Implementation units that own this grammar:
 
 ## 3. Sigil inventory
 
-| Token                       | Meaning                            | Owner               | Status                                   |
-| --------------------------- | ---------------------------------- | ------------------- | ---------------------------------------- |
-| `{…}`                       | extras head (canonical)            | `crates/extra`      | **current**                              |
-| `@@type{…}`                 | typed extras head                  | `crates/extra`      | **current**                              |
-| `@@type`                    | type-only head                     | `crates/extra`      | **current**                              |
-| `@@{…}`                     | untyped extras head (= `{…}`)      | `crates/extra`      | **current**                              |
-| `{}` / `@@{}`               | empty head                         | `crates/extra`      | **current**                              |
-| `` `x` `` / `"x"`           | positional slug / title            | `crates/extra`      | new                                      |
-| `.x` `#x` `--x:v` `k:v` `k` | class / id / CSS var / prop / flag | `crates/extra`      | extended                                 |
-| `[.c,#id]{k:v}`             | legacy extras fragment             | —                   | **removed** (§14) — literal text         |
-| `{{type}}`                  | inline & block marker              | `plugin-marker`     | new (freed from `cite.section`)          |
-| `::type` … `::`             | inline directive, 2–7 colons       | `plugin-directive`  | new                                      |
-| `==type` … `==`             | block directive                    | `plugin-directive`  | new                                      |
-| `[k]` `("k")`               | construct head (slug / title)      | per-plugin          | existing                                 |
-| `\|-…-\|`                   | table declaration line             | `plugin-table`      | new                                      |
-| `\|\| cap \|\|`             | table caption line                 | `plugin-table`      | new                                      |
-| `\|===\|`                   | table foot separator               | `plugin-table`      | existing (kept)                          |
-| `~?!` / `~?!!`              | image / figure marker              | `plugin-img`        | existing                                 |
-| `[^^](ref "loc")`           | citation                           | `plugin-cite`       | **current** (§7.3)                       |
-| `[[…]]`                     | wiki link                          | `plugin-wiki`       | existing                                 |
-| `>`                         | blockquote                         | `plugin-blockquote` | Phase 4 (+extras)                        |
-| `-` `*` `+`                 | unordered list item                | `plugin-list`       | Phase 4 (+extras)                        |
-| `1.`                        | ordered list item                  | `plugin-list`       | Phase 4 (+extras)                        |
-| `:::name`                   | legacy custom block                | `plugin-custom`     | superseded by `==type`                   |
-| `o.`                        | ordered list offset                | —                   | **retired**                              |
-| `===` (bare, below table)   | legacy table foot separator        | —                   | **retired**                              |
-| `{{section}}`               | legacy section marker              | —                   | **retired** (with `[task.cite.section]`) |
-| `@@`                        | _no other meaning_                 | —                   | reserved for Pendon                      |
+| Token                       | Meaning                            | Owner               | Status                          |
+| --------------------------- | ---------------------------------- | ------------------- | ------------------------------- |
+| `{…}`                       | extras head (canonical)            | `crates/extra`      | **current**                     |
+| `@@type{…}`                 | typed extras head                  | `crates/extra`      | **current**                     |
+| `@@type`                    | type-only head                     | `crates/extra`      | **current**                     |
+| `@@{…}`                     | untyped extras head (= `{…}`)      | `crates/extra`      | **current**                     |
+| `{}` / `@@{}`               | empty head                         | `crates/extra`      | **current**                     |
+| `` `x` `` / `"x"`           | positional slug / title            | `crates/extra`      | new                             |
+| `.x` `#x` `--x:v` `k:v` `k` | class / id / CSS var / prop / flag | `crates/extra`      | extended                        |
+| `{{type}}`                  | inline & block marker              | `plugin-marker`     | new (freed from `cite.section`) |
+| `::type` … `::`             | inline directive, 2–7 colons       | `plugin-directive`  | new                             |
+| `==type` … `==`             | block directive                    | `plugin-directive`  | new                             |
+| `[k]` `("k")`               | construct head (slug / title)      | per-plugin          | existing                        |
+| `\|-…-\|`                   | table declaration line             | `plugin-table`      | new                             |
+| `\|\| cap \|\|`             | table caption line                 | `plugin-table`      | new                             |
+| `\|===\|`                   | table foot separator               | `plugin-table`      | existing (kept)                 |
+| `~?!` / `~?!!`              | image / figure marker              | `plugin-img`        | existing                        |
+| `[^^](ref "loc")`           | citation                           | `plugin-cite`       | **current** (§7.3)              |
+| `[[…]]`                     | wiki link                          | `plugin-wiki`       | existing                        |
+| `>`                         | blockquote                         | `plugin-blockquote` | current (+extras)               |
+| `-` `*` `+`                 | unordered list container           | `plugin-list`       | current (+extras)               |
+| `1.`                        | ordered list container             | `plugin-list`       | current (+extras)               |
+| `:::name`                   | legacy custom block                | `plugin-custom`     | superseded by `==type`          |
+| `@@`                        | _no other meaning_                 | —                   | reserved for Pendon             |
 
-`@@` is reserved: no plugin may claim it for another purpose. `plugin-list` and
-`plugin-blockquote` do **not** exist yet: until Phase 4 the `>` / `-` sigils are
-plain markdown, and a plugin list naming them is reported (§13).
+`@@` is reserved: no plugin may claim it for another purpose.
 
 ## 4. Lexical rules
 
@@ -365,40 +362,46 @@ Notation: `head?` = optional, `extras?` = optional `@@type{…}`, `∘` = no spa
 ### 7.1 Image and figure (`plugin-img`)
 
 ```ebnf
-image  = "~?" "?"? size* "[" alt "]" "(" url title? ")" extras? text?
-size   = ( "w" | "h" ) DIGIT+
+image    = marker "[" alt "]" "(" url ")" extras? caption?
+marker   = container? marker-body               # container: `p` = <p>, `d` = <div>
+marker-body = 1*( "!" | modifier )              # MUST contain >= 1 "!"; "!!" => figure
+modifier = "?" | "~" | ( "w" | "h" ) DIGIT+
+caption  = text
+extras   = §5 extras-head                       # the shared {…} / @@type{…} head
 ```
 
-- `~?!` → `Image` node; `~?!!` → `Image` wrapped in a `Figure`.
-- Extras attach to the **outermost** node (`Figure` when `~?!!`, else `Image`).
-- `w800` / `h300` map to `width` / `height` on the inner image (unchanged).
-- `#id`/`slug` set the outer node id; `class` goes to the outer node.
-- Trailing text on the same line is the figure caption (`children` of `Figure`).
-- The extras head MUST touch the closing `)` of the `(url)` block (§4.1). The
-  retired `[.c,#id]{k:v}` block is literal text (§14).
+- Markers must contain at least one `!`; `!!` enables figure mode. A leading `p`
+  wraps in `<p>` and `d` wraps in `<div>` (container); a container prefix and `!!`
+  are mutually exclusive (e.g. `p!!`, `d!!` are rejected and the line is skipped
+  without error).
+- Bare `!` requires at least one modifier (`?`, `~`, `w<digits>`, or `h<digits>`); otherwise the line is left for `plugin-markdown`.
+- Modifiers are order-independent: `?` adds `loading="lazy"`, `~` adds `decoding="async"`, `w<digits>`/`h<digits>` set explicit dimensions on the inner `<img>`.
+- Invalid marker combinations (e.g., `p!!`, `d!!`) are rejected and the line is skipped without error.
+- Extras attach to the outermost node (`Figure` when `!!`, else `Image`); dimensions from modifiers always apply to the inner `<img>`.
+- Trailing caption text is permitted only in figure mode (`!!`); non-figure markers ignore trailing text.
+- Caption content is processed through the shared inline pipeline (wiki, cite, anchor, markdown) before rendering.
 
 ### 7.2 Anchor (`plugin-anchor`)
 
 ```ebnf
-anchor = "[" text "]" "(" url title? ")" extras?
+anchor   = "[" text "]" "(" url modifier* title? ")" extras?
+modifier = "^" | "~" | "!" | "$" | ";;" | "--"
+extras   = §5 extras-head                       # the shared {…} / @@type{…} head
 ```
 
-- Extras attach to the `<a>` element and MUST touch the closing `)`.
-- The head `("title")` wins over extras `"…"` (§6.2).
-- URL modifier suffixes stay part of the URL token and are parsed **before**
-  extras (unchanged behaviour): `^` → `target="_blank"`, `~` → `target="_self"`,
-  `!` → `rel="nofollow"`, `$` → `rel="sponsored"`, `;;` → `rel="ugc"`,
-  `--` → `rel="noreferrer"`; conflicting `^`/`~` is last-wins with a
-  Warning. `rel:`/`target:` extras merge with (do not replace) the modifier
-  result, as today.
-- `slug` → `id` when `#id` is absent.
-- The retired `[.c,#id]{k:v}` block after `)` is literal text (§14).
+- Modifiers are appended directly to the URL (before the title) and parsed right-to-left: `^` forces `target="_blank"`, `~` forces `target="_self"`, `!` adds `nofollow`, `$` adds `sponsored`, `;;` adds `ugc`, `--` adds `noreferrer`.
+- Conflicting `^` and `~` modifiers resolve as last-wins with a warning diagnostic emitted.
+- External URLs (http, https, protocol-relative, www, or non-root paths containing dots) automatically receive `target="_blank"` and `rel="noopener"` unless overridden by modifiers.
+- Extras attach to the `<a>` element; `rel` values merge with modifier-generated tokens rather than replacing them, while `target` in extras overrides modifier defaults.
+- Positional `` `slug` `` maps to `id` when `#id` is absent; `"title"` in extras yields to the standard link title syntax.
+- Image syntax `![alt](src)` is explicitly skipped; reference-style links and nested brackets are unsupported.
 
 ### 7.3 Cite (`plugin-cite`)
 
 ```ebnf
-cite = "[^^]" "(" ref [ ws dquote loc dquote ] ")" extras?
-ref  = 1*( any char except ws, ")", ",", dquote )
+cite     = "[^^]" "(" ref [ ws dquote loc dquote ] ")" extras?
+ref      = 1*( any char except ws, ")", ",", dquote )
+extras   = §5 extras-head                       # the shared {…} / @@type{…} head
 ```
 
 - The reference is **unquoted** and the location is an optional **quoted**
@@ -410,13 +413,12 @@ ref  = 1*( any char except ws, ")", ",", dquote )
 - First head positional → `id`; the quoted location → `loc`. There is no `loc=`
   prop form of the head: the quoted string after the reference is the only
   location syntax.
-- `{{section}}` and `[task.cite.section]` are **gone** (removed in Phase 1;
-  §12, §14). The bibliography section returns as a `plugin-marker` block.
 
 ### 7.4 Heading (`plugin-heading`)
 
 ```ebnf
-heading = "#"(1..6) [ "[" slug "]" ] [ "(" title ")" ] extras? text
+heading  = "#"(1..6) [ "[" slug "]" ] [ "(" title ")" ] extras? text
+extras   = §5 extras-head                       # the shared {…} / @@type{…} head
 ```
 
 - `[slug]` and `("title")` are both optional and independent, and the whole head
@@ -426,19 +428,16 @@ heading = "#"(1..6) [ "[" slug "]" ] [ "(" title ")" ] extras? text
   MUST NOT become part of the title).
 - Extras attach to the heading element; extras `slug` is ignored when `[slug]`
   exists.
-- The retired pre-§11 forms (`[.class]` brackets, a `{key: value}` block written
-  apart from the head) are literal text (§14).
 
 ### 7.5 Wiki (`plugin-wiki`)
 
 ```ebnf
 wikilink = "[[" target [ "|" label ] "]]" extras?
+extras   = §5 extras-head                       # the shared {…} / @@type{…} head
 ```
 
-- Unchanged apart from adjacent extras support (`[[Anim Esta]]@@type{…}`).
 - Extras attach to the wiki `<a>`; `href` is produced by the plugin
   (`link_prefix`) and MUST NOT be overridable by extras (it wins).
-- Infobox syntax is out of scope for this spec.
 
 ## 8. Table (`plugin-table`)
 
@@ -450,6 +449,8 @@ header-row  = "|" cell ( "|" cell )* "|" extras?     # alignment/width row
 row         = "|" cell ( "|" cell )* "|" extras?      # body row
 foot        = "|===|" extras? row*
 cell        = "|" extras? content
+
+extras   = §5 extras-head                       # the shared {…} / @@type{…} head
 ```
 
 Mapping to table layers:
@@ -491,8 +492,7 @@ Rules:
 - Alignment/width tokens (`:---:`, `(200px)`) and the `>` (colspan `+1`) / `^`
   (rowspan `+1`) cell markers are unchanged and come **before** the cell extras.
 - Cell content may be empty; empty cells become `<td></td>`.
-- The retired `[.class,#id]{k:v}` blocks (inside a cell, after a delimiter code,
-  before the closing `-|`, and the `-[.row]` last-cell form) are literal text (§14).
+- Text before the closing `-|` is literal text (§14).
 
 ## 9. Decorators, blockquotes and lists
 
@@ -537,8 +537,6 @@ A paragraph line like this stays a link — without `@@` it is not a decorator.
   line: the groups need it (`@@[…]`), the bare forms do not gain it (`[…]` is
   never a decorator, §4.1).
 
-- The decorator's `type` (when present) is the **type marker** of the decorated
-  node and drives per-type component selection (§11).
 - A decorator applies to a **paragraph** or a **code fence** (`plugin-markdown`),
   a **list container** (§9.3) or a **blockquote** (§9.2). A decorator line above
   a **heading** decorates the **section** (§9.5), and a **table** parses its own
@@ -553,59 +551,39 @@ A paragraph line like this stays a link — without `@@` it is not a decorator.
 - Indentation MUST be `<=` the indentation of the decorated block; a decorator
   indented deeper than the following block is literal text.
 
-### 9.2 Blockquote (`plugin-blockquote`) — Phase 4
-
-`plugin-blockquote` does not exist yet. Until it lands, `>` is plain markdown and
-the syntax below is a **plan**, not current behaviour:
+### 9.2 Blockquote (`plugin-blockquote`)
 
 ```ebnf
-blockquote = ">" ws [ extras ] content
+blockquote_inner = ">" ws "@@" type positional* extras? content
+decorator_line   = "@@" type positional* extras?
 ```
 
-- Extras written immediately inside the quote (`> @@type{…} text`) attach to the
-  **blockquote** node, not to the paragraph inside it.
-- Blockquote is one of the two adjacency exceptions (§4.1): a space between the
-  marker, the head and the content is allowed.
-- A decorator line directly above `>` attaches to the blockquote as well; when
-  both exist the inner one wins.
-- Nested quotes follow the same rule for their own node.
+- This plugin binds extras to the blockquote node **before** `plugin-markdown` parses content; `>` remains plain Markdown.
+- Two spellings are supported: an inner head immediately inside the quote (`> @@type{…}`) or a decorator line directly above it.
+- The inner head takes precedence when both forms are present for the same blockquote.
+- Whitespace between the `>` marker, the head, and the content is explicitly allowed as an adjacency exception (§4.1).
+- Decorator lines inside code fences or raw HTML blocks are treated as literal text and do not bind.
+- The paragraph wrapping the quote is replaced with `NodeKind::Custom(name)` if claimed by `[[task.blockquote.custom]]`, otherwise `NodeKind::Element("blockquote")`.
+- Nodes are marked `__plugin_kind = "block"` so stripped body content is re-lexed as block-level Markdown (headings, lists, nested quotes).
+- Nesting is preserved one level at a time; `>> inner` leaves `> inner` for the subsequent Markdown pass.
 
-### 9.3 List (`plugin-list`) — Phase 4
-
-`plugin-list` does not exist yet. Until it lands, `-` / `1.` are plain markdown
-and the design below is a **plan**, not current behaviour.
-
-Design A: extras are carried by **decorator lines**, never by a swallowed
-carrier list.
+### 9.3 List (`plugin-list`)
 
 ```ebnf
-list-decorator = ( "@@" )? type? "{" … "}"             # own line, above the list
-item           = marker ws [ item-decorator ws ] content
-item-decorator = ( "@@" )? type? "{" … "}"
+list_decorator = "@@" type? extras?
 marker         = "-" | "*" | "+" | DIGIT+ "."
 ```
 
-Rules:
-
-- **L1 (list container).** A decorator line directly above a list decorates the
-  container: layer `unordered` for `-`/`*`/`+`, layer `ordered` for `1.`.
-- **L2 (item).** An item-decorator at the very start of an item's content
-  decorates that `li`; the remainder of the line is the item's first block.
-
-  ```text
-  - @@liItem{`alpha`} Alpha text
-    - Nested item
-  ```
-
-- **L3 (block inside item).** A decorator line on its own, as the _second_ line
-  of an item, decorates the following block inside that `li`.
-- **L4 (`o.` retired).** List start offsets use the first item's number only
-  (CommonMark behaviour): `6. Goo` starts the ordered list at 6.
-- **L5 (nesting).** Nested lists follow L1–L3 at their own indentation; a
-  nested list's decorator must be indented to the nested list's level.
-- Ordered and unordered markers may not be mixed inside one list.
-- A "task list" checkbox (`- [ ]`) is content, not a marker; the item extras
-  come after the checkbox.
+- This plugin binds extras to list containers **before** `plugin-markdown` parses content; markers remain plain Markdown.
+- A decorator line directly above a list targets the container layer: `unordered` for `-`/`*`/`+`, `ordered` for `1.`.
+- The layer is determined strictly by the **marker**, never by the decorator's own type name.
+- Container nodes emit `NodeKind::Custom(name)` when claimed by config, otherwise `NodeKind::Element("ul"|"ol")` with `__plugin_kind`.
+- Extras land on the wrapper element or component, ensuring attributes apply to the list itself rather than surrounding it.
+- Ordered list start offsets follow CommonMark behavior (first item number); extras cannot currently override this value.
+- Decorator lines that fail to bind to a valid list trigger a `Severity::Warning` diagnostic.
+- Item-level decorators (L2/L3) and nesting validation (L5) are defined in spec but not yet implemented.
+- Positional slots default to `` `slug` `` and `"title"` but can be renamed per entry via `backtick_key` and `quote_key`.
+- Unbound decorators outside of lists remain as ordinary block nodes to prevent silent data loss.
 
 ### 9.4 Layer mapping for lists
 
@@ -635,7 +613,7 @@ every `Section`.
 - A decorator line directly above a heading — `@@type{…}` / `{…}` (optional
   indentation; a blank line before the heading is allowed) — decorates the
   **section**, not the heading: the heading already owns its extras on its `#`
-  run (§7.4), so a second head above it would be redundant.
+  run (§7.4).
 
   ```text
   @@sectionA{`slug-section`, #sectionID}
@@ -705,7 +683,7 @@ colons           = "::" up to ":::::::" (2..7)
 ### 10.3 Block directive (`plugin-directive`)
 
 ```ebnf
-block-block  = fences type [ "[" bracket "]" ] [ "(" paren ")" ] extras? body fences
+block-directive = fences type [ "[" bracket "]" ] [ "(" paren ")" ] extras? body fences
 fences       = "==" up to "=======" (2..7)
 close        = fences (alone on its line)
 ```
@@ -847,13 +825,19 @@ event stream once:
 This keeps the markdown plugin unaware of Pendon extras and avoids
 per-plugin text hacking.
 
-### 12.3 Fallback paths (critical)
+### 12.3 Fallback paths
 
-The built-in renderers for `BlockQuote`, `List`, `ListItem`, `CodeBlock` and
-`Paragraph` currently **ignore attributes** (`renderer-solid/src/node.rs`
-~L32–36, ~L83–108). This MUST be fixed: extras parsed but discarded are a
-silent data-loss bug. Minimum requirement: the fallback path emits `id`,
-`class` and `style`, and passes the remaining keys as attributes.
+When no custom component claims a layer, the built-in renderers emit the element
+with the node's attributes, so no extras are silently dropped. `renderer-solid`
+(`crates/renderer-solid/src/node.rs`) calls `render_attrs` for `Paragraph`
+(`<p>`), `Blockquote` (`<blockquote>`), `Heading` (`<h*>`, skipping the internal
+`level`), `Section` (`<section>`), `CodeFence` (`<pre>`, skipping `raw_html`),
+`BulletList` (`<ul>`) and `OrderedList` (`<ol>`, where `start` is emitted
+numerically); the HTML/JSON/AST renderers mirror this. The fallback path emits
+`id`, `class` and `style` and passes the remaining keys as attributes.
+
+Known gap: `ListItem` (`<li>`) is rendered by the fallback path without its
+attributes — this is the item layer (L2/L3, §9.3), which is still pending.
 
 ## 13. Diagnostics
 
@@ -880,330 +864,118 @@ Config-load errors MUST abort the build before any file is processed.
 
 ## 14. Retirement and collisions
 
-| Removed                       | Replaced by                          | Note                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ----------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `[task.cite.section]`         | `plugin-marker` (`{{bibliography}}`) | **removed** in Phase 1: `CiteOptions.section` and `CitationContext::replace_section_markers` are gone. The section component returns as a marker once `plugin-marker` lands (Phase 3)                                                                                                                                                                                                                          |
-| `{{section}}` in sources      | marker block                         | **removed**: the `{{ footnote }}` lines in `sandbox/cite` and `sandbox/img` are gone; `{{…}}` is free for `plugin-marker`                                                                                                                                                                                                                                                                                      |
-| `:::name` custom blocks       | `==type` block directive             | keep reading `:::` for one release? §15 OPEN-R1                                                                                                                                                                                                                                                                                                                                                                |
-| bare `===` table footer       | `\|===\|`                            | Phase 2                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `o.` ordered-list offset      | first item's number                  | Phase 3                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `plugin-quiz` (`:::quiz`)     | —                                    | retired from the pipeline; plugin code stays, deep rework later                                                                                                                                                                                                                                                                                                                                                |
-| legacy `[.c,#id]{k:v}`        | `{…}` / `@@type{…}`                  | **removed** (D3): plain literal text, no warning, no deprecation path. Gone from the code (`parse_attrs`, `ExtraAttrs`, `legacy_extras_warning`), the docs, every sandbox and the plugin READMEs                                                                                                                                                                                                               |
-| `import = "…"` (string)       | `imports = ["…"]`                    | done: accepted with a Warning (§15 OPEN-C2)                                                                                                                                                                                                                                                                                                                                                                    |
-| `[task.<plugin>.custom_node]` | `[task.<plugin>.custom.<layer>]`     | **removed**: `custom.<layer>` is read for `anchor`, `img` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`) and every sandbox/fixture config is migrated. The stale key is still parsed so it fails the build with a migration message instead of being ignored. Unwired layers (`task.img.custom.img`) and layers that need per-type routing (OPEN-C3) are config errors |
+| Removed                       | Replaced by                          | Note                                                                                                                                                                                                                                                                                                          |
+| ----------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `[task.cite.section]`         | `plugin-marker` (`{{bibliography}}`) | **removed**: `CiteOptions.section` and `CitationContext::replace_section_markers` are gone; the section component is now a marker.                                                                                                                                                                            |
+| `{{section}}` in sources      | marker block                         | **removed**: the `{{ footnote }}` lines in `sandbox/cite` and `sandbox/img` are gone; `{{…}}` is free for `plugin-marker`.                                                                                                                                                                                    |
+| `:::name` custom blocks       | `==type` block directive             | deprecated alias kept for one release (Warning), then hard-error — §15 OPEN-R1.                                                                                                                                                                                                                               |
+| bare `===` table footer       | `\|===\|`                            | **removed**: only `\|===\|` remains.                                                                                                                                                                                                                                                                          |
+| `o.` ordered-list offset      | first item's number                  | **removed**: an `ol`'s `start` comes from the first item and is not overridable (§9.4).                                                                                                                                                                                                                       |
+| `plugin-quiz` (`:::quiz`)     | —                                    | retired from the pipeline; plugin code stays, deep rework later.                                                                                                                                                                                                                                              |
+| legacy `[.c,#id]{k:v}`        | `{…}` / `@@type{…}`                  | **removed** (D3): plain literal text, no warning, no deprecation path. Gone from the code (`parse_attrs`, `ExtraAttrs`, `legacy_extras_warning`), docs, sandboxes and READMEs.                                                                                                                                |
+| `import = "…"` (string)       | `imports = ["…"]`                    | **removed**: the singular form is accepted with a Warning (§15 OPEN-C2), then hard-errors.                                                                                                                                                                                                                    |
+| `[task.<plugin>.custom_node]` | `[task.<plugin>.custom.<layer>]`     | **removed**: `custom.<layer>` is read for `anchor`, `img` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`); every sandbox/fixture config is migrated. The stale key fails the build with a migration message. Unwired layers (`task.img.custom.img`) are config errors. |
 
 ## 15. Open decisions
 
-Each item records the recommendation to implement **unless the maintainer
+Each open item records the recommendation to implement **unless the maintainer
 objects**; the spec text above already assumes the recommendation.
 
-- **OPEN-IR-1 (flags) — resolved.** `Event::AttributeFlag { name }` is in the IR
-  and rendered verbatim by the AST, JSON, HTML (compact + pretty) and Solid
-  renderers.
 - **OPEN-L1 (item extras placement).** An item-decorator at the very start of
   an item's line decorates the `li` (L2); a decorator on its own line _inside_
   the item decorates the following block (L3).
   _Alternative:_ both always decorate the following block (then `li` extras
   need a different spelling). **Recommendation: as specified.**
+- **OPEN-B1 (bare fence).** A bare `==…==` fence only closes; anonymous block
+  directives are impossible. **Recommendation: as specified** (removes the
+  open/close ambiguity of `===`).
+- **OPEN-E1 (table column extras).** Alignment-row cell extras apply to that
+  column's `<th>` only. **Recommendation: yes** (cascading to `<td>`s would
+  duplicate attributes on every body cell).
+- **OPEN-T1 (tenant of `plugin-blockquote`/`plugin-list`).** Both plugins are
+  **new crates** (they now exist); the existing markdown-plugin behaviour stays
+  as fallback when they are not enabled. **Recommendation: new crates.**
+- **OPEN-R1 (`:::` compatibility).** Keep parsing `:::name` blocks as a
+  deprecated alias of `==name` for one release (Warning), then hard-error.
+  **Recommendation: alias with Warning** — `sandbox/universal`,
+  `sandbox/custom` and `apps/cli/tests/fixtures` still use `:::`.
+
+### Resolved decisions
+
+Recorded for provenance; the current behaviour is what the sections above state.
+Rationale lives in [`decisions/`](../decisions/).
+
+- **OPEN-IR-1 (flags) — resolved.** `Event::AttributeFlag { name }` is in the IR
+  and rendered verbatim by the AST, JSON, HTML (compact + pretty) and Solid
+  renderers (§6.3).
 - **OPEN-L2 (list layers) — resolved.** Layer keys are `list` (= `<li>` item),
   `unordered` (= `<ul>` container) and `ordered` (= `<ol>` container), mirroring
   `task.table.custom.<layer>`. Config: `[task.list.custom.list]`,
   `[task.list.custom.unordered]`, `[task.list.custom.ordered]`.
-- **OPEN-B1 (bare fence).** A bare `==…==` fence only closes; anonymous block
-  directives are impossible. **Recommendation: as specified** (removes the
-  open/close ambiguity of `===`).
 - **OPEN-C1 (config shape) — resolved.** Layered plugins use `custom.<layer>`
   (single table or array of tables); single-layer plugins use the primary layer
   shorthand (`[task.anchor.custom]`, `[[task.anchor.custom]]`). Implemented by
   the loader in `apps/cli/src/components.rs`.
 - **OPEN-C2 (`import` alias) — resolved (warn).** The loader accepts the
   singular `import` and emits a Warning, then hard-errors one release later.
-- **OPEN-C3 (layer routing before the plugin cutover) — resolved.** Each plugin
-  keeps its single-component option struct until its own cutover, so a `custom`
-  layer must stay _routable_: exactly one component, or a layer default that no
-  `type` entry competes with. A layer holding several `type` entries (or a
-  default next to typed entries) is a §13 config error instead of a silent
-  downgrade to the default — `components::resolve_single` enforces it and
-  `apps/cli/src/plugins.rs` maps the resolved entry into the existing option
-  structs. Per-type routing (`type` marker → entry) lands with the plugin
-  cutovers in Phases 1–3.
-- **OPEN-E1 (table column extras).** Alignment-row cell extras apply to that
-  column's `<th>` only. **Recommendation: yes** (cascading to `<td>`s would
-  duplicate attributes on every body cell).
-- **OPEN-T1 (tenant of `plugin-blockquote`/`plugin-list`).** Both plugins are
-  **new crates**; the existing markdown-plugin behaviour stays as fallback when
-  they are not enabled. **Recommendation: new crates.**
-- **OPEN-R1 (`:::` compatibility).** Keep parsing `:::name` blocks as a
-  deprecated alias of `==name` for one release (Warning), then hard-error.
-  **Recommendation: alias with Warning** — `sandbox/universal`,
-  `sandbox/custom` and `apps/cli/tests/fixtures` still use `:::`.
-- **OPEN-S1 (sectionize/`[task.cite.section]` removal order) — resolved
-  (done).** Verified `plugin-section` is heading/icon based and never
-  references `cite.section`, so the removal landed with the cite change:
-  `CiteOptions.section`, `CitationContext::replace_section_markers`, the
-  section branch of `cite::solid_hints` and the `[task.cite.section]` blocks in
-  `sandbox/cite`, `sandbox/cite/custom`, `sandbox/universal` and
-  `sandbox/img/regular` are gone, together with the `{{ footnote }}` lines in
-  the two sources that used them.
+- **OPEN-C3 (layer routing) — resolved.** Each plugin selects a layer component
+  per instance with §11 rule 3 (exact `type` match → layer default → built-in
+  element); the earlier "routable layer" restriction in `apps/cli` is gone
+  (`apps/cli/src/plugins.rs::layer_set`).
+- **OPEN-S1 (`[task.cite.section]` removal order) — resolved (done).**
+  `plugin-section` is heading/icon based and never references `cite.section`, so
+  the removal landed with the cite change: `CiteOptions.section`,
+  `CitationContext::replace_section_markers`, the section branch of
+  `cite::solid_hints` and the `[task.cite.section]` blocks in `sandbox/cite`,
+  `sandbox/cite/custom`, `sandbox/universal` and `sandbox/img/regular` are gone,
+  together with the `{{ footnote }}` lines in the two sources that used them.
 
 ## 16. Golden set and tests
 
-Phase ordering says "spec first": expectations for the new grammar are frozen as
-data **before** the implementation lands, so no downstream rewrite happens.
+Expectations for the grammar are frozen as **data** before implementation, so no
+downstream rewrite happens. The fixtures live in `docs/spec/golden/` and are the
+**executable source of truth**; see [`golden/README.md`](golden/README.md) for the
+format, the harness (`apps/cli/tests/syntax_spec.rs`, one `#[test]` per fixture,
+byte-for-byte against the real CLI) and the re-freeze procedure.
 
 ### 16.1 Fixture format
 
 ```text
-docs/spec/golden/NN-name.md          input markdown
-docs/spec/golden/NN-name.toml        pendon.toml for the fixture (plugins + custom sets)
-docs/spec/golden/NN-name.jsx         expected solid output
-docs/spec/golden/NN-name.events.json expected event IR (optional, for parser bugs)
+docs/spec/golden/NN-name.md           input markdown
+docs/spec/golden/NN-name.toml         pendon.toml for the fixture (plugins + custom sets)
+docs/spec/golden/NN-name.jsx          expected solid output (generated — never hand-edited)
+docs/spec/golden/NN-name.events.json  expected event IR (optional, for parser bugs)
 ```
-
-Harness: `apps/cli/tests/syntax_spec.rs`, one `#[test]` per fixture, following
-the existing `assert_cmd` style (`apps/cli/tests/custom_spec.rs`,
-`list_render_spec.rs`) and run through a `write_project` helper in a temp dir.
 
 ### 16.2 Test gating
 
-- Fixtures whose syntax is not implemented yet are annotated
-  `#[ignore = "pending Phase N"]` so `cargo test` stays green while the
-  expectation is still frozen in the repo.
-- Each phase removes the `#[ignore]` annotations it makes pass. A phase is not
-  complete while its fixtures are still ignored.
+- A fixture whose syntax is not implemented yet is annotated
+  `#[ignore = "pending Phase N"]` so `cargo test` stays green while the expectation
+  is frozen. A phase is not complete while its fixtures are still ignored.
 - `crates/extra` tests are **not** ignored: `src/value.rs` unit tests plus
-  `tests/extras_spec.rs` (one case per rule of §4–§6, including the §5.1 worked
-  example) land green in Phase 0 and are the primary gate for the foundation.
+  `tests/extras_spec.rs` (one case per rule of §4–§6) land green in Phase 0 and are
+  the primary gate for the foundation.
 
-Status: fixtures **01–09** are frozen and green, **10–12** (`decorator-blocks`,
-`blockquote`, `list-container`) and **14–16** (`marker`, `directive-inline`,
-`directive-block`) are green too, **21** (`extras-forms`) locks the two
-spellings, the type-only head, the empty head and strict adjacency, and **22**
-(`section`) freezes the §9.5 outline (`cargo test -p pendon --test syntax_spec`,
-none ignored); 17–20 are covered by the unit tests of the renderer/CLI crates
-(§17), and 13 (`list-item`) waits for the remaining Phase 4 work (list-item
-decorators, L2/L3).
+> Live status (which fixtures are green) is tracked in [`STATUS.md`](../../STATUS.md),
+> not here — this section stays normative.
 
-### 16.3 Minimum fixture list
+## 17. Migration phases (historical)
 
-| #  | Fixture                   | Covers                                                                           |
-| -- | ------------------------- | -------------------------------------------------------------------------------- |
-| 01 | `extras-head`             | all item kinds, ordering, duplicates, escaping                                   |
-| 02 | `extras-literal`          | malformed heads → literal text, adjacency failures                               |
-| 03 | `img-figure`              | `~?!` / `~?!!` + extras + caption                                                |
-| 04 | `anchor`                  | head `("title")` vs extras `"title"` priority                                    |
-| 05 | `cite`                    | `[^^](ref "loc")` + extras, retired forms stay literal                           |
-| 06 | `heading`                 | `[slug]` + `("title")` + extras, auto-number interaction                         |
-| 07 | `wiki`                    | `[[…]]` + extras, `href` not overridable                                         |
-| 08 | `table-decl`              | `\|-…-\|`, `\|\| caption \|\|`, decl head `[slug]`                               |
-| 09 | `table-layers`            | column/th/td/tr/tbody/tfoot extras routing                                       |
-| 10 | `decorator-blocks`        | paragraph + code fence decorators, typed / bare / `@@[…]` group lines            |
-| 11 | `blockquote`              | inner extras + decorator above                                                   |
-| 12 | `list-container`          | L1 decorator → `ul`/`ol` + `start`                                               |
-| 13 | `list-item`               | L2 item-decorator → `li`, nesting                                                |
-| 14 | `marker`                  | inline + block forms, `<span>`/`<div>` fallback                                  |
-| 15 | `directive-inline`        | `::…::` nesting 2..7, `bracket_key`/`parentheses_key`                            |
-| 16 | `directive-block`         | `==type`/`==` LIFO closing, nesting, EOF warning                                 |
-| 17 | `flags`                   | bare flags through solid/html/json/ast                                           |
-| 18 | `fallback-attrs`          | extras on list/blockquote/paragraph/code fence without components                |
-| 19 | `template-children-error` | `template` without `{children}` → hard error                                     |
-| 20 | `component-selection`     | type match → default → fallback, two defaults error                              |
-| 21 | `extras-forms`            | bare / typed / type-only / empty head, strict adjacency (anchor, heading, table) |
-| 22 | `section`                 | §9.5 outline: decorator above a heading → section, id chain, `<--->` / `>---<`   |
-
-## 17. Migration phases
-
-| Phase | Content                                                                                                                                                                                                                       | Gate                                                                     |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| 0     | `crates/extra` v2 (`AttrValue`, `ExtrasHead`, `parse_extras`, `parse_type_marker`, `parse_directive_head`), `ComponentSet` loader + `{children}` validation, `Event::AttributeFlag`, fallback-attr fix. **No syntax change.** | extras unit tests + fixtures 17/18/19/20 green; existing suite unchanged |
-| 1     | Cut over `img`/`figure`, `anchor`, `cite`, `heading`, `wiki`; `[task.cite.section]` → marker; `{{…}}` freed; `imports` rename.                                                                                                | fixtures 03–07, 01, 02                                                   |
-| 2     | Table rewrite: `\|-…-\|`, `\|\| caption \|\|`, cell/row/section extras, drop bare `===`.                                                                                                                                      | fixtures 08, 09                                                          |
-| 3     | `plugin-blockquote`, `plugin-list`, `plugin-marker`, `plugin-directive`, decorator binder; drop `o.`.                                                                                                                         | fixtures 10–16                                                           |
-| 4     | Spec/fixture/docs cleanup: RFC → archived, `sandbox/unified` rewritten, `docs/todo/syntaxes.md` trimmed.                                                                                                                      | full green, no ignored fixtures                                          |
-
-**Phase 0 complete.** The `crates/extra` v2 parser is implemented and green
-(`crates/extra/src/{value,typed}.rs`, `crates/extra/tests/extras_spec.rs`):
-`AttrValue`, `ExtrasHead`, `parse_extras`, `parse_type_marker`,
-`parse_directive_head`, `parse_extras_body`, `to_attributes` and
-`Attrs::merge_with`. The §11 `ComponentSet` loader (three TOML shapes, typed
-entries + one default per layer, `{children}`/balance template validation,
-`import` deprecation) lives in `apps/cli/src/components.rs` and is wired into
-every task-level plugin option builder in `apps/cli/src/plugins.rs`.
-`Event::AttributeFlag` is part of the IR, and the fallback renderers keep
-attributes on `Paragraph`/`Blockquote`/`BulletList`/`OrderedList`
-(`crates/renderer-solid/src/node.rs`,
-`crates/renderer-html/src/{compact,pretty}.rs`,
-`crates/renderer-ast/src/builder.rs`). Fixtures 17–20 are covered by unit tests
-in those crates plus `components::tests` and `plugins::tests`; the workspace
-suite is green.
-
-Remaining before Phase 1 lands the plugin cutovers: route `type` markers per
-instance _inside_ the plugins (OPEN-C3) and let the §12 binder attach the parsed
-extras to the constructs (img, anchor, cite, heading, wiki, table layers).
-
-### 17.1 Progress after Phase 0
-
-The §11 config cutover is **complete**:
-
-- `custom.<layer>` is the only component-set spelling; the legacy
-  `[task.<plugin>.custom_node]` key is removed and fails the build with a
-  migration message (§14).
-- Every sandbox config and CLI fixture is migrated; re-running all 24 sandboxes
-  after the migration produced byte-identical output except for the two
-  documents whose `{{ footnote }}` marker was retired (§14, `cite.section`).
-- `CiteOptions.section` / `CitationContext::replace_section_markers` and the
-  `[task.cite.section]` config are removed (Phase 1 item), so `{{…}}` is now
-  free for `plugin-marker`.
-
-Next: parse `@@type{…}` in `crates/plugin-{anchor,cite,heading,img,wiki}` and
-attach the attributes to the construct node (fixtures 01–07).
-
-### 17.2 Progress after the construct `@@type{…}` heads
-
-All five construct plugins of Phase 1 read and merge the extras head:
-
-- `plugin-anchor` (§7.2) — extras attach to the `<a>`; URL modifiers and the
-  `("title")` head win, `href` is never overridable.
-- `plugin-wiki` (§7.5) — extras attach to the wiki `<a>`; `href` (from
-  `link_prefix`) wins.
-- `plugin-heading` (§7.4) — `[slug]`, `[.class]`, `("title")` and extras;
-  precedence `#id` > `[slug]` > extras slug, `class` accumulates.
-- `plugin-extract-heading` (§7.4) — strips the same head from the extracted
-  `text`/`id`, so the headings metadata matches the rendered heading.
-- `plugin-img` (§7.1) — extras attach to the **outermost** node (`<figure>` for
-  `~?!!`, else the `<img>`); `w`/`h` stay on the inner image, `--var` items
-  merge into `style`.
-- `plugin-cite` (§7.3) — extras merge into the citation node; the head values
-  (`id`, `loc`) win, `#id`/`slug` feed the `cite-id` slot (the reference `id` is
-  never replaced).
-
-Shared rules implemented through `crates/extra`: `#id` > head slug > extras
-slug, `class` accumulates (head first, §6.4), head wins for every other key
-(dropped with a §13 Warning), bare flags become `Event::AttributeFlag`
-(§6.3). Extras must be adjacent (§4.1) and the pre-§11 `[.c,#id]{k:v}` block is
-**gone**: it is literal text, with no warning (§14). A malformed head stays
-literal text (§4.3).
-
-### 17.3 Progress after the §11 component-set routing and the §8 table layers
-
-**Per-instance routing (OPEN-C3) is done.** A layer is no longer restricted to
-one component: every plugin that owns layers carries a
-[`ComponentSet`](../crates/renderer-solid/src/components.rs) — typed entries plus
-at most one default — and selects per instance with §11 rule 3 (exact `type`
-match → layer default → built-in element). The marker travels to the node as a
-plain `type` attribute, so `{attrs.type}` templates read it back, and every entry
-of every layer gets a renderer hint. The CLI's `resolve_single` /
-"routable layer" restriction is gone (`apps/cli/src/plugins.rs::layer_set`).
-
-| Plugin           | Layers (§11)                                                 |
-| ---------------- | ------------------------------------------------------------ |
-| `plugin-anchor`  | `anchor`                                                     |
-| `plugin-heading` | `heading`                                                    |
-| `plugin-cite`    | `cite`                                                       |
-| `plugin-img`     | `img` (the `<img>`), `figure` (its container)                |
-| `plugin-table`   | `table`, `caption`, `thead`, `tbody`, `tfoot`, `row`, `cell` |
-
-The **`img` cutover** landed with the routing: a `~?!!` figure whose `figure`
-_and_ `img` layers are configured nests them (`<Figure …><AdvancedImage …/>caption</Figure>`),
-with the extras on the outermost node, `w`/`h` on the inner `<img>` and the
-caption as children; a layer configured alone still replaces the whole image, so
-pre-cutover configs are unchanged.
-
-**§8 table layers** parse:
-
-- the declaration line `|-[slug]("title")@@type{…}-|` → the `<table>` layer;
-- the caption line `||extras? content||` → the `<caption>` layer (the retired
-  pre-§8 `[caption][.c]{k:v}` form is literal text, §14);
-- cell-front extras (`|@@cellA{.x} content |`, also in front of the `>`/`^`
-  markers, whose extras merge into the spanned cell) → the `cell` layer of that
-  `<th>`/`<td>`; the delimiter cell carries its head after the alignment code and
-  the column marker routes the column's cells;
-- row end-of-line extras (`… |@@rowB{.x}`) → the `<tr>`; the retired
-  `-[.row-danger]` last-cell form is literal text;
-- the alignment row's end-of-line extras → the `<tbody>`; the `|===|` line's
-  extras → the `<tfoot>`. Bare `===` is **retired**.
-- `thead` has no extras slot of its own in §8, so its set is used as a default.
-
-Two robustness notes:
-
-- A table paragraph that the lexer turned into a `Link` (the declaration head
-  `[slug]("A title with spaces")` can trigger that) is rebuilt from the events
-  (`[label](href "title")`) before the table is parsed.
-- A block image whose marker has no `!` (`~?[alt](src)`, `~?w800[alt](src)`) can
-  be lexed as a link too; use `~![…]` / `~?!!…` (or wait for the §12 protect
-  pass) until the pre-markdown protect stage lands.
-
-Not yet wired: `task.wiki.custom.anchor` / `task.wiki.custom.infobox` (the wiki
-plugin emits no custom node yet and `ConfigTask` does not read those keys), and
-the `list` / `blockquote` layers (their plugins are Phase 4). `sandbox/unified`
-therefore configures only the plugins that exist.
-
-### 17.4 Golden fixtures
-
-`docs/spec/golden/` holds fixtures **01–09** — `extras-head`, `extras-literal`,
-`img-figure`, `anchor`, `cite`, `heading`, `wiki`, `table-decl`, `table-layers` —
-plus **10–12** (`decorator-blocks`, `blockquote`, `list-container`), **14–16**
-(`marker`, `directive-inline`, `directive-block`), **21** (`extras-forms`) and
-**22** (`section`),
-each with the input markdown, the task config that renders it and the frozen
-`.jsx` output. `apps/cli/tests/syntax_spec.rs` copies the fixture into a temp
-project, runs `pendon run -F` and compares the output byte for byte, so the
-fixtures also cover config loading and the CLI path, not just the parsers.
-
-**No fixture is `#[ignore]`d**, which closes the Phase 1 gate (01–07), the Phase 2
-table gate (08–09), the block-decorator gate (10–12) and the marker/directive
-gate (14–16) and the head-forms gate (21). Fixture 13 (`list-item`) stays open
-until the Phase 4 list-item decorators (L2/L3) exist; 17–20 are pinned by unit
-tests inside the crates they exercise (§17.0/§17.1).
-
-Two fixture findings worth keeping in mind when reading the goldens:
-
-- A `Link` node produced by the core lexer inside the extras head is rebuilt by
-  `plugin-table` before the table is parsed, so a long `("title")` in the
-  declaration line still works (fixture 08).
-- The cite head's location is the quoted string after the unquoted reference
-  (`[^^](book "hlm. 45")`); it fills the same `loc` slot as an extras `loc:` prop,
-  with the head winning (fixture 05).
-
-### 17.5 Positional groups on heads and markers (done)
-
-Every `@@` head accepts the `[x]` / `("x")` groups between its type and its
-`{…}` body (§4.4/§6.1), and markers accept them directly after `}}`
-(`{{type}}[…](…){…}`, §10.1). The groups map through `bracket_key` /
-`parentheses_key` (resolved per `type`, §11 rule 5), win a key collision with a
-body item (§6.2/§6.4) and fall back to literal text when malformed (§4.3).
-Decorators gained the `@@[…]` untyped spelling; a `[x](y)` line without `@@`
-stays a link by construction (§9.1). Pinned by
-`crates/extra/tests/extras_spec.rs` (`heads_carry_positional_groups`,
-`groups_must_be_adjacent`, `groups_map_through_the_positional_keys`),
-`decorator.rs` (`positional_groups_make_a_decorator_line`,
-`a_group_decorator_binds_its_attributes`), `plugin-marker`
-(`groups_follow_the_marker_type`,
-`marker_groups_win_and_malformed_groups_stay_literal`), and by golden fixtures 10
-(the typed `@@aside[intro]("Aside title"){.lead}` line and the untyped
-`@@[intro]("…")` spelling) and 14
-(`{{bibliography}}[refs]("Cited sources"){…}` with its body items dropped, and a
-malformed group staying literal while the marker renders).
-
-The §6.1 layer-order rule is part of the note: a `[x]("y")` pair is read by
-whichever enabled layer runs first, so under the sandbox's canonical order
-(`anchor` before `marker`) a marker keeps no attribute from that pair — verified
-by rendering the `sandbox/ultimate` config with the two entries swapped.
-
-`sandbox/ultimate` carries the group cases too: M13–M19 (bracket → `slug`,
-parentheses → `title`, group + extras head, malformed, the anchor layer winning
-an adjacent pair, an unclaimed type, one inline pair) and Q25/Q26 in the quote
-section. The pair cases need an enabled `anchor` layer, which golden 14 (markers
-only) does not have, so they live in the sandbox instead.
+The migration ran in phases (0: shared scanner; 1: construct plugins; 2: table
+rewrite; 3: blockquote/list/marker/directive + binder; 4: list-item layer). The
+completed-phase record and progress notes moved to
+[`docs/archive/typed-extras-completed-phases.md`](../archive/typed-extras-completed-phases.md);
+live work is in [`STATUS.md`](../../STATUS.md). This spec keeps only the target
+grammar, so it does not drift as phases land.
 
 ## 18. Acceptance criteria
 
 1. Every §3 sigil is either implemented or explicitly retired.
-2. No extras data is dropped silently: any node that parses extras MUST emit
-   them as attributes, with or without a custom component.
+2. No extras data is dropped silently: any node that parses extras MUST emit them as
+   attributes, with or without a custom component.
 3. A `template` that would drop children fails the build at config load.
-4. All §16 fixtures are green (none ignored) except fixtures explicitly
-   deferred with a separate spec note.
+4. All §16 fixtures are green (none ignored) except fixtures explicitly deferred
+   with a separate spec note.
 5. Escaping and literal fallback are covered by fixtures 01/02.
 6. `cargo test --workspace` is green; `sandbox/unified` produces the documented
    output.

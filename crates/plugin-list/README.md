@@ -86,10 +86,14 @@ An entry may rename the §6.1 positional slots in its extras head: `backtick_key
 `"title"` item. Keys the entry leaves unset keep the built-in default, so an
 entry with no overrides behaves exactly as before.
 
-## Not yet wired
+## CLI wiring
 
-This crate is not part of the CLI plugin list yet: `apps/cli` still has to learn
-`list` (options + dispatch + `solid_hints`), which another change owns — until
-then the decorator line is literal text for the CLI. `cargo test -p
-pendon-plugin-list` covers both levels: the crate (`src/lib.rs`) and the full
-pipeline `core → plugin-list → plugin-markdown → solid` (`tests/pipeline.rs`).
+This crate is wired into the CLI plugin list: `list` builds its `ListOptions`
+from `[task.list.custom.<layer>]` and dispatches `process` in the config runner
+(`apps/cli/src/plugins.rs`, `apps/cli/src/process.rs`). Run
+`cargo test -p pendon-plugin-list` for crate-level and end-to-end coverage
+(`src/lib.rs` and the full pipeline `core → plugin-list → plugin-markdown →
+solid` in `tests/pipeline.rs`).
+
+Only the container layers (`unordered` / `ordered`) are wired end-to-end today;
+the `list` item layer (L2/L3) is still pending (see above).

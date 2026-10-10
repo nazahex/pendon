@@ -135,11 +135,11 @@ This works for any starting level — an H3-first document produces `1.`, `1.1.`
 Replace the default `<hN>` output with a custom Solid component:
 
 ```toml
-[task.heading.custom_node]
+[task.heading.custom.heading]
 name = "DocHeading"
 template = "<DocHeading level={{attrs.level}} id=\"{attrs.id}\" number=\"{attrs.number}\" class=\"{attrs.class}\">{children}</DocHeading>"
 
-[[task.heading.custom_node.imports]]
+[[task.heading.custom.heading.imports]]
 module = "@/components/DocHeading"
 default = "DocHeading"
 ```
