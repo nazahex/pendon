@@ -59,8 +59,11 @@
 #     literal, with no warning.
 #   - Pendon has NO setext headings (`Title` + `-----`). Use `#` headings for
 #     every section break. `---` belongs to micromatter and `<hr />` only.
-#   - Blockquote and list plugins do not exist yet (Phase 4). The Q and L
-#     sections are frozen as plain text until they do.
+#   - Blockquote and list read the same unified head. A quote carries an inner
+#     head right after `>` (§9.2, inner head over a decorator line); a list
+#     carries a container **decorator line** above it that decorates the
+#     container, never the items (§9.3 L1), the layer chosen by the marker
+#     (§9.4). The Q and L sections exercise both.
 #
 # HOW THIS FILE WAS BUILT (repeat this method when extending it)
 #   1. List every construct and every slot where an extras head can attach.
@@ -123,7 +126,12 @@
 #   - A cell that starts with a marker touching `|` (T31).
 #   - Spaced head in a delimiter row (T21).
 #   - Decorator not directly above its list (L30, L40, L41, L46) and trailing
-#     extras on table rows/tbody. (List/blockquote are pending Phase 4.)
+#     extras on table rows/tbody.
+#   - THE RENDERED BODY STOPS AT L37. Everything from L40 on — including the
+#     D, B, N and E sections — is missing from all three tasks: the extras head
+#     of the H1 inside the L37 item swallows the rest of the source (the same
+#     head scan also mis-renders Q24 in the subset task). Repro and status:
+#     TODO.md, "Sandbox ultimate: the rendered body stops at L37".
 # =============================================================================
 title: "Unified Syntax Torture Demo"
 references:
@@ -563,6 +571,26 @@ M11 {{}} {{bad-type}} {{bad_type}} {{type1}} {{ spaced }} {{footnote}} {.spaced}
 
 M12 {{Footnote}}{.upper} {{FOOTNOTE}}
 
+<!-- §6.1/§10.1 groups: a bracket group directly after `}}` fills the marker's
+bracket_key (slug) and a parentheses group fills parentheses_key (title). A bracket
+group immediately followed by a parentheses group is also an anchor head, and this task
+lists `anchor` before `marker`, so the anchor layer claims such a pair first (§6.1 layer
+order) and the marker renders bare. -->
+
+M13 {{markerA}}[m13] bracket group, trailing text as children
+
+M14 {{markerA}}("M14") parentheses group, trailing text as children
+
+M15 {{markerA}}[m15]@@asideA{.h} group then extras head
+
+M16 {{markerA}}[m16( malformed group stays literal, marker still renders
+
+M17 {{markerA}}[m17]("M17") anchor layer wins the pair, marker stays bare
+
+M18 {{unknownType}}[m18] unclaimed type keeps the group
+
+M19 inline {{footnote}}[m19] and {{markerA}}("M19") ipsum.
+
 ##[s-table] Table
 
 <!--
@@ -829,7 +857,7 @@ T31 a cell starting with a marker touching the pipe (head vs marker, edge):
 
 ##[s-quote] Blockquote
 
-<!-- PENDING PHASE 4: plugin-blockquote does not exist yet. Expected output of this whole section = plain markdown/literal text, frozen as such. Re-review when implemented. -->
+<!-- §9.2: inner head (right after `>`) + a decorator line directly above the quote. The inner head wins; an unclaimed type falls back to the layer default (§11 rule 3). §6.1 groups: a bracket group becomes the inner head's slug and a parentheses group its title; a bracket group immediately followed by a parentheses group is an anchor head and the anchor layer runs first, so the head keeps only its type. -->
 
 > Q01 plain
 > continues
@@ -852,7 +880,7 @@ T31 a cell starting with a marker touching the pipe (head vs marker, edge):
 
 > @@bqA Q09 type only
 
-> @@bqA{.x} Q10 no space after >
+>@@bqA{.x} Q10 no space after >
 
 > Q11 not first @@bqA{.x} literal
 
@@ -895,7 +923,7 @@ T31 a cell starting with a marker touching the pipe (head vs marker, edge):
 
 > {`slug-foo`, "Title Foo", .extra, .class, #id, foo: "bar", bar: 12, isFoo: true, --style-var: "2rem", isBar} Q19 untyped all
 
-> {.x} Q20 untyped, no space after >
+>{.x} Q20 untyped, no space after >
 
 > Q21 not first {.x} literal
 
@@ -903,11 +931,15 @@ T31 a cell starting with a marker touching the pipe (head vs marker, edge):
 
 > @@bqA {.x} Q23 type and brace separated by space (literal)
 
+> @@bqA[q25] Q25 bracket group on the inner head
+
+> @@bqA[q26( Q26 malformed inner-head group stays literal, type falls back
+
 > {.q24} KSu [a](/x "T"){.k} **b** _i_ `c` [[W]]{.k} [^^](paper-smith){.k} {{footnote}}{.k} ::asideA{.k} d:: $x$
 
 ##[s-list] List
 
-<!-- PENDING PHASE 4: plugin-list does not exist yet. Expected output of this whole section = plain markdown/literal text, frozen as such. Re-review when implemented. -->
+<!-- §9.3 L1: a container decorator line above a list decorates the container (§9.4 layer = the marker). The `list` item layer (L2/L3) is not wired yet, so the L10/L22 item heads stay literal for now. -->
 
 ###[l01] L01
 
@@ -918,60 +950,51 @@ T31 a cell starting with a marker touching the pipe (head vs marker, edge):
 ###[l02] L02
 
 {.u}
-
 - L02 decorator untyped X
 - L02b
 
 ###[l02n] L02n
 
 @@{.u}
-
 - L02n decorator non-canonical
 - L02nb
 
 ###[l03] L03
 
 @@unorderedA{.u, #l03}
-
 - L03 star, XY
 - L03b
 
 ###[l04] L04
 
 @@compact{.a, .b, #l04, k: "v", n: 2}
-
 - L04 plus, XXYZZ
 - L04b
 
 ###[l05] L05
 
 @@unorderedA{`slug-foo`, "Title Foo", .extra, .class, #id, foo: "bar", bar: 12, isFoo: true, --style-var: "2rem", isBar}
-
 - L05 all
 - L05b
 
 ###[l06] L06
 
 @@unorderedZ{.u}
-
 - L06 unclaimed
 
 ###[l07] L07
 
 {}
-
 - L07 empty
 
 ###[l07n] L07n
 
 @@{}
-
 - L07n empty non-canonical
 
 ###[l08] L08
 
 @@unorderedA
-
 - L08 type only
 
 ###[l10] L10
@@ -1011,14 +1034,12 @@ T31 a cell starting with a marker touching the pipe (head vs marker, edge):
 ###[l22] L22
 
 @@orderedA{.o, #l22}
-
 1. {.i} L22 container+item
 2. @@liItem{.a, .b, #i2, k: "v", n: 2} L22b
 
 ###[l22n] L22n
 
 @@{.o}
-
 1. @@{.i} L22n non-canonical container+item
 
 ###[l24] L24
@@ -1029,13 +1050,11 @@ T31 a cell starting with a marker touching the pipe (head vs marker, edge):
 ###[l25] L25
 
 {start: 3}
-
 1. L25 start via extras (expect Warning)
 
 ###[l25n] L25n
 
 @@{start: 3}
-
 1. L25n start via non-canonical extras (expect Warning)
 
 ###[l26] L26
@@ -1045,14 +1064,12 @@ o. L26 retired o. syntax (expect plain paragraph)
 ###[l30] L30
 
 @@unorderedA{.l1}
-
 - L30 level 1
   @@orderedA{.l2}
   1. L30a decorator right under item text (edge)
      - L30a1
   2. L30b
 - L33 level 1
-
   @@orderedA{.l2b}
   1. L33a decorator after blank, inside item
   2. L33b
@@ -1084,25 +1101,21 @@ o. L26 retired o. syntax (expect plain paragraph)
 ###[l40] L40
 
 {.u}
-
 - L40 blank line between decorator and list (edge: decorator not directly above)
 
 ###[l40n] L40n
 
 @@{.u}
-
 - L40n blank line between non-canonical decorator and list (edge)
 
 ###[l41] L41
 
 @@orphan{.x}
-
 L41 orphan decorator with no list below (edge)
 
 ###[l42] L42
 
 {.u, #l42}
-
 - L42 container untyped XY
 - L42b
 
@@ -1110,7 +1123,7 @@ L41 orphan decorator with no list below (edge)
 
 {.a, .b, #l43, k: "v", n: 2}
 
-1. L43 container untyped XXYZZ
+1. L43 container untyped XXYZZ, separated by linebreak
 2. L43b
 
 ###[l44] L44
@@ -1304,7 +1317,6 @@ L7b
 ###[b20-h]("B20 H")@@headingX{.k} Heading inside
 
 @@unorderedA{.k}
-
 - @@liItem{.k} item
 - item
 
@@ -1353,7 +1365,6 @@ B20 inner block with inline ::asideA{.k} d:: and ::::asideB x :::asideA y::: z::
 ###[b23-h]("B23 H"){.k} Heading untyped inside
 
 {.k}
-
 - {.k} item untyped
 - item
 

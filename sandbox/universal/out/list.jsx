@@ -4,9 +4,8 @@ import Parego from "@comp/shared/Parego";
 export const frontmatter = {"cites":[]};
 export const headings = [{"id":"advanced-commonmark-list-demonstration","text":"Advanced CommonMark List Demonstration","level":1,"subheadings":[{"id":"multi-paragraph-nested-lists","text":"Multi-Paragraph & Nested Lists","level":2},{"id":"lists-containing-code-blocks-complex-elements","text":"Lists containing Code Blocks & Complex Elements","level":2},{"id":"mixed-ordering-complex-indentation","text":"Mixed Ordering & Complex Indentation","level":2}]}];
 export default function PendonView() { return (<>
-<section>
+<section id="advanced-commonmark-list-demonstration">
 <h1>1. Advanced CommonMark List Demonstration</h1>
-</section>
 <section id="multi-paragraph-nested-lists">
 <h2>1.1. Multi-Paragraph &amp; Nested Lists</h2>
 <ol start={1}>
@@ -131,6 +130,7 @@ export default function PendonView() { return (<>
 </ul>
 </Hint><p>Commodo sit reprehenderit occaecat voluptate ex voluptate officia irure.
 </p>
+</section>
 </section>
 
 </>); }

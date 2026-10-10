@@ -95,15 +95,15 @@ from being read as a Markdown link before the plugin sees it:
 
 ##[cite] Cite
 
-The citation head is `[^^]("ref")`; extras merge into the citation node while the
+The citation head is `[^^](ref)`; extras merge into the citation node while the
 cite args win (§7.3). `#id`/slug feed the `cite-id` slot.
 
-Minim [^^]("paper-smith")@@citeX{.paper, #smith, note: "short"} esse do ut anim
+Minim [^^](paper-smith)@@citeX{.paper, #smith, note: "short"} esse do ut anim
 proident est qui magna non elit quis eiusmod dolore.
 
 A location argument stays the construct value:
 
-[^^]("suryana-2026", "hlm. 45")@@citeX{loc: "dropped", .thin}
+[^^](suryana-2026 "hlm. 45")@@citeX{loc: "dropped", .thin}
 
 ##[wiki] Wiki link
 
@@ -112,6 +112,21 @@ and is never overridable (§7.5).
 
 [[Anim Esta (Officia) | Anim]]@@wikiX{.link, title: "dropped"} and [[Wireless]].
 
+##[marker] Marker
+
+The `{{type}}` marker (§10.1) has no HTML equivalent: its type is mandatory and
+doubles as the routing key of the `marker` layer. An inline marker keeps its
+paragraph, a block marker owns its line and takes that line's trailing text as
+its children.
+
+Inline {{footnote}} and block forms:
+
+{{bibliography}}
+
+An unclaimed type falls back to the layer default:
+
+{{unknownType}} Rendered through `MarkerDefault`.
+
 ##[table] Table
 
 The §8 declaration line carries the `<table>` extras and the head
@@ -119,12 +134,12 @@ The §8 declaration line carries the `<table>` extras and the head
 cells carry their extras at the front of the row/cell, after the last `|`.
 
 |-[sales-2026]("Laporan Penjualan 2026")@@tableX{.striped, sortable: true}-|
-|| @@captionX{.caption-note} Laporan Penjualan 2026 ||
+||@@captionX{.caption-note} Laporan Penjualan 2026||
 | Produk | Stok | Harga | Status |
-| @@cellA{.v-top} :---(200px) | :---:[.v-top] | ---:(30%)[.v-bottom] | :---: |
+| :---(200px)@@cellA{.v-top} | :---:{.v-top} | ---:(30%){.v-bottom} | :---: |
 | @@cellB{.lead} Laptop Pro | 15 | 15.000.000 | [Tersedia](/docs) |
 | Mouse Wireless | @@cellB{} > | 250.000 | Tersedia |@@rowB{.row-info}
-| Keyboard Mekanikal | 0 | 850.000 | Habis | -[.row-danger]
+| Keyboard Mekanikal | 0 | 850.000 | Habis |{.row-danger}
 |===|@@tfootX{.total}
 | Total Inventaris | > | 21.300.000 | - |
 

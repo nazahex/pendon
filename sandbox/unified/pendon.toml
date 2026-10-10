@@ -8,7 +8,7 @@
 name = "Unified Demo"
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "micromatter,heading,table,img,cite,wiki,anchor,markdown,latex,syntect,sectionize,extract-heading"
+plugin = "micromatter,section,heading,table,img,directive,cite,wiki,anchor,marker,markdown,latex,syntect,extract-heading"
 format = "solid"
 markdown_strip_comments = true
 markdown_allow_html = true
@@ -123,3 +123,17 @@ template = "<TableCellAB type={\"{attrs.type}\"} {...attrs}>{children}</TableCel
 name = "TableCellDefault"
 imports = "import { TableCellDefault } from '@comp/content/Table'"
 template = "<TableCellDefault {...attrs}>{children}</TableCellDefault>"
+
+# === MARKER (§10.1) =======================================================
+# The marker `type` is mandatory and is the routing key of the `marker` layer.
+
+[[task.marker.custom]]
+type = ["bibliography"]
+name = "Bibliography"
+imports = "import { Bibliography } from '@comp/content/Cite'"
+template = "<Bibliography cites={frontmatter.cites} references={frontmatter.references} />"
+
+[[task.marker.custom]]
+name = "MarkerDefault"
+imports = "import { MarkerDefault } from '@comp/content/Marker'"
+template = "<MarkerDefault {...attrs}>{children}</MarkerDefault>"

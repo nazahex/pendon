@@ -36,8 +36,11 @@
 #     Both forms are used across layers on purpose.
 #   - Layer layout follows the latest demo (task.<plugin>.custom.<layer>).
 #     The wiki custom block is commented out because its key is unconfirmed.
-#   - Blockquote and list are NOT configured and NOT in the plugin lists until
-#     Phase 4. Unknown plugin names / unknown task.* keys must not be silent.
+#   - Blockquote and list ARE configured now: the `blockquote` and `list`
+#     plugins sit before `markdown` in Tasks 1 and 2, and the Q/L sections
+#     exercise the inner head and the container decorator. Task 3 keeps them
+#     out, so its Q/L syntax stays literal text. Unknown plugin names /
+#     unknown task.* keys must not be silent.
 #
 # WHEN THE PROJECT CHANGES
 #   New plugin/layer : add its plugin id to Tasks 1 and 2 (Task 3 only if it
@@ -60,7 +63,7 @@
 name = "Unified Full"
 input = "./src/[slug].md"
 output = "./out/full/[slug].jsx"
-plugin = "micromatter,heading,table,img,directive,cite,wiki,anchor,marker,markdown,latex,syntect,sectionize,extract-heading"
+plugin = "micromatter,section,heading,table,img,directive,cite,wiki,anchor,marker,blockquote,list,markdown,latex,syntect,extract-heading"
 format = "solid"
 markdown_strip_comments = true
 markdown_allow_html = true
@@ -188,8 +191,48 @@ parentheses_key = "level"
 imports = "import Note from '@comp/content/Note'"
 template = "<Note {...attrs}>{children}</Note>"
 
-# --- BLOCKQUOTE / LIST: removed until Phase 4 (plugin-blockquote and plugin-list do not exist).
-#     Q and L sections of ultimate.md are frozen as plain text. Re-add entries when implemented.
+# --- BLOCKQUOTE: §9.2 primary layer `blockquote`. Typed entry + default -------
+# `bqZ` is intentionally unconfigured so it exercises "unclaimed type ->
+# layer default" (§11 rule 3). A plain quote (no head, no decorator) also
+# reaches the default.
+
+[[task.blockquote.custom]]
+type = ["bqA", "bqB"]
+name = "BlockquoteAB"
+imports = "import { BlockquoteAB } from '@comp/content/Blockquote'"
+template = "<BlockquoteAB type={\"{attrs.type}\"} {...attrs}>{children}</BlockquoteAB>"
+
+[[task.blockquote.custom]]
+name = "BlockquoteDefault"
+imports = "import { BlockquoteDefault } from '@comp/content/Blockquote'"
+template = "<BlockquoteDefault {...attrs}>{children}</BlockquoteDefault>"
+
+# --- LIST: §9.3/§9.4 container layers `unordered` / `ordered`. The marker
+#     (`-`/`*`/`+` vs `1.`) decides the layer (§9.4), never the decorator's own
+#     type. `unorderedZ` is intentionally unconfigured (layer default path).
+#     The `list` item layer (L2/L3) is a later step and is not configured yet.
+
+[[task.list.custom.unordered]]
+type = ["unorderedA", "compact"]
+name = "UnorderedACompact"
+imports = "import { UnorderedACompact } from '@comp/content/List'"
+template = "<UnorderedACompact type={\"{attrs.type}\"} {...attrs}>{children}</UnorderedACompact>"
+
+[[task.list.custom.unordered]]
+name = "UnorderedDefault"
+imports = "import { UnorderedDefault } from '@comp/content/List'"
+template = "<UnorderedDefault {...attrs}>{children}</UnorderedDefault>"
+
+[[task.list.custom.ordered]]
+type = ["orderedA"]
+name = "OrderedA"
+imports = "import { OrderedA } from '@comp/content/List'"
+template = "<OrderedA type={\"{attrs.type}\"} {...attrs}>{children}</OrderedA>"
+
+[[task.list.custom.ordered]]
+name = "OrderedDefault"
+imports = "import { OrderedDefault } from '@comp/content/List'"
+template = "<OrderedDefault {...attrs}>{children}</OrderedDefault>"
 
 # --- TABLE: 7 layers. table/tbody/tfoot typed+default; caption/thead single;
 #            row/cell typed+default -----------------------------------------
@@ -269,7 +312,7 @@ template = "<TableCellDefault {...attrs}>{children}</TableCellDefault>"
 name = "Unified Defaults"
 input = "./src/[slug].md"
 output = "./out/default/[slug].jsx"
-plugin = "micromatter,heading,table,img,directive,cite,wiki,anchor,marker,markdown,latex,syntect,sectionize,extract-heading"
+plugin = "micromatter,section,heading,table,img,directive,cite,wiki,anchor,marker,blockquote,list,markdown,latex,syntect,extract-heading"
 format = "solid"
 markdown_strip_comments = true
 markdown_allow_html = true

@@ -1,0 +1,32 @@
+[[task]]
+name = "Plugin Directive Demo Solid"
+input = "./src/directive.md"
+output = "./out/directive.jsx"
+plugin = "directive,markdown"
+format = "solid"
+
+[[task.directive.custom]]
+type = ["asideA", "asideB"]
+name = "AsideAB"
+bracket_key = "label"
+parentheses_key = "kind"
+backtick_key = "author"
+quote_key = "summary"
+imports = "import { AsideAB } from '@comp/content/AsideAB'"
+template = "<AsideAB slug={\"{attrs.slug}\"} title={\"{attrs.title}\"} type={\"{attrs.type}\"} {...attrs}>{children}</AsideAB>"
+
+[[task.directive.custom]]
+type = ["note"]
+name = "Note"
+bracket_key = "id"
+parentheses_key = "level"
+imports = "import Note from '@comp/content/Note'"
+template = "<Note {...attrs}>{children}</Note>"
+
+[[task.directive.custom]]
+type = ["warning"]
+name = "Warning"
+bracket_key = "number"
+parentheses_key = "reason"
+imports = "import Warning from '@comp/content/Warning'"
+template = "<Warning {...attrs}>{children}</Warning>"

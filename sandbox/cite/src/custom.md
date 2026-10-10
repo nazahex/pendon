@@ -56,6 +56,6 @@ references:
 
 # Laporan Sintaks & Pengujian
 
-Penerapan AI pada sistem modern sangat pesat [^^]("suryana-2026", "hlm. 45")[.fpp] [^^]("paper-smith", "hlm. 110-125"){rox:true} . Dokumentasi lengkap dapat dilihat pada [Portal Resmi React](https://react.dev/learn).
+Penerapan AI pada sistem modern sangat pesat [^^](suryana-2026 "hlm. 45"){.fpp} [^^](paper-smith "hlm. 110-125"){rox:true} . Dokumentasi lengkap dapat dilihat pada [Portal Resmi React](https://react.dev/learn).
 
-Optimasi _compiler_ terbukti meningkatkan performa [^^]("paper-smith", "hlm. 210-225"). Penggunaan [^^]("web-react") [^^]("suryana-2026") [^^]("paper-smith") juga disarankan untuk fleksibilitas arsitektur.
+Optimasi _compiler_ terbukti meningkatkan performa [^^](paper-smith "hlm. 210-225"). Penggunaan [^^](web-react) [^^](suryana-2026) [^^](paper-smith) juga disarankan untuk fleksibilitas arsitektur.

@@ -6,7 +6,7 @@ export default function PendonView() { return (<>
 </p>
 <p>Mollit <a href="/foo/bar" rel="noopener noreferrer sponsored nofollow" target="_blank" title="Buy Foo!">labore</a> anim ipsum<sup class="cite-ref"><a href="#citeref-1-paper-smith" id="cra-1">[1]</a></sup> in ullamco.
 </p>
-<figure class="extra class or" data-baz="23" data-foo="bar" id="custom-id" style="--wix:sum;--rotate:5deg;"><img alt="lorem ipsum" decoding="async" height="300" loading="lazy" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" width="800" /><figcaption>Exercitation qui <strong>exercitation</strong> dolor velit <i>aliqua</i> consectetur voluptate <a href="/consequat">consequat</a> labore elit non esse occaecat.</figcaption></figure>
+<figure class="extra class or" data-baz="23" data-foo="bar" id="custom-id" style="--wix: sum; --rotate: 5deg;"><img alt="lorem ipsum" decoding="async" height="300" loading="lazy" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" width="800" /><figcaption>Exercitation qui <strong>exercitation</strong> dolor velit <i>aliqua</i> consectetur voluptate <a href="/consequat">consequat</a> labore elit non esse occaecat.</figcaption></figure>
 <p>Velit consequat culpa magna fugiat non occaecat voluptate.
 </p>
 

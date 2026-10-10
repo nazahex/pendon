@@ -1,6 +1,6 @@
 export const frontmatter = {"charmap":["Revan","a","Stevano","b"],"dateModified":"2026-03-17","datePublished":"2026-03-17","description":"Sebuah cerita suram dari seorang pemuda yang hidup dalam kehampaan total. Mengupas relita pahit kehidupan yang terbalut ilusi.","headline":"Anhedonia: Bintang Bayangan","ogdescription":"Sebuah cerita suram dari seorang pemuda yang hidup dalam kehampaan total. Mengupas relita pahit kehidupan yang terbalut ilusi.","ogimage":"anders_omnibus.jpg","ogtitle":"Anhedonia: Bintang Bayangan","title":"Anhedonia: Bintang Bayangan"};
 export default function PendonView() { return (<>
-<img alt="foo" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773742324/revano_bench_kjc4im.avif" style="--max-width:80%;" />
+<img alt="foo" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773742324/revano_bench_kjc4im.avif" style="--max-width: 80%;" />
 <h2>Hari 4</h2>
 <p>Revan duduk di rooftop kediamannya. Melamun melihat langit malam, yang mana pada malam ini bintang bersinar lebih terang daripada biasanya. Angin menghembus kencang, menyejukkan jiwa di tengah kesuraman dunia.
 </p>

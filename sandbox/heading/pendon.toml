@@ -2,7 +2,7 @@
 name = "Plugin Heading Demo Solid"
 input = "./src/heading.md"
 output = "./out/heading.jsx"
-plugin = "micromatter,markdown,sectionize,extract-heading,heading"
+plugin = "micromatter,section,heading,markdown,extract-heading"
 format = "solid"
 
 [task.heading]
@@ -11,7 +11,7 @@ number_style = "nested-number"
 
 [task.heading.custom.heading]
 name = "DocHeading"
-template = "<DocHeading level={{attrs.level}} id=\"{attrs.id}\" class=\"{attrs.class}\" number=\"{attrs.number}\" qux={{attrs.qux}} nor={{attrs.nor}} >{children}</DocHeading>"
+template = "<DocHeading {...attrs} >{children}</DocHeading>"
 
 [[task.heading.custom.heading.imports]]
 module = "@/components/DocHeading"
@@ -23,5 +23,5 @@ default = "DocHeading"
 name = "Normal Demo Solid"
 input = "./src/normal.md"
 output = "./out/normal.jsx"
-plugin = "micromatter,markdown,sectionize,extract-heading"
+plugin = "micromatter,section,markdown,heading,extract-heading"
 format = "solid"

@@ -1,9 +1,10 @@
 export const frontmatter = {"cites":[{"id":"paper-smith","index":1},{"id":"paper-smith","index":2,"loc":"hlm. 55"},{"id":"suryana-2026","index":3,"loc":"hlm. 45"},{"id":"doe-2020","index":4},{"id":"paper-smith","index":5,"loc":"hlm. 1"},{"id":"suryana-2026","index":6},{"id":"paper-smith","index":7,"loc":"hlm. 7"}],"references":{"doe-2020":{"authors":[{"firstName":"Jane","lastName":"Doe"}],"id":"doe-2020","issuedDate":{"year":2020},"language":"en","publisher":"Test Press","publisherLocation":"Bandung","title":"Edge Cases in Practice","type":"book"},"paper-smith":{"authors":[{"firstName":"John","lastName":"Smith"}],"containerTitle":"Journal of Web Engineering","doi":"10.1016/j.jwe.2025.08.001","id":"paper-smith","issue":"4","issuedDate":{"month":8,"year":2025},"language":"en","pages":"210-225","title":"Generative MDX to PDF Compilation Architectures","type":"journal","volume":"18"},"suryana-2026":{"authors":[{"firstName":"Eko","lastName":"Suryana"}],"id":"suryana-2026","isbn":"978-602-0000-00-0","issuedDate":{"year":2026},"language":"id","publisher":"TechPress Indonesia","publisherLocation":"Jakarta","title":"Masa Depan Rekayasa Perangkat Lunak","type":"book"}},"title":"Unified Syntax Torture Demo"};
-export const headings = [{"id":"s-top","text":"Unified Demo","level":1,"subheadings":[{"id":"s-anchor","text":"Anchor","level":2},{"id":"s-heading","text":"Heading","level":2,"subheadings":[{"id":"h01","text":"H01 slug","level":3},{"id":"h02-title","text":"H02 title","level":3},{"id":"h03-typex","text":"H03 type+X","level":3},{"id":"h04-plain","text":"H04 plain","level":3},{"id":"h05","text":"H05 slug+title","level":3},{"id":"h06","text":"H06 slug+X","level":3},{"id":"i","text":"H07 title+XY","level":3},{"id":"i-2","text":"H08 XXYZZ","level":3},{"id":"id","text":"H09 all","level":3},{"id":"h10-untyped","text":"H10 untyped","level":3},{"id":"h10n-untyped-non-canonical","text":"H10n untyped non-canonical","level":3},{"id":"h11-empty","text":"H11 empty","level":3},{"id":"h11n-empty-non-canonical","text":"H11n empty non-canonical","level":3},{"id":"h12-unclaimed","text":"H12 unclaimed","level":3},{"id":"h13-type-only","text":"H13 type only","level":3},{"id":"h14","text":"H14 precedence","level":3},{"id":"h14n","text":"H14n precedence non-canonical","level":3}]}]},{"id":"h15","text":"H15 level 1","level":1,"subheadings":[{"id":"h16-level-2","text":"H16 level 2","level":2},{"id":"h16n-level-2-non-canonical","text":"H16n level 2 non-canonical","level":2,"subheadings":[{"id":"h17","text":"H17 level 4","level":4,"subheadings":[{"id":"h18-level-6-skips-5","text":"H18 level 6 (skips 5)","level":6},{"id":"h18n-level-6-non-canonical","text":"H18n level 6 non-canonical","level":6}]},{"id":"h19","text":"H19 KS a b i c W<sup class=\"cite-ref k\"><a href=\"#citeref-1-paper-smith\" id=\"cra-1\" data-type=\"citeX\">[1]</a></sup> d <span class=\"latex latex-inline\" innerHTML={`<span class=\"katex\"><span class=\"katex-mathml\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">x</annotation></semantics></math></span><span class=\"katex-html\" aria-hidden=\"true\"><span class=\"base\"><span class=\"strut\" style=\"height:0.4306em;\"></span><span class=\"mord mathnormal\">x</span></span></span></span>`}></span>","level":3},{"id":"section","text":"","level":3},{"id":"h21","text":"H21 closing hashes ###","level":3},{"id":"section-2","text":"","level":3},{"id":"h24","text":"H24 KSu a b i c W<sup class=\"cite-ref k\"><a href=\"#citeref-1-paper-smith\" id=\"cra-1\">[1]</a></sup> d <span class=\"latex latex-inline\" innerHTML={`<span class=\"katex\"><span class=\"katex-mathml\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">x</annotation></semantics></math></span><span class=\"katex-html\" aria-hidden=\"true\"><span class=\"base\"><span class=\"strut\" style=\"height:0.4306em;\"></span><span class=\"mord mathnormal\">x</span></span></span></span>`}></span>","level":3},{"id":"i-3","text":"H25 slug+title+XXYZ untyped","level":3},{"id":"h26-titlex-untyped","text":"H26 title+X untyped","level":3},{"id":"h27","text":"H27 slug+X untyped, slug precedence","level":3}]},{"id":"s-image","text":"Image and figure","level":2},{"id":"s-cite","text":"Cite","level":2},{"id":"s-wiki","text":"Wiki","level":2},{"id":"s-marker","text":"Marker","level":2},{"id":"s-table","text":"Table","level":2},{"id":"s-quote","text":"Blockquote","level":2,"subheadings":[{"id":"q14-heading-inside","text":"Q14 heading inside","level":3}]}]},{"id":"asideas-l37body","text":"===asideAs-l37body","level":1,"subheadings":[{"id":"l40","text":"L40","level":3},{"id":"l40n","text":"L40n","level":3},{"id":"l41","text":"L41","level":3},{"id":"l42","text":"L42","level":3},{"id":"l43","text":"L43","level":3},{"id":"l44","text":"L44","level":3},{"id":"l46","text":"L46","level":3},{"id":"s-idir","text":"Inline directive","level":2},{"id":"s-bdir","text":"Block directive","level":2}]},{"id":"typed-plain","text":"typed plain","level":1},{"id":"b03-title","text":"B03 title","level":1,"subheadings":[{"id":"b20-h","text":"Heading inside","level":3},{"id":"b23-h","text":"Heading untyped inside","level":3},{"id":"s-nest","text":"Nesting","level":2},{"id":"s-edge","text":"Edge cases","level":2,"subheadings":[{"id":"h-e33","text":"E33 heading with t and bad head u{.y","level":3},{"id":"h-e68","text":"[.extra,.class,#id]{foo: \"bar\"} E68 legacy heading","level":3}]}]}];
+export const headings = [{"id":"s-top","text":"Unified Demo","level":1,"subheadings":[{"id":"s-anchor","text":"Anchor","level":2},{"id":"s-heading","text":"Heading","level":2,"subheadings":[{"id":"h01","text":"H01 slug","level":3},{"id":"h02-title","text":"H02 title","level":3},{"id":"h03-typex","text":"H03 type+X","level":3},{"id":"h04-plain","text":"H04 plain","level":3},{"id":"h05","text":"H05 slug+title","level":3},{"id":"h06","text":"H06 slug+X","level":3},{"id":"h07-titlexy","text":"H07 title+XY","level":3},{"id":"h08","text":"H08 XXYZZ","level":3},{"id":"h09","text":"H09 all","level":3},{"id":"h10-untyped","text":"H10 untyped","level":3},{"id":"h10n-untyped-non-canonical","text":"H10n untyped non-canonical","level":3},{"id":"h11-empty","text":"H11 empty","level":3},{"id":"h11n-empty-non-canonical","text":"H11n empty non-canonical","level":3},{"id":"h12-unclaimed","text":"H12 unclaimed","level":3},{"id":"h13-type-only","text":"H13 type only","level":3},{"id":"h14","text":"H14 precedence","level":3},{"id":"h14n","text":"H14n precedence non-canonical","level":3}]}]},{"id":"h15","text":"H15 level 1","level":1,"subheadings":[{"id":"h16-level-2","text":"H16 level 2","level":2},{"id":"h16n-level-2-non-canonical","text":"H16n level 2 non-canonical","level":2,"subheadings":[{"id":"h17","text":"H17 level 4","level":4,"subheadings":[{"id":"h18-level-6-skips-5","text":"H18 level 6 (skips 5)","level":6},{"id":"h18n-level-6-non-canonical","text":"H18n level 6 non-canonical","level":6}]},{"id":"h19","text":"H19 KS a b i c W<sup class=\"cite-ref k\"><a href=\"#citeref-1-paper-smith\" id=\"cra-1\" data-type=\"citeX\">[1]</a></sup> d <span class=\"latex latex-inline\" innerHTML={`<span class=\"katex\"><span class=\"katex-mathml\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">x</annotation></semantics></math></span><span class=\"katex-html\" aria-hidden=\"true\"><span class=\"base\"><span class=\"strut\" style=\"height:0.4306em;\"></span><span class=\"mord mathnormal\">x</span></span></span></span>`}></span>","level":3},{"id":"section","text":"","level":3},{"id":"h21","text":"H21 closing hashes ###","level":3},{"id":"section-2","text":"","level":3},{"id":"h24","text":"H24 KSu a b i c W<sup class=\"cite-ref k\"><a href=\"#citeref-1-paper-smith\" id=\"cra-1\">[1]</a></sup> d <span class=\"latex latex-inline\" innerHTML={`<span class=\"katex\"><span class=\"katex-mathml\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\"><semantics><mrow><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">x</annotation></semantics></math></span><span class=\"katex-html\" aria-hidden=\"true\"><span class=\"base\"><span class=\"strut\" style=\"height:0.4306em;\"></span><span class=\"mord mathnormal\">x</span></span></span></span>`}></span>","level":3},{"id":"h25","text":"H25 slug+title+XXYZ untyped","level":3},{"id":"h26-titlex-untyped","text":"H26 title+X untyped","level":3},{"id":"h27","text":"H27 slug+X untyped, slug precedence","level":3}]},{"id":"s-image","text":"Image and figure","level":2},{"id":"s-cite","text":"Cite","level":2},{"id":"s-wiki","text":"Wiki","level":2},{"id":"s-marker","text":"Marker","level":2},{"id":"s-table","text":"Table","level":2},{"id":"s-quote","text":"Blockquote","level":2,"subheadings":[{"id":"id","text":"Q14 heading inside","level":3}]},{"id":"s-list","text":"List","level":2,"subheadings":[{"id":"l01","text":"L01","level":3},{"id":"l02","text":"L02","level":3},{"id":"l02n","text":"L02n","level":3},{"id":"l03","text":"L03","level":3},{"id":"l04","text":"L04","level":3},{"id":"l05","text":"L05","level":3},{"id":"l06","text":"L06","level":3},{"id":"l07","text":"L07","level":3},{"id":"l07n","text":"L07n","level":3},{"id":"l08","text":"L08","level":3},{"id":"l10","text":"L10","level":3},{"id":"l20","text":"L20","level":3},{"id":"l20n","text":"L20n","level":3},{"id":"l21","text":"L21","level":3},{"id":"l22","text":"L22","level":3},{"id":"l22n","text":"L22n","level":3},{"id":"l24","text":"L24","level":3},{"id":"l25","text":"L25","level":3},{"id":"l25n","text":"L25n","level":3},{"id":"l26","text":"L26","level":3},{"id":"l30","text":"L30","level":3},{"id":"l34","text":"L34","level":3}]}]},{"id":"l34","text":"===asideAs-l37body","level":1,"subheadings":[{"id":"l40","text":"L40","level":3},{"id":"l40n","text":"L40n","level":3},{"id":"l41","text":"L41","level":3},{"id":"l42","text":"L42","level":3},{"id":"l43","text":"L43","level":3},{"id":"l44","text":"L44","level":3},{"id":"l46","text":"L46","level":3},{"id":"s-idir","text":"Inline directive","level":2},{"id":"s-bdir","text":"Block directive","level":2}]},{"id":"asideab01-typed-plain","text":"typed plain","level":1},{"id":"asideat03b03-title","text":"B03 title","level":1,"subheadings":[{"id":"b20-h","text":"Heading inside","level":3},{"id":"b23-h","text":"Heading untyped inside","level":3},{"id":"s-nest","text":"Nesting","level":2},{"id":"s-edge","text":"Edge cases","level":2}]},{"id":"x-footnote-k-asidea-x-wwikix-kta-xw1ai-pngfigurex-f-capasideax","text":"{{footnote}}{.k} ::asideA x:: Wt{.x}~?!!w1a@@figureX{.f} cap===asideAx","level":1,"subheadings":[{"id":"h-e33","text":"E33 heading with t and bad head u{.y","level":3},{"id":"h-e68","text":"[.extra,.class,#id]{foo: \"bar\"} E68 legacy heading","level":3}]}];
 export default function PendonView() { return (<>
+<section>
+</section>
 <section id="s-top">
 <h1>Unified Demo</h1>
-</section>
 <section id="s-anchor">
 <h2>Anchor</h2>
 <p>A01 <a href="/a">plain</a>
@@ -80,7 +81,7 @@ export default function PendonView() { return (<>
 </p>
 <p>A34 (<a class="p" href="/a">t</a>), <a class="p" href="/a">t</a>. <em></em><a class="p" href="/a">t</a><em></em> _<a class="p" href="/a">t</a>_
 </p>
-<p>A35 <a class="o" href="/a"><span class="k" type="footnote"></span> in anchor</a> [<span __plugin_kind="inline" type="asideA"> d</span>](/a)&#123;.o&#125;
+<p>A35 <a class="o" href="/a"><span class="k" type="footnote"></span> in anchor</a> [<span type="asideA"> d</span>](/a)&#123;.o&#125;
 </p>
 <p>A36 <a class="a b" href="/a" id="i" k="v" n="2">t</a>
 </p>
@@ -141,13 +142,13 @@ export default function PendonView() { return (<>
 <section id="h06">
 <h3 class="x" type="headingX">H06 slug+X</h3>
 </section>
-<section id="i">
+<section id="h07-titlexy">
 <h3 class="x" title="T07" type="headingY">H07 title+XY</h3>
 </section>
-<section id="i-2">
+<section id="h08">
 <h3 class="a b" k="v" n="2" title="T08" type="headingX">H08 XXYZZ</h3>
 </section>
-<section id="id">
+<section id="h09">
 <h3 bar="12" class="extra class" foo="bar" isBar isFoo="true" style="--style-var: 2rem" title="T09" type="headingX">H09 all</h3>
 </section>
 <section id="h10-untyped">
@@ -175,9 +176,9 @@ export default function PendonView() { return (<>
 <h3 class="x" title="T14n">H14n precedence non-canonical</h3>
 </section>
 </section>
+</section>
 <section id="h15">
 <h1 class="l1" type="headingX">H15 level 1</h1>
-</section>
 <section id="h16-level-2">
 <h2 class="l2">H16 level 2</h2>
 </section>
@@ -193,7 +194,7 @@ export default function PendonView() { return (<>
 </section>
 </section>
 <section id="h19">
-<h3 class="k" title="T19" type="headingX">H19 KS <a class="k" href="/x" title="T" type="anchorA">a</a> <strong>b</strong> <i>i</i> <code>c</code> <a class="k" href="/W" title="W" type="wikiX">W</a><sup class="cite-ref k"><a href="#citeref-1-paper-smith" id="cra-1" data-type="citeX">[1]</a></sup><span class="k" type="footnote"></span><span __plugin_kind="inline" class="k" type="asideA"> d</span> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span></h3>
+<h3 class="k" title="T19" type="headingX">H19 KS <a class="k" href="/x" title="T" type="anchorA">a</a> <strong>b</strong> <i>i</i> <code>c</code> <a class="k" href="/W" title="W" type="wikiX">W</a><sup class="cite-ref k"><a href="#citeref-1-paper-smith" id="cra-1" data-type="citeX">[1]</a></sup><span class="k" type="footnote"></span><span class="k" type="asideA"> d</span> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span></h3>
 </section>
 <section id="section">
 <h3 class="x" type="headingX"></h3>
@@ -205,9 +206,9 @@ export default function PendonView() { return (<>
 <h3 class="x"></h3>
 </section>
 <section id="h24">
-<h3 class="k">H24 KSu <a class="k" href="/x" title="T">a</a> <strong>b</strong> <i>i</i> <code>c</code> <a class="k" href="/W" title="W">W</a><sup class="cite-ref k"><a href="#citeref-1-paper-smith" id="cra-1">[1]</a></sup><span class="k" type="footnote"></span><span __plugin_kind="inline" class="k" type="asideA"> d</span> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span></h3>
+<h3 class="k">H24 KSu <a class="k" href="/x" title="T">a</a> <strong>b</strong> <i>i</i> <code>c</code> <a class="k" href="/W" title="W">W</a><sup class="cite-ref k"><a href="#citeref-1-paper-smith" id="cra-1">[1]</a></sup><span class="k" type="footnote"></span><span class="k" type="asideA"> d</span> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span></h3>
 </section>
-<section id="i-3">
+<section id="h25">
 <h3 class="a" k="v" title="T25">H25 slug+title+XXYZ untyped</h3>
 </section>
 <section id="h26-titlex-untyped">
@@ -238,7 +239,7 @@ export default function PendonView() { return (<>
 <figure class="empty-alt"><img alt="" decoding="async" loading="lazy" src="/i.png" width="800" /></figure>
 <figure class="x" type="figureZ"><img alt="I13" decoding="async" height="300" loading="lazy" src="/i.png" /><figcaption>unclaimed</figcaption></figure>
 <img alt="I14" class="a b" data-k="v" data-n="2" data-title="Extras T" decoding="async" id="i" src="/i.png &quot;Head T&quot;" type="imageX" width="100" />
-<figure isA type="figureX"><img alt="I15" decoding="async" loading="lazy" src="/i.png" width="100" /><figcaption>Caption KS <a class="k" href="/x" type="anchorA">a</a><sup class="cite-ref k"><a href="#citeref-1-paper-smith" id="cra-1" data-type="citeX">[1]</a></sup><a class="k" href="/W" title="W" type="wikiX">W</a> <span class="k" type="footnote"></span> <span __plugin_kind="inline" class="k" type="asideA"> d</span> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span> <strong>b</strong></figcaption></figure>
+<figure isA type="figureX"><img alt="I15" decoding="async" loading="lazy" src="/i.png" width="100" /><figcaption>Caption KS <a class="k" href="/x" type="anchorA">a</a><sup class="cite-ref k"><a href="#citeref-1-paper-smith" id="cra-1" data-type="citeX">[1]</a></sup><a class="k" href="/W" title="W" type="wikiX">W</a> <span class="k" type="footnote"></span> <span class="k" type="asideA"> d</span> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span> <strong>b</strong></figcaption></figure>
 <p><img alt="I16 plain markdown image" src="/i.png" />
 </p>
 <img alt="I17" class="thumb" decoding="async" height="300" src="/i.png" width="800" />
@@ -250,7 +251,7 @@ export default function PendonView() { return (<>
 <figure><img alt="I20" decoding="async" loading="lazy" src="/i.png" /></figure>
 <figure type="figureX"><img alt="I21" decoding="async" loading="lazy" src="/i.png" /></figure>
 <img alt="I22" class="a" data-title="Extras T" decoding="async" src="/i.png &quot;Head T&quot;" width="100" />
-<figure class="f"><img alt="I23" decoding="async" loading="lazy" src="/i.png" width="100" /><figcaption>Caption KSu <a class="k" href="/x">a</a><sup class="cite-ref k"><a href="#citeref-1-paper-smith" id="cra-1">[1]</a></sup><a class="k" href="/W" title="W">W</a> <span class="k" type="footnote"></span> <span __plugin_kind="inline" class="k" type="asideA"> d</span> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span> <strong>b</strong></figcaption></figure>
+<figure class="f"><img alt="I23" decoding="async" loading="lazy" src="/i.png" width="100" /><figcaption>Caption KSu <a class="k" href="/x">a</a><sup class="cite-ref k"><a href="#citeref-1-paper-smith" id="cra-1">[1]</a></sup><a class="k" href="/W" title="W">W</a> <span class="k" type="footnote"></span> <span class="k" type="asideA"> d</span> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span> <strong>b</strong></figcaption></figure>
 </section>
 <section id="s-cite">
 <h2>Cite</h2>
@@ -380,6 +381,20 @@ export default function PendonView() { return (<>
 </p>
 <p>M12 <span class="upper" type="Footnote"></span><span type="FOOTNOTE"></span>
 </p>
+<p>M13 <span slug="m13" type="markerA"></span> bracket group, trailing text as children
+</p>
+<p>M14 <span title="M14" type="markerA"></span> parentheses group, trailing text as children
+</p>
+<p>M15 <span class="h" slug="m15" type="markerA"></span> group then extras head
+</p>
+<p>M16 <span type="markerA"></span>[m16( malformed group stays literal, marker still renders
+</p>
+<p>M17 <span type="markerA"></span><a href="" title="M17">m17</a> anchor layer wins the pair, marker stays bare
+</p>
+<p>M18 <span slug="m18" type="unknownType"></span> unclaimed type keeps the group
+</p>
+<p>M19 inline <span slug="m19" type="footnote"></span> and <span title="M19" type="markerA"></span> ipsum.
+</p>
 </section>
 <section id="s-table">
 <h2>Table</h2>
@@ -407,7 +422,7 @@ export default function PendonView() { return (<>
     </tr>
     <tr type="rowA">
       <td class="v-top" style="text-align: left; width: 200px;" type="cellA">empty-extras</td>
-      <td class="c" style="text-align: center;"><span __plugin_kind="inline" class="k" type="asideA"> d</span></td>
+      <td class="c" style="text-align: center;"><span class="k" type="asideA"> d</span></td>
       <td style="text-align: right; width: 30%;"><span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>x</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span>`}></span></td>
       <td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB"><code>c</code></td>
     </tr>
@@ -811,7 +826,7 @@ export default function PendonView() { return (<>
     </tr>
     <tr>
       <td class="v-top" style="text-align: left; width: 200px;">empty</td>
-      <td class="c" id="i" style="text-align: center;"><span __plugin_kind="inline" class="k" type="asideA"> d</span></td>
+      <td class="c" id="i" style="text-align: center;"><span class="k" type="asideA"> d</span></td>
       <td class="a b" id="i2" k="v" n="2" style="text-align: right; width: 30%;"><span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>x</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span>`}></span></td>
       <td b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T"><code>c</code></td>
     </tr>
@@ -1163,61 +1178,31 @@ x</blockquote>
 </section>
 <section id="s-quote">
 <h2>Blockquote</h2>
-<blockquote>
-<p>Q01 plain
-continues
+<blockquote>Q01 plain<p>continues
 </p>
-</blockquote>
-<blockquote>
-<p>&#123;.x&#125; Q02 untyped X
+</blockquote><blockquote class="x"><p>Q02 untyped X
 </p>
-</blockquote>
-<blockquote>
-<p>@@&#123;.x&#125; Q02n untyped non-canonical
+</blockquote><blockquote class="x"><p>Q02n untyped non-canonical
 </p>
-</blockquote>
-<blockquote>
-<p>@@bqA&#123;&#125; Q03 typed empty
+</blockquote><blockquote type="bqA"><p>Q03 typed empty
 </p>
-</blockquote>
-<blockquote>
-<p>@@bqA&#123;.x&#125; Q04 X
+</blockquote><blockquote class="x" type="bqA"><p>Q04 X
 </p>
-</blockquote>
-<blockquote>
-<p>@@bqA&#123;.x, #i&#125; Q05 XY
+</blockquote><blockquote class="x" id="i" type="bqA"><p>Q05 XY
 </p>
-</blockquote>
-<blockquote>
-<p>@@bqA&#123;.a, .b, #i, k: &quot;v&quot;, n: 2&#125; Q06 XXYZZ
+</blockquote><blockquote class="a b" id="i" k="v" n="2" type="bqA"><p>Q06 XXYZZ
 </p>
-</blockquote>
-<blockquote>
-<p>@@bqB&#123;<code>slug-foo</code>, &quot;Title Foo&quot;, .extra, .class, #id, foo: &quot;bar&quot;, bar: 12, isFoo: true, --style-var: &quot;2rem&quot;, isBar&#125; Q07 all
+</blockquote><blockquote bar="12" class="extra class" foo="bar" id="id" isBar isFoo="true" slug="slug-foo" style="--style-var: 2rem" title="Title Foo" type="bqB"><p>Q07 all
 </p>
-</blockquote>
-<blockquote>
-<p>@@bqZ&#123;.x&#125; Q08 unclaimed
+</blockquote><blockquote class="x" type="bqZ"><p>Q08 unclaimed
 </p>
-</blockquote>
-<blockquote>
-<p>@@bqA Q09 type only
+</blockquote><blockquote type="bqA"><p>Q09 type only
 </p>
-</blockquote>
-<blockquote>
-<p>@@bqA&#123;.x&#125; Q10 no space after &gt;
+</blockquote><blockquote class="x" type="bqA"><p>Q10 no space after &gt;
 </p>
-</blockquote>
-<blockquote>
-<p>Q11 not first @@bqA&#123;.x&#125; literal
+</blockquote><blockquote><p>Q11 not first @@bqA&#123;.x&#125; literal
 </p>
-</blockquote>
-<blockquote>
-<p>@@bqA&#123;.x&#125;
-</p>
-</blockquote>
-<blockquote>
-<p>@@bqA&#123;.outer&#125; Q13 outer
+</blockquote><blockquote class="x" type="bqA"></blockquote><blockquote class="outer" type="bqA"><p>Q13 outer
 </p>
 <blockquote>
 <p>@@bqB&#123;.inner&#125; Q13a inner
@@ -1229,11 +1214,8 @@ lazy continuation without marker
 </p>
 </blockquote>
 </blockquote>
-</blockquote>
-<blockquote>
-<p>@@bqA&#123;.q&#125; Q14 mixed
+</blockquote><blockquote class="q" type="bqA"><p>Q14 mixed
 </p>
-<section id="q14-heading-inside">
 <h3>Q14 heading inside</h3>
 <ul>
 <li>@@liItem&#123;.i&#125; Q14 item</li>
@@ -1253,8 +1235,180 @@ lazy continuation without marker
 </tr>
 </tbody>
 </table>
-<pre lang="ts"><code innerHTML={"<p><b>&gt;</b> const q <b>=</b> <i><i>&quot;</i>@@bqA{.literal}<i>&quot;</i></i>;</p><p><b>&gt;</b> <i><i>`</i><i>`</i></i><i><i>`</i></p><p>&gt;</p><p>&gt; $$x = y$$</p><p>&gt;</p><p>&gt; </p><p>&#8203;</p><p>&#8203;</p><p>&gt; @@bqA{.q15} KS a **b** _i_ <i>`</i></i><i>c<i>`</i> W &lt;sup class=&quot;cite-ref k&quot;&gt;&lt;a href=&quot;#citeref-1-paper-smith&quot; id=&quot;cra-1&quot; data-type=&quot;citeX&quot;&gt;[1]&lt;/a&gt;&lt;/sup&gt;   d $x$</p><p>&#8203;</p><p>&#8203;</p><p>&gt; {} Q16 untyped empty</p><p>&#8203;</p><p>&#8203;</p><p>&gt; {.x, #i} Q17 untyped XY</p><p>&#8203;</p><p>&gt; {.a, .b, #i, k: &quot;v&quot;, n: 2} Q18 untyped XXYZZ</p><p>&#8203;</p><p>&gt; {<i>`</i></i>slug<b>-</b><i>foo<i>`</i>, &quot;Title Foo&quot;, .extra, .class, #id, foo: &quot;bar&quot;, bar: 12, isFoo: true, --style-var: &quot;2rem&quot;, isBar} Q19 untyped all</p><p>&#8203;</p><p>&gt; {.x} Q20 untyped, no space after &gt;</p><p>&#8203;</p><p>&gt; Q21 not first {.x} literal</p><p>&#8203;</p><p>&gt; {.x}</p><p>&#8203;</p><p>&gt; @@bqA {.x} Q23 type and brace separated by space (literal)</p><p>&#8203;</p><p>&gt; {.q24} KSu a **b** _i_ <i>`</i></i><i>c<i>`</i> W &lt;sup class=&quot;cite-ref k&quot;&gt;&lt;a href=&quot;#citeref-1-paper-smith&quot; id=&quot;cra-1&quot;&gt;[1]&lt;/a&gt;&lt;/sup&gt;   d $x$</p><p>&#8203;</p><p>&#8203;</p><p>List</p><p>&#8203;</p><p>&lt;!-- PENDING PHASE 4: plugin-list does not exist yet. Expected output of this whole section = plain markdown/literal text, frozen as such. Re-review when implemented. --&gt;</p><p>&#8203;</p><p>L01</p><p>&#8203;</p><p>- L01 plain</p><p>  - L01a</p><p>- L01b</p><p>&#8203;</p><p>L02</p><p>&#8203;</p><p>{.u}</p><p>&#8203;</p><p>- L02 decorator untyped X</p><p>- L02b</p><p>&#8203;</p><p>L02n</p><p>&#8203;</p><p>@@{.u}</p><p>&#8203;</p><p>- L02n decorator non-canonical</p><p>- L02nb</p><p>&#8203;</p><p>L03</p><p>&#8203;</p><p>@@unorderedA{.u, #l03}</p><p>&#8203;</p><p>- L03 star, XY</p><p>- L03b</p><p>&#8203;</p><p>L04</p><p>&#8203;</p><p>@@compact{.a, .b, #l04, k: &quot;v&quot;, n: 2}</p><p>&#8203;</p><p>- L04 plus, XXYZZ</p><p>- L04b</p><p>&#8203;</p><p>L05</p><p>&#8203;</p><p>@@unorderedA{<i>`</i></i>slug<b>-</b><i>foo<i>`</i>, &quot;Title Foo&quot;, .extra, .class, #id, foo: &quot;bar&quot;, bar: 12, isFoo: true, --style-var: &quot;2rem&quot;, isBar}</p><p>&#8203;</p><p>- L05 all</p><p>- L05b</p><p>&#8203;</p><p>L06</p><p>&#8203;</p><p>@@unorderedZ{.u}</p><p>&#8203;</p><p>- L06 unclaimed</p><p>&#8203;</p><p>L07</p><p>&#8203;</p><p>{}</p><p>&#8203;</p><p>- L07 empty</p><p>&#8203;</p><p>L07n</p><p>&#8203;</p><p>@@{}</p><p>&#8203;</p><p>- L07n empty non-canonical</p><p>&#8203;</p><p>L08</p><p>&#8203;</p><p>@@unorderedA</p><p>&#8203;</p><p>- L08 type only</p><p>&#8203;</p><p>L10</p><p>&#8203;</p><p>- @@liItem{<i>`</i></i><i>alpha<i>`</i>} L10 typed item</p><p>  - {<i>`</i></i><i>beta<i>`</i>} L10a nested untyped</p><p>  - @@liItem{.a, #i} L10b XY</p><p>- @@check{.c, k: &quot;v&quot;, n: 2} L11 XXYZZ</p><p>- @@data{<i>`</i></i>slug<b>-</b><i>foo<i>`</i>, &quot;Title Foo&quot;, .extra, .class, #id, foo: &quot;bar&quot;, bar: 12, isFoo: true, --style-var: &quot;2rem&quot;, isBar} L12 all</p><p>- @@liZ{.z} L13 unclaimed</p><p>- {} L14 empty</p><p>- @@{} L14n empty non-canonical</p><p>- @@liItem L15 type only</p><p>- L16 plain among extras</p><p>- {.only}</p><p>- @@liItem{.x}L17 glued</p><p>- {.x}L17u glued untyped</p><p>- @@liItem {.x} L17s type and brace separated by space (literal)</p><p>&#8203;</p><p>L20</p><p>&#8203;</p><p>{<i>`</i></i>my<b>-</b><i>list<i>`</i>}</p><p>6. L20 start at 6</p><p>7. L20b</p><p>&#8203;</p><p>L20n</p><p>&#8203;</p><p>@@{<i>`</i></i>my<b>-</b>list<b>-</b><i>n<i>`</i>}</p><p>6. L20n start at 6 non-canonical</p><p>7. L20nb</p><p>&#8203;</p><p>L21</p><p>&#8203;</p><p>1. L21 plain ol</p><p>2. L21b</p><p>&#8203;</p><p>L22</p><p>&#8203;</p><p>@@orderedA{.o, #l22}</p><p>&#8203;</p><p>1. {.i} L22 container+item</p><p>2. @@liItem{.a, .b, #i2, k: &quot;v&quot;, n: 2} L22b</p><p>&#8203;</p><p>L22n</p><p>&#8203;</p><p>@@{.o}</p><p>&#8203;</p><p>1. @@{.i} L22n non-canonical container+item</p><p>&#8203;</p><p>L24</p><p>&#8203;</p><p>0. L24 start 0</p><p>1. L24b</p><p>&#8203;</p><p>L25</p><p>&#8203;</p><p>{start: 3}</p><p>&#8203;</p><p>1. L25 start via extras (expect Warning)</p><p>&#8203;</p><p>L25n</p><p>&#8203;</p><p>@@{start: 3}</p><p>&#8203;</p><p>1. L25n start via non-canonical extras (expect Warning)</p><p>&#8203;</p><p>L26</p><p>&#8203;</p><p>o. L26 retired o. syntax (expect plain paragraph)</p><p>&#8203;</p><p>L30</p><p>&#8203;</p><p>@@unorderedA{.l1}</p><p>&#8203;</p><p>- L30 level 1</p><p>  @@orderedA{.l2}</p><p>  1. L30a decorator right under item text (edge)</p><p>     - L30a1</p><p>  2. L30b</p><p>- L33 level 1</p><p>&#8203;</p><p>  @@orderedA{.l2b}</p><p>  1. L33a decorator after blank, inside item</p><p>  2. L33b</p><p>&#8203;</p><p>L34</p><p>&#8203;</p><p>- L34 multi-paragraph</p><p>&#8203;</p><p>  second paragraph KS a **b** W &lt;sup class=&quot;cite-ref k&quot;&gt;&lt;a href=&quot;#citeref-1-paper-smith&quot; id=&quot;cra-1&quot; data-type=&quot;citeX&quot;&gt;[1]&lt;/a&gt;&lt;/sup&gt;   d</p><p>&#8203;</p><p>&#8203;</p><p>  <i>`</i></i><i><i>`</i><i>`</i></i>ts</p><p>  const l <b>=</b> <i><i>&quot;</i>@@{.literal}<i>&quot;</i></i>;</p>"} /></pre>
+<pre lang="ts"><code innerHTML={"<p>const q <b>=</b> <i><i>&quot;</i>@@bqA{.literal}<i>&quot;</i></i>;</p>"} /></pre>
+<p><span class="latex latex-block" style="display: block;" innerHTML={`<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>x</mi><mo>=</mo><mi>y</mi></mrow><annotation encoding="application/x-tex">x = y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span></span></span></span></span>`}></span>
+
+</p>
+<span class="q" type="markerA"></span></blockquote><blockquote class="q15" type="bqA"><p>KS <a class="k" href="/x" title="T" type="anchorA">a</a> <strong>b</strong> <i>i</i> <code>c</code> <a class="k" href="/W" title="W" type="wikiX">W</a><sup class="cite-ref k"><a href="#citeref-1-paper-smith" id="cra-1" data-type="citeX">[1]</a></sup><span class="k" type="footnote"></span><span class="k" type="asideA"> d</span> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span>
+</p>
+</blockquote><blockquote><p>Q16 untyped empty
+</p>
+</blockquote><blockquote class="x" id="i"><p>Q17 untyped XY
+</p>
+</blockquote><blockquote class="a b" id="i" k="v" n="2"><p>Q18 untyped XXYZZ
+</p>
+</blockquote><blockquote bar="12" class="extra class" foo="bar" id="id" isBar isFoo="true" slug="slug-foo" style="--style-var: 2rem" title="Title Foo"><p>Q19 untyped all
+</p>
+</blockquote><blockquote class="x"><p>Q20 untyped, no space after &gt;
+</p>
+</blockquote><blockquote><p>Q21 not first &#123;.x&#125; literal
+</p>
+</blockquote><blockquote class="x"></blockquote><blockquote><p>@@bqA &#123;.x&#125; Q23 type and brace separated by space (literal)
+</p>
+</blockquote><blockquote slug="q25" type="bqA"><p>Q25 bracket group on the inner head
+</p>
+</blockquote><blockquote><p>@@bqA[q26( Q26 malformed inner-head group stays literal, type falls back
+</p>
+</blockquote><blockquote class="q24"><p>KSu <a class="k" href="/x" title="T">a</a> <strong>b</strong> <i>i</i> <code>c</code> <a class="k" href="/W" title="W">W</a><sup class="cite-ref k"><a href="#citeref-1-paper-smith" id="cra-1">[1]</a></sup><span class="k" type="footnote"></span><span class="k" type="asideA"> d</span> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span>
+</p>
+</blockquote></section>
+<section id="s-list">
+<h2>List</h2>
+<section id="l01">
+<h3>L01</h3>
 <ul>
+<li>L01 plain<ul>
+<li>L01a</li>
+</ul>
+</li>
+<li>L01b</li>
+</ul>
+</section>
+<section id="l02">
+<h3>L02</h3>
+<ul class="u"><li>L02 decorator untyped X</li>
+<li>L02b</li>
+</ul></section>
+<section id="l02n">
+<h3>L02n</h3>
+<ul class="u"><li>L02n decorator non-canonical</li>
+<li>L02nb</li>
+</ul></section>
+<section id="l03">
+<h3>L03</h3>
+<ul class="u" id="l03" type="unorderedA"><li>L03 star, XY</li>
+<li>L03b</li>
+</ul></section>
+<section id="l04">
+<h3>L04</h3>
+<ul class="a b" id="l04" k="v" n="2" type="compact"><li>L04 plus, XXYZZ</li>
+<li>L04b</li>
+</ul></section>
+<section id="l05">
+<h3>L05</h3>
+<ul bar="12" class="extra class" foo="bar" id="id" isBar isFoo="true" slug="slug-foo" style="--style-var: 2rem" title="Title Foo" type="unorderedA"><li>L05 all</li>
+<li>L05b</li>
+</ul></section>
+<section id="l06">
+<h3>L06</h3>
+<ul class="u" type="unorderedZ"><li>L06 unclaimed</li>
+</ul></section>
+<section id="l07">
+<h3>L07</h3>
+<ul><li>L07 empty</li>
+</ul></section>
+<section id="l07n">
+<h3>L07n</h3>
+<ul><li>L07n empty non-canonical</li>
+</ul></section>
+<section id="l08">
+<h3>L08</h3>
+<ul type="unorderedA"><li>L08 type only</li>
+</ul></section>
+<section id="l10">
+<h3>L10</h3>
+<ul>
+<li>@@liItem&#123;<code>alpha</code>&#125; L10 typed item<ul>
+<li>&#123;<code>beta</code>&#125; L10a nested untyped</li>
+<li>@@liItem&#123;.a, #i&#125; L10b XY</li>
+</ul>
+</li>
+<li>@@check&#123;.c, k: &quot;v&quot;, n: 2&#125; L11 XXYZZ</li>
+<li>@@data&#123;<code>slug-foo</code>, &quot;Title Foo&quot;, .extra, .class, #id, foo: &quot;bar&quot;, bar: 12, isFoo: true, --style-var: &quot;2rem&quot;, isBar&#125; L12 all</li>
+<li>@@liZ&#123;.z&#125; L13 unclaimed</li>
+<li>&#123;&#125; L14 empty</li>
+<li>@@&#123;&#125; L14n empty non-canonical</li>
+<li>@@liItem L15 type only</li>
+<li>L16 plain among extras</li>
+<li>&#123;.only&#125;</li>
+<li>@@liItem&#123;.x&#125;L17 glued</li>
+<li>&#123;.x&#125;L17u glued untyped</li>
+<li>@@liItem &#123;.x&#125; L17s type and brace separated by space (literal)</li>
+</ul>
+</section>
+<section id="l20">
+<h3>L20</h3>
+<ol slug="my-list" start="6"><li>L20 start at 6</li>
+<li>L20b</li>
+</ol></section>
+<section id="l20n">
+<h3>L20n</h3>
+<ol slug="my-list-n" start="6"><li>L20n start at 6 non-canonical</li>
+<li>L20nb</li>
+</ol></section>
+<section id="l21">
+<h3>L21</h3>
+<ol start={1}>
+<li>L21 plain ol</li>
+<li>L21b</li>
+</ol>
+</section>
+<section id="l22">
+<h3>L22</h3>
+<ol class="o" id="l22" start="1" type="orderedA"><li>&#123;.i&#125; L22 container+item</li>
+<li>@@liItem&#123;.a, .b, #i2, k: &quot;v&quot;, n: 2&#125; L22b</li>
+</ol></section>
+<section id="l22n">
+<h3>L22n</h3>
+<ol class="o" start="1"><li>@@&#123;.i&#125; L22n non-canonical container+item</li>
+</ol></section>
+<section id="l24">
+<h3>L24</h3>
+<ol start={0}>
+<li>L24 start 0</li>
+<li>L24b</li>
+</ol>
+</section>
+<section id="l25">
+<h3>L25</h3>
+<ol start="1"><li>L25 start via extras (expect Warning)</li>
+</ol></section>
+<section id="l25n">
+<h3>L25n</h3>
+<ol start="1"><li>L25n start via non-canonical extras (expect Warning)</li>
+</ol></section>
+<section id="l26">
+<h3>L26</h3>
+<p>o. L26 retired o. syntax (expect plain paragraph)
+</p>
+</section>
+<section id="l30">
+<h3>L30</h3>
+<ul class="l1" type="unorderedA"><li>L30 level 1<p>@@orderedA&#123;.l2&#125;
+</p>
+<ol start={1}>
+<li>L30a decorator right under item text (edge)<ul>
+<li>L30a1</li>
+</ul>
+</li>
+<li>L30b</li>
+</ol>
+</li>
+<li>L33 level 1<p>@@orderedA&#123;.l2b&#125;
+</p>
+<ol start={1}>
+<li>L33a decorator after blank, inside item</li>
+<li>L33b</li>
+</ol>
+</li>
+</ul></section>
+<section id="l34">
+<h3>L34</h3>
+<ul>
+<li>L34 multi-paragraph<p>second paragraph KS <a class="k" href="/x" type="anchorA">a</a> <strong>b</strong> <a class="k" href="/W" title="W" type="wikiX">W</a><sup class="cite-ref k"><a href="#citeref-1-paper-smith" id="cra-1" data-type="citeX">[1]</a></sup><span class="k" type="footnote"></span><span class="k" type="asideA"> d</span>
+</p>
+<pre lang="ts"><code innerHTML={"<p>const l <b>=</b> <i><i>&quot;</i>@@{.literal}<i>&quot;</i></i>;</p>"} /></pre>
+</li>
 <li>L35 table in item<table>
   <thead>
     <tr>
@@ -1270,18 +1424,14 @@ lazy continuation without marker
   </tbody>
 </table>
 </li>
-<li>L36 quote in item<blockquote>
-<p>@@bqA&#123;.in-li&#125; quoted
-</p>
-</blockquote>
+<li>L36 quote in item</li>
+</ul>
+<blockquote class="in-li" type="bqA">quoted</blockquote><ul>
+<li>L37 directive in item<h1>===asideA</h1>
 </li>
-<li>L37 directive in item</li>
 </ul>
 </section>
-<section>
-<h1>===asideA</h1>
 </section>
-</blockquote>
 </section>
 
 </>); }

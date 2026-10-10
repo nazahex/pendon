@@ -2,7 +2,7 @@
 
 ### Paragraph
 
-p!w300h800[foo](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp)[.extra,.class,.or,#custom-id]{foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg"}
+p!w300h800[foo](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp){.extra, .class, .or, #custom-id, foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg"}
 
 Expected result:
 
@@ -32,7 +32,7 @@ Expected result:
 
 ---
 
-d~!w300h800[foo](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp)[.extra,.class,.or,#custom-id]{foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg"}
+d~!w300h800[foo](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp){.extra, .class, .or, #custom-id, foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg"}
 
 Expected result:
 

@@ -10,29 +10,33 @@ export default function PendonView() { return (<>
 <li>Quis consequat aliquip fugiat cillum officia laboris eu aliqua culpa pariatur sit consectetur eu irure.</li>
 <li>Amet tempor officia ad labore.</li>
 <li>Ut non commodo anim proident pariatur cupidatat fugiat.</li>
-<li>Duis duis incididunt id id sunt mollit adipisicing dolore officia deserunt.<div __plugin_kind="block" slug="Lorem Ipsum" type="info">
-
-- Laborum incididunt officia pariatur magna.
-  - Id esse nisi commodo sit irure pariatur mollit nostrud ea tempor anim nostrud eiusmod.
-    - Ex laboris cupidatat deserunt eu excepteur aliqua Lorem et deserunt voluptate ipsum excepteur officia.
-- Dolor incididunt adipisicing et dolore enim nostrud eu.
-
-</div></li>
+<li>Duis duis incididunt id id sunt mollit adipisicing dolore officia deserunt.</li>
 </ol>
-<p>Nulla ad elit est officia cupidatat.
+<div slug="Lorem Ipsum" type="info"><ul>
+<li>Laborum incididunt officia pariatur magna.<ul>
+<li>Id esse nisi commodo sit irure pariatur mollit nostrud ea tempor anim nostrud eiusmod.<ul>
+<li>Ex laboris cupidatat deserunt eu excepteur aliqua Lorem et deserunt voluptate ipsum excepteur officia.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Dolor incididunt adipisicing et dolore enim nostrud eu.</li>
+</ul>
+</div><p>Nulla ad elit est officia cupidatat.
 </p>
-<div __plugin_kind="block" slug="Lorem Ipsum" type="info">
-
-Aute minim ea in incididunt.
-
-1. Laborum incididunt officia pariatur magna.
-2. Id esse nisi commodo sit irure pariatur mollit nostrud ea tempor anim nostrud eiusmod.
-  1. Ex laboris cupidatat deserunt eu excepteur aliqua Lorem et deserunt voluptate ipsum excepteur officia.
-  2. Labore eiusmod nulla ex irure laboris magna quis et Lorem ad.
-3. 
-
-Sunt sunt magna quis id id ipsum aute laboris non id enim quis voluptate qui.
-
+<div slug="Lorem Ipsum" type="info"><p>Aute minim ea in incididunt.
+</p>
+<ol start={1}>
+<li>Laborum incididunt officia pariatur magna.</li>
+<li>Id esse nisi commodo sit irure pariatur mollit nostrud ea tempor anim nostrud eiusmod.<ol start={1}>
+<li>Ex laboris cupidatat deserunt eu excepteur aliqua Lorem et deserunt voluptate ipsum excepteur officia.</li>
+<li>Labore eiusmod nulla ex irure laboris magna quis et Lorem ad.</li>
+</ol>
+</li>
+<li></li>
+</ol>
+<p>Sunt sunt magna quis id id ipsum aute laboris non id enim quis voluptate qui.
+</p>
 </div><blockquote>
 <ul>
 <li>Nisi veniam adipisicing pariatur ipsum consequat veniam nulla pariatur quis ea minim deserunt.</li>

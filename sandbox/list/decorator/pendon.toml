@@ -1,0 +1,40 @@
+[[task]]
+name = "List & Blockquote Decorators (Solid)"
+input = "./src/decorator.md"
+output = "./out/decorator.jsx"
+plugin = "blockquote,list,markdown"
+format = "solid"
+
+# --- §9.2 blockquote primary layer -------------------------------------------
+# `bqA` routes to a component; every other type falls back to the built-in
+# <blockquote> (there is deliberately no default entry, D8).
+[[task.blockquote.custom]]
+type = ["bqA"]
+name = "QuoteA"
+imports = "import { QuoteA } from '@comp/content/Quote'"
+template = "<QuoteA {...attrs}>{children}</QuoteA>"
+
+# --- §9.3/§9.4 list container layers -----------------------------------------
+# The marker (`-` / `*` / `+` vs `1.`) decides the layer; the decorator's own
+# type only selects the component within that layer.
+[[task.list.custom.unordered]]
+type = ["unorderedA"]
+name = "UnorderedA"
+imports = "import { UnorderedA } from '@comp/content/List'"
+template = "<UnorderedA {...attrs}>{children}</UnorderedA>"
+
+[[task.list.custom.unordered]]
+name = "UnorderedDefault"
+imports = "import { UnorderedDefault } from '@comp/content/List'"
+template = "<UnorderedDefault {...attrs}>{children}</UnorderedDefault>"
+
+[[task.list.custom.ordered]]
+type = ["orderedA"]
+name = "OrderedA"
+imports = "import { OrderedA } from '@comp/content/List'"
+template = "<OrderedA {...attrs}>{children}</OrderedA>"
+
+[[task.list.custom.ordered]]
+name = "OrderedDefault"
+imports = "import { OrderedDefault } from '@comp/content/List'"
+template = "<OrderedDefault {...attrs}>{children}</OrderedDefault>"

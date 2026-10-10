@@ -72,7 +72,7 @@ Expected result:
 
 ## Complete Combination
 
-~?!!h300w800[lorem ipsum](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp)[.extra,.class,.or,#custom-id]{foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg"} Exercitation qui **exercitation** dolor velit _aliqua_ consectetur voluptate [consequat](/consequat) labore elit non esse occaecat.
+~?!!h300w800[lorem ipsum](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp){.extra, .class, .or, #custom-id, foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg"} Exercitation qui **exercitation** dolor velit _aliqua_ consectetur voluptate [consequat](/consequat) labore elit non esse occaecat.
 
 Expected result:
 

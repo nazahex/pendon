@@ -1,6 +1,6 @@
 Irure $H \rightarrow O$ deserunt esse duis {adipisicing} $occaecat$ eiusmod fugiat esse cupidatat in.
 
-!!?~[lorem ipsum](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp)[.foo]{ con: jux } Et id {duis} labore $deserunt$ Lorem commodo occaecat incididunt $H \rightarrow O$ qui.
+!!?~[lorem ipsum](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp){.foo, con: jux} Et id {duis} labore $deserunt$ Lorem commodo occaecat incididunt $H \rightarrow O$ qui.
 
 | Foo               | Bar   |
 | ----------------- | ----- |

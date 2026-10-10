@@ -24,7 +24,7 @@ export default function PendonView() { return (<>
 </Parego><h2>Duis excepteur dolor amet consectetur</h2>
 <p>Sunt irure aute sit minim adipisicing non reprehenderit aliqua. Ut veniam anim aliqua eiusmod irure laborum officia nostrud tempor laboris mollit deserunt ut anim. Adipisicing ullamco Lorem id nulla qui laborum.
 </p>
-<Parego type="info" title=""><p>Ea incididunt eu aliquip ea eiusmod. Fugiat labore ut id anim consequat do. Veniam consequat adipisicing do tempor sit fugiat. Ullamco sint enim culpa velit. Magna deserunt tempor reprehenderit nisi dolore anim sint eiusmod amet qui voluptate eiusmod exercitation commodo. Lorem ad eiusmod duis proident eu.
+<Parego type="info"><p>Ea incididunt eu aliquip ea eiusmod. Fugiat labore ut id anim consequat do. Veniam consequat adipisicing do tempor sit fugiat. Ullamco sint enim culpa velit. Magna deserunt tempor reprehenderit nisi dolore anim sint eiusmod amet qui voluptate eiusmod exercitation commodo. Lorem ad eiusmod duis proident eu.
 </p>
 </Parego>
 </>); }

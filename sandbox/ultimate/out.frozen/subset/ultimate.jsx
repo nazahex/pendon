@@ -383,6 +383,26 @@ Label pensiun: H22, E44 (setext tidak didukung).
 </p>
 <p>M12 &#123;&#123;Footnote&#125;&#125;&#123;.upper&#125; &#123;&#123;FOOTNOTE&#125;&#125;
 </p>
+<p>&lt;!-- §6.1/§10.1 groups: a bracket group directly after <code>&#125;&#125;</code> fills the marker&#39;s
+bracket<i>key (slug) and a parentheses group fills parentheses</i>key (title). A bracket
+group immediately followed by a parentheses group is also an anchor head, and this task
+lists <code>anchor</code> before <code>marker</code>, so the anchor layer claims such a pair first (§6.1 layer
+order) and the marker renders bare. --&gt;
+</p>
+<p>M13 &#123;&#123;markerA&#125;&#125;[m13] bracket group, trailing text as children
+</p>
+<p>M14 &#123;&#123;markerA&#125;&#125;(&quot;M14&quot;) parentheses group, trailing text as children
+</p>
+<p>M15 &#123;&#123;markerA&#125;&#125;[m15]@@asideA&#123;.h&#125; group then extras head
+</p>
+<p>M16 &#123;&#123;markerA&#125;&#125;[m16( malformed group stays literal, marker still renders
+</p>
+<p>M17 &#123;&#123;markerA&#125;&#125;<a href="" title="M17">m17</a> anchor layer wins the pair, marker stays bare
+</p>
+<p>M18 &#123;&#123;unknownType&#125;&#125;[m18] unclaimed type keeps the group
+</p>
+<p>M19 inline &#123;&#123;footnote&#125;&#125;[m19] and &#123;&#123;markerA&#125;&#125;(&quot;M19&quot;) ipsum.
+</p>
 <h2 id="s-table">2.7. Table</h2>
 <p>&lt;!--
 </p>
@@ -487,7 +507,7 @@ x</blockquote>
 <Table><thead><tr><th>A</th><th>B</th><th>C</th></tr></thead><tbody><tr><td></td><td>x</td><td>y</td></tr><tr><td class="s" rowspan="2">@@cellB&#123;&#125; &gt;</td><td>x</td><td>y</td></tr><tr><td>x</td><td>y</td></tr><tr><td class="s" colspan="2">a</td><td>y</td></tr><tr><td></td><td>@@cellB&#123;.span&#125; merged</td><td>z</td></tr></tbody></Table><p>T31 a cell starting with a marker touching the pipe (head vs marker, edge):
 </p>
 <Table><thead><tr><th>A</th><th>B</th><th>C</th></tr></thead><tbody><tr><td>&#123;&#123;footnote&#125;&#125;&#123;.m&#125; x</td><td>&#123;&#123;markerA&#125;&#125; y</td><td>z</td></tr><tr><td>&#123;&#123;footnote&#125;&#125;</td><td>w</td><td>v</td></tr></tbody></Table><h2 id="s-quote">2.8. Blockquote</h2>
-<p>&lt;!-- PENDING PHASE 4: plugin-blockquote does not exist yet. Expected output of this whole section = plain markdown/literal text, frozen as such. Re-review when implemented. --&gt;
+<p>&lt;!-- §9.2: inner head (right after <code>&gt;</code>) + a decorator line directly above the quote. The inner head wins; an unclaimed type falls back to the layer default (§11 rule 3). §6.1 groups: a bracket group becomes the inner head&#39;s slug and a parentheses group its title; a bracket group immediately followed by a parentheses group is an anchor head and the anchor layer runs first, so the head keeps only its type. --&gt;
 </p>
 <blockquote>
 <p>Q01 plain
@@ -595,7 +615,7 @@ lazy continuation without marker
 
 &gt; &#123;`slug-foo`, &quot;Title Foo&quot;, .extra, .class, #id, foo: &quot;bar&quot;, bar: 12, isFoo: true, --style-var: &quot;2rem&quot;, isBar&#125; Q19 untyped all
 
-&gt; &#123;.x&#125; Q20 untyped, no space after &gt;
+&gt;&#123;.x&#125; Q20 untyped, no space after &gt;
 
 &gt; Q21 not first &#123;.x&#125; literal
 
@@ -603,8 +623,12 @@ lazy continuation without marker
 
 &gt; @@bqA &#123;.x&#125; Q23 type and brace separated by space (literal)
 
+&gt; @@bqA[q25] Q25 bracket group on the inner head
+
+&gt; @@bqA[q26( Q26 malformed inner-head group stays literal, type falls back
+
 &gt; &#123;.q24&#125; KSu 
-&lt;!-- PENDING PHASE 4: plugin-list does not exist yet. Expected output of this whole section = plain markdown/literal text, frozen as such. Re-review when implemented. --&gt;
+&lt;!-- §9.3 L1: a container decorator line above a list decorates the container (§9.4 layer = the marker). The `list` item layer (L2/L3) is not wired yet, so the L10/L22 item heads stay literal for now. --&gt;
 
 
 - L01 plain
@@ -613,52 +637,43 @@ lazy continuation without marker
 
 
 &#123;.u&#125;
-
 - L02 decorator untyped X
 - L02b
 
 
 @@&#123;.u&#125;
-
 - L02n decorator non-canonical
 - L02nb
 
 
 @@unorderedA&#123;.u, #l03&#125;
-
 - L03 star, XY
 - L03b
 
 
 @@compact&#123;.a, .b, #l04, k: &quot;v&quot;, n: 2&#125;
-
 - L04 plus, XXYZZ
 - L04b
 
 
 @@unorderedA&#123;`slug-foo`, &quot;Title Foo&quot;, .extra, .class, #id, foo: &quot;bar&quot;, bar: 12, isFoo: true, --style-var: &quot;2rem&quot;, isBar&#125;
-
 - L05 all
 - L05b
 
 
 @@unorderedZ&#123;.u&#125;
-
 - L06 unclaimed
 
 
 &#123;&#125;
-
 - L07 empty
 
 
 @@&#123;&#125;
-
 - L07n empty non-canonical
 
 
 @@unorderedA
-
 - L08 type only
 
 
@@ -693,13 +708,11 @@ lazy continuation without marker
 
 
 @@orderedA&#123;.o, #l22&#125;
-
 1. &#123;.i&#125; L22 container+item
 2. @@liItem&#123;.a, .b, #i2, k: &quot;v&quot;, n: 2&#125; L22b
 
 
 @@&#123;.o&#125;
-
 1. @@&#123;.i&#125; L22n non-canonical container+item
 
 
@@ -708,12 +721,10 @@ lazy continuation without marker
 
 
 &#123;start: 3&#125;
-
 1. L25 start via extras (expect Warning)
 
 
 @@&#123;start: 3&#125;
-
 1. L25n start via non-canonical extras (expect Warning)
 
 
@@ -721,14 +732,12 @@ o. L26 retired o. syntax (expect plain paragraph)
 
 
 @@unorderedA&#123;.l1&#125;
-
 - L30 level 1
   @@orderedA&#123;.l2&#125;
   1. L30a decorator right under item text (edge)
      - L30a1
   2. L30b
 - L33 level 1
-
   @@orderedA&#123;.l2b&#125;
   1. L33a decorator after blank, inside item
   2. L33b

@@ -2,7 +2,7 @@
 name = "Universal Integration (Solid)"
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "micromatter,table,img,epis,parego,cite,wiki,anchor,markdown,latex,syntect,heading,sectionize,extract-heading,hint"
+plugin = "micromatter,table,img,epis,parego,cite,wiki,anchor,section,markdown,latex,syntect,heading,extract-heading,hint"
 format = "solid"
 markdown_strip_comments = true
 markdown_allow_html = true
