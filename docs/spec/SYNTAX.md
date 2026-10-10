@@ -34,6 +34,7 @@ Implementation units that own this grammar:
 | `crates/plugin-directive`                                    | `::type` inline and `==type` block directives                   |
 | `crates/plugin-list`                                         | list container + item extras binding (item layer L2/L3 pending) |
 | `crates/plugin-blockquote`                                   | blockquote extras binding                                       |
+| `crates/plugin-bind`                                         | `{{{lang[var] … }}}` data blocks + `$var` binding (§19)         |
 | `crates/plugin-table`                                        | table head, declaration row, cell/row/section extras            |
 | `crates/plugin-section`                                      | heading-driven `Section` outline + section decorator / markers  |
 | `crates/plugin-img`, `-anchor`, `-cite`, `-heading`, `-wiki` | their own head + extras                                         |
@@ -85,6 +86,11 @@ Implementation units that own this grammar:
 | `>`                         | blockquote                         | `plugin-blockquote` | current (+extras)               |
 | `-` `*` `+`                 | unordered list container           | `plugin-list`       | current (+extras)               |
 | `1.`                        | ordered list container             | `plugin-list`       | current (+extras)               |
+| `{{{lang[var] … }}}`        | data block                         | `plugin-bind`       | new (§19)                       |
+| `$var`                      | bound data reference (extras only) | `plugin-bind`       | new (§19)                       |
+| `$a.b[0]`                   | path into a bound value            | `plugin-bind`       | new (§19)                       |
+| `...$var`                   | spread/merge inside a `{…}` value  | `plugin-bind`       | new (§19)                       |
+| `{{{lang[var](../src/x)}}}` | external data block                | `plugin-bind`       | new (§19)                       |
 | `:::name`                   | legacy custom block                | `plugin-custom`     | superseded by `==type`          |
 | `@@`                        | _no other meaning_                 | —                   | reserved for Pendon             |
 
@@ -200,7 +206,13 @@ cssvar      = "--" css-name ws ":" ws value
 prop        = key ws ":" ws value
 flag        = key
 value       = dquote | squote | bquote | number | bool | bare
+            | object | array
 bquote      = "`" { char } "`"
+object      = "{" [ ws pairs ] ws "}"
+pairs       = pair { ws "," ws pair } [ ws "," ]
+pair        = key ws ":" ws value
+array       = "[" [ ws values ] ws "]"
+values      = value { ws "," ws value } [ ws "," ]
 key         = ( ALPHA | "_" ) { ALPHA | DIGIT | "_" | "-" }
 css-name    = key
 name        = 1*( ALPHA | DIGIT | "_" | "-" | ":" )
@@ -218,6 +230,19 @@ ws          = 1*( " " | "\t" )
   `Raw`. A quoted value is unquoted on the way in; `Int`/`Float`/`Bool` render
   back to the authored literal text.
 - An empty item (`a,,b`, leading/trailing comma) is ignored.
+- `value` MAY also be a nested `{…}` object or `[…]` array
+  ([ADR-0005](../decisions/0005-structured-extras-values.md)). Nesting is
+  arbitrary and the item splitter is depth-aware: a `,`, `}` or `]` inside a
+  nested value — or inside a quoted string — never ends the item or the head.
+  `{}` and `[]` are valid and empty.
+- A nested object's entries are `key : value` pairs, or a `...ref` **spread** item
+  (§19), using the `key` production above: `--cssvar`, `.class`, `#id`, `` `slug` ``,
+  `title` and bare flags do not exist inside a `{…}` value. A duplicate nested key
+  is last-wins (§6.4); a spread is transported to `plugin-bind` under the reserved
+  key `...`, which no `key` can spell.
+- A malformed nested value (unbalanced group, trailing characters, unquoted
+  whitespace) rejects the **whole head**, which then falls back to literal text
+  (§4.3). Extras are never partially applied.
 - Escape inside a value: `\,` `\"` `\'` `\` ``\\`.
 
 ### 5.1 Worked example
@@ -296,7 +321,10 @@ present: `#id` > head slug > extras slug.
 `crates/extra` exposes:
 
 ```rust
-enum AttrValue { Str(String), Int(i64), Float(f64), Bool(bool), Raw(String) }
+enum AttrValue {
+    Str(String), Int(i64), Float(f64), Bool(bool), Raw(String),
+    Object(Vec<(String, AttrValue)>), Array(Vec<AttrValue>),
+}
 ```
 
 Mapping to the event IR (`Event::Attribute { name, value: String }`):
@@ -314,14 +342,23 @@ Mapping to the event IR (`Event::Attribute { name, value: String }`):
 - **empty string** (`k: ""`) → the attribute is omitted, so a node that leaves a
   slot unset does not emit `k=""`. `alt` is the single exception: an empty
   `alt=""` is meaningful (a decorative image) and always renders.
+- `Object` / `Array` ([ADR-0005](../decisions/0005-structured-extras-values.md))
+  → **compact JSON** text in `value` (`{"b":1}`), the stringly-typed form every
+  renderer understands. Verified: with no data-binding plugin enabled,
+  `[a](/u)@@anchorA{a: {b: 1}}` renders `a="&#123;&quot;b&quot;:1&#125;"`.
+- **Structured transport.** With `plugin-bind` enabled (§19), a `$var`-bearing
+  value is carried as `JSON_ATTR_PREFIX` (`U+E001`) + compact JSON;
+  `renderer-ast` strips the prefix and re-hydrates a real JSON value, which
+  `renderer-solid` spreads as `k={…}`. `crates/extra` MUST NOT emit `U+E001` —
+  only `plugin-bind` may (`crates/core/src/event.rs`).
 
 Renderers:
 
-| Renderer                 | flag                               | typed string | Int/Float                     |
-| ------------------------ | ---------------------------------- | ------------ | ----------------------------- |
-| `renderer-solid`         | `k` (bare JSX shorthand, verbatim) | `k="v"`      | `k="12"` (fallback path only) |
-| `renderer-html`          | `k`                                | `k="v"`      | `k="12"`                      |
-| `renderer-json` / `-ast` | `{ "name": "k", "kind": "flag" }`  | string       | string                        |
+| Renderer                 | flag                               | typed string | Int/Float                     | structured (`{…}` / `[…]`)         |
+| ------------------------ | ---------------------------------- | ------------ | ----------------------------- | ---------------------------------- |
+| `renderer-solid`         | `k` (bare JSX shorthand, verbatim) | `k="v"`      | `k="12"` (fallback path only) | `k="{…}"`, or `k={…}` under `bind` |
+| `renderer-html`          | `k`                                | `k="v"`      | `k="12"`                      | `k="{…}"` (escaped)                |
+| `renderer-json` / `-ast` | `{ "name": "k", "kind": "flag" }`  | string       | string                        | string (compact JSON)              |
 
 Custom components receive the **typed** form through the `attrs` map
 (`{...attrs}` spread), because that path serialises `AttrValue` as JSON
@@ -808,9 +845,9 @@ micromatter/markdown untouched. Sentinels are line-scoped and self-delimiting:
 - Sentinels are emitted as a plain paragraph/HTML-level token that markdown
   passes through unchanged.
 
-### 12.2 Post-markdown (bind)
+### 12.2 Post-markdown (emit)
 
-A single binder pass (shared by `plugin-list`, `plugin-blockquote`,
+A single **emitter** pass (shared by `plugin-list`, `plugin-blockquote`,
 `plugin-directive`, `plugin-table`, `plugin-marker` and decorators) walks the
 event stream once:
 
@@ -824,6 +861,13 @@ event stream once:
 
 This keeps the markdown plugin unaware of Pendon extras and avoids
 per-plugin text hacking.
+
+> **Not `plugin-bind` (§19).** The word _emit_ here means "turn a parsed extras
+> payload into `Event`s and attach them". It is not data binding: there is no
+> `{{{…}}}` block and no `$var` at this stage. `plugin-bind` runs _before_
+> `parse` (the **extract** stage) and resolves _after_ this pass; only those
+> `$var` references are ever called "binding"
+> ([ADR-0005](../decisions/0005-structured-extras-values.md)).
 
 ### 12.3 Fallback paths
 
@@ -905,6 +949,23 @@ objects**; the spec text above already assumes the recommendation.
 Recorded for provenance; the current behaviour is what the sections above state.
 Rationale lives in [`decisions/`](../decisions/).
 
+- **OPEN-BIND-1 (`var` first character) — resolved.** `is_valid_var` requires a
+  leading `ALPHA`, so `$100` is plain text and "no `$` escape hatch is needed"
+  holds. No fixture had a digit-leading name, so nothing was re-frozen.
+- **OPEN-BIND-2 (path into a bound value) — resolved.** Dotted key, integer array
+  index and quoted key only; a miss warns and stays literal; a non-`ref` shape
+  (`$a.`, `$a[*]`) is untouched text. Implemented (`Ref`/`parse_ref`/`lookup` in
+  `crates/plugin-bind`), frozen by golden `24-bind-paths`. RFC §2.5.
+- **OPEN-BIND-3 (merge / override) — resolved.** `...$ref` inside a nested `{…}`
+  value supplies **defaults**, shallow: an authored key wins over a spread, the
+  later spread wins among spreads. The spread travels under the reserved
+  `SPREAD_KEY` (`"..."`) that `crates/extra` emits, because a JSON object loses
+  item order before `plugin-bind` sees it — so §6.4's "later item wins" does
+  **not** carry over. RFC §2.6.
+- **OPEN-BIND-4 (external data files) — resolved.** `{{{lang[var](../src/x.ext)}}}`
+  is a bodyless block whose payload is a file, resolved against the **source
+  file's** directory (never the CWD, so it works at any depth); stdin is an
+  `Error`; the file joins the render's cache dependencies. RFC §2.7.
 - **OPEN-IR-1 (flags) — resolved.** `Event::AttributeFlag { name }` is in the IR
   and rendered verbatim by the AST, JSON, HTML (compact + pretty) and Solid
   renderers (§6.3).
@@ -945,6 +1006,7 @@ docs/spec/golden/NN-name.md           input markdown
 docs/spec/golden/NN-name.toml         pendon.toml for the fixture (plugins + custom sets)
 docs/spec/golden/NN-name.jsx          expected solid output (generated — never hand-edited)
 docs/spec/golden/NN-name.events.json  expected event IR (optional, for parser bugs)
+docs/spec/golden/NN-name.data/        payload files read by a `(path)` block (optional)
 ```
 
 ### 16.2 Test gating
@@ -979,3 +1041,83 @@ grammar, so it does not drift as phases land.
 5. Escaping and literal fallback are covered by fixtures 01/02.
 6. `cargo test --workspace` is green; `sandbox/unified` produces the documented
    output.
+
+## 19. Data blocks (`plugin-bind`)
+
+A **data block** declares a structured value once; a `$var` reference in an
+extras value binds it as a real JavaScript prop. Owner: `crates/plugin-bind`; the
+pipeline placement is fixed by [ADR-0004](../decisions/0004-pre-parse-bind-stage.md).
+
+```text
+bind_block = "{{{" lang "[" var "]" body "}}}"                  ; body payload
+           | "{{{" lang "[" var "]" "(" path ")" "}}}"          ; file payload
+lang       = "json" | "jsonc" | "yaml" | "yml" | "toml" | "csv" | "mdp"
+var        = ALPHA { ALPHA | DIGIT | "-" | "_" }
+ref        = "$" var { "." var | "[" DIGIT+ "]" | "[" dquote key dquote "]" }
+spread     = "..." ws ref                ; an item of a nested `{ … }` value
+path       = any non-empty text up to the closing ")"
+```
+
+- A block MUST start at the beginning of a line. The body starts on the line
+  after the head and ends at the first line whose trimmed content is exactly
+  `}}}`.
+- `lang` and `var` are REQUIRED. A block with a missing or invalid `lang`/`var`
+  is dropped (never rendered) with a `Severity::Warning`; the same applies to an
+  unterminated block, a payload that fails to parse, and a non-`mdp` body written
+  on the head line.
+- `var` MUST be unique; a duplicate warns and the **last** block wins.
+- An empty body binds `null`, with no warning.
+- `var` MUST start with a letter (`ALPHA`). A leading digit is never a reference
+  name — `$100` is plain text. `is_valid_var` enforces it (`OPEN-BIND-1`).
+- A `$var` reference is recognised only when it is the **entire** value of an
+  extras item (`k: v`), quoted or unquoted; there is no free-text interpolation.
+  It resolves inside a nested extras value as well.
+- A `ref` MAY carry a **path** (`$config.db.host`, `$rows[0].nama`,
+  `$m["a-b"]`): a dotted key, an integer index or a quoted key, walked left to
+  right. A dotted key follows `var`, so a key that starts with a digit or holds
+  whitespace needs the quoted form. An integer index addresses an **array** only.
+  No wildcards, filters, recursive descent or slices. A miss warns and stays
+  literal, exactly like an undefined `$var`; a value that is not a `ref` at all
+  (`$100`, `prefix$var`, `$a.`, `$a[*]`) is untouched text with no warning.
+- A **spread** item (`{...$brand, scale: 1.2}`, only inside a nested `{ … }`
+  value) merges a bound object in as **defaults**, shallow. A key written in the
+  object wins over a spread, and among spreads the later one wins. A spread that
+  is unbound, not an object, or not a reference warns and is ignored (the other
+  items still apply). A spread's own values are copied, never walked as
+  references. `SYNTAX.md` §6.4's "later item wins" does **not** apply here — the
+  merge is transported through a JSON object, which loses item order.
+- A **file payload** replaces the body with a `(path)` group closed by `}}}` on
+  the same line: `{{{csv[rows](../data/rows.csv)}}}`. `path` is resolved against
+  the **source file's** directory — never the process CWD — so a relative path
+  works at any depth; `..` and absolute paths are allowed (this is not a security
+  boundary). A document from stdin has no such directory, so a file payload there
+  is an **error**. An unreadable file, a directory, non-UTF-8 bytes, a path
+  **and** a body in one block, or a missing `}}}` warn and drop the block. `lang`
+  is authoritative; if a known data extension disagrees with it, warn. A block's
+  file is recorded as a dependency of the render so an edit re-renders the page.
+  The `( … )` group is not a path for `mdp` (its head-line body keeps its
+  meaning).
+- An undefined `$var` warns and stays literal text.
+- **No `$` escape, and none needed.** Because a reference must start with
+  `ALPHA`, `$100`, `$1.50` and `$ 5` are ordinary text, so a currency or price
+  value is written as-is (`price: $100`, `price: "$100"`). There is no `\$`
+  escape hatch, and **quoting is not one**: a quoted value is unquoted before the
+  reference check, so today `price: "$100"` raises the same unbound warning as
+  `price: $100` (verified). Quoting exists for whitespace and separators, not for
+  escaping a `$`.
+- **Non-goals.** No free-text interpolation (`Total: $sum` stays literal); no
+  `\$` escape; no frontmatter/micromatter payload source; resolution is a
+  **build-time** transform with no reactive/runtime binding.
+- Values are parsed to JSON: `jsonc` strips `//` and `/* … */` comments outside
+  strings; `yaml` expands merge keys (`<<`) and maps non-finite floats to `null`;
+  `toml` datetimes become RFC 3339 strings; `csv` uses the header row as keys and
+  parses each cell as JSON when possible (`NULL` → `null`).
+- `mdp` (Pendon Markdown as a value) is specified but not implemented yet: it
+  warns and drops the block.
+
+`plugin-bind` runs **before** `pendon_core::parse` (a payload's `#`, `-` and blank
+lines would otherwise be markup) and resolves **after** every other plugin. It is
+Solid-first: a bound value reaches the prop as `name={…}`; other renderers keep a
+stringly-typed fallback. Executable contracts: goldens [`23-bind`](golden/README.md)
+(blocks, `$var`, nested values) and [`24-bind-paths`](golden/README.md) (paths,
+spread/merge, a file payload resolved through `../data/`).
