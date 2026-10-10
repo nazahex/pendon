@@ -5,7 +5,7 @@
 use pendon_extra::{
     parse_directive_head, parse_extras, parse_type_marker, to_attributes, AttrValue, Attrs,
     DirectiveMatch, DirectiveSigil, ExtrasAttr, ExtrasError, ExtrasHead, ExtrasMatch,
-    ExtrasOptions, ExtrasWarning, PositionalKeys,
+    ExtrasOptions, ExtrasWarning, PositionalKeys, SPREAD_KEY,
 };
 
 /// Parses `input` as a complete head and maps it to attributes.
@@ -577,4 +577,203 @@ fn groups_map_through_the_positional_keys() {
     let attrs = to_attributes(&head, &ExtrasOptions::default());
     let keys: Vec<String> = attrs.items.iter().map(|(key, _)| key.clone()).collect();
     assert_eq!(keys, vec!["slug", "title"]);
+}
+
+/// Nested `{ … }` / `[ … ]` prop values — the shared-syntax foundation the
+/// data-binding plugin builds on (`docs/rfc/plugin-bind.md`).
+mod nested_values {
+    use super::*;
+
+    fn prop_value(input: &str, key: &str) -> AttrValue {
+        let head = head_of(input);
+        let attrs = to_attributes(&head, &ExtrasOptions::default());
+        attrs
+            .value(key)
+            .unwrap_or_else(|| panic!("no value for {key} in {input:?}"))
+            .clone()
+    }
+
+    #[test]
+    fn a_flat_object_value_keeps_entry_order() {
+        let value = prop_value("@@type{cfg: {a: 1, b: \"two\", c: true}}", "cfg");
+        assert_eq!(
+            value,
+            AttrValue::Object(vec![
+                ("a".to_string(), AttrValue::Int(1)),
+                ("b".to_string(), AttrValue::Str("two".to_string())),
+                ("c".to_string(), AttrValue::Bool(true)),
+            ])
+        );
+    }
+
+    #[test]
+    fn an_array_value_holds_mixed_scalars() {
+        let value = prop_value("@@type{items: [1, 2.5, \"x\", false]}", "items");
+        assert_eq!(
+            value,
+            AttrValue::Array(vec![
+                AttrValue::Int(1),
+                AttrValue::Float(2.5),
+                AttrValue::Str("x".to_string()),
+                AttrValue::Bool(false),
+            ])
+        );
+    }
+
+    /// The RFC's own directive example nests an object inside an object; the
+    /// inner comma must not split the outer item.
+    #[test]
+    fn objects_nest_and_inner_commas_do_not_split() {
+        let value = prop_value(
+            "@@type{tabel: {karyawan: $rows, foo: {fooYi: $foo}}}",
+            "tabel",
+        );
+        assert_eq!(
+            value,
+            AttrValue::Object(vec![
+                ("karyawan".to_string(), AttrValue::Raw("$rows".to_string())),
+                (
+                    "foo".to_string(),
+                    AttrValue::Object(vec![(
+                        "fooYi".to_string(),
+                        AttrValue::Raw("$foo".to_string())
+                    )])
+                ),
+            ])
+        );
+    }
+
+    #[test]
+    fn an_array_of_objects_parses() {
+        let value = prop_value("@@type{users: [{id: 1}, {id: 2}]}", "users");
+        assert_eq!(
+            value,
+            AttrValue::Array(vec![
+                AttrValue::Object(vec![("id".to_string(), AttrValue::Int(1))]),
+                AttrValue::Object(vec![("id".to_string(), AttrValue::Int(2))]),
+            ])
+        );
+    }
+
+    /// A `$var` reference is just an unquoted scalar at the extras layer; the
+    /// bind plugin resolves it. It must survive verbatim.
+    #[test]
+    fn a_dollar_ref_is_a_raw_scalar() {
+        let value = prop_value("@@type{data: $data-X}", "data");
+        assert_eq!(value, AttrValue::Raw("$data-X".to_string()));
+    }
+
+    /// §2.6: a `...$var` spread is transported as the reserved `SPREAD_KEY`
+    /// entry holding the reference strings in source order — the only shape a
+    /// key/value object can carry, since the merge itself belongs to
+    /// `plugin-bind`.
+    #[test]
+    fn a_spread_item_is_transported_under_the_reserved_key() {
+        let value = prop_value("@@type{theme: {...$brand, scale: 1.2}}", "theme");
+        assert_eq!(
+            value,
+            AttrValue::Object(vec![
+                ("scale".to_string(), AttrValue::Float(1.2)),
+                (
+                    SPREAD_KEY.to_string(),
+                    AttrValue::Array(vec![AttrValue::Str("$brand".to_string())]),
+                ),
+            ])
+        );
+        assert_eq!(value.literal(), "{\"...\":[\"$brand\"],\"scale\":1.2}");
+    }
+
+    /// Two spreads keep their left-to-right order, and a spread that is not a
+    /// `$`-prefixed token is a parse error, so the head falls back to literal
+    /// text (§4.3) instead of merging garbage.
+    #[test]
+    fn two_spreads_keep_their_order_and_a_bad_spread_rejects_the_head() {
+        let value = prop_value("@@type{theme: {...$base, ...$brand}}", "theme");
+        assert_eq!(
+            value,
+            AttrValue::Object(vec![(
+                SPREAD_KEY.to_string(),
+                AttrValue::Array(vec![
+                    AttrValue::Str("$base".to_string()),
+                    AttrValue::Str("$brand".to_string()),
+                ]),
+            )])
+        );
+        assert_eq!(
+            literal_error("@@type{theme: {...brand}}"),
+            ExtrasError::InvalidItem
+        );
+    }
+
+    /// A spread is only an item of a nested `{…}` value: as a value
+    /// (`a: ...$x`) it is the same `Raw` scalar it has always been, and inside
+    /// an array it is untouched too.
+    #[test]
+    fn a_spread_is_an_object_item_and_nothing_else() {
+        assert_eq!(
+            prop_value("@@type{a: ...$x}", "a"),
+            AttrValue::Raw("...$x".to_string())
+        );
+        assert_eq!(
+            prop_value("@@type{a: [...$x]}", "a"),
+            AttrValue::Array(vec![AttrValue::Raw("...$x".to_string())])
+        );
+    }
+
+    /// The head's own `}` must not be shadowed by a nested value's `}`.
+    #[test]
+    fn the_head_close_is_depth_aware() {
+        let ExtrasMatch::Head { head, .. } = parse_extras("@@type{cfg: {a: {b: 1}}}") else {
+            panic!("expected a head");
+        };
+        assert_eq!(head.items.len(), 1);
+    }
+
+    #[test]
+    fn a_nested_duplicate_key_is_last_wins() {
+        let value = prop_value("@@type{cfg: {a: 1, a: 2}}", "cfg");
+        assert_eq!(
+            value,
+            AttrValue::Object(vec![("a".to_string(), AttrValue::Int(2))])
+        );
+    }
+
+    #[test]
+    fn an_empty_object_and_array_are_valid() {
+        assert_eq!(prop_value("@@type{o: {}}", "o"), AttrValue::Object(vec![]));
+        assert_eq!(prop_value("@@type{a: []}", "a"), AttrValue::Array(vec![]));
+    }
+
+    /// `literal()` renders a structured value as compact JSON so a string-only
+    /// renderer still receives valid text.
+    #[test]
+    fn structured_literal_is_compact_json() {
+        let value = prop_value("@@type{cfg: {a: 1, b: [2, 3]}}", "cfg");
+        assert_eq!(value.literal(), "{\"a\":1,\"b\":[2,3]}");
+    }
+
+    /// `to_json()` keeps the JSON types so the Solid spread path can emit
+    /// `={…}`.
+    #[test]
+    fn to_json_keeps_structure_and_types() {
+        let value = prop_value("@@type{cfg: {n: 1, f: 2.5, b: true, s: \"x\"}}", "cfg");
+        assert_eq!(
+            value.to_json(),
+            serde_json::json!({"n": 1, "f": 2.5, "b": true, "s": "x"})
+        );
+    }
+
+    /// A malformed nested value falls back to literal text (§4.3): the whole
+    /// head is rejected, nothing partially applied.
+    #[test]
+    fn a_malformed_nested_value_rejects_the_head() {
+        use ExtrasError::*;
+        assert_eq!(literal_error("@@type{cfg: {a: 1}"), UnterminatedHead);
+        assert_eq!(literal_error("@@type{cfg: {a: }}"), EmptyValue);
+        assert_eq!(literal_error("@@type{cfg: [1, }"), UnterminatedHead);
+        assert_eq!(
+            literal_error("@@type{cfg: {a: 1} junk}"),
+            TrailingCharacters
+        );
+    }
 }

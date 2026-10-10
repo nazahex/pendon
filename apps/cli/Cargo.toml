@@ -9,6 +9,7 @@ description = "Pendon CLI"
 pendon-core = { path = "../../crates/core" }
 pendon-extra = { path = "../../crates/extra" }
 pendon-plugin-anchor = { path = "../../crates/plugin-anchor" }
+pendon-plugin-bind = { path = "../../crates/plugin-bind" }
 pendon-plugin-blockquote = { path = "../../crates/plugin-blockquote" }
 pendon-plugin-cite = { path = "../../crates/plugin-cite" }
 pendon-plugin-codeblock-syntect = { path = "../../crates/plugin-codeblock-syntect" }

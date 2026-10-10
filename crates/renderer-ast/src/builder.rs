@@ -182,8 +182,17 @@ impl AstBuilder {
 
     fn handle_attribute(&mut self, name: &str, value: &str) {
         if let Some(cur) = self.stack.last_mut() {
-            cur.attrs
-                .insert(name.to_string(), Value::String(value.to_string()));
+            // A data-binding transform transports a structured value (object /
+            // array / non-string scalar) as `JSON_ATTR_PREFIX` + compact JSON
+            // (`docs/rfc/plugin-bind.md`). Re-hydrate it into a real JSON value
+            // so the Solid spread path emits `name={…}` instead of a quoted
+            // string; other renderers keep the stringly-typed fallback.
+            let stored = match pendon_core::json_attr_payload(value) {
+                Some(payload) => serde_json::from_str(payload)
+                    .unwrap_or_else(|_| Value::String(payload.to_string())),
+                None => Value::String(value.to_string()),
+            };
+            cur.attrs.insert(name.to_string(), stored);
         }
         // Custom components carry their placement in `__plugin_kind` (emitted by
         // plugin-custom before any other attribute). Inline components behave

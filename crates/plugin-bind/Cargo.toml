@@ -1,0 +1,13 @@
+[package]
+name = "pendon-plugin-bind"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "The {{{lang[var] …}}} data-binding processor for Pendon (RFC docs/rfc/plugin-bind.md)"
+
+[dependencies]
+pendon-core = { path = "../core" }
+pendon-extra = { path = "../extra" }
+serde_json = "1"
+serde_yaml = "0.9"
+toml = "0.8"

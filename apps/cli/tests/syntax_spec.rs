@@ -43,7 +43,27 @@ fn write_project(stem: &str) -> PathBuf {
     )
     .expect("fixture source");
     fs::copy(golden.join(format!("{stem}.toml")), dir.join("pendon.toml")).expect("fixture config");
+    copy_data_dir(stem, &dir);
     dir
+}
+
+/// Copies a fixture's payload directory (`NN-name.data/`) into the temp project
+/// as `data/`, when it has one.
+///
+/// A file payload (`{{{csv[rows](../data/rows.csv)}}}`) must be resolved against
+/// the **source file's** directory, so the payload has to sit *outside* `src/`
+/// for `../` to be part of what the fixture proves (§2.7).
+fn copy_data_dir(stem: &str, dir: &Path) {
+    let from = golden_dir().join(format!("{stem}.data"));
+    if !from.is_dir() {
+        return;
+    }
+    let to = dir.join("data");
+    fs::create_dir_all(&to).expect("data dir");
+    for entry in fs::read_dir(&from).expect("read data dir") {
+        let entry = entry.expect("data entry");
+        fs::copy(entry.path(), to.join(entry.file_name())).expect("copy data file");
+    }
 }
 
 fn render(stem: &str) -> String {
@@ -205,4 +225,21 @@ fn golden_12_list_container() {
 #[test]
 fn golden_22_section() {
     assert_fixture("22-section");
+}
+
+/// §16.3 fixture 23: `plugin-bind` (§19) — a `{{{lang[var] … }}}` block is read
+/// before the lexer, `$var` binds a real JS value in an extras head (JSON,
+/// JSONC, YAML merge keys, TOML, CSV, nested values), and an unbound `$var`
+/// stays literal with a warning.
+#[test]
+fn golden_23_bind() {
+    assert_fixture("23-bind");
+}
+
+/// §16.3 fixture 24: bind **paths** (§2.5), a **spread/merge** item (§2.6) and
+/// an **external file** payload (§2.7) resolved against the source file's own
+/// directory (the fixture source sits in `src/`, its payload in `../data/`).
+#[test]
+fn golden_24_bind_paths() {
+    assert_fixture("24-bind-paths");
 }

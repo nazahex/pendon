@@ -35,9 +35,9 @@ pub fn process_single_file(
     vicado_hints_override: Option<&SolidRenderHints>,
     task_markdown_opts: MarkdownOptions,
     task_wiki_opts: WikiOptions,
-    deps: Vec<String>,
+    mut deps: Vec<String>,
 ) -> ProcessResult {
-    let input_text = match fs::read_to_string(path_str) {
+    let mut input_text = match fs::read_to_string(path_str) {
         Ok(text) => text,
         Err(e) => {
             eprintln!("Error: cannot read input file '{}': {}", path_str, e);
@@ -50,6 +50,31 @@ pub fn process_single_file(
         }
     };
 
+    // `plugin-bind` scans `{{{lang[var] … }}}` data blocks **before** the lexer
+    // sees them: a payload's lines (`#`, `-`, a blank line) would otherwise be
+    // read as markup (ADR-0004, `docs/rfc/plugin-bind.md`).
+    let bind = if has_plugin(task.plugin.as_deref(), "bind") {
+        // A `(path)` payload resolves against the **source file's** directory,
+        // never the process CWD (§2.7), so the depth of `path_str` does not
+        // matter and `../` walks up from the document itself.
+        let extracted = match Path::new(path_str).parent() {
+            Some(base) => pendon_plugin_bind::extract_with_base(&input_text, base),
+            None => pendon_plugin_bind::extract(&input_text),
+        };
+        input_text = extracted.text.clone();
+        // Every external file is an input of this page: without this the cache
+        // would not notice an edit to it (§2.7 decision 8).
+        deps.extend(
+            extracted
+                .external_files
+                .iter()
+                .map(|path| path.display().to_string()),
+        );
+        Some(extracted)
+    } else {
+        None
+    };
+
     let opts = Options {
         strict: task.strict.unwrap_or(false),
         max_doc_bytes: task.max_doc_bytes,
@@ -57,6 +82,9 @@ pub fn process_single_file(
         max_blank_run: task.max_blank_run,
     };
     let mut events = pendon_core::parse(&input_text, &opts);
+    if let Some(bind) = bind.as_ref() {
+        events.extend(bind.diagnostics.iter().cloned());
+    }
 
     // Run micromatter FIRST if it's in the plugin list
     if let Some(pstr) = task.plugin.as_deref() {
@@ -216,7 +244,9 @@ pub fn process_single_file(
 
     if let Some(pstr) = task.plugin.as_deref() {
         for name in plugin_names(Some(pstr)) {
-            if name == "micromatter" {
+            // micromatter runs before the loop; `bind` is a pre-parse + resolve
+            // stage with no work of its own inside the loop (ADR-0004).
+            if name == "micromatter" || name == "bind" {
                 continue;
             }
 
@@ -457,6 +487,11 @@ pub fn process_single_file(
         if let Some(hints) = pendon_plugin_anchor::solid_hints(&anchor_options) {
             builtin_hints.push(hints);
         }
+    }
+    // `resolve` runs last, after every extras head has emitted its attributes
+    // (ADR-0004).
+    if let Some(bind) = bind.as_ref() {
+        events = pendon_plugin_bind::resolve(&events, &bind.registry);
     }
 
     let pretty = task.pretty.unwrap_or(false);

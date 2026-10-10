@@ -14,12 +14,12 @@
 //! The pre-§11 `[.class,#id]{key: value}` form is **removed** (§14): it is
 //! plain literal text and this crate has no parser for it.
 
-mod bind;
 mod decorator;
+mod emit;
 mod typed;
 mod value;
 
-pub use bind::{emit_attr_warnings, emit_attrs, scan_extras_chars, warning_event, warning_message};
+pub use emit::{emit_attr_warnings, emit_attrs, scan_extras_chars, warning_event, warning_message};
 
 pub use decorator::{
     bind_decorators, parse_decorator_line, Bindings, BoundDecorator, DecoratorDrop, DecoratorLine,
@@ -40,7 +40,7 @@ pub use typed::{
 /// unclaimed marker to the layer default's, and a marker with no entry at all to
 /// the built-in `slug` / `title` (§11 rule 3).
 pub type KeyResolver<'a> = &'a dyn Fn(Option<&str>) -> ExtrasOptions;
-pub use value::{classify_scalar, number_kind, AttrValue, NumberKind};
+pub use value::{classify_scalar, number_kind, AttrValue, NumberKind, SPREAD_KEY};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SolidImportSpec {

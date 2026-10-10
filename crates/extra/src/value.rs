@@ -1,6 +1,16 @@
 //! Attribute values produced by the typed extras head
 //! (`docs/spec/SYNTAX.md` §6.3).
 
+/// The reserved object key that carries `...$var` spread items
+/// (RFC `docs/rfc/plugin-bind.md` §2.6).
+///
+/// `to_attributes` cannot express "merge that object in" as a key/value pair, so
+/// a spread is transported as this key whose value is a JSON **array** of the
+/// reference strings, in source order. `...` can never be an authored key
+/// (`is_key` requires a leading `ALPHA` or `_`), so the key is unreachable from
+/// a document and free to carry the marker.
+pub const SPREAD_KEY: &str = "...";
+
 /// A single parsed attribute value, exactly as declared in spec §6.3.
 ///
 /// Numbers are parsed as numbers so a custom component receives `12` rather
@@ -18,11 +28,18 @@ pub enum AttrValue {
     Bool(bool),
     /// Any other unquoted text.
     Raw(String),
+    /// A nested `{ … }` object; entries keep source order.
+    Object(Vec<(String, AttrValue)>),
+    /// A nested `[ … ]` array.
+    Array(Vec<AttrValue>),
 }
 
 impl AttrValue {
     /// Literal text used by `Event::Attribute`, by interpolations
     /// (`{attrs.key}`) and by the stringly-typed DOM fallback path.
+    ///
+    /// A structured value (`Object` / `Array`) renders as compact JSON so a
+    /// renderer that only understands strings still receives valid text.
     pub fn literal(&self) -> String {
         match self {
             Self::Str(text) | Self::Raw(text) => text.clone(),
@@ -30,6 +47,34 @@ impl AttrValue {
             Self::Float(number) => float_literal(*number),
             Self::Bool(true) => "true".to_string(),
             Self::Bool(false) => "false".to_string(),
+            Self::Object(_) | Self::Array(_) => {
+                serde_json::to_string(&self.to_json()).unwrap_or_else(|_| "null".to_string())
+            }
+        }
+    }
+
+    /// The JSON form of this value, used by the data-binding renderer path
+    /// (`docs/rfc/plugin-bind.md`).
+    ///
+    /// A structured value becomes a real JSON object/array; a scalar keeps its
+    /// JSON type so the emitted `{…}` expression is valid JavaScript.
+    pub fn to_json(&self) -> serde_json::Value {
+        use serde_json::Value;
+        match self {
+            Self::Str(text) | Self::Raw(text) => Value::String(text.clone()),
+            Self::Int(number) => Value::Number((*number).into()),
+            Self::Float(number) => serde_json::Number::from_f64(*number)
+                .map(Value::Number)
+                .unwrap_or(Value::Null),
+            Self::Bool(flag) => Value::Bool(*flag),
+            Self::Object(entries) => {
+                let mut map = serde_json::Map::new();
+                for (key, value) in entries {
+                    map.insert(key.clone(), value.to_json());
+                }
+                Value::Object(map)
+            }
+            Self::Array(items) => Value::Array(items.iter().map(AttrValue::to_json).collect()),
         }
     }
 }

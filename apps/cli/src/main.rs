@@ -51,7 +51,7 @@ fn main() -> ExitCode {
         None
     };
 
-    let input = match read_input(&args) {
+    let mut input = match read_input(&args) {
         Ok(s) => s,
         Err(msg) => {
             eprintln!("Error: {}", msg);
@@ -63,6 +63,27 @@ fn main() -> ExitCode {
         sp.stop();
     }
 
+    // `plugin-bind` scans `{{{lang[var] … }}}` data blocks **before** the lexer
+    // sees them: a payload's lines (`#`, `-`, a blank line) would otherwise be
+    // read as markup (ADR-0004, `docs/rfc/plugin-bind.md`).
+    let bind = if plugins::has_plugin(args.plugin.as_deref(), "bind") {
+        // A `(path)` payload resolves against the **source file's** directory
+        // (§2.7); a document piped through stdin has none, and a `(path)` block
+        // is then an error rather than a silent CWD-relative guess.
+        let extracted = match args
+            .input
+            .as_deref()
+            .and_then(|path| std::path::Path::new(path).parent())
+        {
+            Some(base) => pendon_plugin_bind::extract_with_base(&input, base),
+            None => pendon_plugin_bind::extract(&input),
+        };
+        input = extracted.text.clone();
+        Some(extracted)
+    } else {
+        None
+    };
+
     let mut events = parse(
         &input,
         &Options {
@@ -72,6 +93,9 @@ fn main() -> ExitCode {
             max_blank_run: args.max_blank_run,
         },
     );
+    if let Some(bind) = bind.as_ref() {
+        events.extend(bind.diagnostics.iter().cloned());
+    }
 
     if let Some(plugins) = args.plugin.as_deref() {
         if plugins::has_plugin(Some(plugins), "micromatter") {
@@ -128,7 +152,9 @@ fn main() -> ExitCode {
         let mut markdown_ran = false;
         let mut quiz_pending = false;
         for name in plugin_names(Some(pstr)) {
-            if name == "micromatter" {
+            // micromatter runs before the loop; `bind` is a pre-parse + resolve
+            // stage with no work of its own inside the loop (ADR-0004).
+            if name == "micromatter" || name == "bind" {
                 continue;
             }
             if let Some(path) = name.strip_prefix("toml:") {
@@ -235,6 +261,13 @@ fn main() -> ExitCode {
         events
     } else {
         events
+    };
+
+    // `resolve` runs last, after every extras head has emitted its attributes
+    // (ADR-0004).
+    let events = match bind.as_ref() {
+        Some(bind) => pendon_plugin_bind::resolve(&events, &bind.registry),
+        None => events,
     };
 
     if used_quiz {

@@ -15,7 +15,7 @@
 //!   A type that ends on a symbol (`@@anchorA.`) is a type-only head and the
 //!   symbol stays literal text.
 
-use crate::value::{classify_scalar, AttrValue};
+use crate::value::{classify_scalar, AttrValue, SPREAD_KEY};
 
 /// Why a head was rejected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -417,9 +417,46 @@ fn read_body(input: &str) -> Result<(ExtrasHead, usize), ExtrasError> {
         Some((line, _)) => line,
         None => body,
     };
-    let close = find_closing_unquoted(line, b'}').ok_or(ExtrasError::UnterminatedHead)?;
+    // Depth-aware so a nested value (`{ k: { a: 1 } }`) does not close the head
+    // at its inner `}` (`docs/rfc/plugin-bind.md`).
+    let close = find_group_close(line, '}').ok_or(ExtrasError::UnterminatedHead)?;
     let head = parse_extras_body(&line[..close])?;
     Ok((head, 1 + close + 1))
+}
+
+/// Index within `body` (the text *after* an opening bracket) of the `close`
+/// bracket that matches it, honouring nested `{ … }` / `[ … ]`, quotes and `\`
+/// escapes. Returns `None` when it is never closed (or a mismatched closer
+/// appears) on this line, so the caller treats the value as malformed (§4.3).
+fn find_group_close(body: &str, close: char) -> Option<usize> {
+    let mut depth = 0i32;
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+
+    for (index, character) in body.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        match character {
+            '\\' => escaped = true,
+            '\'' | '"' | '`' => match quote {
+                Some(open) if open == character => quote = None,
+                None => quote = Some(character),
+                _ => {}
+            },
+            '{' | '[' if quote.is_none() => depth += 1,
+            '}' | ']' if quote.is_none() => {
+                if depth == 0 {
+                    // A mismatched closer at depth 0 is not this group's end.
+                    return (character == close).then_some(index);
+                }
+                depth -= 1;
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// `true` when only spaces or tabs separate the cursor from a `{` on the same
@@ -465,12 +502,17 @@ pub fn parse_extras_body(body: &str) -> Result<ExtrasHead, ExtrasError> {
     })
 }
 
-/// Splits a body on top-level commas, honouring quotes and `\` escapes.
+/// Splits a body on top-level commas, honouring quotes, `\` escapes, and
+/// nested `{ … }` / `[ … ]` (so a structured value's inner commas do not split
+/// the item — `docs/rfc/plugin-bind.md`).
 fn split_items(body: &str) -> Result<Vec<&str>, ExtrasError> {
     let mut parts = Vec::new();
     let mut start = 0usize;
     let mut quote: Option<char> = None;
     let mut escaped = false;
+    // Nesting depth of `{` / `[` opened inside a value; a comma only splits an
+    // item when it sits at depth 0.
+    let mut depth = 0i32;
 
     for (index, character) in body.char_indices() {
         if escaped {
@@ -484,7 +526,9 @@ fn split_items(body: &str) -> Result<Vec<&str>, ExtrasError> {
                 None => quote = Some(character),
                 _ => {}
             },
-            ',' if quote.is_none() => {
+            '{' | '[' if quote.is_none() => depth += 1,
+            '}' | ']' if quote.is_none() => depth = depth.saturating_sub(1),
+            ',' if quote.is_none() && depth == 0 => {
                 parts.push(&body[start..index]);
                 start = index + 1;
             }
@@ -528,7 +572,7 @@ fn parse_item(part: &str) -> Result<ExtrasItem, ExtrasError> {
                 }
                 return Ok(ExtrasItem::Prop {
                     key: read_key(key)?,
-                    value: parse_scalar(value)?,
+                    value: parse_value(value)?,
                 });
             }
             Ok(ExtrasItem::Flag {
@@ -575,6 +619,90 @@ fn parse_scalar(text: &str) -> Result<AttrValue, ExtrasError> {
             Ok(classify_scalar(text))
         }
     }
+}
+
+/// Parses a prop value: a nested `{ … }` object, a `[ … ]` array, or a scalar
+/// (`docs/rfc/plugin-bind.md`). Dispatch is on the first non-space byte.
+fn parse_value(text: &str) -> Result<AttrValue, ExtrasError> {
+    let text = text.trim();
+    match text.as_bytes().first() {
+        Some(b'{') => parse_object(text),
+        Some(b'[') => parse_array(text),
+        _ => parse_scalar(text),
+    }
+}
+
+/// Parses a nested `{ key: value, … }` object value. Keys reuse the prop-key
+/// rules; values recurse through [`parse_value`], so objects nest arbitrarily.
+/// Trailing characters after the closing `}` are rejected (§4.3 fallback).
+///
+/// A `...$var` **spread** is legal here and only here (§2.6): it is collected
+/// into the [`SPREAD_KEY`] entry as the reference strings, in source order.
+fn parse_object(text: &str) -> Result<AttrValue, ExtrasError> {
+    let inner = &text[1..];
+    let close = find_group_close(inner, '}').ok_or(ExtrasError::UnterminatedHead)?;
+    let body = &inner[..close];
+    if !inner[close + 1..].trim().is_empty() {
+        return Err(ExtrasError::TrailingCharacters);
+    }
+    let mut entries: Vec<(String, AttrValue)> = Vec::new();
+    let mut spreads: Vec<AttrValue> = Vec::new();
+    for part in split_items(body)? {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        // A spread is recognised only as a whole item, so a value that happens
+        // to start with `.` (`a: ...$x`) is still parsed as a value.
+        if let Some(token) = part.strip_prefix("...") {
+            let reference = token.trim();
+            if !reference.starts_with('$')
+                || reference.len() == 1
+                || reference.chars().any(char::is_whitespace)
+            {
+                return Err(ExtrasError::InvalidItem);
+            }
+            // The reference's own grammar belongs to `plugin-bind`; this layer
+            // only transports the text.
+            spreads.push(AttrValue::Str(reference.to_string()));
+            continue;
+        }
+        let (key, value) = split_key_value(part).ok_or(ExtrasError::InvalidItem)?;
+        let key = key.trim();
+        if key.is_empty() {
+            return Err(ExtrasError::InvalidItem);
+        }
+        // Last-wins on a duplicate key, matching `to_attributes` (§6.4).
+        let value = parse_value(value)?;
+        match entries.iter_mut().find(|(existing, _)| existing == key) {
+            Some(slot) => slot.1 = value,
+            None => entries.push((read_key(key)?.to_string(), value)),
+        }
+    }
+    if !spreads.is_empty() {
+        entries.push((SPREAD_KEY.to_string(), AttrValue::Array(spreads)));
+    }
+    Ok(AttrValue::Object(entries))
+}
+
+/// Parses a nested `[ value, … ]` array value. Elements recurse through
+/// [`parse_value`]. Trailing characters after the closing `]` are rejected.
+fn parse_array(text: &str) -> Result<AttrValue, ExtrasError> {
+    let inner = &text[1..];
+    let close = find_group_close(inner, ']').ok_or(ExtrasError::UnterminatedHead)?;
+    let body = &inner[..close];
+    if !inner[close + 1..].trim().is_empty() {
+        return Err(ExtrasError::TrailingCharacters);
+    }
+    let mut items = Vec::new();
+    for part in split_items(body)? {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        items.push(parse_value(part)?);
+    }
+    Ok(AttrValue::Array(items))
 }
 
 /// Parses a scalar that must start with a quote or backtick.
@@ -660,30 +788,6 @@ fn is_key(text: &str) -> bool {
         _ => return false,
     }
     chars.all(|character| character.is_ascii_alphanumeric() || character == '_' || character == '-')
-}
-
-/// Finds the first unquoted `closing` byte.
-fn find_closing_unquoted(text: &str, closing: u8) -> Option<usize> {
-    let mut quote: Option<char> = None;
-    let mut escaped = false;
-
-    for (index, character) in text.char_indices() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        match character {
-            '\\' => escaped = true,
-            '\'' | '"' | '`' => match quote {
-                Some(open) if open == character => quote = None,
-                None => quote = Some(character),
-                _ => {}
-            },
-            _ if quote.is_none() && character as u8 == closing => return Some(index),
-            _ => {}
-        }
-    }
-    None
 }
 
 // ----------------------------------------------------- extras → attributes

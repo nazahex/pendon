@@ -286,6 +286,10 @@ fn render_text_or_children(v: &Value, out: &mut String, hints: Option<&SolidRend
 
 /// Emits the attributes of `v` as JSX attributes. A JSON `true` value is a bare
 /// attribute (§6.3 flag) and is emitted in JSX boolean shorthand: `<Tag isFoo />`.
+///
+/// A structured value (object/array, re-hydrated from a data-binding transform,
+/// `docs/rfc/plugin-bind.md`) is emitted as a JSX expression `name={…}`; a raw
+/// JSX fragment (`JSX_ATTR_PREFIX`) is wrapped in parentheses `name={( … )}`.
 fn render_attrs(v: &Value, out: &mut String, skipped: &[&str]) {
     let Some(attrs) = v.get("attrs").and_then(Value::as_object) else {
         return;
@@ -304,12 +308,37 @@ fn render_attrs(v: &Value, out: &mut String, skipped: &[&str]) {
         if matches!(value, Value::Bool(true)) {
             continue;
         }
-        out.push_str("=\"");
-        match value {
-            Value::String(value) => escape_jsx(value, out),
-            value => escape_jsx(&value.to_string(), out),
+        // A raw JSX fragment (rendered MDP) reaches Solid as a parenthesised
+        // expression so the markup is parsed, not stringified.
+        if let Value::String(text) = value {
+            if let Some(fragment) = pendon_core::jsx_attr_payload(text) {
+                out.push_str("={(");
+                out.push_str(fragment);
+                out.push_str(")}");
+                continue;
+            }
         }
-        out.push('"');
+        match value {
+            Value::String(text) => {
+                out.push_str("=\"");
+                escape_jsx(text, out);
+                out.push('"');
+            }
+            // Objects, arrays and numbers are JS expressions, not strings.
+            Value::Object(_) | Value::Array(_) | Value::Number(_) => {
+                out.push_str("={");
+                out.push_str(&serde_json::to_string(value).unwrap_or_else(|_| "null".into()));
+                out.push('}');
+            }
+            Value::Bool(false) => {
+                out.push_str("={false}");
+            }
+            Value::Null => {
+                out.push_str("={null}");
+            }
+            // `Bool(true)` was already emitted as a bare flag above.
+            Value::Bool(true) => {}
+        }
     }
 }
 

@@ -202,4 +202,56 @@ mod tests {
             assert_eq!(node["attrs"]["isBar"], true, "{label}: {output}");
         }
     }
+
+    /// A data-binding transform transports a structured value as
+    /// `JSON_ATTR_PREFIX` + compact JSON (`docs/rfc/plugin-bind.md`). The AST
+    /// builder re-hydrates it into a real JSON value so the Solid spread path
+    /// can emit `name={…}`; a plain string attribute is unchanged.
+    #[test]
+    fn json_attr_sentinel_rehydrates_to_a_real_value() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Custom("Card".to_string())),
+            Event::Attribute {
+                name: "cfg".to_string(),
+                value: format!("{}{{\"a\":1,\"b\":[2,3]}}", pendon_core::JSON_ATTR_PREFIX),
+            },
+            Event::Attribute {
+                name: "label".to_string(),
+                value: "plain".to_string(),
+            },
+            Event::EndNode(NodeKind::Custom("Card".to_string())),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let output = render_ast_to_string(&events).unwrap();
+        let parsed: Value = serde_json::from_str(&output).unwrap();
+        let node = &parsed["children"][0];
+
+        assert_eq!(
+            node["attrs"]["cfg"],
+            serde_json::json!({"a": 1, "b": [2, 3]})
+        );
+        assert_eq!(node["attrs"]["label"], "plain");
+    }
+
+    /// A malformed JSON payload degrades to the raw string rather than dropping
+    /// the attribute (§4.3-style resilience).
+    #[test]
+    fn a_malformed_json_attr_falls_back_to_string() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Custom("Card".to_string())),
+            Event::Attribute {
+                name: "cfg".to_string(),
+                value: format!("{}not-json", pendon_core::JSON_ATTR_PREFIX),
+            },
+            Event::EndNode(NodeKind::Custom("Card".to_string())),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let output = render_ast_to_string(&events).unwrap();
+        let parsed: Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(parsed["children"][0]["attrs"]["cfg"], "not-json");
+    }
 }

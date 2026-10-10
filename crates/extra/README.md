@@ -15,16 +15,26 @@ for interpreting the parsed properties.
   `parse_type_marker` (the `@@type` run), `parse_directive_head`, and
   `parse_extras_body`. A malformed head returns `ExtrasMatch::Malformed` and the
   caller MUST render the original text verbatim (literal fallback, §4.3).
-- **IR glue** — `scan_extras_chars` / `emit_attrs` / `warning_event`: the shared
-  code that binds a parsed head to the event IR.
+- **IR glue** — `scan_extras_chars` / `emit_attrs` / `warning_event` (`src/emit.rs`):
+  the shared **emit** pass that turns a parsed head into event attributes. It is
+  not data binding — that is `plugin-bind` (§12.2, ADR-0005).
 - **Decorator binder** — `parse_decorator_line` / `bind_decorators`
   (`src/decorator.rs`): a standalone extras line binds to the _next_ block node
   through a caller-supplied `target` callback. See
   [`docs/decisions/0002-decorator-binder.md`](../../docs/decisions/0002-decorator-binder.md).
-- **Typed values** — `AttrValue { Str, Int, Float, Bool, Raw }` and
-  `classify_scalar` (§6.3). Numbers parse as numbers (a component receives `12`,
-  not `"12"`) but render back to their authored literal text so goldens stay
-  stable (`6.0` stays `6.0`).
+- **Typed values** — `AttrValue { Str, Int, Float, Bool, Raw, Object, Array }` and
+  `classify_scalar` (§6.3, ADR-0005). Numbers parse as numbers (a component
+  receives `12`, not `"12"`) but render back to their authored literal text so
+  goldens stay stable (`6.0` stays `6.0`). A nested `{…}`/`[…]` value is parsed
+  with a depth-aware, quote-aware item splitter (inner commas never split the
+  head) and renders as compact JSON unless `plugin-bind` transports it as a real
+  JS value.
+- **Spread transport** — a `...$ref` item inside a nested `{…}` value (§19) is
+  collected under `SPREAD_KEY` (`"..."`, `src/value.rs`) as a JSON array of the
+  reference strings, in source order. `...` cannot be spelled as a `key`, so the
+  marker is unreachable from a document; the merge itself belongs to
+  `plugin-bind`, which is the only consumer. It travels as a key because a JSON
+  object in this workspace has no item order to preserve.
 - **Positional keys** — `ExtrasOptions` / `PositionalKeys` / `KeyResolver` for
   the §6.1 per-component `backtick_key` / `quote_key` (and, for directive heads,
   `bracket_key` / `parentheses_key`).
