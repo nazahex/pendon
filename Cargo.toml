@@ -4,6 +4,7 @@ members = [
   "crates/core",
   "crates/extra",
   "crates/plugin-anchor",
+  "crates/plugin-bind",
   "crates/plugin-blockquote",
   "crates/plugin-cite",
   "crates/plugin-codeblock-syntect",
