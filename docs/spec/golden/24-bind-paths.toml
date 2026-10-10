@@ -1,0 +1,11 @@
+[[task]]
+name = "Golden 24"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "anchor,bind,markdown"
+format = "solid"
+
+# Paths (§2.5), spread/merge (§2.6) and an external file payload (§2.7). The
+# fixture's `24-bind-paths.data/` directory is copied to `data/` beside `src/` by
+# the harness, so `../data/rows.csv` resolves relative to the source file — never
+# to the process CWD — and is recorded in the task's cache dependencies.

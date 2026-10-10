@@ -1,0 +1,10 @@
+[[task]]
+name = "Golden 23"
+input = "./src/[slug].md"
+output = "./out/[slug].jsx"
+plugin = "anchor,bind,markdown"
+format = "solid"
+
+# `bind` is a pre-parse + resolve stage (ADR-0004): the CLI extracts the
+# `{{{lang[var] … }}}` blocks before `pendon_core::parse` and resolves `$var`
+# after every other plugin has emitted its extras attributes.

@@ -14,6 +14,7 @@ docs/spec/golden/NN-name.md           input markdown (the source, hand-authored)
 docs/spec/golden/NN-name.toml         pendon.toml for the fixture (plugins + custom sets)
 docs/spec/golden/NN-name.jsx          expected Solid output (GENERATED — do not hand-edit)
 docs/spec/golden/NN-name.events.json  expected event IR (optional, for parser bugs)
+docs/spec/golden/NN-name.data/        payload files a fixture reads from a path (optional; copied to `data/`)
 ```
 
 The `.md` files are written to **double as prose**: they carry short comments
@@ -28,7 +29,7 @@ explaining the rule the fixture exercises (e.g. `01-extras-head.md` explains tha
 cover config loading and the full CLI path, not just the parsers.
 
 ```bash
-cargo test -p pendon --test syntax_spec      # 17 fixtures, none #[ignore]d
+cargo test -p pendon --test syntax_spec      # 19 fixtures, none #[ignore]d
 ```
 
 The `sandbox/ultimate` frozen baseline is gated separately:
@@ -73,6 +74,8 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | 16 | `directive-block`  | `==type…==`                                                    |
 | 21 | `extras-forms`     | bare head, type-only head, empty head, `@@type {…}` literal   |
 | 22 | `section`          | §9.5 outline, section decorator + id chain                    |
+| 23 | `bind`             | §19 data blocks → real props: JSON/JSONC/YAML/TOML/CSV, nested `$var`, unbound → literal |
+| 24 | `bind-paths`       | §2.5–§2.7 paths, spread/merge, external file via `../data/`  |
 
 Fixtures 17–20 are covered by unit tests in the renderer/CLI crates rather than as
 golden files.
