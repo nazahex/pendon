@@ -3,7 +3,7 @@
 object into a nested extras value with a **spread** item, and reads a payload from
 an **external file** — RFC §2.5–§2.7.
 
-This fixture lives at `src/24-bind-paths.md` and its file payload at
+This fixture lives at `src/24-bind-paths.mdp` and its file payload at
 `../data/rows.csv`, so resolving a relative path against the **source file's** own
 directory (never the process CWD) is part of the contract, as is recording that
 file as a cache dependency.

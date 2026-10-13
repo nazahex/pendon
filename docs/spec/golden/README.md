@@ -10,15 +10,15 @@ guess.
 Each fixture is a stem `NN-name` with up to four files:
 
 ```text
-docs/spec/golden/NN-name.md           input markdown (the source, hand-authored)
+docs/spec/golden/NN-name.mdp          input markdown (the source, hand-authored)
 docs/spec/golden/NN-name.toml         pendon.toml for the fixture (plugins + custom sets)
 docs/spec/golden/NN-name.jsx          expected Solid output (GENERATED — do not hand-edit)
 docs/spec/golden/NN-name.events.json  expected event IR (optional, for parser bugs)
 docs/spec/golden/NN-name.data/        payload files a fixture reads from a path (optional; copied to `data/`)
 ```
 
-The `.md` files are written to **double as prose**: they carry short comments
-explaining the rule the fixture exercises (e.g. `01-extras-head.md` explains that
+The `.mdp` files are written to **double as prose**: they carry short comments
+explaining the rule the fixture exercises (e.g. `01-extras-head.mdp` explains that
 `class` accumulates and other keys are last-wins). Read them as living examples.
 
 ## How they are tested

@@ -3,7 +3,7 @@
 //! Every fixture is a small project checked into the repo:
 //!
 //! ```text
-//! docs/spec/golden/NN-name.md   input markdown
+//! docs/spec/golden/NN-name.mdp  input markdown
 //! docs/spec/golden/NN-name.toml the task config that renders it (§16.1)
 //! docs/spec/golden/NN-name.jsx  the frozen Solid output
 //! ```
@@ -28,8 +28,8 @@ fn golden_dir() -> PathBuf {
 
 /// Writes the fixture project into a temp dir and returns it.
 ///
-/// The fixture lives in the repo as `NN-name.{md,toml,jsx}`; inside the temp
-/// project it is a regular project (`src/NN-name.md`, `pendon.toml`, …), so the
+/// The fixture lives in the repo as `NN-name.{mdp,toml,jsx}`; inside the temp
+/// project it is a regular project (`src/NN-name.mdp`, `pendon.toml`, …), so the
 /// harness exercises the real CLI path, config loading included.
 fn write_project(stem: &str) -> PathBuf {
     let golden = golden_dir();
@@ -38,8 +38,8 @@ fn write_project(stem: &str) -> PathBuf {
     fs::create_dir_all(dir.join("src")).expect("src dir");
 
     fs::copy(
-        golden.join(format!("{stem}.md")),
-        dir.join("src").join(format!("{stem}.md")),
+        golden.join(format!("{stem}.mdp")),
+        dir.join("src").join(format!("{stem}.mdp")),
     )
     .expect("fixture source");
     fs::copy(golden.join(format!("{stem}.toml")), dir.join("pendon.toml")).expect("fixture config");

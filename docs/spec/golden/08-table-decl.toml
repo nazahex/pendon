@@ -1,6 +1,6 @@
 [[task]]
 name = "Golden 08"
-input = "./src/[slug].md"
+input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
 plugin = "micromatter,table,markdown"
 format = "solid"

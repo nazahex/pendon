@@ -4,7 +4,7 @@ export default function PendonView() { return (<>
 object into a nested extras value with a <strong>spread</strong> item, and reads a payload from
 an <strong>external file</strong> — RFC §2.5–§2.7.
 </p>
-<p>This fixture lives at <code>src/24-bind-paths.md</code> and its file payload at
+<p>This fixture lives at <code>src/24-bind-paths.mdp</code> and its file payload at
 <code>../data/rows.csv</code>, so resolving a relative path against the <strong>source file&#39;s</strong> own
 directory (never the process CWD) is part of the contract, as is recording that
 file as a cache dependency.

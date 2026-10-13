@@ -21,7 +21,7 @@ URL modifiers are parsed before the head and win over `target:`:
 
 `rel:` merges with the modifier result instead of replacing it:
 
-[Rel merge](https://example.com/bar!)@@anchorA{rel: "prefetch", hreflang: "en"}
+[Rel merge](https://example.com/bar!?~$)@@anchorA{rel: "prefetch", hreflang: "en"}
 
 A marker with no configured entry keeps the built-in `<a>` element and carries
 the marker as its `type` attribute (§11 rule 3):
