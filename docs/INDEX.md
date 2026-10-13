@@ -14,20 +14,24 @@ and the rest link to it. If you are an AI agent, also read [`AGENTS.md`](../AGEN
 
 ## "I want to…" → read this
 
-| I want to…                              | Read                                                                                             |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Understand what Pendon is               | [`README.md`](../README.md)                                                                      |
-| Look up the exact markup grammar        | [`spec/SYNTAX.md`](spec/SYNTAX.md)                                                               |
-| See a worked example as executable data | [`spec/golden/`](spec/golden/) + [`spec/golden/README.md`](spec/golden/README.md)                |
-| Know why a syntax rule exists (D1–D10)  | [`decisions/0001-typed-extras-reconciliation.md`](decisions/0001-typed-extras-reconciliation.md) |
-| See what is being worked on / blocked   | [`STATUS.md`](../STATUS.md)                                                                      |
-| Run the CLI                             | [`guides/cli.md`](guides/cli.md)                                                                 |
-| Author or modify a plugin               | [`guides/plugin-authoring.md`](guides/plugin-authoring.md)                                       |
-| Write/run tests, goldens, sandboxes     | [`guides/testing.md`](guides/testing.md)                                                         |
-| Contribute (principles, PR checklist)   | [`CONTRIBUTORS.md`](../CONTRIBUTORS.md)                                                          |
-| Read a plugin's public behaviour        | that crate's `crates/plugin-*/README.md`                                                         |
-| Propose a new feature                   | [`rfc/`](rfc/) (create `rfc/<feature>.md`)                                                       |
-| Read superseded/old material            | [`archive/`](archive/) (historical, frozen)                                                      |
+| I want to…                              | Read                                                                                               |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Understand what Pendon is               | [`README.md`](../README.md)                                                                        |
+| Look up the exact markup grammar        | [`spec/SYNTAX.md`](spec/SYNTAX.md)                                                                 |
+| Highlight Pendon in an editor           | [`editors/vscode/README.md`](../editors/vscode/README.md)                                          |
+| See a worked example as executable data | [`spec/golden/`](spec/golden/) + [`spec/golden/README.md`](spec/golden/README.md)                  |
+| Know why a syntax rule exists (D1–D10)  | [`decisions/0001-typed-extras-reconciliation.md`](decisions/0001-typed-extras-reconciliation.md)   |
+| See what is being worked on / blocked   | [`STATUS.md`](../STATUS.md)                                                                        |
+| Run the CLI                             | [`guides/cli.md`](guides/cli.md)                                                                   |
+| Understand the CLI's report output      | [`spec/CLI-REPORT.md`](spec/CLI-REPORT.md)                                                         |
+| Overhaul the terminal toolkit           | [`rfc/tui-overhaul.md`](rfc/tui-overhaul.md) + [`spec/CLI-REPORT.md`](spec/CLI-REPORT.md)          |
+| Author or modify a plugin               | [`guides/plugin-authoring.md`](guides/plugin-authoring.md)                                         |
+| Write/run tests, goldens, sandboxes     | [`guides/testing.md`](guides/testing.md)                                                           |
+| Contribute (principles, PR checklist)   | [`CONTRIBUTORS.md`](../CONTRIBUTORS.md)                                                            |
+| Read a plugin's public behaviour        | that crate's `crates/plugin-*/README.md`                                                           |
+| Propose a new feature                   | [`rfc/`](rfc/) (create `rfc/<feature>.md`)                                                         |
+| Bind data / read accepted proposals     | [`rfc/plugin-bind.md`](rfc/plugin-bind.md) (§2.5–§2.8) + §19 in [`spec/SYNTAX.md`](spec/SYNTAX.md) |
+| Read superseded/old material            | [`archive/`](archive/) (historical, frozen)                                                        |
 
 ## Layout
 
@@ -41,6 +45,7 @@ docs/
    INDEX.md             this map
    spec/SYNTAX.md       normative grammar (§1–§15 normative, §16 fixture ref)
    spec/PARSER.md       parser/IR contract
+   spec/CLI-REPORT.md   CLI report contract (streams, theme, layout, gating)
    spec/golden/         executable fixtures (ground truth) + README
    decisions/           ADRs (append-only) + index
    guides/              how-tos: cli, plugin-authoring, testing
@@ -49,6 +54,7 @@ docs/
 
 memory-bank/            Cline per-session working memory (not project truth)
 crates/*/README.md      per-plugin public reference (link to spec, don't restate it)
+editors/vscode/         TextMate grammars for .mdp / .md + the scope harness
 ```
 
 ## Keeping docs up to date (the mechanism)

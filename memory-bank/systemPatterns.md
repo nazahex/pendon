@@ -9,6 +9,9 @@ input ─▶ pendon_core::parse ─▶ Event stream ─▶ plugins (transform) �
 
 - **Two plugin stages:** pre-markdown (text → text, "protect") and post-markdown
   (events → events, "bind"). See `docs/spec/SYNTAX.md` §12.
+- **One pre-parse stage:** `plugin-bind` (`extract`) runs on raw text _before_
+  `pendon_core::parse`, because a data payload's lines look like markup; its
+  `resolve` runs after every other plugin (ADR-0004).
 - **Pipeline order is explicit** and matters (e.g. `section` before `markdown`
   before `heading`; `micromatter` before frontmatter-dependent context).
 

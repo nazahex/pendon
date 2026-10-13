@@ -43,6 +43,51 @@ landed; the item layer is next.
 
 ## In progress
 
+- [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
+      (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
+      `.md`), and the harness (`tools/self-test.mjs`) is green on every golden
+      and sandbox fixture. Coloring pass: fixed the heading `captures`
+      off-by-one (title/extras/slug now tokenize; was lumped with `innerText`),
+      added CSV bind-body field scopes, and added inline `$…$` + display
+      `$$…$$` math (mirrors `plugin-latex`). Directive visual aids landed
+      VS Code-side (`src/extension.js` + `src/scan.js`, guarded by
+      `tools/directive-scan-test.mjs`): caret-tracking open/close match highlight
+      (always on) and an opt-in `pendon.directive.depthColors` depth rainbow —
+      the `::`/`==` syntax is unchanged. **Heading breadcrumbs/Outline landed**
+      (`src/headings.js` + a `DocumentSymbolProvider` in `src/extension.js`,
+      guarded by `tools/heading-scan-test.mjs`): `.mdp` headings now appear in
+      the breadcrumbs with the Pendon head stripped and inline markdown reduced
+      to plain text; symbol shape (section-scoped ranges, `#`-prefixed names)
+      mirrors the built-in Markdown provider, so the breadcrumb chain follows
+      the cursor's depth. `#` inside HTML comments, fenced code (info-string
+      openers included), closed `---` frontmatter and `plugin-bind` data blocks
+      is skipped — each region verified inert with `pendon run --format ast`.
+      `package.json` gained
+      `onLanguage:pendon` so the extension activates for `.mdp`. Left:
+      package/publish the extension; the frontmatter gap, line-bounded display
+      math, blockquote inline fallback and the other approximations are listed in
+      [`editors/vscode/README.md`](editors/vscode/README.md).
+- [ ] **RFCs: diagnostics + VS Code plugin (drafts).**
+      `docs/rfc/advanced-diagnostic.md` and `docs/rfc/plugin-vsc.md` authored; no
+      code yet. Note: today diagnostics are silent (the CLI uses them only for the
+      exit code, `--strict` covers only core-parser limit guards, and
+      `Event::Diagnostic.span` is never populated).
+- [ ] **CLI report: contract spec + upgrade RFC + `--quiet` (docs + one flag).**
+      `docs/spec/CLI-REPORT.md` formalizes the stderr report (streams, `Theme`
+      tokens, block layout, gating); `docs/rfc/cli-report-upgrade.md` proposes the
+      upgrade path (plain non-interactive report so CI stops losing the summary,
+      `NO_COLOR`, verbosity ladder, `--report=json`; the `pendon-tui` hygiene item
+      now lives in `rfc/tui-overhaul.md`). `-q` /
+      `--quiet` landed — it silences the `run` report and the `--tui` spinner only
+      (stdout, exit codes, and diagnostics are untouched).
+- [ ] **TUI overhaul RFC (docs only — no code).** `docs/rfc/tui-overhaul.md`
+      proposes a ground-up rewrite of `crates/tui`: one `Report<W>` sink replacing
+      the eight free `render_*` functions, one colour decision
+      (`--color`/`NO_COLOR`), glyph sets that actually switch, width-aware blocks,
+      a synchronous `Progress`/`Spinner` with no threads, a plain mode for non-TTY
+      runs, and a buffer test seam. All open-question recommendations are accepted
+      and recorded in the RFC. Supersedes the "`pendon-tui` hygiene pass" item in
+      `cli-report-upgrade.md`.
 - [ ] **Step 3 — L2/L3 item layer.** `plugin-list` item wrapper; `plugin-markdown`
       gains `CustomPlacement::ListItem` + `PendingListItem` / `arm_list_item` /
       `take_list_item`; L4 `start:` rejection warning; L5 nesting test; golden
@@ -72,8 +117,8 @@ landed; the item layer is next.
 
 ## Golden & freeze status (see [`docs/spec/golden/README.md`](docs/spec/golden/README.md))
 
-- Golden fixtures `01–12`, `14–16`, `21`, `22` are frozen and green; none
-  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (17 fixtures) and
+- Golden fixtures `01–12`, `14–16`, `21–24` are frozen and green; none
+  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (19 fixtures) and
   `cargo test -p pendon --test ultimate_freeze_spec` are the gates.
 - `sandbox/ultimate` frozen baseline `out.frozen/` is gated by
   `ultimate_freeze_spec` — re-freeze deliberately only.
