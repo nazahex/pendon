@@ -8,6 +8,7 @@ pub struct CliArgs {
     pub strict: bool,
     pub pretty: bool,
     pub tui: bool,
+    pub quiet: bool,
     pub max_doc_bytes: Option<usize>,
     pub max_line_len: Option<usize>,
     pub max_blank_run: Option<usize>,
@@ -31,6 +32,10 @@ pub fn parse_args() -> Result<CliArgs, String> {
     let strict: bool = pargs.contains("--strict");
     let pretty: bool = pargs.contains("--pretty");
     let tui: bool = pargs.contains("--tui");
+    // `-q` / `--quiet` silences the report (the `run` summary and the `--tui`
+    // spinner). It never touches stdout, exit codes, or diagnostics — see
+    // `docs/spec/CLI-REPORT.md` §5.
+    let quiet: bool = pargs.contains(["-q", "--quiet"]);
     let markdown_allow_html: bool = pargs.contains("--markdown-allow-html");
     let markdown_strip_comments: bool = pargs.contains("--markdown-strip-comments");
     let max_doc_bytes: Option<usize> = pargs
@@ -60,6 +65,7 @@ pub fn parse_args() -> Result<CliArgs, String> {
         strict,
         pretty,
         tui,
+        quiet,
         max_doc_bytes,
         max_line_len,
         max_blank_run,

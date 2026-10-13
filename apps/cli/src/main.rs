@@ -41,7 +41,10 @@ fn main() -> ExitCode {
 
     let format = args.format.as_deref().unwrap_or("json");
 
-    let use_tui = args.tui && pendon_tui::is_interactive_stderr();
+    // `--quiet` silences the report, so it also disables the `--tui` spinner
+    // (`docs/spec/CLI-REPORT.md` §5).
+    let use_tui = args.tui && !args.quiet && pendon_tui::is_interactive_stderr();
+
     let maybe_spinner = if use_tui {
         Some(pendon_tui::widgets::spinner::Spinner::start(
             "Reading input".to_string(),

@@ -59,6 +59,9 @@ pub fn run_from_config() -> ExitCode {
     let clean_cache = pargs.contains("--clean-cache");
     // Ignore existing cache but save the new one at the end.
     let force_rebuild = pargs.contains(["-F", "--force"]);
+    // `-q` / `--quiet` silences the `run` report (`docs/spec/CLI-REPORT.md` §5).
+    // Diagnostics, warnings and errors are unaffected.
+    let quiet = pargs.contains(["-q", "--quiet"]);
 
     if clean_cache {
         if let Err(e) = CacheManifest::clean() {
@@ -77,7 +80,7 @@ pub fn run_from_config() -> ExitCode {
     };
 
     let theme = pendon_tui::Theme::default();
-    if pendon_tui::is_interactive_stderr() {
+    if !quiet && pendon_tui::is_interactive_stderr() {
         pendon_tui::render_status_line("Scanning source files...", theme);
     }
 
@@ -243,7 +246,7 @@ pub fn run_from_config() -> ExitCode {
                 }
             }
         }
-        if pendon_tui::is_interactive_stderr() {
+        if !quiet && pendon_tui::is_interactive_stderr() {
             pendon_tui::render_severity_line(
                 pendon_tui::SeverityLine::Info,
                 &format!("Found: {} files", matched),
@@ -299,7 +302,7 @@ pub fn run_from_config() -> ExitCode {
         }
     }
 
-    if pendon_tui::is_interactive_stderr() {
+    if !quiet && pendon_tui::is_interactive_stderr() {
         pendon_tui::render_severity_line(
             pendon_tui::SeverityLine::Done,
             "All tasks completed",
