@@ -1,0 +1,24 @@
+{
+  "iconDefinitions": {
+    "_mdp_dark": {
+      "iconPath": "./pendon-dark.svg"
+    },
+    "_mdp_light": {
+      "iconPath": "./pendon-light.svg"
+    }
+  },
+  "fileExtensions": {
+    "mdp": "_mdp_dark"
+  },
+  "languageIds": {
+    "pendon": "_mdp_dark"
+  },
+  "light": {
+    "fileExtensions": {
+      "mdp": "_mdp_light"
+    },
+    "languageIds": {
+      "pendon": "_mdp_light"
+    }
+  }
+}

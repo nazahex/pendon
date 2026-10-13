@@ -1,0 +1,11 @@
+{
+  "name": "Pendon injection",
+  "scopeName": "pendon.injection",
+  "comment": "Adds the Pendon rules to the built-in Markdown grammar, so .md files highlight Pendon syntax. All rules live in pendon.tmLanguage.json; keep this file tiny. The .mdp grammar already contains them, so it is excluded: injecting into a grammar that includes the same rules recurses.",
+  "injectionSelector": "L:text.html.markdown - (comment, string, meta.embedded, markup.raw, markup.fenced_code.block, text.html.markdown.pendon)",
+  "patterns": [
+    {
+      "include": "text.html.markdown.pendon#pendon"
+    }
+  ]
+}

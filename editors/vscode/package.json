@@ -1,0 +1,91 @@
+{
+  "name": "pendon-vscode",
+  "displayName": "Pendon",
+  "description": "Pendon (.mdp) language support: TextMate grammar for the Pendon Markdown-as-DSL engine.",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "publisher": "nazahex",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Language Packs"
+  ],
+  "keywords": [
+    "pendon",
+    "mdp",
+    "markdown",
+    "dsl",
+    "textmate"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nazahex/pendon.git",
+    "directory": "editors/vscode"
+  },
+  "homepage": "https://github.com/nazahex/pendon",
+  "bugs": {
+    "url": "https://github.com/nazahex/pendon/issues"
+  },
+  "type": "commonjs",
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onLanguage:markdown",
+    "onLanguage:pendon"
+  ],
+  "scripts": {
+    "check": "node tools/self-test.mjs",
+    "scopes": "node tools/check-scopes.mjs",
+    "test": "node tools/directive-scan-test.mjs && node tools/heading-scan-test.mjs",
+    "package": "vsce package --no-dependencies"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Pendon",
+      "properties": {
+        "pendon.directive.depthColors": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Tint every matched `::`/`==` directive marker by its nesting depth (a bracket-pair-rainbow for directives). The caret-tracking match highlight is always on and needs no setting.",
+          "scope": "language-overridable"
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "pendon",
+        "aliases": [
+          "Pendon",
+          "pendon"
+        ],
+        "extensions": [
+          ".mdp"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "pendon",
+        "scopeName": "text.html.markdown.pendon",
+        "path": "./syntaxes/pendon.tmLanguage.json"
+      },
+      {
+        "scopeName": "pendon.injection",
+        "path": "./syntaxes/pendon-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.markdown"
+        ]
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "pendon",
+        "label": "Pendon",
+        "path": "./icons/pendon-icon-theme.json"
+      }
+    ]
+  }
+}

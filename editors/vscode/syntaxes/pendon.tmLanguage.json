@@ -1,0 +1,1615 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Pendon",
+  "scopeName": "text.html.markdown.pendon",
+  "comment": "Pendon grammar for .mdp files. The normative syntax is docs/spec/SYNTAX.md; this file only encodes what that document describes and delegates every construct Pendon does not override to VS Code's built-in text.html.markdown grammar. The Pendon rules come first so they win over the Markdown ones.",
+  "patterns": [
+    {
+      "include": "#block"
+    }
+  ],
+  "repository": {
+    "block": {
+      "comment": "Block dispatch: Pendon rules first, then the built-in Markdown rules, then the paragraph.",
+      "patterns": [
+        {
+          "include": "#pendonBlock"
+        },
+        {
+          "include": "text.html.markdown#frontMatter"
+        },
+        {
+          "include": "text.html.markdown#separator"
+        },
+        {
+          "include": "text.html.markdown#heading"
+        },
+        {
+          "include": "text.html.markdown#blockquote"
+        },
+        {
+          "include": "text.html.markdown#lists"
+        },
+        {
+          "include": "text.html.markdown#fenced_code_block"
+        },
+        {
+          "include": "text.html.markdown#raw_block"
+        },
+        {
+          "include": "text.html.markdown#link-def"
+        },
+        {
+          "include": "text.html.markdown#html"
+        },
+        {
+          "include": "text.html.markdown#table"
+        },
+        {
+          "include": "#paragraph"
+        }
+      ]
+    },
+    "pendon": {
+      "comment": "Every Pendon rule. The injection grammar (syntaxes/pendon-injection.tmLanguage.json) includes this one, so .md files get Pendon highlighting too.",
+      "patterns": [
+        {
+          "include": "#pendonBlock"
+        },
+        {
+          "include": "#inlinePendon"
+        }
+      ]
+    },
+    "pendonBlock": {
+      "comment": "Block-level Pendon constructs; the most specific sigil is listed first.",
+      "patterns": [
+        {
+          "include": "#bindBlock"
+        },
+        {
+          "include": "#sectionDeepen"
+        },
+        {
+          "include": "#sectionClose"
+        },
+        {
+          "include": "#blockDirective"
+        },
+        {
+          "include": "#tableDeclaration"
+        },
+        {
+          "include": "#tableCaption"
+        },
+        {
+          "include": "#tableFoot"
+        },
+        {
+          "include": "#table"
+        },
+        {
+          "include": "#decorator"
+        },
+        {
+          "include": "#headings"
+        }
+      ]
+    },
+    "inlinePendon": {
+      "comment": "Inline Pendon constructs, most specific sigil first: citation, wiki, figure/image, marker, directive, anchor, then the extras heads.",
+      "patterns": [
+        {
+          "include": "#mathDisplay"
+        },
+        {
+          "include": "#mathInline"
+        },
+        {
+          "include": "#citation"
+        },
+        {
+          "include": "#wiki"
+        },
+        {
+          "include": "#figure"
+        },
+        {
+          "include": "#image"
+        },
+        {
+          "include": "#marker"
+        },
+        {
+          "include": "#markerGroups"
+        },
+        {
+          "include": "#inlineDirective"
+        },
+        {
+          "include": "#link"
+        },
+        {
+          "include": "#headGroups"
+        },
+        {
+          "include": "#headTypedBody"
+        },
+        {
+          "include": "#headTypeOnly"
+        },
+        {
+          "include": "#headBare"
+        }
+      ]
+    },
+    "paragraph": {
+      "comment": "A copy of text.html.markdown#paragraph with the Pendon inline rules in front (the built-in rule can only be reached through #block, which never sees them).",
+      "begin": "(^|\\G)[ ]{0,3}(?=[^ \\t\\n])",
+      "while": "(^|\\G)((?=\\s*[-=]{3,}\\s*$)|[ ]{4,}(?=[^ \\t\\n]))",
+      "name": "meta.paragraph.pendon",
+      "patterns": [
+        {
+          "include": "#inlinePendon"
+        },
+        {
+          "include": "text.html.markdown#inline"
+        },
+        {
+          "include": "text.html.derivative"
+        },
+        {
+          "include": "text.html.markdown#heading-setext"
+        }
+      ]
+    },
+    "inlineContent": {
+      "comment": "Inline content of a heading, table caption or marker: Pendon rules first, then the built-in Markdown inline rules.",
+      "patterns": [
+        {
+          "include": "#inlinePendon"
+        },
+        {
+          "include": "text.html.markdown#inline"
+        },
+        {
+          "include": "text.html.derivative"
+        }
+      ]
+    },
+    "headGroups": {
+      "comment": "§4.4/§6.1 — head groups `[slug]` / `(\"title\")` on a head with no `{…}` body.",
+      "match": "(@@)([A-Za-z][A-Za-z0-9]*)?((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))+)(?!\\{)",
+      "name": "meta.head.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.head.sigil.pendon"
+        },
+        "2": {
+          "name": "entity.name.type.pendon"
+        },
+        "3": {
+          "patterns": [
+            {
+              "include": "#positionalGroup"
+            }
+          ]
+        }
+      }
+    },
+    "headTypedBody": {
+      "comment": "§5 — `@@type[slug](\"title\"){…}`. The body must be adjacent and closed on the same line; an unterminated head is stopped at the line end (compare §4.3).",
+      "begin": "(@@)([A-Za-z][A-Za-z0-9]*)?((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(\\{)",
+      "end": "(\\})|(^)",
+      "name": "meta.head.pendon",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.head.sigil.pendon"
+        },
+        "2": {
+          "name": "entity.name.type.pendon"
+        },
+        "3": {
+          "patterns": [
+            {
+              "include": "#positionalGroup"
+            }
+          ]
+        },
+        "4": {
+          "name": "punctuation.definition.head.begin.pendon"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.head.end.pendon"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#headItems"
+        }
+      ]
+    },
+    "headBodyOnly": {
+      "comment": "§4.1 — the body of an untyped head; only reachable where adjacency is known (a decorator line), so no look-behind is needed.",
+      "begin": "(\\{)",
+      "end": "(\\})|(^)",
+      "name": "meta.head.pendon",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.head.begin.pendon"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.head.end.pendon"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#headItems"
+        }
+      ]
+    },
+    "headBare": {
+      "comment": "§4.1 — an untyped `{…}` head must touch the construct it decorates. A `{` that follows whitespace or opens the line is literal text.",
+      "begin": "(?<=\\S)(\\{)(?!\\{)",
+      "end": "(\\})|(^)",
+      "name": "meta.head.pendon",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.head.begin.pendon"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.head.end.pendon"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#headItems"
+        }
+      ]
+    },
+    "headTypeOnly": {
+      "comment": "§4.4 — a typed head with neither groups nor body. A type followed by whitespace and a body is literal text, so nothing is claimed here (§4.3).",
+      "match": "(@@)([A-Za-z][A-Za-z0-9]*)(?![A-Za-z0-9\\[({])(?![ \\t]*\\{)",
+      "name": "meta.head.type-only.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.head.sigil.pendon"
+        },
+        "2": {
+          "name": "entity.name.type.pendon"
+        }
+      }
+    },
+    "positionalGroup": {
+      "comment": "§6.1 — the positional groups of a head: `[slug]` and `(\"title\")`, in either order.",
+      "patterns": [
+        {
+          "match": "(\\[)([^\\]\\n]*)(\\])",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.group.begin.pendon"
+            },
+            "2": {
+              "name": "entity.name.slug.pendon"
+            },
+            "3": {
+              "name": "punctuation.definition.group.end.pendon"
+            }
+          }
+        },
+        {
+          "match": "(\\(\\s*)([^)\\n]*?)(\\s*\\))",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.group.begin.pendon"
+            },
+            "2": {
+              "patterns": [
+                {
+                  "include": "#itemString"
+                },
+                {
+                  "include": "#itemBare"
+                }
+              ]
+            },
+            "3": {
+              "name": "punctuation.definition.group.end.pendon"
+            }
+          }
+        }
+      ]
+    },
+    "marker": {
+      "comment": "§6.1 — a `{{type}}` marker; its groups (and any head) must follow the closing braces immediately.",
+      "match": "(\\{\\{)([A-Za-z][A-Za-z0-9_-]*)(\\}\\})",
+      "name": "meta.marker.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.marker.begin.pendon"
+        },
+        "2": {
+          "name": "entity.name.type.marker.pendon"
+        },
+        "3": {
+          "name": "punctuation.definition.marker.end.pendon"
+        }
+      }
+    },
+    "markerGroups": {
+      "comment": "§6.1 — the positional groups of a marker; they must touch the `}}`.",
+      "match": "(?<=\\}\\})((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))+)",
+      "name": "meta.marker.pendon",
+      "captures": {
+        "1": {
+          "patterns": [
+            {
+              "include": "#positionalGroup"
+            }
+          ]
+        }
+      }
+    },
+    "citation": {
+      "comment": "§7.3 — `[^^](ref \"loc\")`: an unquoted reference and an optional quoted location. A quoted reference, a comma or an empty argument is not a citation and stays literal text (the retired spellings).",
+      "match": "(\\[\\^\\^\\])(\\()([ \\t]*)([^ \\t)\",]+)(?:[ \\t]+(\"[^\"\\n]*\"))?[ \\t]*(\\))",
+      "name": "meta.citation.pendon",
+      "captures": {
+        "1": {
+          "patterns": [
+            {
+              "match": "(\\[)(\\^\\^)(\\])",
+              "captures": {
+                "1": {
+                  "name": "punctuation.definition.citation.begin.pendon"
+                },
+                "2": {
+                  "name": "keyword.other.citation.marker.pendon"
+                },
+                "3": {
+                  "name": "punctuation.definition.citation.end.pendon"
+                }
+              }
+            }
+          ]
+        },
+        "2": {
+          "name": "punctuation.definition.metadata.begin.pendon"
+        },
+        "4": {
+          "name": "variable.other.reference.cite.pendon"
+        },
+        "5": {
+          "patterns": [
+            {
+              "include": "#itemString"
+            }
+          ]
+        },
+        "6": {
+          "name": "punctuation.definition.metadata.end.pendon"
+        }
+      }
+    },
+    "wiki": {
+      "comment": "§7.5 — `[[Target | Label]]`: the label is split off the first `|` (both sides are trimmed) and an empty target stays literal text. A wikilink's content is never re-interpreted, so the target and the label are single scopes.",
+      "match": "(\\[\\[)(?=[^\\]\\n|]*[^\\]\\s|])([^\\]|\\n]*?[^\\]|\\s\\n])(?:[ \\t]*([|])([^\\]\\n]*))?[ \\t]*(\\]\\])",
+      "name": "meta.wikilink.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.wikilink.begin.pendon"
+        },
+        "2": {
+          "name": "markup.underline.link.wiki.pendon"
+        },
+        "3": {
+          "name": "punctuation.separator.wikilink.alias.pendon"
+        },
+        "4": {
+          "name": "string.other.wikilink.label.pendon"
+        },
+        "5": {
+          "name": "punctuation.definition.wikilink.end.pendon"
+        }
+      }
+    },
+    "figure": {
+      "comment": "§7.1 — a figure: a line-start marker carrying `!!`, its extras attach to the figure and the rest of the line is the caption (inline content).",
+      "begin": "^[ ]{0,3}((?:[!?~]|[wh][0-9]+)*!{2,}(?:[!?~]|[wh][0-9]+)*)(\\[)([^\\]\\n]*)(\\])(\\()([^)\\n]*)(\\))",
+      "end": "[ \\t]*$",
+      "name": "meta.figure.pendon",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.other.image.marker.pendon"
+        },
+        "2": {
+          "name": "punctuation.definition.link.description.begin.pendon"
+        },
+        "3": {
+          "name": "string.other.link.description.pendon"
+        },
+        "4": {
+          "name": "punctuation.definition.link.description.end.pendon"
+        },
+        "5": {
+          "name": "punctuation.definition.metadata.begin.pendon"
+        },
+        "6": {
+          "name": "markup.underline.link.image.pendon"
+        },
+        "7": {
+          "name": "punctuation.definition.metadata.end.pendon"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#headExtras"
+        },
+        {
+          "include": "#inlineContent"
+        }
+      ]
+    },
+    "image": {
+      "comment": "§7.1 — an advanced image: the marker carries `!` but not `!!` (that is a figure) and either carries modifiers or has an adjacent head; a bare `!` before a Markdown image only counts when a head touches the `)`. The `p`/`d` container prefix only matters on a line of its own, where the marker is coloured from its `!`.",
+      "match": "(?![!?~wh0-9]*!!)((?:[!?~]|[wh][0-9]+){2,}|!(?=\\[[^\\]\\n]*\\]\\([^)\\n]*\\)(?:\\{|@@(?:[A-Za-z]|\\[|\\())))(\\[)([^\\]\\n]*)(\\])(\\()([^)\\n]*)(\\))",
+      "name": "meta.image.advanced.pendon",
+      "captures": {
+        "1": {
+          "name": "keyword.other.image.marker.pendon"
+        },
+        "2": {
+          "name": "punctuation.definition.link.description.begin.pendon"
+        },
+        "3": {
+          "name": "string.other.link.description.pendon"
+        },
+        "4": {
+          "name": "punctuation.definition.link.description.end.pendon"
+        },
+        "5": {
+          "name": "punctuation.definition.metadata.begin.pendon"
+        },
+        "6": {
+          "name": "markup.underline.link.image.pendon"
+        },
+        "7": {
+          "name": "punctuation.definition.metadata.end.pendon"
+        }
+      }
+    },
+    "inlineDirective": {
+      "comment": "§10.2 — `::type[…](\"…\") content ::`: the content is inline content and the closing run must be at least as long as the opening one. `\\1` is the opening run, so a longer close is accepted, a run followed by a letter opens a nested directive instead of closing this one, and a run that no closer ever follows (an unterminated opener, §4.3) never opens at all; `(^)` is the safety net for a region whose closer the scan missed.",
+      "begin": "(:{2,7})([A-Za-z][A-Za-z0-9]*)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[^\\n]*(?:\\1:{0,5})(?![A-Za-z:]))",
+      "end": "(\\1:{0,5})(?![A-Za-z:])|(^)",
+      "name": "meta.directive.inline.pendon",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.directive.begin.pendon"
+        },
+        "2": {
+          "name": "entity.name.type.directive.pendon"
+        },
+        "3": {
+          "patterns": [
+            {
+              "include": "#positionalGroup"
+            }
+          ]
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.directive.end.pendon"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#headExtras"
+        },
+        {
+          "include": "#inlineContent"
+        }
+      ]
+    },
+    "link": {
+      "comment": "§7.2 — a Markdown inline link; the anchor layer owns `href`/`target`/`rel`, the URL modifiers (`^`, `!`, `$`, `;;`, `--`) are coloured apart from the URL and an adjacent head attaches to the anchor. URLs may nest parentheses, two levels deep. `![…](…)` stays a Markdown image.",
+      "match": "(?<!!)(\\[)((?<square>[^\\[\\]\\\\]|\\\\.|\\[\\g<square>*+\\])*+)(\\])(\\()([ \\t]*)((?:[^()\"\\n]|\\((?:[^()\"\\n]|\\([^()\"\\n]*\\))*\\))*?)((?:;;|--|[!^~$])*)([ \\t]*)(?:(\")([^\"\\n]*)(\"*)([ \\t]*))?(\\))",
+      "name": "meta.link.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.link.title.begin.pendon"
+        },
+        "2": {
+          "name": "string.other.link.title.pendon",
+          "patterns": [
+            {
+              "include": "#inlineContent"
+            }
+          ]
+        },
+        "4": {
+          "name": "punctuation.definition.link.title.end.pendon"
+        },
+        "5": {
+          "name": "punctuation.definition.metadata.begin.pendon"
+        },
+        "7": {
+          "name": "markup.underline.link.pendon"
+        },
+        "8": {
+          "name": "keyword.operator.url-modifier.pendon"
+        },
+        "10": {
+          "name": "punctuation.definition.string.begin.pendon"
+        },
+        "11": {
+          "name": "string.other.link.description.title.pendon"
+        },
+        "12": {
+          "name": "punctuation.definition.string.end.pendon"
+        },
+        "14": {
+          "name": "punctuation.definition.metadata.end.pendon"
+        }
+      }
+    },
+    "headings": {
+      "comment": "§7.4 — ATX headings with Pendon heads: the groups are adjacent to the `#` run and the extras may follow the title. One rule per level (`$1` in `name` substitutes matched text, not a count).",
+      "patterns": [
+        {
+          "include": "#heading1"
+        },
+        {
+          "include": "#heading2"
+        },
+        {
+          "include": "#heading3"
+        },
+        {
+          "include": "#heading4"
+        },
+        {
+          "include": "#heading5"
+        },
+        {
+          "include": "#heading6"
+        }
+      ]
+    },
+    "heading1": {
+      "comment": "§7.4 — `#` heading. Capture 2 are the head groups, 4 the title (with its Pendon extras), 5 a closing run of `#`.",
+      "match": "^(#)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
+      "name": "markup.heading.1.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.heading.begin.pendon"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#positionalGroup"
+            }
+          ]
+        },
+        "3": {
+          "patterns": [
+            {
+              "include": "#inlineContent"
+            }
+          ]
+        },
+        "4": {
+          "name": "punctuation.definition.heading.end.pendon"
+        }
+      }
+    },
+    "heading2": {
+      "match": "^(##)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
+      "name": "markup.heading.2.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.heading.begin.pendon"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#positionalGroup"
+            }
+          ]
+        },
+        "3": {
+          "patterns": [
+            {
+              "include": "#inlineContent"
+            }
+          ]
+        },
+        "4": {
+          "name": "punctuation.definition.heading.end.pendon"
+        }
+      }
+    },
+    "heading3": {
+      "match": "^(###)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
+      "name": "markup.heading.3.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.heading.begin.pendon"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#positionalGroup"
+            }
+          ]
+        },
+        "3": {
+          "patterns": [
+            {
+              "include": "#inlineContent"
+            }
+          ]
+        },
+        "4": {
+          "name": "punctuation.definition.heading.end.pendon"
+        }
+      }
+    },
+    "heading4": {
+      "match": "^(####)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
+      "name": "markup.heading.4.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.heading.begin.pendon"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#positionalGroup"
+            }
+          ]
+        },
+        "3": {
+          "patterns": [
+            {
+              "include": "#inlineContent"
+            }
+          ]
+        },
+        "4": {
+          "name": "punctuation.definition.heading.end.pendon"
+        }
+      }
+    },
+    "heading5": {
+      "match": "^(#####)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
+      "name": "markup.heading.5.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.heading.begin.pendon"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#positionalGroup"
+            }
+          ]
+        },
+        "3": {
+          "patterns": [
+            {
+              "include": "#inlineContent"
+            }
+          ]
+        },
+        "4": {
+          "name": "punctuation.definition.heading.end.pendon"
+        }
+      }
+    },
+    "heading6": {
+      "match": "^(######)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
+      "name": "markup.heading.6.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.heading.begin.pendon"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#positionalGroup"
+            }
+          ]
+        },
+        "3": {
+          "patterns": [
+            {
+              "include": "#inlineContent"
+            }
+          ]
+        },
+        "4": {
+          "name": "punctuation.definition.heading.end.pendon"
+        }
+      }
+    },
+    "decorator": {
+      "comment": "§9.1 — a line whose entire content is a head. Bodies are matched up to two levels of nesting; a deeper one is left as literal text.",
+      "match": "^[ \\t]{0,3}((?:@@)(?:[A-Za-z][A-Za-z0-9]*)?(?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*(?:\\{(?:[^{}\\n]|\\{(?:[^{}\\n]|\\{[^{}\\n]*\\})*\\})*\\})?|(?:\\{(?:[^{}\\n]|\\{(?:[^{}\\n]|\\{[^{}\\n]*\\})*\\})*\\}))[ \\t]*$",
+      "name": "meta.decorator.pendon",
+      "captures": {
+        "1": {
+          "patterns": [
+            {
+              "include": "#headGroups"
+            },
+            {
+              "include": "#headTypedBody"
+            },
+            {
+              "include": "#headTypeOnly"
+            },
+            {
+              "include": "#headBodyOnly"
+            }
+          ]
+        }
+      }
+    },
+    "headItems": {
+      "comment": "§5 — the items of a head body; §19 adds the `$ref` and `...spread` forms. Anything not recognised stays literal text.",
+      "patterns": [
+        {
+          "include": "#itemEscape"
+        },
+        {
+          "include": "#itemComma"
+        },
+        {
+          "include": "#itemNestedObject"
+        },
+        {
+          "include": "#itemNestedArray"
+        },
+        {
+          "include": "#itemSpread"
+        },
+        {
+          "include": "#itemRef"
+        },
+        {
+          "include": "#itemSlug"
+        },
+        {
+          "include": "#itemString"
+        },
+        {
+          "include": "#itemStringSingle"
+        },
+        {
+          "include": "#itemCustomProperty"
+        },
+        {
+          "include": "#itemClass"
+        },
+        {
+          "include": "#itemId"
+        },
+        {
+          "include": "#itemKey"
+        },
+        {
+          "include": "#itemBool"
+        },
+        {
+          "include": "#itemNumber"
+        },
+        {
+          "include": "#itemBare"
+        }
+      ]
+    },
+    "itemEscape": {
+      "comment": "§5 — `\\` escapes the next character of a value.",
+      "match": "\\\\(?:[,\":'`\\\\{}\\[\\]()])",
+      "name": "constant.character.escape.pendon"
+    },
+    "itemComma": {
+      "match": "(,)",
+      "captures": {
+        "1": {
+          "name": "punctuation.separator.head.item.pendon"
+        }
+      }
+    },
+    "itemNestedObject": {
+      "begin": "(\\{)",
+      "end": "(\\})|(^)",
+      "name": "meta.mapping.head.pendon",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.mapping.begin.pendon"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.mapping.end.pendon"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#headItems"
+        }
+      ]
+    },
+    "itemNestedArray": {
+      "begin": "(\\[)",
+      "end": "(\\])|(^)",
+      "name": "meta.sequence.head.pendon",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.sequence.begin.pendon"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.sequence.end.pendon"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#headItems"
+        }
+      ]
+    },
+    "itemSpread": {
+      "comment": "§19 — `...$ref` spreads a bind path into the head.",
+      "match": "(\\.\\.\\.)\\s*((?:\\$)(?:(?:\\.[A-Za-z0-9_-]+)|(?:\\[[0-9]+\\])|(?:\\[\\s*\"(?:[^\"\\\\]|\\\\.)*\"\\s*\\]))*)",
+      "name": "meta.spread.head.pendon",
+      "captures": {
+        "1": {
+          "name": "keyword.operator.spread.pendon"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#itemRef"
+            }
+          ]
+        }
+      }
+    },
+    "itemRef": {
+      "comment": "§19 — a `$name` reference to a bind path, with `.property`, `[0]` and `[\"key\"]` steps.",
+      "patterns": [
+        {
+          "match": "(\\$)([A-Za-z_][A-Za-z0-9_-]*)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.variable.pendon"
+            },
+            "2": {
+              "name": "variable.other.reference.pendon"
+            }
+          }
+        },
+        {
+          "match": "(\\.)([A-Za-z0-9_-]+)",
+          "captures": {
+            "1": {
+              "name": "punctuation.separator.reference.pendon"
+            },
+            "2": {
+              "name": "variable.other.property.pendon"
+            }
+          }
+        },
+        {
+          "match": "(\\[)([0-9]+)(\\])",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.sequence.begin.pendon"
+            },
+            "2": {
+              "name": "constant.numeric.index.pendon"
+            },
+            "3": {
+              "name": "punctuation.definition.sequence.end.pendon"
+            }
+          }
+        },
+        {
+          "match": "(\\[)(\"(?:[^\"\\\\\\n]|\\\\.)*\")(\\])",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.sequence.begin.pendon"
+            },
+            "2": {
+              "name": "string.quoted.double.reference.pendon"
+            },
+            "3": {
+              "name": "punctuation.definition.sequence.end.pendon"
+            }
+          }
+        }
+      ]
+    },
+    "itemSlug": {
+      "comment": "§4.1 — a backticked slug.",
+      "match": "(`)([^`\\n]*)(`)",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.slug.begin.pendon"
+        },
+        "2": {
+          "name": "entity.name.slug.pendon"
+        },
+        "3": {
+          "name": "punctuation.definition.slug.end.pendon"
+        }
+      }
+    },
+    "itemString": {
+      "comment": "§5 — a double-quoted value. The closing quote must be on the same line, so an unterminated value stays literal text.",
+      "match": "(\")((?:[^\"\\\\\\n]|\\\\.)*)(\")",
+      "name": "string.quoted.double.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.string.begin.pendon"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#itemEscape"
+            }
+          ]
+        },
+        "3": {
+          "name": "punctuation.definition.string.end.pendon"
+        }
+      }
+    },
+    "itemStringSingle": {
+      "match": "(')((?:[^'\\\\\\n]|\\\\.)*)(')",
+      "name": "string.quoted.single.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.string.begin.pendon"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#itemEscape"
+            }
+          ]
+        },
+        "3": {
+          "name": "punctuation.definition.string.end.pendon"
+        }
+      }
+    },
+    "itemCustomProperty": {
+      "comment": "§5 — the `--name` form; the `::` form cannot be used inside a head body because `::` opens an inline directive.",
+      "match": "(--)([A-Za-z_][A-Za-z0-9_-]*)(?=[ \\t]*:(?!:))",
+      "name": "meta.custom-property.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.custom-property.pendon"
+        },
+        "2": {
+          "name": "variable.other.custom-property.pendon"
+        }
+      }
+    },
+    "itemClass": {
+      "match": "(\\.)([A-Za-z0-9_:-]+)",
+      "name": "meta.class.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.class.pendon"
+        },
+        "2": {
+          "name": "entity.other.attribute-name.class.pendon"
+        }
+      }
+    },
+    "itemId": {
+      "match": "(#)([A-Za-z0-9_:-]+)",
+      "name": "meta.id.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.id.pendon"
+        },
+        "2": {
+          "name": "entity.other.attribute-name.id.pendon"
+        }
+      }
+    },
+    "itemKey": {
+      "comment": "§5 — `key: value`; `::` is an inline directive, never a key/value separator.",
+      "match": "([A-Za-z_][A-Za-z0-9_-]*)([ \\t]*)(:)(?!:)",
+      "captures": {
+        "1": {
+          "name": "entity.other.attribute-name.pendon"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.pendon"
+        }
+      }
+    },
+    "itemBool": {
+      "match": "(?:true|false)(?![A-Za-z0-9_-])",
+      "name": "constant.language.boolean.pendon"
+    },
+    "itemNumber": {
+      "match": "-?[0-9]+(?:\\.[0-9]+)?(?![A-Za-z0-9_-])",
+      "name": "constant.numeric.pendon"
+    },
+    "itemBare": {
+      "comment": "§5 — anything else is a bare value (including flags, which are values too).",
+      "match": "[^\\s,{}\\[\\]\"'`\\\\]+",
+      "name": "string.unquoted.pendon"
+    },
+    "sectionDeepen": {
+      "comment": "§9.5 — a line whose trimmed content is exactly `<--->` deepens the outline by one section.",
+      "match": "^[ \\t]*(<--->)[ \\t]*$",
+      "name": "meta.section.deepen.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.section.deepen.pendon"
+        }
+      }
+    },
+    "sectionClose": {
+      "comment": "§9.5 — a line whose trimmed content is exactly `>---<` closes the innermost section (a Markdown blockquote elsewhere).",
+      "match": "^[ \\t]*(>---<)[ \\t]*$",
+      "name": "meta.section.close.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.section.close.pendon"
+        }
+      }
+    },
+    "tableDeclaration": {
+      "comment": "§8 — the optional `|-…-|` declaration line. The line is childless: only the groups and the head are coloured, any other text stays literal.",
+      "match": "^[ ]{0,3}(\\|-)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(.*?)((?:-\\|)|\\|)[ \\t]*$",
+      "name": "meta.table.declaration.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.table.begin.pendon"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#positionalGroup"
+            }
+          ]
+        },
+        "3": {
+          "patterns": [
+            {
+              "include": "#headExtras"
+            }
+          ]
+        },
+        "4": {
+          "name": "punctuation.definition.table.end.pendon"
+        }
+      }
+    },
+    "tableCaption": {
+      "comment": "§8 — a `||…||` caption line, before the rows.",
+      "match": "^[ ]{0,3}(\\|\\|)(.*?)(\\|\\|)[ \\t]*$",
+      "name": "meta.table.caption.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.caption.begin.pendon"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#tableExtras"
+            }
+          ]
+        },
+        "3": {
+          "name": "punctuation.definition.caption.end.pendon"
+        }
+      }
+    },
+    "tableFoot": {
+      "comment": "§8 — the `|===|` foot separator line (bare `===` is retired).",
+      "match": "^[ ]{0,3}(\\|)(===)(\\|)(.*)$",
+      "name": "meta.table.foot.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.separator.table.cell.pendon"
+        },
+        "2": {
+          "name": "punctuation.definition.table.foot.pendon"
+        },
+        "3": {
+          "name": "punctuation.separator.table.cell.pendon"
+        },
+        "4": {
+          "patterns": [
+            {
+              "include": "#tableExtras"
+            }
+          ]
+        }
+      }
+    },
+    "headExtras": {
+      "comment": "§5 — the shared extras head on its own, for slots where nothing else may be interpreted (a decorator line, a childless table declaration).",
+      "patterns": [
+        {
+          "include": "#headTypedBody"
+        },
+        {
+          "include": "#headGroups"
+        },
+        {
+          "include": "#headTypeOnly"
+        },
+        {
+          "include": "#headBare"
+        }
+      ]
+    },
+    "table": {
+      "comment": "§8 — the body rows, shaped like text.html.markdown#table: the first row opens the region, the rest continue it, and a non-row line ends it.",
+      "begin": "^[ ]{0,3}(\\|)(?=[^|].*\\|[ \\t]*$)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.separator.table.cell.pendon"
+        }
+      },
+      "while": "^[ ]{0,3}(?=\\|)",
+      "name": "meta.table.body.pendon",
+      "patterns": [
+        {
+          "include": "#tableFoot"
+        },
+        {
+          "include": "#tableCellSeparator"
+        },
+        {
+          "include": "#tableAlignment"
+        },
+        {
+          "include": "#tableWidth"
+        },
+        {
+          "include": "#tableSpan"
+        },
+        {
+          "include": "#tableCell"
+        },
+        {
+          "include": "#tableExtras"
+        }
+      ]
+    },
+    "tableCellSeparator": {
+      "match": "\\|",
+      "name": "punctuation.separator.table.cell.pendon"
+    },
+    "tableAlignment": {
+      "comment": "§8 — an alignment code cell: `---`, `:---`, `---:`, `:---:`.",
+      "match": "(?<=\\|)([ \\t]*)(:?-{1,}:?)(?=[ \\t(]|@@|\\{|\\)|\\||$)",
+      "captures": {
+        "2": {
+          "name": "punctuation.separator.table.alignment.pendon"
+        }
+      }
+    },
+    "tableWidth": {
+      "comment": "§8 — a width token `(200px)`, directly after the alignment code (or the opening `|`).",
+      "match": "(?<=[|\\-])(\\()([^)\\n]*)(\\))",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.table.width.begin.pendon"
+        },
+        "2": {
+          "name": "constant.other.table.width.pendon"
+        },
+        "3": {
+          "name": "punctuation.definition.table.width.end.pendon"
+        }
+      }
+    },
+    "tableSpan": {
+      "comment": "§8 — the `>` (colspan) / `^` (rowspan) markers, which come before the cell head.",
+      "match": "(?<=[|)\\-:])([ \\t]*)([>^]+)(?=[ \\t]*(?:@@|\\{))",
+      "captures": {
+        "2": {
+          "name": "keyword.operator.table.span.pendon"
+        }
+      }
+    },
+    "tableCell": {
+      "comment": "§8 — a cell's content, up to the next `|`; `\\|` escapes a pipe inside it.",
+      "match": "(?<=\\|)([ \\t]*)(?=\\S)((?:\\\\\\||[^|])+)(?<=\\S)([ \\t]*)(?=\\|)",
+      "captures": {
+        "3": {
+          "patterns": [
+            {
+              "include": "#inlinePendon"
+            },
+            {
+              "include": "text.html.markdown#inline"
+            },
+            {
+              "include": "text.html.derivative"
+            }
+          ]
+        }
+      }
+    },
+    "tableExtras": {
+      "comment": "§8 — a table slot: the extras head first (a cell head touches its `|`), then the inline rules.",
+      "patterns": [
+        {
+          "include": "#headExtras"
+        },
+        {
+          "include": "#inlinePendon"
+        },
+        {
+          "include": "text.html.markdown#inline"
+        },
+        {
+          "include": "text.html.derivative"
+        }
+      ]
+    },
+    "blockDirective": {
+      "comment": "§10.3 — `==type … ==`. The body is block content, so directives nest; a fence alone on a line closes the innermost open directive.",
+      "begin": "^[ ]{0,3}(={2,7})(?=[A-Za-z])([A-Za-z][A-Za-z0-9_-]*)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)",
+      "end": "^[ ]{0,3}(={2,7})[ \\t]*$",
+      "name": "meta.directive.block.pendon",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.directive.begin.pendon"
+        },
+        "2": {
+          "name": "entity.name.type.directive.pendon"
+        },
+        "3": {
+          "patterns": [
+            {
+              "include": "#positionalGroup"
+            }
+          ]
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.directive.end.pendon"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#headExtras"
+        },
+        {
+          "include": "#block"
+        }
+      ]
+    },
+    "bindBlock": {
+      "comment": "§19 — data blocks. A block starts at the beginning of a line; a head that carries no payload must be alone on its line.",
+      "patterns": [
+        {
+          "include": "#bindFile"
+        },
+        {
+          "include": "#bindBodyJson"
+        },
+        {
+          "include": "#bindBodyJsonc"
+        },
+        {
+          "include": "#bindBodyYaml"
+        },
+        {
+          "include": "#bindBodyToml"
+        },
+        {
+          "include": "#bindBodyCsv"
+        },
+        {
+          "include": "#bindBodyMdp"
+        }
+      ]
+    },
+    "bindFile": {
+      "comment": "§19 — file payload: `{{{csv[rows](../data/rows.csv)}}}`, closed on the same line.",
+      "match": "^[ ]{0,3}(\\{\\{\\{)(json|jsonc|yaml|yml|toml|csv|mdp)(\\[)([A-Za-z][A-Za-z0-9_-]*)(\\])(\\()([^)\\n]+)(\\))(\\}\\}\\})[ \\t]*$",
+      "name": "meta.bind.block.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.bind.begin.pendon"
+        },
+        "2": {
+          "name": "constant.language.bind.lang.pendon"
+        },
+        "3": {
+          "name": "punctuation.definition.bind.var.begin.pendon"
+        },
+        "4": {
+          "name": "variable.other.bind.name.pendon"
+        },
+        "5": {
+          "name": "punctuation.definition.bind.var.end.pendon"
+        },
+        "6": {
+          "name": "punctuation.definition.bind.path.begin.pendon"
+        },
+        "7": {
+          "name": "string.unquoted.bind.path.pendon"
+        },
+        "8": {
+          "name": "punctuation.definition.bind.path.end.pendon"
+        },
+        "9": {
+          "name": "punctuation.definition.bind.end.pendon"
+        }
+      }
+    },
+    "bindBodyJson": {
+      "begin": "^[ ]{0,3}(\\{\\{\\{)(json)(\\[)([A-Za-z][A-Za-z0-9_-]*)(\\])[ \\t]*$",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.bind.begin.pendon"
+        },
+        "2": {
+          "name": "constant.language.bind.lang.pendon"
+        },
+        "3": {
+          "name": "punctuation.definition.bind.var.begin.pendon"
+        },
+        "4": {
+          "name": "variable.other.bind.name.pendon"
+        },
+        "5": {
+          "name": "punctuation.definition.bind.var.end.pendon"
+        }
+      },
+      "end": "^[ ]{0,3}(\\}\\}\\})[ \\t]*$",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.bind.end.pendon"
+        }
+      },
+      "name": "meta.bind.block.pendon",
+      "contentName": "meta.embedded.block.json.bind.pendon",
+      "patterns": [
+        {
+          "include": "source.json"
+        }
+      ]
+    },
+    "bindBodyJsonc": {
+      "begin": "^[ ]{0,3}(\\{\\{\\{)(jsonc)(\\[)([A-Za-z][A-Za-z0-9_-]*)(\\])[ \\t]*$",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.bind.begin.pendon"
+        },
+        "2": {
+          "name": "constant.language.bind.lang.pendon"
+        },
+        "3": {
+          "name": "punctuation.definition.bind.var.begin.pendon"
+        },
+        "4": {
+          "name": "variable.other.bind.name.pendon"
+        },
+        "5": {
+          "name": "punctuation.definition.bind.var.end.pendon"
+        }
+      },
+      "end": "^[ ]{0,3}(\\}\\}\\})[ \\t]*$",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.bind.end.pendon"
+        }
+      },
+      "name": "meta.bind.block.pendon",
+      "contentName": "meta.embedded.block.jsonc.bind.pendon",
+      "patterns": [
+        {
+          "include": "source.json.comments"
+        }
+      ]
+    },
+    "bindBodyYaml": {
+      "begin": "^[ ]{0,3}(\\{\\{\\{)(yaml|yml)(\\[)([A-Za-z][A-Za-z0-9_-]*)(\\])[ \\t]*$",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.bind.begin.pendon"
+        },
+        "2": {
+          "name": "constant.language.bind.lang.pendon"
+        },
+        "3": {
+          "name": "punctuation.definition.bind.var.begin.pendon"
+        },
+        "4": {
+          "name": "variable.other.bind.name.pendon"
+        },
+        "5": {
+          "name": "punctuation.definition.bind.var.end.pendon"
+        }
+      },
+      "end": "^[ ]{0,3}(\\}\\}\\})[ \\t]*$",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.bind.end.pendon"
+        }
+      },
+      "name": "meta.bind.block.pendon",
+      "contentName": "meta.embedded.block.yaml.bind.pendon",
+      "patterns": [
+        {
+          "include": "source.yaml"
+        }
+      ]
+    },
+    "bindBodyToml": {
+      "comment": "§19 — `toml` body. VS Code ships no TOML grammar, so `source.toml` resolves only when the user has one installed.",
+      "begin": "^[ ]{0,3}(\\{\\{\\{)(toml)(\\[)([A-Za-z][A-Za-z0-9_-]*)(\\])[ \\t]*$",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.bind.begin.pendon"
+        },
+        "2": {
+          "name": "constant.language.bind.lang.pendon"
+        },
+        "3": {
+          "name": "punctuation.definition.bind.var.begin.pendon"
+        },
+        "4": {
+          "name": "variable.other.bind.name.pendon"
+        },
+        "5": {
+          "name": "punctuation.definition.bind.var.end.pendon"
+        }
+      },
+      "end": "^[ ]{0,3}(\\}\\}\\})[ \\t]*$",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.bind.end.pendon"
+        }
+      },
+      "name": "meta.bind.block.pendon",
+      "contentName": "meta.embedded.block.toml.bind.pendon",
+      "patterns": [
+        {
+          "include": "source.toml"
+        }
+      ]
+    },
+    "bindBodyCsv": {
+      "comment": "§19 — `csv` body; no CSV grammar is bundled, so the payload fields are scoped here (comma, quoted / numeric / boolean / unquoted field).",
+      "begin": "^[ ]{0,3}(\\{\\{\\{)(csv)(\\[)([A-Za-z][A-Za-z0-9_-]*)(\\])[ \\t]*$",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.bind.begin.pendon"
+        },
+        "2": {
+          "name": "constant.language.bind.lang.pendon"
+        },
+        "3": {
+          "name": "punctuation.definition.bind.var.begin.pendon"
+        },
+        "4": {
+          "name": "variable.other.bind.name.pendon"
+        },
+        "5": {
+          "name": "punctuation.definition.bind.var.end.pendon"
+        }
+      },
+      "end": "^[ ]{0,3}(\\}\\}\\})[ \\t]*$",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.bind.end.pendon"
+        }
+      },
+      "name": "meta.bind.block.pendon",
+      "contentName": "meta.embedded.block.csv.bind.pendon",
+      "patterns": [
+        {
+          "match": ",",
+          "name": "punctuation.separator.csv.field.pendon"
+        },
+        {
+          "match": "\"(?:[^\"\\\\\\n]|\\\\.)*\"",
+          "name": "string.quoted.double.csv.pendon"
+        },
+        {
+          "match": "-?[0-9]+(?:\\.[0-9]+)?(?![0-9A-Za-z_.-])",
+          "name": "constant.numeric.csv.pendon"
+        },
+        {
+          "match": "(?:true|false)(?![0-9A-Za-z_-])",
+          "name": "constant.language.boolean.csv.pendon"
+        },
+        {
+          "match": "[^,\\n]+",
+          "name": "string.unquoted.csv.pendon"
+        }
+      ]
+    },
+    "bindBodyMdp": {
+      "comment": "§19 — `mdp` body: specified but not implemented (the pipeline warns and drops the block), so the payload is not tokenized as Pendon.",
+      "begin": "^[ ]{0,3}(\\{\\{\\{)(mdp)(\\[)([A-Za-z][A-Za-z0-9_-]*)(\\])[ \\t]*$",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.bind.begin.pendon"
+        },
+        "2": {
+          "name": "constant.language.bind.lang.pendon"
+        },
+        "3": {
+          "name": "punctuation.definition.bind.var.begin.pendon"
+        },
+        "4": {
+          "name": "variable.other.bind.name.pendon"
+        },
+        "5": {
+          "name": "punctuation.definition.bind.var.end.pendon"
+        }
+      },
+      "end": "^[ ]{0,3}(\\}\\}\\})[ \\t]*$",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.bind.end.pendon"
+        }
+      },
+      "name": "meta.bind.block.pendon",
+      "contentName": "meta.embedded.block.mdp.bind.pendon",
+      "patterns": []
+    },
+    "mathInline": {
+      "comment": "plugin-latex — inline math `$…$`. Mirrors the plugin scanner: `\\$` is a literal dollar, a `$` touching a space neither opens nor closes, and an unclosed `$` (e.g. `$100`) stays literal.",
+      "match": "(?<![$\\\\])(\\$)(?!\\$)(?![ \\t\\n])((?:[^$\\n]|(?<=[ \\t\\n])\\$)*?)(?<![ \\t\\n])(\\$)",
+      "name": "meta.math.inline.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.math.begin.pendon"
+        },
+        "2": {
+          "name": "string.other.math.pendon"
+        },
+        "3": {
+          "name": "punctuation.definition.math.end.pendon"
+        }
+      }
+    },
+    "mathDisplay": {
+      "comment": "plugin-latex — display math `$$…$$` on one line. `\\$` escapes; a lone interior `$` is part of the formula, `$$` closes it.",
+      "match": "(?<!\\\\)(\\$\\$)((?:[^$\\n]|\\$(?!\\$))*?)(\\$\\$)",
+      "name": "meta.math.display.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.math.begin.pendon"
+        },
+        "2": {
+          "name": "string.other.math.pendon"
+        },
+        "3": {
+          "name": "punctuation.definition.math.end.pendon"
+        }
+      }
+    }
+  }
+}
