@@ -9,6 +9,8 @@ rejected alternatives, and the evidence that pins each decision.
 | [0001](0001-typed-extras-reconciliation.md) | Typed Extras Reconciliation (D1–D10)                | Accepted / complete |
 | [0002](0002-decorator-binder.md)            | Decorator binder: wrapper node with `__plugin_kind` | Accepted            |
 | [0003](0003-positional-groups.md)           | Positional groups `@@type[…](…){…}` (Option 2)      | Accepted / done     |
+| [0004](0004-pre-parse-bind-stage.md)        | `plugin-bind` runs a pre-parse text stage           | Accepted / building |
+| [0005](0005-structured-extras-values.md)    | Structured extras values + the `U+E001` transport   | Accepted / complete |
 
 ## Conventions
 
