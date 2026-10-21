@@ -18,12 +18,12 @@ a reference at all — a <code>var</code> starts with a letter:
 </p>
 <p>A spread supplies defaults, and the key written in the head wins over it:
 </p>
-<p><a href="/docs" theme={{"accent":"#0af","mode":"dark","scale":1.2}} type="anchorA">Theme</a>
+<p><a href="/docs" theme={{accent: "#0af", mode: "dark", scale: 1.2}} type="anchorA">Theme</a>
 </p>
 <p>A spread item is <strong>copied, never walked</strong>: a <code>$…</code>-looking string inside the bound
 object stays exactly as it is.
 </p>
-<p><a copy={{"n":2,"title":"a $brand string is data"}} href="/docs" type="anchorA">Copy</a>
+<p><a copy={{n: 2, title: "a $brand string is data"}} href="/docs" type="anchorA">Copy</a>
 </p>
 
 </>); }

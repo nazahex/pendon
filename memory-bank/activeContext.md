@@ -183,6 +183,16 @@ blockquote) have landed; the item layer is the next code task.
   decorator binder, `plugin-section` rework, §11 positional keys + empty-attr
   omission, positional groups `@@type[…](…){…}`, `plugin-list`/`plugin-blockquote`
   container layers.
+- **Extras nested values + JSX brackets (this session):** `parse_value` now
+  treats a `{ … }` group holding a single identifier/dotted path
+  (`{valueA}`, `{frontmatter.fm1}`) as `AttrValue::JsxExpr` instead of rejecting
+  the whole head (§4.3 literal fallback). Transported via `JSX_ATTR_PREFIX`
+  (`U+E002`); `renderer-solid` emits `name={valueA}` unquoted in both the
+  direct-node and `{...attrs}` template paths, `renderer-html` emits the escaped
+  string, and object/array/`$var` bind behaviour (incl. `$theme` inside a nested
+  value combined with non-bind values) is preserved. New unit tests in
+  `crates/extra/tests/extras_spec.rs` (`nested_values`), golden fixture
+  `25-extras-nested`, and regenerated `sandbox/extras/out/extras-basic.jsx`.
 
 ## Next steps
 

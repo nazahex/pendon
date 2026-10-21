@@ -6,15 +6,15 @@ export default function PendonView() { return (<>
 quoted location. Extras merge into the citation node while the cite args win
 (§7.3). <code>#id</code>/slug feed the <code>cite-id</code> slot.
 </p>
-<p>Minim <Cite reference={frontmatter.references["book"]} cite-id={"smith"} class={"paper"} index={1} loc={"hlm. 45"} note={"short"} type={"citeX"} /> esse do ut anim proident.
+<p>Minim <Cite reference={frontmatter.references["book"]} cite-id="smith" class="paper" index={1} loc="hlm. 45" note="short" type="citeX" /> esse do ut anim proident.
 </p>
 <p>A location argument stays the construct value even when the extras ask for one:
 </p>
-<p><Cite reference={frontmatter.references["book"]} class={"thin"} index={1} loc={"hlm. 45"} type={"citeX"} />
+<p><Cite reference={frontmatter.references["book"]} class="thin" index={1} loc="hlm. 45" type="citeX" />
 </p>
 <p>The same reference twice keeps its identity and gets the next index:
 </p>
-<p><Cite reference={frontmatter.references["book"]} class={"repeat"} index={2} type={"citeX"} />
+<p><Cite reference={frontmatter.references["book"]} class="repeat" index={2} type="citeX" />
 </p>
 <p>Retired spellings are not citations; they stay literal text (§7.3):
 </p>

@@ -312,6 +312,14 @@ fn render_attrs(v: &Value, out: &mut String, skipped: &[&str]) {
         // expression so the markup is parsed, not stringified.
         if let Value::String(text) = value {
             if let Some(fragment) = pendon_core::jsx_attr_payload(text) {
+                if is_jsx_expression_token(fragment) {
+                    // A bare identifier / dotted path is emitted unquoted so it
+                    // is passed as a variable reference: `name={valueA}`.
+                    out.push_str("={");
+                    out.push_str(fragment);
+                    out.push('}');
+                    continue;
+                }
                 out.push_str("={(");
                 out.push_str(fragment);
                 out.push_str(")}");
@@ -324,10 +332,17 @@ fn render_attrs(v: &Value, out: &mut String, skipped: &[&str]) {
                 escape_jsx(text, out);
                 out.push('"');
             }
-            // Objects, arrays and numbers are JS expressions, not strings.
-            Value::Object(_) | Value::Array(_) | Value::Number(_) => {
+            // Objects and arrays are JS expressions, not strings. Emit clean JS
+            // literal syntax (`{ key: value }`, `[ item, ... ]`) rather than
+            // compact JSON with escaped quotes.
+            Value::Object(_) | Value::Array(_) => {
                 out.push_str("={");
-                out.push_str(&serde_json::to_string(value).unwrap_or_else(|_| "null".into()));
+                out.push_str(&to_js_literal(value));
+                out.push('}');
+            }
+            Value::Number(_) => {
+                out.push_str("={");
+                out.push_str(&value.to_string());
                 out.push('}');
             }
             Value::Bool(false) => {
@@ -364,4 +379,106 @@ fn escape_jsx(s: &str, out: &mut String) {
 /// JSX curly brace expressions (e.g., innerHTML bindings).
 fn json_string_literal(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_else(|_| "\"\"".to_string())
+}
+
+/// `true` when `text` is a single JSX expression token — a dot-separated
+/// identifier path such as `valueA` or `frontmatter.fm1` — which is emitted
+/// unquoted as `name={valueA}` rather than wrapped in parentheses.
+pub(crate) fn is_jsx_expression_token(text: &str) -> bool {
+    let mut segments = text.split('.');
+    let first = segments.next();
+    if first.is_none() {
+        return false;
+    }
+    for segment in std::iter::once(first.unwrap_or("")).chain(segments) {
+        let segment = segment.trim();
+        if segment.is_empty() {
+            return false;
+        }
+        let mut chars = segment.chars();
+        match chars.next() {
+            Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
+            _ => return false,
+        }
+        if !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            return false;
+        }
+    }
+    true
+}
+
+/// Converts a `serde_json::Value` to a clean JavaScript literal expression
+/// string — object literal syntax (`{ key: value }`) rather than compact JSON
+/// with quoted keys and escaped quotes. Used so structured extras values render
+/// as `name={ key: "value" }` instead of `name={"{\"key\":\"value\"}"}`.
+pub(crate) fn to_js_literal(value: &Value) -> String {
+    match value {
+        Value::Null => "null".to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Number(n) => n.to_string(),
+        Value::String(s) => {
+            let mut out = String::from("\"");
+            for ch in s.chars() {
+                match ch {
+                    '"' => out.push_str("\\\""),
+                    '\\' => out.push_str("\\\\"),
+                    '\n' => out.push_str("\\n"),
+                    '\r' => out.push_str("\\r"),
+                    '\t' => out.push_str("\\t"),
+                    c => out.push(c),
+                }
+            }
+            out.push('"');
+            out
+        }
+        Value::Array(items) => {
+            let mut out = String::from("[");
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                out.push_str(&to_js_literal(item));
+            }
+            out.push(']');
+            out
+        }
+        Value::Object(map) => {
+            let mut out = String::from("{");
+            let mut first = true;
+            for (key, val) in map {
+                if !first {
+                    out.push_str(", ");
+                }
+                first = false;
+                if is_js_identifier(key) {
+                    out.push_str(key);
+                } else {
+                    out.push('"');
+                    for ch in key.chars() {
+                        match ch {
+                            '"' => out.push_str("\\\""),
+                            '\\' => out.push_str("\\\\"),
+                            c => out.push(c),
+                        }
+                    }
+                    out.push('"');
+                }
+                out.push_str(": ");
+                out.push_str(&to_js_literal(val));
+            }
+            out.push('}');
+            out
+        }
+    }
+}
+
+/// `true` when `s` is a valid JavaScript identifier that can be used as an
+/// unquoted object key.
+fn is_js_identifier(s: &str) -> bool {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' || c == '$' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
 }

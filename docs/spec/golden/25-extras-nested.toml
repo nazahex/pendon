@@ -1,0 +1,12 @@
+[[task]]
+name = "Golden 25"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,directive,marker,bind,markdown"
+format = "solid"
+
+[[task.marker.custom]]
+type = ["markerA"]
+name = "MarkerA"
+imports = "import MarkerA from '@comp/content/MarkerA'"
+template = "<MarkerA {...attrs} />"

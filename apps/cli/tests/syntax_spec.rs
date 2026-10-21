@@ -243,3 +243,11 @@ fn golden_23_bind() {
 fn golden_24_bind_paths() {
     assert_fixture("24-bind-paths");
 }
+
+/// §16.3 fixture 25: nested objects/arrays in extras values plus JSX brackets
+/// (`{valueA}` → `name={valueA}`), including a bind-resolved `$theme` inside a
+/// nested value combined with non-bind nested values in the same head (§5, §6.3).
+#[test]
+fn golden_25_extras_nested() {
+    assert_fixture("25-extras-nested");
+}

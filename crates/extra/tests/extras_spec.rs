@@ -763,6 +763,48 @@ mod nested_values {
         );
     }
 
+    /// A `{ … }` group whose body is a single JSX expression token — an
+    /// identifier or a dot-separated path — is parsed as `JsxExpr` so it is
+    /// emitted unquoted as `name={expr}` rather than rejected as an object.
+    #[test]
+    fn a_jsx_expression_token_is_parsed_as_jsx_expr() {
+        assert_eq!(
+            prop_value("@@type{data: {valueA}}", "data"),
+            AttrValue::JsxExpr("valueA".to_string())
+        );
+        assert_eq!(
+            prop_value("@@type{labels: {frontmatter.fm1}}", "labels"),
+            AttrValue::JsxExpr("frontmatter.fm1".to_string())
+        );
+    }
+
+    /// `literal()` transports a JSX expression through [`JSX_ATTR_PREFIX`]
+    /// (`U+E002`); only `plugin-bind` and the Solid renderer interpret it.
+    #[test]
+    fn a_jsx_expression_literal_carries_the_jsx_prefix() {
+        let value = prop_value("@@type{data: {valueA}}", "data");
+        let lit = value.literal();
+        assert!(lit.starts_with('\u{E002}'));
+        assert_eq!(&lit['\u{E002}'.len_utf8()..], "valueA");
+    }
+
+    /// A real object, an empty group, and a group with trailing characters are
+    /// **not** JSX expressions — they fall through to object parsing (which
+    /// keeps all existing error behaviour).
+    #[test]
+    fn an_object_or_empty_group_is_not_a_jsx_expression() {
+        assert_eq!(
+            prop_value("@@type{cfg: {a: 1}}", "cfg"),
+            AttrValue::Object(vec![("a".to_string(), AttrValue::Int(1))])
+        );
+        assert_eq!(prop_value("@@type{o: {}}", "o"), AttrValue::Object(vec![]));
+        // `{a: 1} junk` has trailing characters → rejected as an object, not an expr.
+        assert_eq!(
+            literal_error("@@type{cfg: {a: 1} junk}"),
+            ExtrasError::TrailingCharacters
+        );
+    }
+
     /// A malformed nested value falls back to literal text (§4.3): the whole
     /// head is rejected, nothing partially applied.
     #[test]

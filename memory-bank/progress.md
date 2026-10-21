@@ -3,7 +3,7 @@
 ## What works (verified green)
 
 - Workspace builds clean: `cargo build --workspace`.
-- `cargo test --workspace` green.
+- `cargo test --workspace` green (except pre-existing ultimate_freeze_spec sandbox issue).
 - Golden fixtures `01–12`, `14–16`, `21–24` frozen and green; none `#[ignore]`d.
   Gates: `cargo test -p pendon --test syntax_spec` (19 fixtures) and
   `cargo test -p pendon --test ultimate_freeze_spec`.

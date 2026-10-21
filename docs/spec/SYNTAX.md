@@ -324,6 +324,7 @@ present: `#id` > head slug > extras slug.
 enum AttrValue {
     Str(String), Int(i64), Float(f64), Bool(bool), Raw(String),
     Object(Vec<(String, AttrValue)>), Array(Vec<AttrValue>),
+    JsxExpr(String),
 }
 ```
 
@@ -346,6 +347,13 @@ Mapping to the event IR (`Event::Attribute { name, value: String }`):
   → **compact JSON** text in `value` (`{"b":1}`), the stringly-typed form every
   renderer understands. Verified: with no data-binding plugin enabled,
   `[a](/u)@@anchorA{a: {b: 1}}` renders `a="&#123;&quot;b&quot;:1&#125;"`.
+- **JSX expression token.** A `{ … }` group whose body is a single identifier or
+  dot-separated path — e.g. `{valueA}` or `{frontmatter.fm1}` — is a JSX
+  expression rather than an object. It is transported as `JSX_ATTR_PREFIX`
+  (`U+E002`) + the expression text, and `renderer-solid` emits it unquoted as
+  `k={valueA}` so the value is passed as a variable reference, not a string
+  literal. `crates/extra` MUST NOT emit `U+E002` outside this form — only the
+  JSX-expression value produces it (`crates/core/src/event.rs`).
 - **Structured transport.** With `plugin-bind` enabled (§19), a `$var`-bearing
   value is carried as `JSON_ATTR_PREFIX` (`U+E001`) + compact JSON;
   `renderer-ast` strips the prefix and re-hydrates a real JSON value, which
@@ -354,11 +362,11 @@ Mapping to the event IR (`Event::Attribute { name, value: String }`):
 
 Renderers:
 
-| Renderer                 | flag                               | typed string | Int/Float                     | structured (`{…}` / `[…]`)         |
-| ------------------------ | ---------------------------------- | ------------ | ----------------------------- | ---------------------------------- |
-| `renderer-solid`         | `k` (bare JSX shorthand, verbatim) | `k="v"`      | `k="12"` (fallback path only) | `k="{…}"`, or `k={…}` under `bind` |
-| `renderer-html`          | `k`                                | `k="v"`      | `k="12"`                      | `k="{…}"` (escaped)                |
-| `renderer-json` / `-ast` | `{ "name": "k", "kind": "flag" }`  | string       | string                        | string (compact JSON)              |
+| Renderer                 | flag                               | typed string | Int/Float                     | structured (`{…}` / `[…]`)                                       |
+| ------------------------ | ---------------------------------- | ------------ | ----------------------------- | ---------------------------------------------------------------- |
+| `renderer-solid`         | `k` (bare JSX shorthand, verbatim) | `k="v"`      | `k="12"` (fallback path only) | `k="{…}"`, or `k={…}` under `bind` or for a JSX-expression token |
+| `renderer-html`          | `k`                                | `k="v"`      | `k="12"`                      | `k="{…}"` (escaped)                                              |
+| `renderer-json` / `-ast` | `{ "name": "k", "kind": "flag" }`  | string       | string                        | string (compact JSON)                                            |
 
 Custom components receive the **typed** form through the `attrs` map
 (`{...attrs}` spread), because that path serialises `AttrValue` as JSON
@@ -1002,7 +1010,7 @@ byte-for-byte against the real CLI) and the re-freeze procedure.
 ### 16.1 Fixture format
 
 ```text
-docs/spec/golden/NN-name.md           input markdown
+docs/spec/golden/NN-name.mdp          input markdown
 docs/spec/golden/NN-name.toml         pendon.toml for the fixture (plugins + custom sets)
 docs/spec/golden/NN-name.jsx          expected solid output (generated — never hand-edited)
 docs/spec/golden/NN-name.events.json  expected event IR (optional, for parser bugs)

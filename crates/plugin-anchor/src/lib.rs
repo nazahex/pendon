@@ -215,33 +215,48 @@ fn build_attributes(
     let mut i = 0usize;
 
     while i < all_modifiers.len() {
-        if all_modifiers[i] == '^' {
-            if explicit_target == Some("_self") {
-                conflict =
-                    Some("[anchor] both '^' and '~' were provided; last modifier wins".to_string());
+        let step = match all_modifiers[i] {
+            '^' => {
+                if explicit_target == Some("_self") {
+                    conflict = Some(
+                        "[anchor] both '^' and '~' were provided; last modifier wins".to_string(),
+                    );
+                }
+                target = Some("_blank".to_string());
+                explicit_target = Some("_blank");
+                add_rel(&mut rel, "noopener");
+                1
             }
-            target = Some("_blank".to_string());
-            explicit_target = Some("_blank");
-            add_rel(&mut rel, "noopener");
-        } else if all_modifiers[i] == '~' {
-            if explicit_target == Some("_blank") {
-                conflict =
-                    Some("[anchor] both '^' and '~' were provided; last modifier wins".to_string());
+            '~' => {
+                if explicit_target == Some("_blank") {
+                    conflict = Some(
+                        "[anchor] both '^' and '~' were provided; last modifier wins".to_string(),
+                    );
+                }
+                target = Some("_self".to_string());
+                explicit_target = Some("_self");
+                1
             }
-            target = Some("_self".to_string());
-            explicit_target = Some("_self");
-        } else if all_modifiers[i] == '!' {
-            add_rel(&mut rel, "nofollow");
-        } else if all_modifiers[i] == '$' {
-            add_rel(&mut rel, "sponsored");
-        } else if all_modifiers[i] == ';' && all_modifiers.get(i + 1) == Some(&';') {
-            add_rel(&mut rel, "ugc");
-            i += 1;
-        } else if all_modifiers[i] == '-' && all_modifiers.get(i + 1) == Some(&'-') {
-            add_rel(&mut rel, "noreferrer");
-            i += 1;
-        }
-        i += 1;
+            '!' => {
+                add_rel(&mut rel, "nofollow");
+                1
+            }
+            '$' => {
+                add_rel(&mut rel, "sponsored");
+                1
+            }
+            ';' if all_modifiers.get(i + 1) == Some(&';') => {
+                add_rel(&mut rel, "ugc");
+                2
+            }
+            '-' if all_modifiers.get(i + 1) == Some(&'-') => {
+                add_rel(&mut rel, "noreferrer");
+                2
+            }
+            // Unknown modifier (e.g. `?` section terminator): stop processing.
+            _ => break,
+        };
+        i += step;
     }
 
     // §7.2 / §6.2: the extras head attaches to the `<a>`; the construct head
@@ -357,6 +372,11 @@ fn strip_url_modifiers(url: &str) -> (String, String) {
             || base.ends_with('$')
         {
             (base[base.len() - 1..].to_string(), 1)
+        } else if base.ends_with('?') {
+            // `?` terminates the modifier section: strip it from the URL
+            // and keep it in the modifier string so it acts as a
+            // left-to-right processing terminator (§7.2).
+            ("?".to_string(), 1)
         } else {
             break;
         };

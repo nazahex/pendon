@@ -32,6 +32,11 @@ pub enum AttrValue {
     Object(Vec<(String, AttrValue)>),
     /// A nested `[ … ]` array.
     Array(Vec<AttrValue>),
+    /// A `{ … }` group whose body is a single JSX expression token — a
+    /// dot-separated identifier path such as `valueA` or `frontmatter.fm1` —
+    /// that must be emitted unquoted as `name={expr}` rather than as a string
+    /// literal. Transported through [`pendon_core::JSX_ATTR_PREFIX`].
+    JsxExpr(String),
 }
 
 impl AttrValue {
@@ -49,6 +54,9 @@ impl AttrValue {
             Self::Bool(false) => "false".to_string(),
             Self::Object(_) | Self::Array(_) => {
                 serde_json::to_string(&self.to_json()).unwrap_or_else(|_| "null".to_string())
+            }
+            Self::JsxExpr(expr) => {
+                format!("{}{}", pendon_core::JSX_ATTR_PREFIX, expr)
             }
         }
     }
@@ -75,6 +83,7 @@ impl AttrValue {
                 Value::Object(map)
             }
             Self::Array(items) => Value::Array(items.iter().map(AttrValue::to_json).collect()),
+            Self::JsxExpr(expr) => Value::String(expr.clone()),
         }
     }
 }

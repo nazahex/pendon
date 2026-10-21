@@ -2,6 +2,8 @@ use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 
 use crate::imports::{ComponentTemplate, SolidRenderHints};
+use crate::node::{is_jsx_expression_token, to_js_literal};
+use pendon_core::{json_attr_payload, jsx_attr_payload};
 
 pub fn render_template(
     template: &ComponentTemplate,
@@ -218,6 +220,58 @@ fn generate_spread_attrs(map: &Map<String, Value>, used_keys: &BTreeSet<String>)
         match val {
             Value::String(s) => {
                 let trimmed = s.trim();
+                // A `JSX_ATTR_PREFIX` payload is a JSX expression reference
+                // (e.g. `{valueA}` / `{frontmatter.fm1}`). Emit it unquoted as
+                // `name={valueA}` so it is passed as a variable reference,
+                // not as a string literal.
+                if let Some(payload) = jsx_attr_payload(s) {
+                    if is_jsx_expression_token(payload) {
+                        part.push_str("={");
+                        part.push_str(payload);
+                        part.push('}');
+                        parts.push(part);
+                        continue;
+                    }
+                    part.push_str("={(");
+                    part.push_str(payload);
+                    part.push_str(")}");
+                    parts.push(part);
+                    continue;
+                }
+                // A `JSON_ATTR_PREFIX` payload carries a structured value
+                // (object/array) produced by `plugin-bind`. Re-hydrate it and
+                // emit as a JS expression.
+                if let Some(payload) = json_attr_payload(s) {
+                    if let Ok(parsed) = serde_json::from_str::<Value>(payload) {
+                        match parsed {
+                            Value::Object(_) | Value::Array(_) => {
+                                part.push_str("={");
+                                part.push_str(&to_js_literal(&parsed));
+                                part.push('}');
+                                parts.push(part);
+                                continue;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                // A string that looks like structured JSON (starts with `{` or
+                // `[`) but was not carried through `JSON_ATTR_PREFIX` — e.g. a
+                // nested object/array written directly in the extras head without
+                // `plugin-bind`. Emit it as a JS expression.
+                if (trimmed.starts_with('{') || trimmed.starts_with('['))
+                    && serde_json::from_str::<Value>(trimmed)
+                        .map(|p| matches!(p, Value::Object(_) | Value::Array(_)))
+                        .unwrap_or(false)
+                {
+                    if let Ok(parsed) = serde_json::from_str::<Value>(trimmed) {
+                        part.push_str("={");
+                        part.push_str(&to_js_literal(&parsed));
+                        part.push('}');
+                        parts.push(part);
+                        continue;
+                    }
+                }
                 // Infer boolean
                 if trimmed == "true" {
                     part.push_str("={true}");
@@ -236,11 +290,11 @@ fn generate_spread_attrs(map: &Map<String, Value>, used_keys: &BTreeSet<String>)
                     part.push_str(&f.to_string());
                     part.push('}');
                 }
-                // Default to string expression
+                // Default to a plain quoted string attribute.
                 else {
-                    part.push_str("={\"");
+                    part.push_str("=\"");
                     part.push_str(&escape_js_string(s));
-                    part.push_str("\"}");
+                    part.push('"');
                 }
             }
             Value::Number(n) => {
@@ -258,9 +312,9 @@ fn generate_spread_attrs(map: &Map<String, Value>, used_keys: &BTreeSet<String>)
                 continue;
             }
             _ => {
-                // Arrays or Objects: pass as JSON expression
+                // Arrays or Objects: pass as JS literal expression
                 part.push_str("={");
-                part.push_str(&serde_json::to_string(val).unwrap_or_else(|_| "null".to_string()));
+                part.push_str(&to_js_literal(val));
                 part.push('}');
             }
         }

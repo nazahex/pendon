@@ -1,0 +1,29 @@
+---
+fm1: "This is a frontmatter label"
+---
+
+## Nested extras
+
+{{markerA}}{ content: { text: "Lorem Ipsum", original: "Foo bar bur." }, labels: {frontmatter.fm1}, bags: [ { fruits: ["banana", "apple"] }, { vegs: "carrot" } ] }
+
+{{markerA}}{ jsxBracket: {valueA} } `valueA` must be passed as a variable, not a string literal: `<MarkerA jsxBracket={valueA} />`.
+
+{{{jsonc[theme]
+{
+  // a JSONC line comment
+  "accent": "#0af",
+  "scale": [1, 2]
+}
+}}}
+
+===DirecA{ token: { def: { theme: $theme }} }
+
+Lorem ipsum.
+
+===
+
+===DirecA{ token: { def: { theme: $theme }}, content: { text: "Lorem Ipsum", original: "Foo bar bur." }, labels: {frontmatter.fm1}, bags: [ { fruits: ["banana", "apple"] }, { vegs : "carrot" } ] }
+
+Lorem ipsum.
+
+===

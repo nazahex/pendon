@@ -76,6 +76,7 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | 22 | `section`          | §9.5 outline, section decorator + id chain                    |
 | 23 | `bind`             | §19 data blocks → real props: JSON/JSONC/YAML/TOML/CSV, nested `$var`, unbound → literal |
 | 24 | `bind-paths`       | §2.5–§2.7 paths, spread/merge, external file via `../data/`  |
+| 25 | `extras-nested`    | nested objects/arrays + JSX brackets (`{valueA}` → `name={valueA}`), bind + non-bind   |
 
 Fixtures 17–20 are covered by unit tests in the renderer/CLI crates rather than as
 golden files.

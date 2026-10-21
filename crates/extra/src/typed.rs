@@ -623,13 +623,69 @@ fn parse_scalar(text: &str) -> Result<AttrValue, ExtrasError> {
 
 /// Parses a prop value: a nested `{ … }` object, a `[ … ]` array, or a scalar
 /// (`docs/rfc/plugin-bind.md`). Dispatch is on the first non-space byte.
+///
+/// A `{ … }` group whose balanced body is a single JSX expression token — a
+/// dot-separated identifier path such as `valueA` or `frontmatter.fm1` — is
+/// parsed as [`AttrValue::JsxExpr`] so it is emitted unquoted as
+/// `name={expr}` instead of being rejected as a malformed object. Any other
+/// `{ … }` falls through to [`parse_object`], which preserves all existing
+/// error behaviour (unbalanced groups, trailing characters, …).
 fn parse_value(text: &str) -> Result<AttrValue, ExtrasError> {
     let text = text.trim();
     match text.as_bytes().first() {
-        Some(b'{') => parse_object(text),
+        Some(b'{') => {
+            if let Some(expr) = read_jsx_expression(text) {
+                return Ok(AttrValue::JsxExpr(expr));
+            }
+            parse_object(text)
+        }
         Some(b'[') => parse_array(text),
         _ => parse_scalar(text),
     }
+}
+
+/// If `text` is a `{ … }` group whose balanced body is a single JSX expression
+/// token — a dot-separated identifier path such as `valueA` or
+/// `frontmatter.fm1` — return the expression text (braces stripped).
+///
+/// Returns `None` for anything else: an actual object (`{ key: value }`),
+/// an empty group (`{}`), a group with trailing characters, or any group whose
+/// body is not a pure identifier path. The caller then falls through to
+/// [`parse_object`], which preserves all existing error behaviour.
+fn read_jsx_expression(text: &str) -> Option<String> {
+    let inner = text.trim_start().strip_prefix('{')?;
+    let close = find_group_close(inner, '}')?;
+    let body = &inner[..close];
+    if !inner[close + 1..].trim().is_empty() {
+        return None;
+    }
+    let body = body.trim();
+    if body.is_empty() {
+        return None;
+    }
+    let mut ok = true;
+    for segment in body.split('.') {
+        let segment = segment.trim();
+        if segment.is_empty() {
+            ok = false;
+            break;
+        }
+        let mut chars = segment.chars();
+        match chars.next() {
+            Some(c) if c.is_ascii_alphabetic() || c == '_' => {
+                // first character is valid
+            }
+            _ => {
+                ok = false;
+                break;
+            }
+        }
+        if !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            ok = false;
+            break;
+        }
+    }
+    ok.then_some(body.to_string())
 }
 
 /// Parses a nested `{ key: value, … }` object value. Keys reuse the prop-key

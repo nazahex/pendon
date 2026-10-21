@@ -33,6 +33,17 @@ pub(crate) fn render_attrs_except(v: &Value, out: &mut String, skip: &[&str]) {
         if matches!(value, Value::Bool(true)) {
             continue;
         }
+        // A `JSX_ATTR_PREFIX` payload (a JSX expression reference) is a
+        // Solid-only concept; in HTML it is emitted as an escaped string so
+        // the sentinel never leaks into markup.
+        if let Value::String(text) = value {
+            if let Some(payload) = pendon_core::jsx_attr_payload(text) {
+                out.push_str("=\"");
+                escape_html(payload, out);
+                out.push('"');
+                continue;
+            }
+        }
         out.push_str("=\"");
         match value {
             Value::String(value) => escape_html(value, out),

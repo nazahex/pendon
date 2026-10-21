@@ -4,7 +4,7 @@ import { Note } from '@comp/content/Directive'
 export default function PendonView() { return (<>
 <p>A block directive owns its line and its body is parsed as block content (§10.3):
 </p>
-<Note type={"note"}><h1>A heading inside the directive</h1>
+<Note type="note"><h1>A heading inside the directive</h1>
 <ul>
 <li>the first item</li>
 <li>the second item</li>
@@ -12,7 +12,7 @@ export default function PendonView() { return (<>
 </Note><p>Nested fences close LIFO, so the innermost directive is the first to close
 (§10.3):
 </p>
-<DirectiveDefault type={"outer"}><Note type={"note"}><p>inner body
+<DirectiveDefault type="outer"><Note type="note"><p>inner body
 </p>
 </Note><p>trailing text of the outer
 </p>
@@ -25,7 +25,7 @@ is no anonymous block directive (§10.3, OPEN-B1):
 <p>An unclosed directive is closed implicitly at the end of the input, with a
 warning (§10.3):
 </p>
-<Note type={"note"}><p>this block never closes
+<Note type="note"><p>this block never closes
 </p>
 </Note>
 </>); }

@@ -25,6 +25,8 @@ pub fn parse(input: &str, options: &Options) -> Vec<Event> {
         let mut in_paragraph = false;
         let mut in_heading = false;
         let mut in_code_fence = false;
+        let mut in_html_comment = false;
+        let mut in_bind_block = false;
         let mut blank_run = 0usize;
         let mut current_line_len = 0usize;
         let mut just_opened_code_fence = false;
@@ -69,6 +71,59 @@ pub fn parse(input: &str, options: &Options) -> Vec<Event> {
                             events.push(Event::EndNode(NodeKind::ThematicBreak));
                             blank_run = 0;
                             current_line_len = current_line_len.saturating_add(s.len());
+                            continue;
+                        }
+                    }
+                    // HTML comment detection: <!-- ... -->
+                    if current_line_len == 0 {
+                        if s.trim_start().starts_with("<!--") {
+                            // One-line comments (`<!-- x -->`) open and close at
+                            // once, matching the scanner; only a line that lacks
+                            // `-->` opens a multi-line comment.
+                            if !s.contains("-->") {
+                                in_html_comment = true;
+                            }
+                            // Still emit the text for fidelity
+                            open_paragraph(&mut events, &mut in_paragraph);
+                            current_line_len = current_line_len.saturating_add(s.len());
+                            events.push(Event::Text(s.to_string()));
+                            blank_run = 0;
+                            continue;
+                        }
+                        if s.trim_start().ends_with("-->") && in_html_comment {
+                            in_html_comment = false;
+                            // Still emit the text for fidelity
+                            open_paragraph(&mut events, &mut in_paragraph);
+                            current_line_len = current_line_len.saturating_add(s.len());
+                            events.push(Event::Text(s.to_string()));
+                            blank_run = 0;
+                            continue;
+                        }
+                    }
+                    // Bind block detection: {{{ ... }}}
+                    if current_line_len == 0 {
+                        if s.trim_start().starts_with("{{{") {
+                            // A head line that already carries its `}}}` (a
+                            // `(path)` payload or a one-line body) is a whole
+                            // block that opens and closes at once; only a line
+                            // lacking `}}}` opens a multi-line block.
+                            if !s.contains("}}}") {
+                                in_bind_block = true;
+                            }
+                            // Still emit the text for fidelity
+                            open_paragraph(&mut events, &mut in_paragraph);
+                            current_line_len = current_line_len.saturating_add(s.len());
+                            events.push(Event::Text(s.to_string()));
+                            blank_run = 0;
+                            continue;
+                        }
+                        if s.trim_start().ends_with("}}}") && in_bind_block {
+                            in_bind_block = false;
+                            // Still emit the text for fidelity
+                            open_paragraph(&mut events, &mut in_paragraph);
+                            current_line_len = current_line_len.saturating_add(s.len());
+                            events.push(Event::Text(s.to_string()));
+                            blank_run = 0;
                             continue;
                         }
                     }
@@ -145,7 +200,8 @@ pub fn parse(input: &str, options: &Options) -> Vec<Event> {
                     }
                 }
                 crate::Token::Hashes(n) => {
-                    if current_line_len == 0 {
+                    if current_line_len == 0 && !in_code_fence && !in_html_comment && !in_bind_block
+                    {
                         events.push(Event::StartNode(NodeKind::Heading));
                         // attach heading level attribute
                         events.push(Event::Attribute {

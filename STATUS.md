@@ -20,6 +20,15 @@ Phase 4 wiring of `plugin-list` L2/L3 (the `<li>` item layer) and the docs
 restructure. The container layers (`list`/`unordered`/`ordered`, blockquote)
 landed; the item layer is next.
 
+**Just landed:** extras nested values + JSX brackets — a `{ … }` group holding a
+single identifier/dotted path (`{valueA}`, `{frontmatter.fm1}`) now parses as
+`AttrValue::JsxExpr` instead of rejecting the whole head (§4.3 fallback).
+Transported via `JSX_ATTR_PREFIX` (`U+E002`); `renderer-solid` emits
+`name={valueA}` unquoted (direct-node and `{...attrs}` template paths),
+`renderer-html` emits the escaped string; object/array/`$var` bind behaviour is
+preserved. Covered by unit tests in `crates/extra/tests/extras_spec.rs`, golden
+fixture `25-extras-nested`, and regenerated `sandbox/extras/out/extras-basic.jsx`.
+
 ## Open blockers
 
 - **L37 truncation (`sandbox/ultimate`).** A heading whose line carries an extras
