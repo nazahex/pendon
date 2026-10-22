@@ -20,6 +20,26 @@ Phase 4 wiring of `plugin-list` L2/L3 (the `<li>` item layer) and the docs
 restructure. The container layers (`list`/`unordered`/`ordered`, blockquote)
 landed; the item layer is next.
 
+**Just landed:** `cite.references_scope` (`"cited"` | `"all"`) chooses what the
+`references` export carries; the default follows `reference_source`
+(frontmatter → `all`, external → `cited`) and an explicit value always wins
+([RFC-0002 §2.6](docs/rfc/plugin-cite-upgrade.md)). `citations`,
+`citation_number` / `instance_index` and diagnostics are untouched. Covered by
+golden `26-cite-scope`, `apps/cli/tests/cli_spec.rs` and plugin unit tests.
+
+**Just landed:** `plugin-cite` migrated to the RFC-0002 shape
+([`docs/rfc/plugin-cite-upgrade.md`](docs/rfc/plugin-cite-upgrade.md)): config
+keys are `ref_id_prefix` / `citation_id_prefix` / `reference_source` /
+`references_export` / `citations_export` (old keys now fail with a rename hint),
+the node carries `ref_id` + `citation_number` (display ordinal, deduped on
+`(ref_id, loc)`) + `instance_index` (unique per occurrence, `cite-1…N`), and the
+data leaves frontmatter for two JS module exports (`export const references` /
+`citations`, emitted after `frontmatter`/`headings`). Goldens `05-cite` and the
+`sandbox/{cite,ultimate,unified,universal}` configs were re-rendered. The
+fallback citation template is `<Citation reference={references["{attrs.ref_id}"]}
+{...attrs} />` and follows a renamed `references_export`, so custom components
+never bind an undefined name.
+
 **Just landed:** extras nested values + JSX brackets — a `{ … }` group holding a
 single identifier/dotted path (`{valueA}`, `{frontmatter.fm1}`) now parses as
 `AttrValue::JsxExpr` instead of rejecting the whole head (§4.3 fallback).
@@ -130,4 +150,7 @@ fixture `25-extras-nested`, and regenerated `sandbox/extras/out/extras-basic.jsx
   `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (19 fixtures) and
   `cargo test -p pendon --test ultimate_freeze_spec` are the gates.
 - `sandbox/ultimate` frozen baseline `out.frozen/` is gated by
-  `ultimate_freeze_spec` — re-freeze deliberately only.
+  `ultimate_freeze_spec` — re-freeze deliberately only. It is currently **red**:
+  the baseline predates the RFC-0002 cite migration and the `a46684a` attr-format
+  cleanup (`href={"/a"}` → `href="/a"`), and the sandbox is being reworked — so
+  ignore it until L37 lands, then re-render and re-freeze in one pass.

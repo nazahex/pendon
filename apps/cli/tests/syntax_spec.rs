@@ -251,3 +251,11 @@ fn golden_24_bind_paths() {
 fn golden_25_extras_nested() {
     assert_fixture("25-extras-nested");
 }
+
+/// §16.3 fixture 26: the reference export scope (§2.6 of RFC-0002) — frontmatter
+/// references default to `all`, so an uncited entry still reaches the
+/// `references` binding, while `citations` only lists what was cited.
+#[test]
+fn golden_26_cite_scope() {
+    assert_fixture("26-cite-scope");
+}

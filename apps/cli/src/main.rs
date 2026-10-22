@@ -258,7 +258,13 @@ fn main() -> ExitCode {
     };
 
     let events = if enabled_plugins.contains("cite") {
-        let (events, cite_diagnostics) = document_context.finalize_citations(&events);
+        let (cite_diagnostics, citations, references, options) =
+            document_context.finalize_citations();
+        builtin_hints.push(pendon_plugin_cite::solid_hints(
+            &options,
+            &citations,
+            &references,
+        ));
         let mut events = events;
         events.extend(cite_diagnostics);
         events

@@ -1,0 +1,9 @@
+[[task]]
+name = "Golden 26"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,cite,markdown"
+format = "solid"
+
+[task.cite]
+reference_source = "internal"

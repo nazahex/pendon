@@ -465,8 +465,7 @@ pub fn process_single_file(
     }
     // Finalize cite
     if cite_ran {
-        let (processed_events, diagnostics) = document_context.finalize_citations(&events);
-        events = processed_events;
+        let (diagnostics, citations, references, options) = document_context.finalize_citations();
 
         if !diagnostics.is_empty() {
             let insert_at = events
@@ -479,9 +478,11 @@ pub fn process_single_file(
             }
         }
 
-        if let Some(hints) = pendon_plugin_cite::solid_hints(&cite_options) {
-            builtin_hints.push(hints);
-        }
+        builtin_hints.push(pendon_plugin_cite::solid_hints(
+            &options,
+            &citations,
+            &references,
+        ));
     }
     if anchor_ran {
         if let Some(hints) = pendon_plugin_anchor::solid_hints(&anchor_options) {

@@ -72,7 +72,7 @@ fn solid_rendering_of_a_typed_quote() {
     let events = pipeline("> @@quoteA{.x} quoted *text*\n");
     let jsx = render_solid_with_hints(&events, solid_hints(&options()).as_ref());
     assert!(jsx.contains("<QuoteA"), "{jsx}");
-    assert!(jsx.contains("class={\"x\"}"), "{jsx}");
+    assert!(jsx.contains("class=\"x\""), "{jsx}");
     assert!(jsx.contains("<em>text</em>"), "{jsx}");
     assert!(!jsx.contains("__plugin_kind"), "{jsx}");
 }

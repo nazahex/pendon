@@ -20,9 +20,15 @@ A location argument stays the construct value even when the extras ask for one:
 
 [^^](book "hlm. 45")@@citeX{loc: "dropped", .thin}
 
-The same reference twice keeps its identity and gets the next index:
+A locator is part of the citation identity: the same reference with a different
+(or no) locator gets a new number.
 
 [^^](book)@@citeX{.repeat}
+
+A repeated `(ref_id, loc)` keeps its `citation_number` but takes a fresh
+`instance_index`, so every physical occurrence has its own backlink anchor:
+
+[^^](book)@@citeX{.again}
 
 Retired spellings are not citations; they stay literal text (§7.3):
 

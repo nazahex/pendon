@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// One import entry for a custom component template.
@@ -30,6 +31,13 @@ pub struct SolidRenderHints {
     pub template_imports: BTreeMap<(String, Option<String>), Vec<ImportEntry>>,
     pub text_imports: Vec<(String, Vec<ImportEntry>)>,
     pub templates: Vec<ComponentTemplate>,
+    /// Export data for citations (to be rendered as `export const citations = ...`)
+    pub citations_export: Option<Value>,
+    /// Export data for references (to be rendered as `export const references = ...`)
+    pub references_export: Option<Value>,
+    /// Custom export variable names
+    pub citations_export_name: Option<String>,
+    pub references_export_name: Option<String>,
 }
 
 pub fn normalize_imports(

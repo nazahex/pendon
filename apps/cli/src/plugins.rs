@@ -1,7 +1,7 @@
 use pendon_core::{ContextPipeline, Event};
 use pendon_plugin_anchor::{AnchorCustomNode, AnchorOptions};
 use pendon_plugin_blockquote::{BlockquoteCustomNode, BlockquoteOptions};
-use pendon_plugin_cite::{CitationContext, CiteCustomNode, CiteOptions};
+use pendon_plugin_cite::{CitationContext, CiteCustomNode, CiteOptions, ReferencesScope};
 use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
 use pendon_plugin_directive::{DirectiveCustomNode, DirectiveOptions};
 use pendon_plugin_heading::{HeadingCustomNode, HeadingOptions};
@@ -12,6 +12,7 @@ use pendon_plugin_section::{SectionCustomNode, SectionOptions};
 use pendon_renderer_solid::{
     ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints, TypedComponent,
 };
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -37,22 +38,18 @@ impl DocumentContext {
         self.citation.lock().unwrap().process_events(events)
     }
 
-    pub fn finalize_citations(&self, events: &[Event]) -> (Vec<Event>, Vec<Event>) {
+    /// Finishes the cite layer: drains diagnostics and hands back the two data
+    /// exports (citations, references) plus the resolved options so the caller
+    /// can build `SolidRenderHints`. Frontmatter is left untouched —
+    /// `cites`/`references` live in dedicated JS exports (§2.4). Which
+    /// references the second export holds follows `references_scope` (§2.6).
+    pub fn finalize_citations(&self) -> (Vec<Event>, Value, Value, CiteOptions) {
         let mut citation = self.citation.lock().unwrap();
-        let cites = citation.get_cites();
-        let references = citation.get_used_references();
+        let citations = citation.get_citations();
+        let references = citation.get_exported_references();
         let options = citation.options().clone();
         let diagnostics = citation.drain_diagnostics();
-        drop(citation);
-
-        let mut events = events.to_vec();
-        pendon_plugin_cite::update_frontmatter_in_events(
-            &mut events,
-            &cites,
-            &references,
-            &options,
-        );
-        (events, diagnostics)
+        (diagnostics, citations, references, options)
     }
 }
 
@@ -193,8 +190,13 @@ const HEADING_LAYER: &str = "heading";
 const CITE_LAYER: &str = "cite";
 /// Default template for the citation component: a self-closing leaf, so §11
 /// rule 6 does not require a `{children}` token.
-const CITE_DEFAULT_TEMPLATE: &str =
-    "<Citation index={attrs.index} id={attrs.id} loc={attrs.loc} />";
+///
+/// The reference *object* is bound from the module-level reference export, so
+/// the binding follows a renamed `references_export` (§2.3 of RFC-0002); the
+/// remaining props ride the `{...attrs}` spread, which keeps them typed.
+fn cite_default_template(references_export: &str) -> String {
+    format!(r#"<Citation reference={{{references_export}["{{attrs.ref_id}}"]}} {{...attrs}} />"#)
+}
 /// §11 primary layer of `plugin-marker`: the node `{{type}}` renders.
 const MARKER_LAYER: &str = "marker";
 /// §11 layers of `plugin-table`, one per element it emits.
@@ -285,6 +287,7 @@ pub fn build_cite_options(
     let Some(config) = config else {
         return Ok(CiteOptions::default());
     };
+    check_legacy_cite_keys(config)?;
     let external_references = match config.reference_source.as_deref().unwrap_or("frontmatter") {
         "frontmatter" | "internal" => None,
         "external" => {
@@ -315,6 +318,37 @@ pub fn build_cite_options(
         }
     };
     check_custom_node_removed("cite", config.custom_node.is_some())?;
+    // §2.6 of RFC-0002: only `cited` and `all` exist. Validate here so a typo
+    // fails loudly instead of silently falling back to the source default.
+    let references_scope = match config.references_scope.as_deref() {
+        None => None,
+        Some(value) => Some(ReferencesScope::parse(value).ok_or_else(|| {
+            format!(
+                "unsupported cite.references_scope '{value}'; expected {} or {}",
+                ReferencesScope::Cited.as_str(),
+                ReferencesScope::All.as_str()
+            )
+        })?),
+    };
+    // The export names are resolved before the component set: the fallback
+    // citation template binds its `reference` prop to the reference export, so
+    // it has to know the final name (§2.3 of RFC-0002).
+    let defaults = CiteOptions::default();
+    let references_export = validate_js_identifier(
+        "references_export",
+        config
+            .references_export
+            .as_deref()
+            .unwrap_or(&defaults.references_export),
+    )?;
+    let citations_export = validate_js_identifier(
+        "citations_export",
+        config
+            .citations_export
+            .as_deref()
+            .unwrap_or(&defaults.citations_export),
+    )?;
+    let default_template = cite_default_template(&references_export);
     let loaded = load_custom("cite", CITE_LAYER, config.custom.as_ref())?;
     check_layers("cite", loaded.as_ref(), &[CITE_LAYER])?;
     let custom = layer_set(loaded.as_ref(), CITE_LAYER, |entry| {
@@ -323,26 +357,65 @@ pub fn build_cite_options(
             template: entry
                 .template
                 .clone()
-                .unwrap_or_else(|| CITE_DEFAULT_TEMPLATE.to_string()),
+                .unwrap_or_else(|| default_template.clone()),
             imports: entry.imports.clone(),
         })
     })?;
     Ok(CiteOptions {
-        prefix: config
-            .prefix
+        ref_id_prefix: config
+            .ref_id_prefix
             .clone()
-            .unwrap_or_else(|| "citeref-".to_string()),
-        class_name: config
-            .class
+            .unwrap_or(defaults.ref_id_prefix),
+        citation_class: config
+            .citation_class
             .clone()
-            .unwrap_or_else(|| "cite-ref".to_string()),
-        id_prefix: config
-            .id_prefix
+            .unwrap_or(defaults.citation_class),
+        citation_id_prefix: config
+            .citation_id_prefix
             .clone()
-            .unwrap_or_else(|| "cra-".to_string()),
+            .unwrap_or(defaults.citation_id_prefix),
+        references_export,
+        citations_export,
+        references_scope,
         custom,
         external_references,
     })
+}
+
+/// RFC-0002 §2.1: `prefix` / `class` / `id_prefix` were renamed. A stale config
+/// must fail with the new name rather than silently rendering with defaults.
+fn check_legacy_cite_keys(config: &CiteTaskConfig) -> Result<(), String> {
+    let renames: [(&str, &str, &Option<toml::Value>); 3] = [
+        ("prefix", "ref_id_prefix", &config.prefix),
+        ("class", "citation_class", &config.class),
+        ("id_prefix", "citation_id_prefix", &config.id_prefix),
+    ];
+    for (old, new, value) in renames {
+        if value.is_some() {
+            return Err(format!(
+                "task.cite.{old} was renamed to task.cite.{new}; update pendon.toml (RFC-0002 §2.1)"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// §2.3 of RFC-0002: export names become `export const <name> = …` in the
+/// Solid output, so they have to be plain JavaScript identifiers.
+fn validate_js_identifier(key: &str, value: &str) -> Result<String, String> {
+    let mut chars = value.chars();
+    let starts_ok = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_' || c == '$');
+    let rest_ok = chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$');
+    if starts_ok && rest_ok {
+        Ok(value.to_string())
+    } else {
+        Err(format!(
+            "cite.{key} '{}' is not a valid JavaScript identifier",
+            value
+        ))
+    }
 }
 
 pub fn build_anchor_options(config: Option<&AnchorTaskConfig>) -> Result<AnchorOptions, String> {
@@ -761,6 +834,17 @@ fn extend_hints(target: &mut SolidRenderHints, extra: &SolidRenderHints) {
             target.templates.push(tpl.clone());
         }
     }
+
+    // Data exports (§2.3) are whole-document payloads: there is at most one
+    // producer (the cite layer), so the last one wins.
+    if extra.citations_export.is_some() {
+        target.citations_export = extra.citations_export.clone();
+        target.citations_export_name = extra.citations_export_name.clone();
+    }
+    if extra.references_export.is_some() {
+        target.references_export = extra.references_export.clone();
+        target.references_export_name = extra.references_export_name.clone();
+    }
 }
 
 fn hints_empty(hints: &SolidRenderHints) -> bool {
@@ -768,6 +852,8 @@ fn hints_empty(hints: &SolidRenderHints) -> bool {
         && hints.template_imports.is_empty()
         && hints.text_imports.is_empty()
         && hints.templates.is_empty()
+        && hints.citations_export.is_none()
+        && hints.references_export.is_none()
 }
 
 pub fn load_custom_registry(
@@ -1081,6 +1167,71 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
         assert!(err.contains("task.cite.custom_node was removed"), "{err}");
     }
 
+    /// RFC-0002 §2.1/§2.3: a renamed cite key or a malformed export name must
+    /// fail loudly instead of silently rendering with defaults.
+    #[test]
+    fn cite_rejects_renamed_keys_and_bad_export_names() {
+        let cite: CiteTaskConfig =
+            toml::from_str("prefix = \"cite-\"\n").expect("valid cite config");
+        let err = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
+            .expect_err("renamed key");
+        assert!(
+            err.contains("task.cite.prefix was renamed to task.cite.ref_id_prefix"),
+            "{err}"
+        );
+
+        let cite: CiteTaskConfig =
+            toml::from_str("citations_export = \"cites-list\"\n").expect("valid cite config");
+        let err = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
+            .expect_err("bad identifier");
+        assert!(err.contains("not a valid JavaScript identifier"), "{err}");
+
+        let cite: CiteTaskConfig = toml::from_str(
+            "references_export = \"bibliographyData\"\ncitations_export = \"citationList\"\n",
+        )
+        .expect("valid cite config");
+        let options = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
+            .expect("valid cite options");
+        assert_eq!(options.references_export, "bibliographyData");
+        assert_eq!(options.citations_export, "citationList");
+    }
+
+    /// §2.6 of RFC-0002: `references_scope` accepts only `cited` / `all`, and
+    /// leaving it unset keeps the source-dependent default (resolved by the
+    /// plugin, not the CLI).
+    #[test]
+    fn cite_reads_and_validates_the_references_scope() {
+        for (value, expected) in [
+            ("cited", ReferencesScope::Cited),
+            ("all", ReferencesScope::All),
+        ] {
+            let cite: CiteTaskConfig = toml::from_str(&format!("references_scope = \"{value}\"\n"))
+                .expect("valid cite config");
+            let options = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
+                .expect("valid cite options");
+            assert_eq!(options.references_scope, Some(expected), "{value}");
+        }
+
+        let cite: CiteTaskConfig =
+            toml::from_str("reference_source = \"internal\"\n").expect("valid cite config");
+        let options = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
+            .expect("valid cite options");
+        assert_eq!(
+            options.references_scope, None,
+            "unset must keep the source-dependent default"
+        );
+
+        let cite: CiteTaskConfig =
+            toml::from_str("references_scope = \"everything\"\n").expect("valid cite config");
+        let err = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
+            .expect_err("unknown scope");
+        assert!(
+            err.contains("unsupported cite.references_scope 'everything'"),
+            "{err}"
+        );
+        assert!(err.contains("cited") && err.contains("all"), "{err}");
+    }
+
     /// `img` reads the `figure` layer (the outermost node) and the `img` layer
     /// (the element it contains), and reports unknown layers.
     #[test]
@@ -1148,7 +1299,34 @@ template = "<DocHeading>{children}</DocHeading>"
             .expect("valid cite options");
         let node = options.custom.default_component().expect("cite component");
         assert_eq!(node.name, "Cite");
-        assert_eq!(node.template, CITE_DEFAULT_TEMPLATE);
+        assert_eq!(node.template, cite_default_template("references"));
+    }
+
+    /// §2.3 of RFC-0002: a renamed `references_export` also renames the binding
+    /// inside the fallback template, so the rendered JSX never points at an
+    /// undefined module binding.
+    #[test]
+    fn the_default_cite_template_follows_a_renamed_reference_export() {
+        let cfg: CiteTaskConfig = toml::from_str(
+            "references_export = \"bibliographyData\"\n[custom]\nname = \"Citation\"\n",
+        )
+        .expect("valid cite config");
+        let options = build_cite_options(Some(&cfg), "./src/[slug].md", "./src/a.md", None)
+            .expect("valid cite options");
+        let node = options
+            .custom
+            .default_component()
+            .expect("cite component")
+            .clone();
+        assert_eq!(
+            node.template,
+            r#"<Citation reference={bibliographyData["{attrs.ref_id}"]} {...attrs} />"#
+        );
+        assert!(
+            !node.template.contains("references["),
+            "template = {}",
+            node.template
+        );
     }
 
     /// `list` reads its three layers (§9.4) and `blockquote` its single layer

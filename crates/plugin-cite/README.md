@@ -2,17 +2,23 @@
 
 Citation and bibliography plugin for Pendon.
 
-`pendon-plugin-cite` transforms inline citation syntax into structured citation nodes, manages a global citation index across the entire document (including sub-pipelines like image captions), and generates bibliography metadata in the frontmatter. It supports custom Solid components, extra HTML attributes, and external reference files.
+`pendon-plugin-cite` transforms inline citation syntax into structured citation
+nodes, numbers them across the entire document (including sub-pipelines like
+image captions), and exports the citation list plus the references selected by
+`references_scope` as typed JS bindings. It supports custom Solid components,
+extra HTML attributes, and external reference files.
 
 ## What This Plugin Does
 
 - Parses `[^^](ref-id)` and `[^^](ref-id "location")` inline citation syntax
-- Maintains a **shared citation context** so citations in image captions, blockquotes, and other sub-pipelines share the same global index counter
-- Injects `cites` and `references` arrays into the document frontmatter
+- Maintains a **shared citation context** so citations in image captions, blockquotes, and other sub-pipelines share the same numbering
+- Emits `export const references = {…}` and `export const citations = […]` in Solid/JS output; frontmatter is left untouched
 - Supports custom Solid components for citations
 - Supports extra classes, IDs, data attributes, and CSS custom properties on each citation
 - Loads references from frontmatter YAML or external YAML files
-- Deduplicates identical citations (same ID + same location = same index)
+- Filters the `references` export with `references_scope` (`cited` / `all`)
+- Splits the display ordinal (`citation_number`) from the per-occurrence anchor target (`instance_index`)
+- Deduplicates `citation_number` by the `(ref_id, loc)` tuple only
 - Emits diagnostics when a referenced ID is not found
 
 ## Recommended Plugin Order
@@ -81,14 +87,27 @@ How the remaining keys are emitted depends on the render target:
   without a `data-` prefix. `#id` is emitted as `cite-id` so it stays distinct
   from the citation reference `id`.
 
-### Duplicate Deduplication
+### Citation Numbers and Instance Index
 
-Identical citations (same reference ID and same location) receive the same index:
+Every physical citation occurrence carries two independent numbers:
+
+| Prop              | Meaning                                                                |
+| :---------------- | :--------------------------------------------------------------------- |
+| `citation_number` | Display ordinal `[1], [2]`, deduplicated by the `(ref_id, loc)` tuple. |
+| `instance_index`  | Absolute per-occurrence counter, never deduplicated. Backlink anchor.  |
 
 ```md
-First mention [^^](book "p. 1") and second mention [^^](book "p. 1") both get [1].
+First mention [^^](book "p. 1") and second mention [^^](book "p. 1") both get [1],
+but they are anchors `cite-1` and `cite-2`.
 Different location [^^](book "p. 2") gets [2].
 ```
+
+Deduplication follows academic practice (CSL, IEEE, Vancouver): the tuple is
+`(ref_id, loc)`, never `ref_id` alone.
+
+- same `ref_id` + same `loc` → same `citation_number`
+- same `ref_id` + different `loc` → **different** `citation_number`
+- `loc` present vs. absent → **different** `citation_number`
 
 ## References Configuration
 
@@ -126,6 +145,19 @@ reference_file = "./references/[...slug].yaml"
 
 The `reference_file` path supports the same capture group substitution as `input`/`output` patterns. When both frontmatter and external references exist, they are merged with **frontmatter taking precedence**.
 
+### Options
+
+| Key                  | Default       | Description                                                  |
+| :------------------- | :------------ | :----------------------------------------------------------- |
+| `reference_source`   | `frontmatter` | `frontmatter` / `internal` / `external`                      |
+| `reference_file`     | —             | YAML file read when `reference_source = "external"`          |
+| `ref_id_prefix`      | `citeref-`    | Prefix of the `href` target (`#citeref-1-book`)              |
+| `citation_class`     | `cite-ref`    | CSS class of the inline `<sup>` element                      |
+| `citation_id_prefix` | `cite-`       | Prefix of the inline anchor id (`id="cite-1"`)               |
+| `references_export`  | `references`  | Name of the exported reference map (must be a JS identifier) |
+| `citations_export`   | `citations`   | Name of the exported citation list (must be a JS identifier) |
+| `references_scope`   | see below     | `cited` / `all` — which references the export carries (§2.6) |
+
 ## Custom Components
 
 ### Custom Citation Component
@@ -136,20 +168,34 @@ Replace the default `<sup><a>...</a></sup>` output with a custom Solid component
 [task.cite.custom]
 name = "Citation"
 imports = "import Citation from '@comp/citation';"
-template = "<Citation index={attrs.index} id={attrs.id} loc={attrs.loc} class=\"{attrs.class}\" />"
+template = "<Citation reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
 ```
+
+The `reference` prop binds the _resolved_ entry from the module-level reference
+export (§2.3), so the component never has to look the id up itself; `{...attrs}`
+spreads the remaining props typed (`citation_number={1}`, `instance_index={1}`,
+`loc="hlm. 45"`, plus the extras). Omit the `template` key and the same shape is
+used as a fallback, with the configured `references_export` name in place of
+`references`.
+
+Only `{children}`, `{text}`, `{attrs.<key>}` and `{...attrs}` are interpreted
+(§6.3) — a template is a string substitution, never an expression evaluator.
+A bare `{attrs.X}` interpolates raw text, so it is only safe inside a quoted
+slot (`class="{attrs.class}"`) and empty slots are dropped unless the key is
+`alt`; use `{...attrs}` when the component needs typed values.
 
 Available template attributes:
 
-| Attribute         | Description                                                          |
-| :---------------- | :------------------------------------------------------------------- |
-| `{attrs.index}`   | Global citation index (1-based)                                      |
-| `{attrs.id}`      | Reference ID                                                         |
-| `{attrs.loc}`     | Location string (if provided)                                        |
-| `{attrs.class}`   | Space-separated extra classes                                        |
-| `{attrs.cite-id}` | Extra `#id` from the attribute block                                 |
-| `{attrs.<key>}`   | Extra prop passed verbatim (e.g. `{attrs.foo}` for `{ foo: "val" }`) |
-| `{attrs.style}`   | Inline style string from `{ --var: "val" }`                          |
+| Attribute                 | Description                                                          |
+| :------------------------ | :------------------------------------------------------------------- |
+| `{attrs.citation_number}` | Display ordinal (1-based, deduplicated by `(ref_id, loc)`)           |
+| `{attrs.instance_index}`  | Per-occurrence counter (unique backlink anchor)                      |
+| `{attrs.ref_id}`          | Reference ID                                                         |
+| `{attrs.loc}`             | Location string (if provided)                                        |
+| `{attrs.class}`           | Space-separated extra classes                                        |
+| `{attrs.cite-id}`         | Extra `#id` from the attribute block                                 |
+| `{attrs.<key>}`           | Extra prop passed verbatim (e.g. `{attrs.foo}` for `{ foo: "val" }`) |
+| `{attrs.style}`           | Inline style string from `{ --var: "val" }`                          |
 
 ### Default HTML Output (No Custom Node)
 
@@ -157,7 +203,7 @@ Without a custom node, citations render as standard HTML:
 
 ```html
 <sup class="cite-ref highlight urgent" data-foo="bar" style="--color:red;">
-  <a href="#citeref-1-suryana-2026" id="cra-1">[1]</a>
+  <a href="#citeref-1-suryana-2026" id="cite-1">[1]</a>
 </sup>
 ```
 
@@ -167,8 +213,8 @@ Extra classes are appended to the base `cite-ref` class. Data attributes and sty
 
 This plugin uses a `CitationContext` that persists across the entire document processing lifecycle. This means:
 
-- Citations inside image captions (`plugin-img`) share the same index counter as citations in regular paragraphs
-- Identity deduplication works globally — the same citation in a caption and a paragraph gets the same index
+- Citations inside image captions (`plugin-img`) share the same numbering as citations in regular paragraphs
+- Identity deduplication works globally — the same citation in a caption and a paragraph gets the same `citation_number`
 - The context is built once per file after `micromatter` extracts frontmatter references
 
 For plugin authors integrating with `pendon-plugin-cite`, use the `CitationContext` API instead of the legacy `process()` function:
@@ -179,33 +225,73 @@ let ctx = CitationContext::new(references, options);
 // Process main document
 events = ctx.process_events(&events);
 
-// Process sub-pipeline (e.g., caption) — index continues from where main doc left off
+// Process sub-pipeline (e.g., caption) — numbering continues where the main doc left off
 caption_events = ctx.process_events(&caption_events);
 
 // Finalize
-let cites = ctx.get_cites();
-let refs = ctx.get_used_references();
+let citations = ctx.get_citations();
+let refs = ctx.get_exported_references(); // honours `references_scope` (§2.6)
 ```
 
-## Frontmatter Output
+## Data Exports
 
-After processing, the plugin injects or updates the document frontmatter with:
+Citation and reference data never touches frontmatter (§2.4). Solid/JS output
+carries it as typed module-level exports, written after `frontmatter`/`headings`:
 
-```json
-{
-  "cites": [
-    { "id": "suryana-2026", "index": 1 },
-    { "id": "suryana-2026", "index": 2, "loc": "hlm. 45" }
-  ],
-  "references": {
-    "suryana-2026": { "title": "...", "authors": [...], ... }
-  }
-}
+```jsx
+export const references = {
+  "suryana-2026": { "title": "...", "authors": [...] }
+};
+
+export const citations = [
+  { "ref_id": "suryana-2026", "citation_number": 1, "instance_index": 1 },
+  { "ref_id": "suryana-2026", "citation_number": 2, "loc": "hlm. 45", "instance_index": 2 }
+];
 ```
 
-- `cites` contains every unique citation in document order
-- `references` contains only the references that were actually cited (not all references defined in frontmatter)
-- When using external references, only cited external references are included in the output
+- `citations` holds **every physical occurrence** in document order
+- `references` holds the entries selected by `references_scope` (see below)
+- Both names are configurable with `references_export` / `citations_export`
+  (values must be valid JavaScript identifiers); a template that binds the map
+  must use the same name, e.g. `<Cite reference={refs_custom_var["{attrs.ref_id}"]} />`
+
+### Reference Export Scope
+
+`references_scope` decides how much of the reference map reaches the
+`references` binding. It has no effect on `citations`, on `citation_number` /
+`instance_index` assignment, or on diagnostics.
+
+| Value   | Export                                                                         |
+| :------ | :----------------------------------------------------------------------------- |
+| `cited` | Only the references the document actually cites                                |
+| `all`   | Every known reference, cited or not (frontmatter ∪ external, frontmatter wins) |
+
+**The default follows the reference source** when the key is omitted:
+
+| `reference_source`         | Default |
+| :------------------------- | :------ |
+| `frontmatter` / `internal` | `all`   |
+| `external`                 | `cited` |
+
+Frontmatter references are authored for that specific document, so exporting all
+of them is the natural default. An external catalog is often a large shared file,
+and shipping its uncited entries would bloat every output. An explicit value
+always wins, whichever source is configured:
+
+```toml
+[task.cite]
+reference_source = "external"
+reference_file = "./references/[...slug].yaml"
+references_scope = "all" # export the whole catalog anyway
+```
+
+```toml
+[task.cite]
+reference_source = "frontmatter"
+references_scope = "cited" # only cited frontmatter references
+```
+
+Any other value is a config error that names the two valid options.
 
 ### Positional keys (§6.1 / §11 rule 5)
 

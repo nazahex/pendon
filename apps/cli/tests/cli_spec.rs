@@ -820,3 +820,137 @@ template = "<TableCell>{children}</TableCell>"
     assert!(output.contains("Laptop Pro"), "{output}");
     assert!(output.contains("Laporan Penjualan"), "{output}");
 }
+
+/// Renders a cite project whose reference map holds a cited `book` and an
+/// uncited `paper`, and returns the produced `.jsx`.
+///
+/// `frontmatter` picks the reference source: `true` declares both entries in the
+/// document's frontmatter, `false` loads them from an external YAML catalog. The
+/// extra `scope` line goes into `[task.cite]` verbatim (`""` keeps the default).
+fn render_cite_scope(frontmatter: bool, scope: &str) -> String {
+    let dir = tempdir().expect("temp dir");
+    let src_dir = dir.path().join("src");
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir_all(&src_dir).expect("create src dir");
+    std::fs::create_dir_all(&out_dir).expect("create out dir");
+
+    let body = "[^^](book) and [^^](book \"p. 2\").\n";
+    let source = if frontmatter {
+        std::fs::write(
+            src_dir.join("chapter.md"),
+            format!(
+                "---\nreferences:\n  book:\n    title: Book\n  paper:\n    title: Paper\n---\n\n{body}"
+            ),
+        )
+        .expect("write markdown file");
+        "reference_source = \"internal\"\n".to_string()
+    } else {
+        std::fs::write(src_dir.join("chapter.md"), body).expect("write markdown file");
+        let refs_dir = dir.path().join("references");
+        std::fs::create_dir_all(&refs_dir).expect("create references dir");
+        std::fs::write(
+            refs_dir.join("chapter.yaml"),
+            "book:\n  title: Book\npaper:\n  title: Paper\n",
+        )
+        .expect("write references file");
+        "reference_source = \"external\"\nreference_file = \"./references/[slug].yaml\"\n"
+            .to_string()
+    };
+
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        format!(
+            "[[task]]\ninput = \"./src/[slug].md\"\noutput = \"./out/[slug].jsx\"\n\
+             plugin = \"micromatter,cite,markdown\"\nformat = \"solid\"\n\n\
+             [task.cite]\n{source}{scope}"
+        ),
+    )
+    .expect("write config file");
+
+    let mut cmd = cargo_bin_cmd!("pendon");
+    cmd.current_dir(dir.path()).arg("run").assert().success();
+
+    std::fs::read_to_string(out_dir.join("chapter.jsx")).expect("read output jsx")
+}
+
+/// The `export const citations = …` line, to prove the scope never touches it.
+fn citations_line(output: &str) -> &str {
+    output
+        .lines()
+        .find(|line| line.starts_with("export const citations"))
+        .unwrap_or_else(|| panic!("no citations export: {output}"))
+}
+
+/// The `export const references = …` line, the only export the scope filters.
+fn references_line(output: &str) -> &str {
+    output
+        .lines()
+        .find(|line| line.starts_with("export const references"))
+        .unwrap_or_else(|| panic!("no references export: {output}"))
+}
+
+/// §2.6: an external catalog may be huge, so it defaults to cited-only — the
+/// uncited `paper` must not reach the `references` export.
+#[test]
+fn run_config_cite_exports_only_cited_external_references_by_default() {
+    let output = render_cite_scope(false, "");
+
+    assert!(references_line(&output).contains("\"book\""), "{output}");
+    assert!(
+        !references_line(&output).contains("paper"),
+        "uncited reference leaked: {output}"
+    );
+}
+
+/// §2.6: `references_scope = "all"` forces the whole external catalog into the
+/// export; the `citations` export is byte-identical to the default render.
+#[test]
+fn run_config_cite_scope_all_keeps_uncited_external_references() {
+    let default = render_cite_scope(false, "");
+    let all = render_cite_scope(false, "references_scope = \"all\"\n");
+
+    assert!(references_line(&all).contains("\"paper\""), "{all}");
+    assert_eq!(citations_line(&default), citations_line(&all));
+}
+
+/// §2.6: frontmatter references are authored for this document, so they default
+/// to `all`; an explicit `cited` narrows them again.
+#[test]
+fn run_config_cite_frontmatter_defaults_to_all_and_honours_cited() {
+    let default = render_cite_scope(true, "");
+    assert!(references_line(&default).contains("\"paper\""), "{default}");
+
+    let cited = render_cite_scope(true, "references_scope = \"cited\"\n");
+    assert!(
+        !references_line(&cited).contains("paper"),
+        "uncited reference leaked: {cited}"
+    );
+    assert_eq!(citations_line(&default), citations_line(&cited));
+}
+
+/// §2.6: any spelling other than `cited` / `all` is a hard error that names the
+/// valid options.
+#[test]
+fn run_config_cite_rejects_an_unknown_references_scope() {
+    let dir = tempdir().expect("temp dir");
+    let src_dir = dir.path().join("src");
+    std::fs::create_dir_all(&src_dir).expect("create src dir");
+    std::fs::write(src_dir.join("chapter.md"), "Body text.\n").expect("write markdown file");
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        "[[task]]\ninput = \"./src/[slug].md\"\noutput = \"./out/[slug].jsx\"\n\
+         plugin = \"cite,markdown\"\nformat = \"solid\"\n\n\
+         [task.cite]\nreferences_scope = \"everything\"\n",
+    )
+    .expect("write config file");
+
+    let mut cmd = cargo_bin_cmd!("pendon");
+    cmd.current_dir(dir.path())
+        .arg("run")
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("unsupported cite.references_scope 'everything'")
+                .and(predicate::str::contains("cited or all")),
+        );
+}

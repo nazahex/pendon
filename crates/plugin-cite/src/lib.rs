@@ -18,9 +18,17 @@ pub struct CiteCustomNode {
 
 #[derive(Clone, Debug)]
 pub struct CiteOptions {
-    pub prefix: String,
-    pub class_name: String,
-    pub id_prefix: String,
+    pub ref_id_prefix: String,
+    pub citation_class: String,
+    pub citation_id_prefix: String,
+    /// Export variable name for references data (Solid/JS output).
+    pub references_export: String,
+    /// Export variable name for citations data (Solid/JS output).
+    pub citations_export: String,
+    /// Which references the `references` export carries (§2.6 of RFC-0002).
+    /// `None` keeps the source-dependent default
+    /// ([`ReferencesScope::default_for_source`]).
+    pub references_scope: Option<ReferencesScope>,
     /// §11 component set of the `cite` layer: typed entries plus at most one
     /// default, selected per instance by the `@@type{…}` marker (rule 3).
     pub custom: ComponentSet<CiteCustomNode>,
@@ -30,11 +38,61 @@ pub struct CiteOptions {
 impl Default for CiteOptions {
     fn default() -> Self {
         Self {
-            prefix: "citeref-".to_string(),
-            class_name: "cite-ref".to_string(),
-            id_prefix: "cra-".to_string(),
+            ref_id_prefix: "citeref-".to_string(),
+            citation_class: "cite-ref".to_string(),
+            citation_id_prefix: "cite-".to_string(),
+            references_export: "references".to_string(),
+            citations_export: "citations".to_string(),
+            references_scope: None,
             custom: ComponentSet::new(),
             external_references: None,
+        }
+    }
+}
+
+/// Which references the `references` export carries (§2.6 of RFC-0002).
+///
+/// The scope is a **filter on the export only**: `citations`, the
+/// `citation_number` / `instance_index` assignment and the diagnostics are
+/// unaffected by it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReferencesScope {
+    /// Only the references the document actually cites.
+    Cited,
+    /// Every reference the document knows about (the merged
+    /// frontmatter/external map), cited or not.
+    All,
+}
+
+impl ReferencesScope {
+    /// The configured spelling of the variant (`cited` / `all`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Cited => "cited",
+            Self::All => "all",
+        }
+    }
+
+    /// Parses the configured spelling; `None` for anything else, so callers can
+    /// fail loudly with the list of valid options.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "cited" => Some(Self::Cited),
+            "all" => Some(Self::All),
+            _ => None,
+        }
+    }
+
+    /// The default when `references_scope` is not configured (§2.6).
+    ///
+    /// Frontmatter references are authored for the document itself, so they
+    /// default to `all`; an external catalog may be large and mostly unrelated,
+    /// so it defaults to `cited`.
+    pub fn default_for_source(external: bool) -> Self {
+        if external {
+            Self::Cited
+        } else {
+            Self::All
         }
     }
 }
@@ -76,8 +134,16 @@ impl CiteExtraAttrs {
 pub struct CitationContext {
     references: Value,
     options: CiteOptions,
-    cites: Vec<Value>,
+    /// Every **physical** citation occurrence, in document order. This is the
+    /// data exported as `export const citations = [...]` (§2.3): entries repeat
+    /// when the same `(ref_id, loc)` is cited more than once.
+    citations: Vec<Value>,
+    /// `(ref_id, loc)` → display ordinal (`citation_number`).
     identities: HashMap<String, usize>,
+    /// Next display ordinal handed out to a new `(ref_id, loc)` tuple.
+    next_citation_number: usize,
+    /// Absolute counter for physical citation occurrences (never deduplicates).
+    instance_counter: usize,
     diagnostics: Vec<Event>,
 }
 
@@ -89,8 +155,10 @@ impl CitationContext {
         Self {
             references,
             options,
-            cites: Vec::new(),
+            citations: Vec::new(),
             identities: HashMap::new(),
+            next_citation_number: 0,
+            instance_counter: 0,
             diagnostics: Vec::new(),
         }
     }
@@ -145,17 +213,21 @@ impl CitationContext {
         out
     }
 
-    /// Returns all accumulated cites as a JSON array.
-    pub fn get_cites(&self) -> Value {
-        Value::Array(self.cites.clone())
+    /// Returns every physical citation occurrence as a JSON array.
+    ///
+    /// Each entry carries `ref_id`, `citation_number`, `instance_index` and the
+    /// optional `loc`. A duplicated `(ref_id, loc)` keeps the same
+    /// `citation_number` but gets its own `instance_index` (§2.2).
+    pub fn get_citations(&self) -> Value {
+        Value::Array(self.citations.clone())
     }
 
     /// Returns only the references that were actually cited.
     pub fn get_used_references(&self) -> Value {
         let mut used = Map::new();
         if let Some(refs) = self.references.as_object() {
-            for cite in &self.cites {
-                if let Some(id) = cite.get("id").and_then(Value::as_str) {
+            for cite in &self.citations {
+                if let Some(id) = cite.get("ref_id").and_then(Value::as_str) {
                     if let Some(reference) = refs.get(id) {
                         used.insert(id.to_string(), reference.clone());
                     }
@@ -168,8 +240,8 @@ impl CitationContext {
             .as_ref()
             .and_then(Value::as_object)
         {
-            for cite in &self.cites {
-                if let Some(id) = cite.get("id").and_then(Value::as_str) {
+            for cite in &self.citations {
+                if let Some(id) = cite.get("ref_id").and_then(Value::as_str) {
                     if !used.contains_key(id) {
                         if let Some(reference) = ext.get(id) {
                             used.insert(id.to_string(), reference.clone());
@@ -179,6 +251,27 @@ impl CitationContext {
             }
         }
         Value::Object(used)
+    }
+
+    /// The effective export scope: an explicit `references_scope` always wins,
+    /// otherwise it follows the reference source (§2.6 of RFC-0002).
+    pub fn references_scope(&self) -> ReferencesScope {
+        self.options.references_scope.unwrap_or_else(|| {
+            ReferencesScope::default_for_source(self.options.external_references.is_some())
+        })
+    }
+
+    /// The map the `references` export carries, filtered by
+    /// [`CitationContext::references_scope`].
+    ///
+    /// `Scope::all` keeps the merged map as-is — including entries the document
+    /// never cites — while `Scope::cited` keeps only what `get_used_references`
+    /// resolves (the only behaviour the plugin had before §2.6).
+    pub fn get_exported_references(&self) -> Value {
+        match self.references_scope() {
+            ReferencesScope::Cited => self.get_used_references(),
+            ReferencesScope::All => self.references.clone(),
+        }
     }
 
     /// Drains accumulated diagnostics.
@@ -238,14 +331,22 @@ pub fn process(events: &[Event], options: &CiteOptions) -> Vec<Event> {
         }
     }
 
-    let cites = ctx.get_cites();
-    let used_refs = ctx.get_used_references();
-    update_frontmatter_in_events(&mut out, &cites, &used_refs, options);
-
+    // `cites`/`references` no longer ride in frontmatter (§2.4); they are
+    // exported as dedicated JS bindings by the solid renderer.
     out
 }
 
-pub fn solid_hints(options: &CiteOptions) -> Option<SolidRenderHints> {
+/// Builds the Solid render hints for a document that ran the `cite` layer.
+///
+/// Besides the §11 component templates this carries the two data exports the
+/// RFC-0002 upgrade introduced (§2.3): every physical citation occurrence and
+/// the references they point at. They are emitted as plain `export const …`
+/// bindings by the Solid renderer, not merged into frontmatter.
+pub fn solid_hints(
+    options: &CiteOptions,
+    citations: &Value,
+    references: &Value,
+) -> SolidRenderHints {
     let mut hints = SolidRenderHints::default();
     let mut add_node = |name: &str, template: &str, imports: &[ImportEntry]| {
         let key = (name.to_string(), Some(name.to_string()));
@@ -262,11 +363,11 @@ pub fn solid_hints(options: &CiteOptions) -> Option<SolidRenderHints> {
             add_node(&custom.name, &custom.template, &custom.imports);
         }
     }
-    if hints.templates.is_empty() {
-        None
-    } else {
-        Some(hints)
-    }
+    hints.citations_export = Some(citations.clone());
+    hints.citations_export_name = Some(options.citations_export.clone());
+    hints.references_export = Some(references.clone());
+    hints.references_export_name = Some(options.references_export.clone());
+    hints
 }
 
 // --- Internal Processing ---
@@ -309,33 +410,63 @@ fn emit_text(text: &str, ctx: &mut CitationContext, out: &mut Vec<Event>) {
 
                 if reference_exists(&ctx.references, &id) {
                     let mut citation = Map::new();
-                    citation.insert("id".to_string(), Value::String(id.clone()));
+                    citation.insert("ref_id".to_string(), Value::String(id.clone()));
                     for (key, value) in props {
                         citation.insert(key, Value::String(value));
                     }
 
-                    // Calculate identity BEFORE inserting index to ensure proper deduplication.
-                    let identity = canonical_identity(&citation);
+                    // Identity for deduplication: the `(ref_id, loc)` tuple.
+                    // `loc` may be absent, so use a sentinel for "no loc".
+                    let loc = citation.get("loc").and_then(Value::as_str).unwrap_or("");
+                    let identity = format!("{id}\x1F{loc}");
 
-                    let index = if let Some(&existing_index) = ctx.identities.get(&identity) {
-                        existing_index
-                    } else {
-                        let new_index = ctx.cites.len() + 1;
-
-                        // Push to the global cites array with the index included
-                        let mut cite_for_array = citation.clone();
-                        cite_for_array.insert("index".to_string(), Value::Number(new_index.into()));
-                        ctx.cites.push(Value::Object(cite_for_array));
-
-                        ctx.identities.insert(identity, new_index);
-                        new_index
+                    // `citation_number`: the display ordinal. A repeated
+                    // `(ref_id, loc)` keeps the number it was first given.
+                    let citation_number = match ctx.identities.get(&identity) {
+                        Some(&existing) => existing,
+                        None => {
+                            ctx.next_citation_number += 1;
+                            let new_number = ctx.next_citation_number;
+                            ctx.identities.insert(identity, new_number);
+                            new_number
+                        }
                     };
 
-                    // CRITICAL: Always ensure index is present in the local citation map
-                    // so it gets emitted as an attribute for custom nodes.
-                    citation.insert("index".to_string(), Value::Number(index.into()));
+                    // `instance_index`: absolute per physical occurrence; it
+                    // never deduplicates (§2.2).
+                    ctx.instance_counter += 1;
+                    let instance_index = ctx.instance_counter;
 
-                    emit_citation(out, &ctx.options, &citation, index, &extra);
+                    // Record the physical occurrence for the `citations` export.
+                    let mut record = citation.clone();
+                    record.insert(
+                        "citation_number".to_string(),
+                        Value::Number(citation_number.into()),
+                    );
+                    record.insert(
+                        "instance_index".to_string(),
+                        Value::Number(instance_index.into()),
+                    );
+                    ctx.citations.push(Value::Object(record));
+
+                    // The emitted node carries both numbers.
+                    citation.insert(
+                        "citation_number".to_string(),
+                        Value::Number(citation_number.into()),
+                    );
+                    citation.insert(
+                        "instance_index".to_string(),
+                        Value::Number(instance_index.into()),
+                    );
+
+                    emit_citation(
+                        out,
+                        &ctx.options,
+                        &citation,
+                        citation_number,
+                        instance_index,
+                        &extra,
+                    );
                 } else {
                     // Reference not found: emit raw syntax as plain text and log diagnostic
                     let raw: String = chars[cursor..end].iter().collect();
@@ -366,7 +497,8 @@ fn emit_citation(
     out: &mut Vec<Event>,
     options: &CiteOptions,
     citation: &Map<String, Value>,
-    index: usize,
+    citation_number: usize,
+    instance_index: usize,
     extra: &CiteExtraAttrs,
 ) {
     // §11 rule 3: the marker picks the component, an unmatched marker falls
@@ -390,16 +522,35 @@ fn emit_citation(
         return;
     }
 
-    // Default HTML rendering with extra class support
-    let id = citation
-        .get("id")
+    // Default HTML output
+    emit_citation_html(
+        out,
+        options,
+        citation,
+        citation_number,
+        instance_index,
+        extra,
+    );
+}
+
+/// Default HTML rendering with extra class support
+fn emit_citation_html(
+    out: &mut Vec<Event>,
+    options: &CiteOptions,
+    citation: &Map<String, Value>,
+    citation_number: usize,
+    instance_index: usize,
+    extra: &CiteExtraAttrs,
+) {
+    let ref_id = citation
+        .get("ref_id")
         .and_then(Value::as_str)
         .unwrap_or_default();
-    let target = format!("{}{}-{}", options.prefix, index, id);
-    let anchor = format!("{}{}", options.id_prefix, index);
+    let target = format!("{}{}-{}", options.ref_id_prefix, citation_number, ref_id);
+    let anchor = format!("{}{}", options.citation_id_prefix, instance_index);
 
-    // Build class list: base class_name + extra classes
-    let mut classes = vec![options.class_name.clone()];
+    // Build class list: base citation_class + extra classes
+    let mut classes = vec![options.citation_class.clone()];
     classes.extend(extra.classes.iter().cloned());
     let class_attr = classes.join(" ");
 
@@ -431,7 +582,7 @@ fn emit_citation(
         html.push_str(&format!(" {}", escape_html(name)));
     }
 
-    html.push_str(&format!(">[{}]</a></sup>", index));
+    html.push_str(&format!(">[{}]</a></sup>", citation_number));
 
     out.push(Event::StartNode(NodeKind::HtmlInline));
     out.push(Event::Text(html));
@@ -684,61 +835,6 @@ fn extract_frontmatter(events: &[Event]) -> Option<Value> {
     None
 }
 
-pub fn update_frontmatter_in_events(
-    events: &mut Vec<Event>,
-    cites: &Value,
-    references: &Value,
-    options: &CiteOptions,
-) {
-    let mut inside = false;
-    let mut found = false;
-    for event in events.iter_mut() {
-        match event {
-            Event::StartNode(NodeKind::Frontmatter) => inside = true,
-            Event::EndNode(NodeKind::Frontmatter) => inside = false,
-            Event::Attribute { name, value } if inside && name == "data" => {
-                if let Ok(mut data) = serde_json::from_str::<Value>(value) {
-                    if let Value::Object(ref mut obj) = data {
-                        obj.insert("cites".to_string(), cites.clone());
-                        if options.external_references.is_some() {
-                            obj.insert("references".to_string(), references.clone());
-                        }
-                    }
-                    *value = serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string());
-                    found = true;
-                }
-            }
-            _ => {}
-        }
-    }
-
-    if !found {
-        let mut data = Map::new();
-        data.insert("cites".to_string(), cites.clone());
-        if options.external_references.is_some() {
-            data.insert("references".to_string(), references.clone());
-        }
-        let metadata =
-            serde_json::to_string(&Value::Object(data)).unwrap_or_else(|_| "{}".to_string());
-        let insert_at = events
-            .iter()
-            .position(|event| matches!(event, Event::StartNode(NodeKind::Document)))
-            .map(|index| index + 1)
-            .unwrap_or(0);
-        events.splice(
-            insert_at..insert_at,
-            [
-                Event::StartNode(NodeKind::Frontmatter),
-                Event::Attribute {
-                    name: "data".to_string(),
-                    value: metadata,
-                },
-                Event::EndNode(NodeKind::Frontmatter),
-            ],
-        );
-    }
-}
-
 fn merge_references(front: &Value, external: Option<&Value>) -> Value {
     let mut merged = Map::new();
     if let Some(map) = external.and_then(Value::as_object) {
@@ -758,10 +854,6 @@ fn reference_exists(references: &Value, id: &str) -> bool {
     references
         .as_object()
         .is_some_and(|map| map.contains_key(id))
-}
-
-fn canonical_identity(citation: &Map<String, Value>) -> String {
-    serde_json::to_string(citation).unwrap_or_default()
 }
 
 fn value_to_string(value: &Value) -> String {
@@ -834,23 +926,27 @@ mod tests {
 
     #[test]
     fn numbers_duplicate_details_once_and_different_details_separately() {
-        let result = process(&events_with_refs(), &CiteOptions::default());
-        let data = result
-            .iter()
-            .find_map(|event| match event {
-                Event::Attribute { name, value } if name == "data" => {
-                    serde_json::from_str::<Value>(value).ok()
-                }
-                _ => None,
-            })
-            .unwrap();
-        assert_eq!(data["cites"].as_array().unwrap().len(), 2);
-        assert_eq!(data["cites"][0]["index"], 1);
-        assert_eq!(data["cites"][1]["index"], 2);
+        let references: Value = serde_json::json!({"book": {"title": "Book"}});
+        let mut ctx = CitationContext::new(references, CiteOptions::default());
+        let _ = ctx.process_events(&events_with_refs());
+
+        let citations = ctx.get_citations();
+        let arr = citations.as_array().unwrap();
+        // Three physical occurrences: `p. 1`, `p. 1`, `p. 2` (§2.2).
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr[0]["ref_id"], "book");
+        assert_eq!(arr[0]["citation_number"], 1);
+        assert_eq!(arr[0]["instance_index"], 1);
+        assert_eq!(arr[1]["loc"], "p. 1");
+        assert_eq!(arr[1]["citation_number"], 1);
+        assert_eq!(arr[1]["instance_index"], 2);
+        assert_eq!(arr[2]["loc"], "p. 2");
+        assert_eq!(arr[2]["citation_number"], 2);
+        assert_eq!(arr[2]["instance_index"], 3);
     }
 
     #[test]
-    fn shared_context_continues_indexing_across_calls() {
+    fn shared_context_continues_numbering_across_calls() {
         let references: Value = serde_json::json!({"book": {"title": "Book"}});
         let options = CiteOptions::default();
         let mut ctx = CitationContext::new(references, options);
@@ -873,11 +969,130 @@ mod tests {
         ];
         let _out_b = ctx.process_events(&events_b);
 
-        let cites = ctx.get_cites();
-        let arr = cites.as_array().unwrap();
+        let citations = ctx.get_citations();
+        let arr = citations.as_array().unwrap();
         assert_eq!(arr.len(), 2);
-        assert_eq!(arr[0]["index"], 1);
-        assert_eq!(arr[1]["index"], 2);
+        assert_eq!(arr[0]["citation_number"], 1);
+        assert_eq!(arr[0]["instance_index"], 1);
+        assert_eq!(arr[1]["citation_number"], 2);
+        assert_eq!(arr[1]["instance_index"], 2);
+    }
+
+    /// §2.1: the inline anchor is keyed by `instance_index`, its `href` by
+    /// `citation_number` + `ref_id`, so a duplicate citation gets a fresh
+    /// anchor id but reuses the number.
+    #[test]
+    fn duplicate_citations_keep_the_number_but_get_a_fresh_anchor() {
+        let result = process(
+            &events_with_text(r#"[^^](book "p. 1") and [^^](book "p. 1")"#),
+            &CiteOptions::default(),
+        );
+
+        let html = html_text(&result);
+        assert!(
+            html.contains(r##"href="#citeref-1-book" id="cite-1""##),
+            "{html}"
+        );
+        assert!(
+            html.contains(r##"href="#citeref-1-book" id="cite-2""##),
+            "{html}"
+        );
+        assert_eq!(html.matches("[1]</a>").count(), 2, "{html}");
+    }
+
+    /// §2.4: the plugin no longer writes `cites`/`references` into frontmatter.
+    #[test]
+    fn frontmatter_is_left_untouched() {
+        let result = process(&events_with_refs(), &CiteOptions::default());
+        let data = result
+            .iter()
+            .find_map(|event| match event {
+                Event::Attribute { name, value } if name == "data" => {
+                    serde_json::from_str::<Value>(value).ok()
+                }
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(
+            data,
+            serde_json::json!({"references": {"book": {"title": "Book"}}})
+        );
+    }
+
+    /// A document whose reference map holds a cited and an uncited entry.
+    fn catalog() -> Value {
+        serde_json::json!({
+            "book": {"title": "Book"},
+            "paper": {"title": "Paper"},
+        })
+    }
+
+    fn context(references: Value, options: CiteOptions) -> CitationContext {
+        let mut ctx = CitationContext::new(references, options);
+        let _ = ctx.process_events(&events_with_text(r#"[^^](book)"#));
+        ctx
+    }
+
+    /// §2.6: frontmatter references are authored for this document, so the
+    /// default export is the whole map — the uncited `paper` ships too.
+    #[test]
+    fn frontmatter_references_are_exported_in_full_by_default() {
+        let ctx = context(catalog(), CiteOptions::default());
+
+        assert_eq!(ctx.references_scope(), ReferencesScope::All);
+        let exported = ctx.get_exported_references();
+        assert_eq!(exported["book"]["title"], "Book");
+        assert_eq!(exported["paper"]["title"], "Paper", "{exported}");
+    }
+
+    /// §2.6: an external catalog may be large, so it defaults to cited-only.
+    #[test]
+    fn external_references_are_exported_only_when_cited_by_default() {
+        let mut options = CiteOptions::default();
+        options.external_references = Some(catalog());
+        let ctx = context(catalog(), options);
+
+        assert_eq!(ctx.references_scope(), ReferencesScope::Cited);
+        let exported = ctx.get_exported_references();
+        assert_eq!(exported["book"]["title"], "Book");
+        assert!(exported.get("paper").is_none(), "{exported}");
+    }
+
+    /// §2.6: an explicit scope always wins over the source-dependent default.
+    #[test]
+    fn an_explicit_references_scope_overrides_the_source_default() {
+        let mut options = CiteOptions::default();
+        options.references_scope = Some(ReferencesScope::Cited);
+        let exported = context(catalog(), options).get_exported_references();
+        assert_eq!(exported.as_object().unwrap().len(), 1, "{exported}");
+        assert!(exported.get("paper").is_none(), "{exported}");
+
+        let mut options = CiteOptions::default();
+        options.references_scope = Some(ReferencesScope::All);
+        options.external_references = Some(catalog());
+        let exported = context(catalog(), options).get_exported_references();
+        assert!(exported.get("paper").is_some(), "{exported}");
+    }
+
+    /// §2.6: the scope filters the export only — numbering, anchors and the
+    /// citation list are identical under either scope.
+    #[test]
+    fn the_scope_does_not_change_citations_or_numbering() {
+        let mut all = context(catalog(), CiteOptions::default());
+        let mut options = CiteOptions::default();
+        options.references_scope = Some(ReferencesScope::Cited);
+        let cited = context(catalog(), options);
+
+        assert_eq!(all.get_citations(), cited.get_citations());
+        assert_eq!(
+            all.get_citations()[0]["citation_number"],
+            serde_json::json!(1)
+        );
+        assert_eq!(
+            all.get_citations()[0]["instance_index"],
+            serde_json::json!(1)
+        );
+        assert!(all.drain_diagnostics().is_empty());
     }
 
     #[test]
@@ -1066,10 +1281,10 @@ mod tests {
         assert!(result
             .iter()
             .any(|e| matches!(e, Event::AttributeFlag { name } if name == "isFoo")));
-        // §7.3: the reference id of the citation is untouched.
+        // §7.3/§2.5: the reference id reaches the template as `ref_id`.
         assert!(result.iter().any(|e| matches!(
             e,
-            Event::Attribute { name, value } if name == "id" && value == "book"
+            Event::Attribute { name, value } if name == "ref_id" && value == "book"
         )));
     }
 
@@ -1159,7 +1374,7 @@ mod tests {
         let result = process(&events, &options);
         assert!(result.iter().any(|event| matches!(
             event,
-            Event::Attribute { name, value } if name == "id" && value == "book"
+            Event::Attribute { name, value } if name == "ref_id" && value == "book"
         )));
         assert!(result.iter().any(|event| matches!(
             event,

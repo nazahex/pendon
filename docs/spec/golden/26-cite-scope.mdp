@@ -1,0 +1,20 @@
+---
+references:
+  book:
+    id: book
+    type: book
+    title: A Book
+  paper:
+    id: paper
+    type: article
+    title: A Paper
+---
+
+Frontmatter references are authored for *this* document, so the `references`
+export carries all of them by default (`references_scope = "all"`, §2.6 of
+RFC-0002). `paper` is never cited below, yet it still ships:
+
+Minim [^^](book "hlm. 45") esse do ut anim proident.
+
+`references_scope = "cited"` would drop `paper` from that export. The setting
+never touches `citations`, `citation_number` or `instance_index`.

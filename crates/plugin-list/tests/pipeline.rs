@@ -58,8 +58,8 @@ fn a_container_decorator_lands_on_the_component() {
     let jsx = jsx("@@unorderedA{.u}\n\n- one\n- two\n", &options());
     // Exactly one `<UL>`: the wrapper *is* the container, it does not nest.
     assert_eq!(jsx.matches("<UL").count(), 1, "{jsx}");
-    assert!(jsx.contains(r#"class={"u"}"#), "{jsx}");
-    assert!(jsx.contains(r#"type={"unorderedA"}"#), "{jsx}");
+    assert!(jsx.contains(r#"class="u""#), "{jsx}");
+    assert!(jsx.contains(r#"type="unorderedA""#), "{jsx}");
     assert!(jsx.contains("<li>one</li>"), "{jsx}");
     assert!(jsx.contains("<li>two</li>"), "{jsx}");
     // The built-in container is gone.
@@ -71,7 +71,7 @@ fn a_container_decorator_lands_on_the_component() {
 fn an_untyped_container_uses_the_layer_default() {
     let jsx = jsx("@@{.u}\n\n- one\n", &options());
     assert_eq!(jsx.matches("<ULDefault").count(), 1, "{jsx}");
-    assert!(jsx.contains(r#"class={"u"}"#), "{jsx}");
+    assert!(jsx.contains(r#"class="u""#), "{jsx}");
     assert!(jsx.contains("<li>one</li>"), "{jsx}");
 }
 
@@ -92,7 +92,7 @@ fn an_unclaimed_container_still_lands_on_the_element() {
 fn an_ordered_container_keeps_the_start_offset() {
     let jsx = jsx("@@orderedA{.o}\n\n6. Goo\n", &options());
     assert_eq!(jsx.matches("<OL").count(), 1, "{jsx}");
-    assert!(jsx.contains(r#"class={"o"}"#), "{jsx}");
+    assert!(jsx.contains(r#"class="o""#), "{jsx}");
     assert!(jsx.contains("start={6}"), "{jsx}");
     assert!(jsx.contains("<li>Goo</li>"), "{jsx}");
     assert!(!jsx.contains("<ol"), "{jsx}");

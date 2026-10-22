@@ -46,11 +46,35 @@ pub fn render_solid_with_hints(events: &[Event], hints: Option<&SolidRenderHints
         out.push_str(&h);
         out.push_str(";\n");
     }
+    // RFC-0002 §2.3: reference/citation payloads ride as module-level exports,
+    // never through frontmatter. References come first so a reader can resolve
+    // a citation's `reference` prop without forward references.
+    if let Some(h) = hints {
+        if let Some(v) = &h.references_export {
+            let name = h.references_export_name.as_deref().unwrap_or("references");
+            push_data_export(&mut out, name, v);
+        }
+        if let Some(v) = &h.citations_export {
+            let name = h.citations_export_name.as_deref().unwrap_or("citations");
+            push_data_export(&mut out, name, v);
+        }
+    }
     out.push_str("export default function PendonView() { return (<>");
     out.push('\n');
     out.push_str(&body);
     out.push_str("\n</>); }\n");
     out
+}
+
+/// Emit `export const <name> = <json>;` — one module-level data binding.
+///
+/// `Value` always serialises, so the fallback is only a defensive guard.
+fn push_data_export(out: &mut String, name: &str, value: &Value) {
+    out.push_str("export const ");
+    out.push_str(name);
+    out.push_str(" = ");
+    out.push_str(&serde_json::to_string(value).unwrap_or_else(|_| "null".to_string()));
+    out.push_str(";\n");
 }
 
 fn collect_used_nodes(v: &Value, out: &mut BTreeSet<(String, Option<String>)>) {
@@ -226,5 +250,45 @@ mod tests {
             output.contains("<blockquote class=\"outer\">"),
             "output = {output}"
         );
+    }
+
+    /// §2.3 of RFC-0002: reference and citation payloads ride as module-level
+    /// `export const` bindings, and both names are configurable.
+    #[test]
+    fn citation_data_is_exported_as_js_bindings() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text("body".to_string()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+        let hints = SolidRenderHints {
+            references_export: Some(serde_json::json!({"book": {"title": "Book"}})),
+            citations_export: Some(serde_json::json!([
+                {"ref_id": "book", "citation_number": 1, "instance_index": 1}
+            ])),
+            references_export_name: Some("bibliographyData".to_string()),
+            citations_export_name: Some("citationList".to_string()),
+            ..Default::default()
+        };
+        let output = render_solid_with_hints(&events, Some(&hints));
+        assert!(
+            output.contains(r#"export const bibliographyData = {"book":{"title":"Book"}};"#),
+            "output = {output}"
+        );
+        assert!(
+            output.contains(
+                r#"export const citationList = [{"citation_number":1,"instance_index":1,"ref_id":"book"}];"#
+            ),
+            "output = {output}"
+        );
+        let refs_at = output
+            .find("export const bibliographyData")
+            .expect("reference export");
+        let citations_at = output
+            .find("export const citationList")
+            .expect("citation export");
+        assert!(refs_at < citations_at, "output = {output}");
     }
 }
