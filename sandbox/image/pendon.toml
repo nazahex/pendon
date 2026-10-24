@@ -1,17 +1,30 @@
 [[task]]
-name = "Image Demo (HTML)"
-input = "./src/[slug].md"
-output = "./out/[slug].html"
-plugin = "dialog,img,markdown"
-format = "html"
-pretty = true
-markdown_allow_html = true
-
-[[task]]
 name = "Image Demo (Solid)"
-input = "./src/[slug].md"
+input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
 plugin = "img,cite,anchor,markdown"
 format = "solid"
-pretty = true
+no_cache = true
 markdown_allow_html = true
+
+[[task.img.custom.img]]
+type = ["imageX", "thumb"]
+name = "ImageThumb"
+imports = "import { ImageThumb } from '@comp/content/AdvancedImage'"
+template = "<ImageThumb type={\"{attrs.type}\"} {...attrs}>{children}</ImageThumb>"
+
+[[task.img.custom.img]]
+name = "AdvancedImage"
+imports = "import AdvancedImage from '@comp/content/AdvancedImage'"
+template = "<AdvancedImage {...attrs}>{children}</AdvancedImage>"
+
+[[task.img.custom.figure]]
+type = ["figureX"]
+name = "FigureX"
+imports = "import { FigureX } from '@comp/content/Figure'"
+template = "<FigureX {...attrs}>{children}</FigureX>"
+
+[[task.img.custom.figure]]
+name = "Figure"
+imports = "import Figure from '@comp/content/Figure'"
+template = "<Figure {...attrs}>{children}</Figure>"

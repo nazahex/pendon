@@ -12,7 +12,7 @@ reference_source = "internal"
 
 [task.cite.custom]
 name = "Cite"
-template = "<Cite reference={frontmatter.references[\"{attrs.id}\"]} {...attrs} />"
+template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
 
 [[task.cite.custom.imports]]
 module = "@comp/content/Cite"

@@ -49,45 +49,45 @@ Label pensiun: H22, E44 (setext tidak didukung).
 </p>
 <p>A04n <a href="/a">t</a>
 </p>
-<p>A05 <AnchorAll href={"/a"} type={"anchorA"}>t</AnchorAll>
+<p>A05 <AnchorAll href="/a" type="anchorA">t</AnchorAll>
 </p>
-<p>A06 <AnchorAll href={"/a"} type={"anchorA"}>t</AnchorAll>
+<p>A06 <AnchorAll href="/a" type="anchorA">t</AnchorAll>
 </p>
 <p>A07 <a class="x" href="/a">t</a>
 </p>
 <p>A07n <a class="x" href="/a">t</a>
 </p>
-<p>A08 <AnchorAll class={"x"} href={"/a"} type={"anchorA"}>t</AnchorAll>
+<p>A08 <AnchorAll class="x" href="/a" type="anchorA">t</AnchorAll>
 </p>
-<p>A09 <AnchorAll class={"x"} href={"/a"} id={"i"} type={"anchorB"}>t</AnchorAll>
+<p>A09 <AnchorAll class="x" href="/a" id="i" type="anchorB">t</AnchorAll>
 </p>
-<p>A10 <AnchorAll class={"a b"} href={"/a"} id={"i"} k={"v"} n={2} type={"anchorC"}>t</AnchorAll>
+<p>A10 <AnchorAll class="a b" href="/a" id="i" k="v" n={2} type="anchorC">t</AnchorAll>
 </p>
-<p>A11 <AnchorAll href={"/a"} id={"s-only"} type={"anchorA"}>t</AnchorAll>
+<p>A11 <AnchorAll href="/a" id="s-only" type="anchorA">t</AnchorAll>
 </p>
-<p>A12 <AnchorAll href={"/a"} title={"Extras title"} type={"anchorA"}>t</AnchorAll>
+<p>A12 <AnchorAll href="/a" title="Extras title" type="anchorA">t</AnchorAll>
 </p>
-<p>A13 <AnchorAll href={"/a"} title={"Head title"} type={"anchorA"}>t</AnchorAll>
+<p>A13 <AnchorAll href="/a" title="Head title" type="anchorA">t</AnchorAll>
 </p>
-<p>A14 <AnchorAll href={"/a"} k={"v"} type={"anchorA"}>t</AnchorAll>
+<p>A14 <AnchorAll href="/a" k="v" type="anchorA">t</AnchorAll>
 </p>
-<p>A15 <AnchorAll href={"/a"} n={12} type={"anchorA"}>t</AnchorAll><AnchorAll href={"/a"} n={-1.5} type={"anchorA"}>t</AnchorAll>
+<p>A15 <AnchorAll href="/a" n={12} type="anchorA">t</AnchorAll><AnchorAll href="/a" n={-1.5} type="anchorA">t</AnchorAll>
 </p>
-<p>A16 <AnchorAll b={true} href={"/a"} type={"anchorA"}>t</AnchorAll><AnchorAll b={false} href={"/a"} type={"anchorA"}>t</AnchorAll>
+<p>A16 <AnchorAll b={true} href="/a" type="anchorA">t</AnchorAll><AnchorAll b={false} href="/a" type="anchorA">t</AnchorAll>
 </p>
-<p>A17 <AnchorAll href={"/a"} style={"--v: 2rem"} type={"anchorA"}>t</AnchorAll>
+<p>A17 <AnchorAll href="/a" style="--v: 2rem" type="anchorA">t</AnchorAll>
 </p>
-<p>A18 <AnchorAll href={"/a"} isBar={true} type={"anchorA"}>t</AnchorAll>
+<p>A18 <AnchorAll href="/a" isBar={true} type="anchorA">t</AnchorAll>
 </p>
-<p>A19 <AnchorAll bar={12} class={"extra class"} foo={"bar"} href={"/a"} id={"id"} isBar={true} isFoo={true} style={"--style-var: 2rem"} title={"Head"} type={"anchorA"}>t</AnchorAll>
+<p>A19 <AnchorAll bar={12} class="extra class" foo="bar" href="/a" id="id" isBar={true} isFoo={true} style="--style-var: 2rem" title="Head" type="anchorA">t</AnchorAll>
 </p>
-<p>A20 <AnchorAll bar={12} class={"extra class"} foo={"bar"} href={"/a"} id={"id"} isBar={true} isFoo={true} style={"--style-var: 2rem"} title={"Title Foo"} type={"anchorB"}>t</AnchorAll>
+<p>A20 <AnchorAll bar={12} class="extra class" foo="bar" href="/a" id="id" isBar={true} isFoo={true} style="--style-var: 2rem" title="Title Foo" type="anchorB">t</AnchorAll>
 </p>
-<p>A21 <AnchorAll class={"from-extras"} href={"/a"} id={"explicit"} type={"anchorB"}>t</AnchorAll>
+<p>A21 <AnchorAll class="from-extras" href="/a" id="explicit" type="anchorB">t</AnchorAll>
 </p>
-<p>A22 <AnchorAll class={"hero"} href={"/a"} type={"anchorZ"}>t</AnchorAll>
+<p>A22 <AnchorAll class="hero" href="/a" type="anchorZ">t</AnchorAll>
 </p>
-<p>A23 <AnchorAll class={"u"} href={"https://example.com/a?q=1&r=2#h"} rel={"noopener"} target={"_blank"} type={"anchorA"}>abs</AnchorAll>
+<p>A23 <AnchorAll class="u" href="https://example.com/a?q=1&r=2#h" rel="noopener" target="_blank" type="anchorA">abs</AnchorAll>
 </p>
 <p>A24 <a class="u" href="./a/b.md" rel="noopener" target="_blank">rel</a>
 </p>
@@ -97,13 +97,13 @@ Label pensiun: H22, E44 (setext tidak didukung).
 </p>
 <p>A26 <a class="u" href="mailto:a@b.co" rel="noopener" target="_blank">mail</a>
 </p>
-<p>A27 <AnchorAll href={"https://example.com/bar"} hreflang={"en"} rel={"noopener noreferrer nofollow sponsored prefetch"} target={"_self"} title={"T"} type={"anchorB"}>mod</AnchorAll>
+<p>A27 <AnchorAll href="https://example.com/bar" hreflang="en" rel="noopener noreferrer nofollow sponsored prefetch" target="_self" title="T" type="anchorB">mod</AnchorAll>
 </p>
 <p>A28 <a href="https://example.com/bar--!;" rel="noopener sponsored" target="_blank">mod2</a>
 </p>
 <p>A29 <a class="u" href="/a_(b)">paren</a>
 </p>
-<p>A30 <AnchorAll class={"m"} href={"/a"} type={"anchorA"}><strong>b</strong> <i>i</i> <code>c</code> $m$</AnchorAll>
+<p>A30 <AnchorAll class="m" href="/a" type="anchorA"><strong>b</strong> <i>i</i> <code>c</code> $m$</AnchorAll>
 </p>
 <p>A31 [a \[b\] c](/a)&#123;.e&#125;
 </p>
@@ -127,7 +127,7 @@ Label pensiun: H22, E44 (setext tidak didukung).
 </p>
 <p>A39 <a class="x" href="/a" id="i">t</a>
 </p>
-<p>A40 <AnchorAll href={"/a"} type={"anchorZ"}>t</AnchorAll>
+<p>A40 <AnchorAll href="/a" type="anchorZ">t</AnchorAll>
 </p>
 <p>A41 <a href="/a" id="s-only">t</a>
 </p>
@@ -145,11 +145,11 @@ Label pensiun: H22, E44 (setext tidak didukung).
 </p>
 <p>A48 <a href="https://example.com/bar--!;" rel="noopener sponsored prefetch" target="_blank">mod3</a>
 </p>
-<p>A49 <AnchorAll href={"/a"} type={"anchorA"}>t</AnchorAll>.
+<p>A49 <AnchorAll href="/a" type="anchorA">t</AnchorAll>.
 </p>
-<p>A50 (<AnchorAll href={"/a"} type={"anchorA"}>t</AnchorAll>)
+<p>A50 (<AnchorAll href="/a" type="anchorA">t</AnchorAll>)
 </p>
-<p>A51 <AnchorAll href={"/a"} type={"anchorA"}>t</AnchorAll>, <AnchorAll href={"/b"} type={"anchorB"}>u</AnchorAll>; <AnchorAll href={"/c"} type={"anchorA"}>v</AnchorAll>!
+<p>A51 <AnchorAll href="/a" type="anchorA">t</AnchorAll>, <AnchorAll href="/b" type="anchorB">u</AnchorAll>; <AnchorAll href="/c" type="anchorA">v</AnchorAll>!
 </p>
 <p>A52 <a class="x" href="/a" type="anchor1">t</a>
 </p>
@@ -177,7 +177,7 @@ Label pensiun: H22, E44 (setext tidak didukung).
 <h4 class="l4" id="h17" type="headingY">2.2.0.1. H17 level 4</h4>
 <h6 class="l6" title="T18">2.2.0.1.0.1. H18 level 6 (skips 5)</h6>
 <h6 class="l6n" title="T18n">2.2.0.1.0.2. H18n level 6 non-canonical</h6>
-<h3 class="k" id="h19" title="T19" type="headingX">2.2.1. H19 KS <AnchorAll class={"k"} href={"/x"} title={"T"} type={"anchorA"}>a</AnchorAll> <strong>b</strong> <i>i</i> <code>c</code> [[W]]@@wikiX&#123;.k&#125; <a class="k" href="paper-smith" type="citeX">^^</a> &#123;&#123;footnote&#125;&#125;&#123;.k&#125; ::asideA&#123;.k&#125; d:: $x$</h3>
+<h3 class="k" id="h19" title="T19" type="headingX">2.2.1. H19 KS <AnchorAll class="k" href="/x" title="T" type="anchorA">a</AnchorAll> <strong>b</strong> <i>i</i> <code>c</code> [[W]]@@wikiX&#123;.k&#125; <a class="k" href="paper-smith" type="citeX">^^</a> &#123;&#123;footnote&#125;&#125;&#123;.k&#125; ::asideA&#123;.k&#125; d:: $x$</h3>
 <p>&lt;!-- H20: heading with empty text, typed --&gt;
 </p>
 <h3 class="x" type="headingX">2.2.2. 
@@ -226,7 +226,7 @@ Label pensiun: H22, E44 (setext tidak didukung).
 </p>
 <p>~!w100<a class="a b" href="/i.png" id="i" k="v" n="2" title="Head T" type="imageX">I14</a>
 </p>
-<p>~?!!w100<a href="/i.png" isA type="figureX">I15</a> Caption KS <AnchorAll class={"k"} href={"/x"} type={"anchorA"}>a</AnchorAll><a class="k" href="paper-smith" type="citeX">^^</a> [[W]]@@wikiX&#123;.k&#125; &#123;&#123;footnote&#125;&#125;&#123;.k&#125; ::asideA&#123;.k&#125; d:: $x$ <strong>b</strong>
+<p>~?!!w100<a href="/i.png" isA type="figureX">I15</a> Caption KS <AnchorAll class="k" href="/x" type="anchorA">a</AnchorAll><a class="k" href="paper-smith" type="citeX">^^</a> [[W]]@@wikiX&#123;.k&#125; &#123;&#123;footnote&#125;&#125;&#123;.k&#125; ::asideA&#123;.k&#125; d:: $x$ <strong>b</strong>
 </p>
 <p><img alt="I16 plain markdown image" src="/i.png" />
 </p>
@@ -369,7 +369,7 @@ Label pensiun: H22, E44 (setext tidak didukung).
 </p>
 <p>&#123;&#123;markerA&#125;&#125; trailing text as children
 </p>
-<p>&#123;&#123;markerA&#125;&#125;&#123;.x, #i&#125; trailing <strong>text</strong> <AnchorAll class={"k"} href={"/x"} type={"anchorA"}>a</AnchorAll>
+<p>&#123;&#123;markerA&#125;&#125;&#123;.x, #i&#125; trailing <strong>text</strong> <AnchorAll class="k" href="/x" type="anchorA">a</AnchorAll>
 </p>
 <p>&#123;&#123;markerA&#125;&#125;&#123;<code>slug-foo</code>, &quot;Title Foo&quot;, .extra, .class, #id, foo: &quot;bar&quot;, bar: 12, isFoo: true, --style-var: &quot;2rem&quot;, isBar&#125;
 </p>
@@ -423,9 +423,9 @@ order) and the marker renders bare. --&gt;
 <p>cell on its right (colspan) ; only ^ is merged into the cell above (rowspan).
 --&gt;
 </p>
-<Table class={"striped wide"} cols={4} id={"tbl"} isDense={true} sortable={true} style={"--gap: 2rem"} title={"Title Foo"} type={"tableX"}><caption class="note" id="cap" type="captionX">T01 caption <strong>b</strong></caption><thead><tr><TableCellA align={"left"} class={"v-top"} type={"cellA"} width={"200px"}>&#123;.h1&#125; H1</TableCellA><th class="c" style="text-align: center;">@@cellA&#123;.h2&#125; H2</th><th style="text-align: right; width: 30%;">H3</th><th class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB">H4</th></tr></thead><tbody class="tb" type="tbodyX"><tr><td class="v-top lead" style="text-align: left; width: 200px;" type="cellB">X</td><td class="c" style="text-align: center;">15</td><td style="text-align: right; width: 30%;"><AnchorAll class={"u"} href={"/docs"} type={"anchorA"}>Ada</AnchorAll></td><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB">[[W]]@@wikiX&#123;.w&#125;</td></tr><tr class="row-info" type="rowB"><TableCellA align={"left"} class={"v-top"} colspan={2} type={"cellA"} width={"200px"}>plain</TableCellA><td style="text-align: right; width: 30%;"><a class="c" href="paper-smith" type="citeX">^^</a></td><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB">&#123;&#123;footnote&#125;&#125;&#123;.m&#125;</td></tr><tr type="rowA"><TableCellA align={"left"} class={"v-top"} type={"cellA"} width={"200px"}>empty-extras</TableCellA><td class="c" style="text-align: center;">::asideA&#123;.k&#125; d::</td><td style="text-align: right; width: 30%;">$x^2$</td><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB"><code>c</code></td></tr><tr class="untyped-row"><TableCellA align={"left"} class={"v-top"} type={"cellA"} width={"200px"}>a</TableCellA><td class="c" style="text-align: center;">b</td><td style="text-align: right; width: 30%;">c</td><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB">d</td></tr><tr class="a" id="r" k="v" n="2" type="rowB"><TableCellA align={"left"} class={"v-top"} type={"cellA"} width={"200px"}>\</TableCellA><td class="c" style="text-align: center;">escaped</td><td style="text-align: right; width: 30%;"></td><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB"></td></tr><tr bar="12" class="extra class" foo="bar" id="id" isBar isFoo="true" style="--style-var: 2rem" title="Title Foo" type="rowB"><TableCellA align={"left"} class={"v-top"} type={"cellA"} width={"200px"}>all-row</TableCellA><td class="c" style="text-align: center;">x</td><td style="text-align: right; width: 30%;">y</td><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB">z</td></tr><tr><TableCellA align={"left"} class={"v-top only-extras"} type={"cellA"} width={"200px"}></TableCellA><td class="c" style="text-align: center;"><strong>b</strong> <i>i</i></td><td style="text-align: right; width: 30%;"><AnchorAll class={"k"} href={"/x"} title={"T"} type={"anchorA"}>a</AnchorAll><a class="k" href="paper-smith" type="citeX">^^</a></td><td b="true" class="a a" flag id="i" k="v" n="1" style="text-align: left;" title="T" type="cellB">KS</td></tr></tbody><tfoot class="total" type="tfootX"><tr class="f" type="rowA"><TableCellA align={"left"} class={"v-top"} colspan={2} type={"cellA"} width={"200px"}>Total</TableCellA><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB">1</td></tr><tr><TableCellA align={"left"} class={"v-top t"} type={"cellA"} width={"200px"}>F2</TableCellA><td class="c" style="text-align: center;">x</td><td style="text-align: right; width: 30%;">y</td><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB">z</td></tr></tfoot></Table><p>T01n non-canonical @@&#123;...&#125; on every table slot:
+<Table class="striped wide" cols={4} id="tbl" isDense={true} sortable={true} style="--gap: 2rem" title="Title Foo" type="tableX"><caption class="note" id="cap" type="captionX">T01 caption <strong>b</strong></caption><thead><tr><TableCellA align="left" class="v-top" type="cellA" width="200px">&#123;.h1&#125; H1</TableCellA><th class="c" style="text-align: center;">@@cellA&#123;.h2&#125; H2</th><th style="text-align: right; width: 30%;">H3</th><th class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB">H4</th></tr></thead><tbody class="tb" type="tbodyX"><tr><td class="v-top lead" style="text-align: left; width: 200px;" type="cellB">X</td><td class="c" style="text-align: center;">15</td><td style="text-align: right; width: 30%;"><AnchorAll class="u" href="/docs" type="anchorA">Ada</AnchorAll></td><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB">[[W]]@@wikiX&#123;.w&#125;</td></tr><tr class="row-info" type="rowB"><TableCellA align="left" class="v-top" colspan={2} type="cellA" width="200px">plain</TableCellA><td style="text-align: right; width: 30%;"><a class="c" href="paper-smith" type="citeX">^^</a></td><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB">&#123;&#123;footnote&#125;&#125;&#123;.m&#125;</td></tr><tr type="rowA"><TableCellA align="left" class="v-top" type="cellA" width="200px">empty-extras</TableCellA><td class="c" style="text-align: center;">::asideA&#123;.k&#125; d::</td><td style="text-align: right; width: 30%;">$x^2$</td><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB"><code>c</code></td></tr><tr class="untyped-row"><TableCellA align="left" class="v-top" type="cellA" width="200px">a</TableCellA><td class="c" style="text-align: center;">b</td><td style="text-align: right; width: 30%;">c</td><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB">d</td></tr><tr class="a" id="r" k="v" n="2" type="rowB"><TableCellA align="left" class="v-top" type="cellA" width="200px">\</TableCellA><td class="c" style="text-align: center;">escaped</td><td style="text-align: right; width: 30%;"></td><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB"></td></tr><tr bar="12" class="extra class" foo="bar" id="id" isBar isFoo="true" style="--style-var: 2rem" title="Title Foo" type="rowB"><TableCellA align="left" class="v-top" type="cellA" width="200px">all-row</TableCellA><td class="c" style="text-align: center;">x</td><td style="text-align: right; width: 30%;">y</td><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB">z</td></tr><tr><TableCellA align="left" class="v-top only-extras" type="cellA" width="200px"></TableCellA><td class="c" style="text-align: center;"><strong>b</strong> <i>i</i></td><td style="text-align: right; width: 30%;"><AnchorAll class="k" href="/x" title="T" type="anchorA">a</AnchorAll><a class="k" href="paper-smith" type="citeX">^^</a></td><td b="true" class="a a" flag id="i" k="v" n="1" style="text-align: left;" title="T" type="cellB">KS</td></tr></tbody><tfoot class="total" type="tfootX"><tr class="f" type="rowA"><TableCellA align="left" class="v-top" colspan={2} type="cellA" width="200px">Total</TableCellA><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB">1</td></tr><tr><TableCellA align="left" class="v-top t" type="cellA" width="200px">F2</TableCellA><td class="c" style="text-align: center;">x</td><td style="text-align: right; width: 30%;">y</td><td class="a" id="i" k="v" n="2" style="text-align: left;" type="cellB">z</td></tr></tfoot></Table><p>T01n non-canonical @@&#123;...&#125; on every table slot:
 </p>
-<Table class={"x"} id={"t01n"}><caption class="c">T01n caption</caption><thead><tr><th class="v" style="text-align: left;">A</th><th>B</th></tr></thead><tbody class="tb"><tr class="r"><td class="v l" style="text-align: left;">x</td><td>y</td></tr></tbody><tfoot class="f"><tr><td class="v" style="text-align: left;">t</td><td>u</td></tr></tfoot></Table><p>T02 plain, no declaration, no caption, no extras:
+<Table class="x" id="t01n"><caption class="c">T01n caption</caption><thead><tr><th class="v" style="text-align: left;">A</th><th>B</th></tr></thead><tbody class="tb"><tr class="r"><td class="v l" style="text-align: left;">x</td><td>y</td></tr></tbody><tfoot class="f"><tr><td class="v" style="text-align: left;">t</td><td>u</td></tr></tfoot></Table><p>T02 plain, no declaration, no caption, no extras:
 </p>
 <Table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr><tr><td>===</td><td></td></tr><tr><td>total</td><td>6</td></tr></tbody></Table><p>|| T03 caption only ||
 </p>
@@ -465,7 +465,7 @@ order) and the marker renders bare. --&gt;
 </p>
 <Table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></Table><p>T18 untyped canonical on every table slot:
 </p>
-<Table class={"striped wide"} cols={4} id={"tbl18"} isDense={true} sortable={true} style={"--gap: 2rem"} title={"Title Foo"}><caption class="note" id="cap18">T18 caption <strong>b</strong></caption><thead><tr><th class="v-top" style="text-align: left; width: 200px;">&#123;.h1&#125; H1</th><th class="c" id="i" style="text-align: center;">&#123;.h2&#125; H2</th><th class="a b" id="i2" k="v" n="2" style="text-align: right; width: 30%;">H3</th><th b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T">H4</th></tr></thead><tbody class="tb"><tr><td class="v-top lead" style="text-align: left; width: 200px;">X</td><td class="c" id="i" style="text-align: center;">15</td><td class="a b" id="i2" k="v" n="2" style="text-align: right; width: 30%;"><a class="u" href="/docs">Ada</a></td><td b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T">[[W]]&#123;.w&#125;</td></tr><tr class="row-info"><td class="v-top" colspan="2" style="text-align: left; width: 200px;">plain</td><td class="a b" id="i2" k="v" n="2" style="text-align: right; width: 30%;"><a class="c" href="paper-smith">^^</a></td><td b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T">&#123;&#123;footnote&#125;&#125;&#123;.m&#125;</td></tr><tr><td class="v-top" style="text-align: left; width: 200px;">empty</td><td class="c" id="i" style="text-align: center;">::asideA&#123;.k&#125; d::</td><td class="a b" id="i2" k="v" n="2" style="text-align: right; width: 30%;">$x^2$</td><td b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T"><code>c</code></td></tr><tr class="a" id="r" k="v" n="2"><td class="v-top" style="text-align: left; width: 200px;">a</td><td class="c" id="i" style="text-align: center;">b</td><td class="a b" id="i2" k="v" n="2" style="text-align: right; width: 30%;">c</td><td b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T">d</td></tr><tr bar="12" class="extra class" foo="bar" id="id" isBar isFoo="true" style="--style-var: 2rem" title="Title Foo"><td class="v-top" style="text-align: left; width: 200px;">all-row</td><td class="c" id="i" style="text-align: center;">x</td><td class="a b" id="i2" k="v" n="2" style="text-align: right; width: 30%;">y</td><td b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T">z</td></tr></tbody><tfoot class="total"><tr class="f"><td class="v-top" colspan="2" style="text-align: left; width: 200px;">Total</td><td b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T">1</td></tr><tr><td class="v-top t" style="text-align: left; width: 200px;">F2</td><td class="c" id="i" style="text-align: center;">x</td><td class="a b" id="i2" k="v" n="2" style="text-align: right; width: 30%;">y</td><td b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T">z</td></tr></tfoot></Table><p>T19 type and brace separated by space: head stays literal:
+<Table class="striped wide" cols={4} id="tbl18" isDense={true} sortable={true} style="--gap: 2rem" title="Title Foo"><caption class="note" id="cap18">T18 caption <strong>b</strong></caption><thead><tr><th class="v-top" style="text-align: left; width: 200px;">&#123;.h1&#125; H1</th><th class="c" id="i" style="text-align: center;">&#123;.h2&#125; H2</th><th class="a b" id="i2" k="v" n="2" style="text-align: right; width: 30%;">H3</th><th b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T">H4</th></tr></thead><tbody class="tb"><tr><td class="v-top lead" style="text-align: left; width: 200px;">X</td><td class="c" id="i" style="text-align: center;">15</td><td class="a b" id="i2" k="v" n="2" style="text-align: right; width: 30%;"><a class="u" href="/docs">Ada</a></td><td b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T">[[W]]&#123;.w&#125;</td></tr><tr class="row-info"><td class="v-top" colspan="2" style="text-align: left; width: 200px;">plain</td><td class="a b" id="i2" k="v" n="2" style="text-align: right; width: 30%;"><a class="c" href="paper-smith">^^</a></td><td b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T">&#123;&#123;footnote&#125;&#125;&#123;.m&#125;</td></tr><tr><td class="v-top" style="text-align: left; width: 200px;">empty</td><td class="c" id="i" style="text-align: center;">::asideA&#123;.k&#125; d::</td><td class="a b" id="i2" k="v" n="2" style="text-align: right; width: 30%;">$x^2$</td><td b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T"><code>c</code></td></tr><tr class="a" id="r" k="v" n="2"><td class="v-top" style="text-align: left; width: 200px;">a</td><td class="c" id="i" style="text-align: center;">b</td><td class="a b" id="i2" k="v" n="2" style="text-align: right; width: 30%;">c</td><td b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T">d</td></tr><tr bar="12" class="extra class" foo="bar" id="id" isBar isFoo="true" style="--style-var: 2rem" title="Title Foo"><td class="v-top" style="text-align: left; width: 200px;">all-row</td><td class="c" id="i" style="text-align: center;">x</td><td class="a b" id="i2" k="v" n="2" style="text-align: right; width: 30%;">y</td><td b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T">z</td></tr></tbody><tfoot class="total"><tr class="f"><td class="v-top" colspan="2" style="text-align: left; width: 200px;">Total</td><td b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T">1</td></tr><tr><td class="v-top t" style="text-align: left; width: 200px;">F2</td><td class="c" id="i" style="text-align: center;">x</td><td class="a b" id="i2" k="v" n="2" style="text-align: right; width: 30%;">y</td><td b="true" class="a" flag id="i3" k="v" n="1" style="text-align: left;" title="T">z</td></tr></tfoot></Table><p>T19 type and brace separated by space: head stays literal:
 </p>
 <p>|-[t19]@@tableX &#123;.x&#125;-|
 ||@@captionX &#123;.y&#125; T19 caption ||

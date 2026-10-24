@@ -1,6 +1,6 @@
 [[task]]
 name = "Plugin Heading Demo Solid"
-input = "./src/heading.md"
+input = "./src/heading.mdp"
 output = "./out/heading.jsx"
 plugin = "micromatter,section,heading,markdown,extract-heading"
 format = "solid"

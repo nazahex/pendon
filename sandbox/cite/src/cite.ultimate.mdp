@@ -1,0 +1,29 @@
+---
+title: Cite Ultimate Sandbox
+---
+
+CITE.U1 - Sintaksis dasar [^^](suryana-2016) ipsum.
+
+CITE.U2 - Locator [^^](suryana-2016 "page 27-35") ipsum.
+
+CITE.U3 - Multiple citations [^^](suryana-2016 "page 50-55") [^^](prasetyo-2019) [^^](kant-1781 "section 2.5-3.2") ipsum.
+
+CITE.U4a - Empty extras [^^](ahmad-2026){}
+
+CITE.U4b - Empty type [^^](ahmad-2026)@@ `@@` should be literal
+
+CITE.U4c - Empty extras [^^](suryana-2016)@@{}
+
+CITE.U5a - Backtiq extras [^^](suryana-2016 "page 27-35"){`backtick-foo`}
+
+CITE.U5b - Quoted extras [^^](suryana-2016 "page 27-30"){"Quoted Foo"}
+
+CITE.U5c - Classes extras [^^](prasetyo-2019){.extra,.class-foo}
+
+CITE.U5d - Classes props [^^](prasetyo-2019){ note: "Note ipsum", details: { author: "Setyo" , reviewed: "Satya" }, level: 2 }
+
+CITE.U5e - Styles extras [^^](prasetyo-2019 "section 2.1"){ --color: "red", border: "2px" }
+
+CITE.U5f - Typed [^^](prasetyo-2019)@@CiteA
+
+{{bibliography}}

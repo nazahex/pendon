@@ -1,7 +1,7 @@
 [[task]]
 name = "Plugin Directive Demo Solid"
-input = "./src/directive.md"
-output = "./out/directive.jsx"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
 plugin = "directive,markdown"
 format = "solid"
 

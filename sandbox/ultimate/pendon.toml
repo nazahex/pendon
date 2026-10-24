@@ -133,20 +133,20 @@ template = "<Figure {...attrs}>{children}</Figure>"
 
 [task.cite]
 reference_source = "internal"
-prefix = "cite-"
-class = "cite-ref"
-id_prefix = "cra-"
+ref_id_prefix = "cite-"
+citation_class = "cite-ref"
+citation_id_prefix = "cra-"
 
 [[task.cite.custom]]
 type = ["citeX"]
 name = "CiteX"
 imports = "import { CiteX } from '@comp/content/Cite'"
-template = "<CiteX reference={frontmatter.references[\"{attrs.id}\"]} {...attrs} />"
+template = "<CiteX reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
 
 [[task.cite.custom]]
 name = "Cite"
 imports = "import { Cite } from '@comp/content/Cite'"
-template = "<Cite reference={frontmatter.references[\"{attrs.id}\"]} {...attrs} />"
+template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
 
 # --- WIKI: opsional, layout key belum pasti. Aktifkan bila spec mendukung ---
 # [task.wiki.custom.anchor]
@@ -160,7 +160,7 @@ template = "<Cite reference={frontmatter.references[\"{attrs.id}\"]} {...attrs} 
 type = "bibliography"
 name = "Bibliography"
 imports = "import { Bibliography } from '@comp/content/Cite'"
-template = "<Bibliography cites={frontmatter.cites} references={frontmatter.references} />"
+template = "<Bibliography citations={citations} references={references} />"
 
 [[task.marker.custom]]
 type = ["markerA", "footnote"]

@@ -1,67 +1,53 @@
-[[task]]
-name = "Cite Demo (HTML)"
-input = "./src/[slug].md"
-output = "./out/[slug].html"
-plugin = "micromatter,cite,markdown"
-format = "html"
-pretty = true
-markdown_allow_html = true
-
-[task.cite]
-reference_source = "external"
-reference_file = "./src/citeref.yaml"
-prefix = "citeref-"
-class = "cite-ref"
-id_prefix = "cra-"
+# === CITE SOLID ===
 
 [[task]]
-name = "Cite Demo (Solid)"
-input = "./src/[slug].md"
+name = "Cite Sandbox (Solid)"
+input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,cite,markdown"
+plugin = "micromatter,marker,cite,markdown"
 format = "solid"
-pretty = true
+no_cache = true
 markdown_allow_html = true
+post_hook = ["prettier --write ./out/[slug].jsx"]
 
 [task.cite]
 reference_source = "external"
-reference_file = "./src/citeref.yaml"
-prefix = "citeref-"
-class = "cite-ref"
-id_prefix = "cra-"
-
-[[task]]
-name = "Cite Demo (Custom Component)"
-input = "./src/custom.md"
-output = "./out/custom.jsx"
-plugin = "micromatter,cite,markdown"
-format = "solid"
-pretty = true
-markdown_allow_html = true
-
-[task.cite]
-reference_source = "external"
-reference_file = "./src/citeref.yaml"
-prefix = "citeref-"
-class = "cite-ref"
-id_prefix = "cra-"
+reference_file = "./src/reference.yaml"
+ref_id_prefix = "ref-" # Prefix for `href` linking to bibliography entries
+citation_class = "citation" # CSS class for the inline `<sup>` citation element
+citation_id_prefix = "cite-" # Prefix for inline anchor IDs (backlink targets from bibliography)
+references_export = "references" # Override the exported variable name for references data
+citations_export = "citations"
+references_scope = "all" # `cited` (external default) | `all` (frontmatter default)
 
 [task.cite.custom]
-name = "Citation"
-template = "<Citation index={attrs.index} id={attrs.id} loc={attrs.loc} class=\"{attrs.class}\" foo={attrs.foo}>{children}</Citation>"
+name = "Cite"
+imports = "import { Cite } from '@comp/content/Cite'"
+template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
 
-[[task.cite.custom.imports]]
-module = "@comp/citation"
-default = "Citation"
+[task.marker.custom]
+type = ["bibliography"]
+name = "Bibliography"
+imports = "import { Bibliography } from '@comp/content/Bibliography'"
+template = "<Bibliography references={references} citations={citations} {...attrs} />"
 
-[[task]]
-name = "Cite Demo Dynamic Path (Solid)"
-input = "./src/books/[collection_id]/[...slug].md"
-output = "../kazviz.com/content/books/[collection_id]/[chapter_id]/[...slug].jsx"
-plugin = "micromatter,cite,markdown"
-format = "solid"
-pretty = true
-markdown_allow_html = true
+# === CITE HTML ===
 
-cite_reference_source = "external"
-cite_reference_file = "./src/books/[collection_id]/[chapter_id]/citeref.yaml"
+# [[task]]
+# name = "Cite Sandbox (HTML)"
+# input = "./src/[slug].mdp"
+# output = "./out/[slug].html"
+# plugin = "micromatter,cite,markdown"
+# format = "html"
+# pretty = true
+# markdown_allow_html = true
+# # Per-task cache / hook knobs (docs/guides/cli.md#task-config-pendontoml):
+# # no_cache = true    # always re-render this task (still cached: the Solid one)
+# # post_hook = ["npx prettier --write ./out/[slug].html"]  # after each file
+
+# [task.cite]
+# reference_source = "external"
+# reference_file = "./src/reference.yaml"
+# ref_id_prefix = "ref-"
+# citation_class = "citation"
+# citation_id_prefix = "cite-"

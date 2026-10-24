@@ -1,0 +1,233 @@
+suryana-2016:
+  type: book
+  title: Pengantar Rekayasa Perangkat Lunak
+  authors:
+    - family: Suryana
+      given: Budi
+  issuedDate:
+    year: 2016
+  edition: Edisi ke-2
+  publisher: TechPress Indonesia
+  publisherLoc: Jakarta
+  isbn: "9780000000002"
+  language: id
+
+lestari-2025:
+  type: journal
+  title: Efektivitas Pembelajaran Berbasis Proyek pada Pendidikan Tinggi
+  authors:
+    - family: Lestari
+      given: Sari
+    - family: Wibowo
+      given: Agus
+  issuedDate:
+    year: 2025
+  containerTitle: Jurnal Pendidikan Sains Indonesia
+  volume: "13"
+  issue: "2"
+  pages: "210-225"
+  doi: "10.0000/jpsi.2025.13.2.210"
+  review: peer-reviewed
+  access: open
+  language: id
+  note: >-
+    Tinjauan sistematis yang menjadi rujukan utama untuk bukti pembelajaran
+    berbasis proyek di perguruan tinggi.
+
+kusuma-2024:
+  type: journal
+  title: Analisis Beban Kognitif pada Praktikum Pemrograman Dasar
+  authors:
+    - family: Kusuma
+      given: Dian
+    - family: Pertiwi
+      given: Ayu
+    - family: Hasan
+      given: Rafi
+  issuedDate:
+    year: 2024
+  containerTitle: Jurnal Informatika Terapan
+  volume: "8"
+  issue: "1"
+  pages: "45-62"
+  doi: "10.0000/jit.2024.8.1.45"
+  review: peer-reviewed
+  language: id
+
+hartono-2023:
+  type: news
+  title: Kurikulum Baru Mulai Diuji di 500 Sekolah
+  authors:
+    - family: Hartono
+      given: Dewi
+  issuedDate:
+    year: 2023
+    month: 9
+    day: 12
+  containerTitle: Harian Nusantara
+  url: https://example.org/berita/kurikulum-baru-diuji
+  language: id
+
+pratama-2022:
+  type: chapter
+  title: Literasi Data bagi Pendidik
+  authors:
+    - family: Pratama
+      given: Rizky
+    - family: Wijaya
+      given: Hendra
+      role: editor
+    - family: Anggraini
+      given: Putri
+      role: editor
+    - family: Santoso
+      given: Budi Eko
+      role: translator
+  issuedDate:
+    year: 2022
+  containerTitle: Handbook Pendidikan Digital
+  pages: "101-130"
+  publisher: Pustaka Cendekia
+  language: id
+
+rahman-2021:
+  type: thesis
+  title: Model Prediksi Curah Hujan Berbasis Jaringan Saraf Tiruan
+  authors:
+    - family: Rahman
+      given: Fajar
+  issuedDate:
+    year: 2021
+  genre: Disertasi doktoral
+  institution: Universitas Sebelas Maret
+  containerTitle: Digilib UNS
+  url: https://example.org/digilib/rahman-2021
+  language: id
+
+nugroho-2024:
+  type: video
+  title: Memahami Entropi dalam Termodinamika
+  authors:
+    - family: Nugroho
+      given: Ari
+      role: speaker
+  issuedDate:
+    year: 2024
+    month: 3
+    day: 8
+  containerTitle: YouTube
+  url: https://www.youtube.com/watch?v=abc123XYZ00
+  language: id
+
+mdn-clipboard:
+  type: website
+  title: Clipboard API
+  authors:
+    - literal: MDN Contributors
+  containerTitle: MDN Web Docs
+  url: https://developer.mozilla.org/en-US/docs/Web/API/Clipboard_API
+  accessedDate:
+    year: 2026
+    month: 6
+    day: 15
+  language: en
+
+ahmad-2026:
+  type: preprint
+  title: Scaling Laws for Low-Resource Language Models
+  authors:
+    - family: Ahmad
+      given: Salim
+    - family: Nakamura
+      given: Yuki
+  issuedDate:
+    year: 2026
+    month: 2
+  containerTitle: arXiv
+  url: https://example.org/abs/0000.00000
+  access: open
+  language: en
+
+prasetyo-2019:
+  type: journal
+  title: Dampak Suplemen X terhadap Daya Ingat
+  authors:
+    - family: Prasetyo
+      given: Joko
+  issuedDate:
+    year: 2019
+  containerTitle: Jurnal Gizi dan Kesehatan
+  volume: "5"
+  issue: "4"
+  pages: "300-312"
+  doi: "10.0000/jgk.2019.5.4.300"
+  retraction:
+    date:
+      year: 2021
+      month: 5
+    noticeUrl: https://example.org/retraction/prasetyo-2019
+  language: id
+
+kant-1781:
+  type: book
+  title: Critique of Pure Reason
+  authors:
+    - family: Kant
+      given: Immanuel
+    - family: Guyer
+      given: Paul
+      role: translator
+    - family: Wood
+      given: Allen W.
+      role: translator
+  issuedDate:
+    year: 1998
+  originalDate:
+    year: 1781
+  publisher: Cambridge University Press
+  language: en
+
+pspt-2024:
+  type: report
+  title: Pemetaan Akses Pendidikan Terbuka di Indonesia
+  authors:
+    - literal: Pusat Studi Pendidikan Terbuka
+  publisher: Pusat Studi Pendidikan Terbuka
+  number: "03/2024"
+  issuedDate:
+    year: 2024
+  url: https://example.org/laporan/03-2024
+  language: id
+
+tanpa-penulis-2020:
+  type: report
+  title: Panduan Penulisan Karya Ilmiah
+  publisher: Penerbit Kampus Contoh
+  issuedDate:
+    year: 2020
+  language: id
+
+van-dijk-2008:
+  type: book
+  title: "Discourse and Context: A Sociocognitive Approach"
+  authors:
+    - particle: van
+      family: Dijk
+      given: Teun A.
+  issuedDate:
+    year: 2008
+  publisher: Cambridge University Press
+  language: en
+
+sulastri-2020:
+  type: journal
+  title: Tradisi Lisan dan Pembentukan Identitas Komunitas
+  authors:
+    - family: Sulastri
+  issuedDate:
+    year: 2020
+  containerTitle: Jurnal Humaniora Nusantara
+  volume: "3"
+  issue: "2"
+  pages: "88-104"
+  language: id

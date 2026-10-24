@@ -1,0 +1,20 @@
+[[task]]
+name = "Extras Syntax Sandbox"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,directive,marker,bind,markdown"
+format = "solid"
+# allow comments in markdown
+markdown_allow_html = true
+
+[[task.marker.custom]]
+type = ["markerA"]
+name = "MarkerA"
+imports = "import MarkerA from '@comp/content/MarkerA'"
+template = "<MarkerA {...attrs} />"
+
+[[task.directive.custom]]
+type = ["DirecA"]
+name = "DirecA"
+imports = "import DirecA from '@comp/content/DirecA'"
+template = "<DirecA {...attrs} />"

@@ -1,0 +1,27 @@
+---
+Foo: Bar
+# Frontmatter Comment
+---
+
+# Lorem Isum
+
+## Foo Bar
+
+## Bar Foo
+
+
+<!--
+# Markdown Comment
+-->
+
+# Hiz
+
+
+{{{toml[dataY]
+# Bind Comment
+}}}
+
+```
+## Codefence Comment
+```
+

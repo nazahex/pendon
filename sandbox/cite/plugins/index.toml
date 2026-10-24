@@ -1,5 +1,0 @@
-[[plugin]]
-id = "footnote"
-props = { name = "Footnote" }
-path = "footnote.toml"
-enabled = true
