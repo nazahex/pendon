@@ -1,5 +1,5 @@
-import AdvancedImage from '@comp/content/AdvancedImage'
-import Figure from '@comp/content/Figure'
+import AdvancedImage from '@comp/AdvancedImage'
+import Figure from '@comp/Figure'
 
 export default function PendonView() { return (<>
 <p>A figure: the extras attach to the outermost node, <code>w</code>/<code>h</code> stay on the inner

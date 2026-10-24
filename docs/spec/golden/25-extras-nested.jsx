@@ -1,4 +1,4 @@
-import MarkerA from '@comp/content/MarkerA'
+import MarkerA from '@comp/MarkerA'
 
 export const frontmatter = {"fm1":"This is a frontmatter label"};
 export default function PendonView() { return (<>

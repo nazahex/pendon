@@ -7,10 +7,10 @@ format = "solid"
 
 [task.image.custom.img]
 name = "AdvancedImage"
-imports = "import AdvancedImage from '@comp/content/AdvancedImage'"
+imports = "import AdvancedImage from '@comp/AdvancedImage'"
 template = "<AdvancedImage {...attrs}>{children}</AdvancedImage>"
 
 [task.image.custom.figure]
 name = "Figure"
-imports = "import Figure from '@comp/content/Figure'"
+imports = "import Figure from '@comp/Figure'"
 template = "<Figure {...attrs}>{children}</Figure>"

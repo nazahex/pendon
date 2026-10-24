@@ -10,5 +10,5 @@ reference_source = "internal"
 
 [task.cite.custom]
 name = "Cite"
-imports = "import { Cite } from '@comp/content/Cite'"
+imports = "import { Cite } from '@comp/Cite'"
 template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"

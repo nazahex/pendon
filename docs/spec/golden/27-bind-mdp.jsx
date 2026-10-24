@@ -1,4 +1,4 @@
-import Figure from '@comp/content/Figure'
+import Figure from '@comp/Figure'
 
 export const frontmatter = {"references":{"book":{"id":"book","title":"A Book","type":"book"}}};
 export const references = {"book":{"id":"book","title":"A Book","type":"book"}};

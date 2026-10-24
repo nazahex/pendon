@@ -1,5 +1,5 @@
-import { DirectiveDefault } from '@comp/content/Directive'
-import { Note } from '@comp/content/Directive'
+import { DirectiveDefault } from '@comp/Directive'
+import { Note } from '@comp/Directive'
 
 export default function PendonView() { return (<>
 <p>A block directive owns its line and its body is parsed as block content (§10.3):

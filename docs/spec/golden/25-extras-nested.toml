@@ -8,5 +8,5 @@ format = "solid"
 [[task.marker.custom]]
 type = ["markerA"]
 name = "MarkerA"
-imports = "import MarkerA from '@comp/content/MarkerA'"
+imports = "import MarkerA from '@comp/MarkerA'"
 template = "<MarkerA {...attrs} />"

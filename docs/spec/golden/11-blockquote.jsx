@@ -1,4 +1,4 @@
-import { QuoteA } from '@comp/content/Quote'
+import { QuoteA } from '@comp/Quote'
 
 export default function PendonView() { return (<>
 <p>§9.2: a quote carries its extras through an <strong>inner head</strong>, right after the <code>&gt;</code>

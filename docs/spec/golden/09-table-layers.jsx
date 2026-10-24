@@ -1,9 +1,9 @@
-import { TableBody } from '@comp/content/Table'
-import { TableCellAB } from '@comp/content/Table'
-import { TableCellDefault } from '@comp/content/Table'
-import { TableFoot } from '@comp/content/Table'
-import { TableRowAB } from '@comp/content/Table'
-import { TableRowDefault } from '@comp/content/Table'
+import { TableBody } from '@comp/Table'
+import { TableCellAB } from '@comp/Table'
+import { TableCellDefault } from '@comp/Table'
+import { TableFoot } from '@comp/Table'
+import { TableRowAB } from '@comp/Table'
+import { TableRowDefault } from '@comp/Table'
 
 export default function PendonView() { return (<>
 <p>Column extras in the alignment row route the column&#39;s <code>&lt;th&gt;</code> and its <code>&lt;td&gt;</code>

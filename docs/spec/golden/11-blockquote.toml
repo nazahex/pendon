@@ -10,5 +10,5 @@ format = "solid"
 [[task.blockquote.custom]]
 type = ["quoteA"]
 name = "QuoteA"
-imports = "import { QuoteA } from '@comp/content/Quote'"
+imports = "import { QuoteA } from '@comp/Quote'"
 template = "<QuoteA {...attrs}>{children}</QuoteA>"

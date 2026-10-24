@@ -1,4 +1,4 @@
-import { TableDefault } from '@comp/content/Table'
+import { TableDefault } from '@comp/Table'
 
 export default function PendonView() { return (<>
 <p>The §8 declaration line carries the <code>&lt;table&gt;</code> extras and the head (<code>[slug]</code>,

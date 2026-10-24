@@ -1,6 +1,6 @@
-import { OrderedDefault } from '@comp/content/List'
-import { UnorderedA } from '@comp/content/List'
-import { UnorderedDefault } from '@comp/content/List'
+import { OrderedDefault } from '@comp/List'
+import { UnorderedA } from '@comp/List'
+import { UnorderedDefault } from '@comp/List'
 
 export default function PendonView() { return (<>
 <p>A container decorator above a list decorates the <em>container</em>, not the items

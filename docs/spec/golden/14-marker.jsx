@@ -1,5 +1,5 @@
-import { Bibliography } from '@comp/content/Marker'
-import { NoteAside } from '@comp/content/Marker'
+import { Bibliography } from '@comp/Marker'
+import { NoteAside } from '@comp/Marker'
 
 export default function PendonView() { return (<>
 <p>The <code>type</code> of a marker is mandatory (§10.1) and is the routing key of the §11

@@ -8,31 +8,31 @@ format = "solid"
 [[task.table.custom.row]]
 type = ["rowA", "rowB"]
 name = "TableRowAB"
-imports = "import { TableRowAB } from '@comp/content/Table'"
+imports = "import { TableRowAB } from '@comp/Table'"
 template = "<TableRowAB type={\"{attrs.type}\"} {...attrs}>{children}</TableRowAB>"
 
 [[task.table.custom.row]]
 name = "TableRowDefault"
-imports = "import { TableRowDefault } from '@comp/content/Table'"
+imports = "import { TableRowDefault } from '@comp/Table'"
 template = "<TableRowDefault {...attrs}>{children}</TableRowDefault>"
 
 [[task.table.custom.cell]]
 type = ["cellA", "cellB"]
 name = "TableCellAB"
-imports = "import { TableCellAB } from '@comp/content/Table'"
+imports = "import { TableCellAB } from '@comp/Table'"
 template = "<TableCellAB type={\"{attrs.type}\"} {...attrs}>{children}</TableCellAB>"
 
 [[task.table.custom.cell]]
 name = "TableCellDefault"
-imports = "import { TableCellDefault } from '@comp/content/Table'"
+imports = "import { TableCellDefault } from '@comp/Table'"
 template = "<TableCellDefault {...attrs}>{children}</TableCellDefault>"
 
 [[task.table.custom.tbody]]
 name = "TableBody"
-imports = "import { TableBody } from '@comp/content/Table'"
+imports = "import { TableBody } from '@comp/Table'"
 template = "<TableBody {...attrs}>{children}</TableBody>"
 
 [[task.table.custom.tfoot]]
 name = "TableFoot"
-imports = "import { TableFoot } from '@comp/content/Table'"
+imports = "import { TableFoot } from '@comp/Table'"
 template = "<TableFoot {...attrs}>{children}</TableFoot>"

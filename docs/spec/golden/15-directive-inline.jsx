@@ -1,5 +1,5 @@
-import { DirectiveDefault } from '@comp/content/Directive'
-import { Note } from '@comp/content/Directive'
+import { DirectiveDefault } from '@comp/Directive'
+import { Note } from '@comp/Directive'
 
 export default function PendonView() { return (<>
 <p>Inline directives keep their paragraph (§10.2) and their content is inline

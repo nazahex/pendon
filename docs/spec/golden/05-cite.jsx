@@ -1,4 +1,4 @@
-import { Cite } from '@comp/content/Cite'
+import { Cite } from '@comp/Cite'
 
 export const frontmatter = {"references":{"book":{"authors":[{"firstName":"John","lastName":"Smith"}],"id":"book","language":"en","title":"A Book","type":"book"}}};
 export const references = {"book":{"authors":[{"firstName":"John","lastName":"Smith"}],"id":"book","language":"en","title":"A Book","type":"book"}};

@@ -1,5 +1,5 @@
-import { HeadingDefault } from '@comp/content/Heading'
-import { HeadingXY } from '@comp/content/Heading'
+import { HeadingDefault } from '@comp/Heading'
+import { HeadingXY } from '@comp/Heading'
 
 export default function PendonView() { return (<>
 <p><code>[slug]</code>, <code>(&quot;title&quot;)</code> and <code>@@type&#123;…&#125;</code> are all optional and independent (§7.4).

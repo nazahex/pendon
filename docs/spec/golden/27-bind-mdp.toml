@@ -11,5 +11,5 @@ reference_source = "internal"
 
 [task.image.custom.figure]
 name = "Figure"
-imports = "import Figure from '@comp/content/Figure'"
+imports = "import Figure from '@comp/Figure'"
 template = "<Figure {...attrs}>{children}</Figure>"

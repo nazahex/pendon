@@ -12,10 +12,10 @@ number_style = "nested-number"
 [[task.heading.custom]]
 type = ["headingX", "headingY"]
 name = "HeadingXY"
-imports = "import { HeadingXY } from '@comp/content/Heading'"
+imports = "import { HeadingXY } from '@comp/Heading'"
 template = "<HeadingXY level={\"{attrs.level}\"} type={\"{attrs.type}\"} number={\"{attrs.number}\"} {...attrs}>{children}</HeadingXY>"
 
 [[task.heading.custom]]
 name = "HeadingDefault"
-imports = "import { HeadingDefault } from '@comp/content/Heading'"
+imports = "import { HeadingDefault } from '@comp/Heading'"
 template = "<HeadingDefault {...attrs}>{children}</HeadingDefault>"
