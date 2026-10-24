@@ -1,0 +1,50 @@
+# === CITE SOLID ===
+
+[[task]]
+name = "Plugin Extract Sandbox (Solid)"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,marker,cite,markdown"
+format = "solid"
+no_cache = true
+markdown_allow_html = true
+post_hook = ["prettier --write ./out/[slug].jsx"]
+
+[[task.cite.extract]]
+output = "./out/[slug].cite.json"
+format = "json"
+
+[[task.cite.extract]]
+export = "citations"
+
+[[task.heading.extract]]
+output = "./out/[slug].heading.yaml"
+format = "yaml"
+
+# - extract can be done numerous times
+# - different name will create different output file, and different export will create different variable name in the output file, even with the same values
+# - same output name will be overwritten, and same export name will be overwritten too, last one wins
+[[task.heading.extract]]
+output = "./out/[slug].heading.json"
+format = "json"
+
+[[task.heading.extract]]
+export = "headingsA"
+
+[[task.heading.extract]]
+export = "headingsB"
+
+[task.cite]
+reference_source = "external"
+reference_file = "./src/reference.yaml"
+ref_id_prefix = "ref-"
+citation_class = "citation"
+citation_id_prefix = "cite-"
+references_export = "references"
+# citations_export = "citations" this field is no longer valid and needed
+references_scope = "all"
+
+[task.cite.custom]
+name = "Cite"
+imports = "import { Cite } from '@comp/Cite'"
+template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"

@@ -10,21 +10,21 @@ markdown_allow_html = true
 [[task.image.custom.img]]
 type = ["imageX", "thumb"]
 name = "ImageThumb"
-imports = "import { ImageThumb } from '@comp/content/AdvancedImage'"
+imports = "import { ImageThumb } from '@comp/AdvancedImage'"
 template = "<ImageThumb type={\"{attrs.type}\"} {...attrs}>{children}</ImageThumb>"
 
 [[task.image.custom.img]]
 name = "AdvancedImage"
-imports = "import AdvancedImage from '@comp/content/AdvancedImage'"
+imports = "import AdvancedImage from '@comp/AdvancedImage'"
 template = "<AdvancedImage {...attrs}>{children}</AdvancedImage>"
 
 [[task.image.custom.figure]]
 type = ["figureX"]
 name = "FigureX"
-imports = "import { FigureX } from '@comp/content/Figure'"
+imports = "import { FigureX } from '@comp/Figure'"
 template = "<FigureX {...attrs}>{children}</FigureX>"
 
 [[task.image.custom.figure]]
 name = "Figure"
-imports = "import Figure from '@comp/content/Figure'"
+imports = "import Figure from '@comp/Figure'"
 template = "<Figure {...attrs}>{children}</Figure>"

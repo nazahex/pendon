@@ -1,5 +1,5 @@
-import { Bibliography } from "@comp/content/Bibliography";
-import { Cite } from "@comp/content/Cite";
+import { Bibliography } from "@comp/Bibliography";
+import { Cite } from "@comp/Cite";
 
 export const frontmatter = { title: "Cite Ultimate Sandbox" };
 export const references = {

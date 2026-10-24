@@ -97,12 +97,12 @@ number_style = "nested-number"
 [[task.heading.custom]]
 type = ["headingX", "headingY"]
 name = "HeadingXY"
-imports = "import { HeadingXY } from '@comp/content/Heading'"
+imports = "import { HeadingXY } from '@comp/Heading'"
 template = "<HeadingXY level={\"{attrs.level}\"} type={\"{attrs.type}\"} number={\"{attrs.number}\"} {...attrs}>{children}</HeadingXY>"
 
 [[task.heading.custom]]
 name = "HeadingDefault"
-imports = "import { HeadingDefault } from '@comp/content/Heading'"
+imports = "import { HeadingDefault } from '@comp/Heading'"
 template = "<HeadingDefault {...attrs}>{children}</HeadingDefault>"
 
 # --- IMAGE: typed + default for both img and figure -------------------------
@@ -110,23 +110,23 @@ template = "<HeadingDefault {...attrs}>{children}</HeadingDefault>"
 [[task.image.custom.img]]
 type = ["imageX", "thumb"]
 name = "ImageThumb"
-imports = "import { ImageThumb } from '@comp/content/AdvancedImage'"
+imports = "import { ImageThumb } from '@comp/AdvancedImage'"
 template = "<ImageThumb type={\"{attrs.type}\"} {...attrs}>{children}</ImageThumb>"
 
 [[task.image.custom.img]]
 name = "AdvancedImage"
-imports = "import AdvancedImage from '@comp/content/AdvancedImage'"
+imports = "import AdvancedImage from '@comp/AdvancedImage'"
 template = "<AdvancedImage {...attrs}>{children}</AdvancedImage>"
 
 [[task.image.custom.figure]]
 type = ["figureX"]
 name = "FigureX"
-imports = "import { FigureX } from '@comp/content/Figure'"
+imports = "import { FigureX } from '@comp/Figure'"
 template = "<FigureX {...attrs}>{children}</FigureX>"
 
 [[task.image.custom.figure]]
 name = "Figure"
-imports = "import Figure from '@comp/content/Figure'"
+imports = "import Figure from '@comp/Figure'"
 template = "<Figure {...attrs}>{children}</Figure>"
 
 # --- CITE: typed + default --------------------------------------------------
@@ -140,18 +140,18 @@ citation_id_prefix = "cra-"
 [[task.cite.custom]]
 type = ["citeX"]
 name = "CiteX"
-imports = "import { CiteX } from '@comp/content/Cite'"
+imports = "import { CiteX } from '@comp/Cite'"
 template = "<CiteX reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
 
 [[task.cite.custom]]
 name = "Cite"
-imports = "import { Cite } from '@comp/content/Cite'"
+imports = "import { Cite } from '@comp/Cite'"
 template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
 
 # --- WIKI: opsional, layout key belum pasti. Aktifkan bila spec mendukung ---
 # [task.wiki.custom.anchor]
 # name = "WikiLink"
-# imports = "import { WikiLink } from '@comp/content/Wiki'"
+# imports = "import { WikiLink } from '@comp/Wiki'"
 # template = "<WikiLink href={\"{attrs.href}\"} {...attrs}>{children}</WikiLink>"
 
 # --- MARKER: type string, type array (self-closing), default ----------------
@@ -159,18 +159,18 @@ template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
 [[task.marker.custom]]
 type = "bibliography"
 name = "Bibliography"
-imports = "import { Bibliography } from '@comp/content/Cite'"
+imports = "import { Bibliography } from '@comp/Cite'"
 template = "<Bibliography citations={citations} references={references} />"
 
 [[task.marker.custom]]
 type = ["markerA", "footnote"]
 name = "MarkerA"
-imports = "import { MarkerA } from '@comp/content/Marker'"
+imports = "import { MarkerA } from '@comp/Marker'"
 template = "<MarkerA type={\"{attrs.type}\"} {...attrs}>{children}</MarkerA>"
 
 [[task.marker.custom]]
 name = "MarkerDefault"
-imports = "import { MarkerDefault } from '@comp/content/Marker'"
+imports = "import { MarkerDefault } from '@comp/Marker'"
 template = "<MarkerDefault {...attrs}>{children}</MarkerDefault>"
 
 # --- DIRECTIVE: custom bracket/parentheses keys, no default -> built-in span/div
@@ -180,7 +180,7 @@ type = ["asideA", "asideB"]
 name = "AsideAB"
 bracket_key = "slug"
 parentheses_key = "title"
-imports = "import { AsideAB } from '@comp/content/AsideAB'"
+imports = "import { AsideAB } from '@comp/AsideAB'"
 template = "<AsideAB slug={\"{attrs.slug}\"} title={\"{attrs.title}\"} type={\"{attrs.type}\"} {...attrs}>{children}</AsideAB>"
 
 [[task.directive.custom]]
@@ -188,7 +188,7 @@ type = ["note"]
 name = "Note"
 bracket_key = "id"
 parentheses_key = "level"
-imports = "import Note from '@comp/content/Note'"
+imports = "import Note from '@comp/Note'"
 template = "<Note {...attrs}>{children}</Note>"
 
 # --- BLOCKQUOTE: §9.2 primary layer `blockquote`. Typed entry + default -------
@@ -199,12 +199,12 @@ template = "<Note {...attrs}>{children}</Note>"
 [[task.blockquote.custom]]
 type = ["bqA", "bqB"]
 name = "BlockquoteAB"
-imports = "import { BlockquoteAB } from '@comp/content/Blockquote'"
+imports = "import { BlockquoteAB } from '@comp/Blockquote'"
 template = "<BlockquoteAB type={\"{attrs.type}\"} {...attrs}>{children}</BlockquoteAB>"
 
 [[task.blockquote.custom]]
 name = "BlockquoteDefault"
-imports = "import { BlockquoteDefault } from '@comp/content/Blockquote'"
+imports = "import { BlockquoteDefault } from '@comp/Blockquote'"
 template = "<BlockquoteDefault {...attrs}>{children}</BlockquoteDefault>"
 
 # --- LIST: §9.3/§9.4 container layers `unordered` / `ordered`. The marker
@@ -215,23 +215,23 @@ template = "<BlockquoteDefault {...attrs}>{children}</BlockquoteDefault>"
 [[task.list.custom.unordered]]
 type = ["unorderedA", "compact"]
 name = "UnorderedACompact"
-imports = "import { UnorderedACompact } from '@comp/content/List'"
+imports = "import { UnorderedACompact } from '@comp/List'"
 template = "<UnorderedACompact type={\"{attrs.type}\"} {...attrs}>{children}</UnorderedACompact>"
 
 [[task.list.custom.unordered]]
 name = "UnorderedDefault"
-imports = "import { UnorderedDefault } from '@comp/content/List'"
+imports = "import { UnorderedDefault } from '@comp/List'"
 template = "<UnorderedDefault {...attrs}>{children}</UnorderedDefault>"
 
 [[task.list.custom.ordered]]
 type = ["orderedA"]
 name = "OrderedA"
-imports = "import { OrderedA } from '@comp/content/List'"
+imports = "import { OrderedA } from '@comp/List'"
 template = "<OrderedA type={\"{attrs.type}\"} {...attrs}>{children}</OrderedA>"
 
 [[task.list.custom.ordered]]
 name = "OrderedDefault"
-imports = "import { OrderedDefault } from '@comp/content/List'"
+imports = "import { OrderedDefault } from '@comp/List'"
 template = "<OrderedDefault {...attrs}>{children}</OrderedDefault>"
 
 # --- TABLE: 7 layers. table/tbody/tfoot typed+default; caption/thead single;
@@ -240,66 +240,66 @@ template = "<OrderedDefault {...attrs}>{children}</OrderedDefault>"
 [[task.table.custom.table]]
 type = ["tableX"]
 name = "TableX"
-imports = "import { TableX } from '@comp/content/Table'"
+imports = "import { TableX } from '@comp/Table'"
 template = "<TableX {...attrs}>{children}</TableX>"
 
 [[task.table.custom.table]]
 name = "Table"
-imports = "import Table from '@comp/content/Table'"
+imports = "import Table from '@comp/Table'"
 template = "<Table {...attrs}>{children}</Table>"
 
 [task.table.custom.caption]
 name = "TableCaption"
-imports = "import { TableCaption } from '@comp/content/Table'"
+imports = "import { TableCaption } from '@comp/Table'"
 template = "<TableCaption {...attrs}>{children}</TableCaption>"
 
 [task.table.custom.thead]
 name = "TableHead"
-imports = "import { TableHead } from '@comp/content/Table'"
+imports = "import { TableHead } from '@comp/Table'"
 template = "<TableHead {...attrs}>{children}</TableHead>"
 
 [[task.table.custom.tbody]]
 type = ["tbodyX"]
 name = "TableBodyX"
-imports = "import { TableBodyX } from '@comp/content/Table'"
+imports = "import { TableBodyX } from '@comp/Table'"
 template = "<TableBodyX {...attrs}>{children}</TableBodyX>"
 
 [[task.table.custom.tbody]]
 name = "TableBody"
-imports = "import { TableBody } from '@comp/content/Table'"
+imports = "import { TableBody } from '@comp/Table'"
 template = "<TableBody {...attrs}>{children}</TableBody>"
 
 [[task.table.custom.tfoot]]
 type = ["tfootX"]
 name = "TableFootX"
-imports = "import { TableFootX } from '@comp/content/Table'"
+imports = "import { TableFootX } from '@comp/Table'"
 template = "<TableFootX {...attrs}>{children}</TableFootX>"
 
 [[task.table.custom.tfoot]]
 name = "TableFoot"
-imports = "import { TableFoot } from '@comp/content/Table'"
+imports = "import { TableFoot } from '@comp/Table'"
 template = "<TableFoot {...attrs}>{children}</TableFoot>"
 
 [[task.table.custom.row]]
 type = ["rowA", "rowB"]
 name = "TableRowAB"
-imports = "import { TableRowAB } from '@comp/content/Table'"
+imports = "import { TableRowAB } from '@comp/Table'"
 template = "<TableRowAB type={\"{attrs.type}\"} {...attrs}>{children}</TableRowAB>"
 
 [[task.table.custom.row]]
 name = "TableRowDefault"
-imports = "import { TableRowDefault } from '@comp/content/Table'"
+imports = "import { TableRowDefault } from '@comp/Table'"
 template = "<TableRowDefault {...attrs}>{children}</TableRowDefault>"
 
 [[task.table.custom.cell]]
 type = ["cellA", "cellB"]
 name = "TableCellAB"
-imports = "import { TableCellAB } from '@comp/content/Table'"
+imports = "import { TableCellAB } from '@comp/Table'"
 template = "<TableCellAB type={\"{attrs.type}\"} {...attrs}>{children}</TableCellAB>"
 
 [[task.table.custom.cell]]
 name = "TableCellDefault"
-imports = "import { TableCellDefault } from '@comp/content/Table'"
+imports = "import { TableCellDefault } from '@comp/Table'"
 template = "<TableCellDefault {...attrs}>{children}</TableCellDefault>"
 
 # ============================================================================
@@ -350,11 +350,11 @@ template = "<AnchorAll {...attrs}>{children}</AnchorAll>"
 
 [task.table.custom.table]
 name = "Table"
-imports = "import Table from '@comp/content/Table'"
+imports = "import Table from '@comp/Table'"
 template = "<Table {...attrs}>{children}</Table>"
 
 [[task.table.custom.cell]]
 type = ["cellA"]
 name = "TableCellA"
-imports = "import { TableCellA } from '@comp/content/Table'"
+imports = "import { TableCellA } from '@comp/Table'"
 template = "<TableCellA {...attrs}>{children}</TableCellA>"

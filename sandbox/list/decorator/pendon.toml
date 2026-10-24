@@ -11,7 +11,7 @@ format = "solid"
 [[task.blockquote.custom]]
 type = ["bqA"]
 name = "QuoteA"
-imports = "import { QuoteA } from '@comp/content/Quote'"
+imports = "import { QuoteA } from '@comp/Quote'"
 template = "<QuoteA {...attrs}>{children}</QuoteA>"
 
 # --- §9.3/§9.4 list container layers -----------------------------------------
@@ -20,21 +20,21 @@ template = "<QuoteA {...attrs}>{children}</QuoteA>"
 [[task.list.custom.unordered]]
 type = ["unorderedA"]
 name = "UnorderedA"
-imports = "import { UnorderedA } from '@comp/content/List'"
+imports = "import { UnorderedA } from '@comp/List'"
 template = "<UnorderedA {...attrs}>{children}</UnorderedA>"
 
 [[task.list.custom.unordered]]
 name = "UnorderedDefault"
-imports = "import { UnorderedDefault } from '@comp/content/List'"
+imports = "import { UnorderedDefault } from '@comp/List'"
 template = "<UnorderedDefault {...attrs}>{children}</UnorderedDefault>"
 
 [[task.list.custom.ordered]]
 type = ["orderedA"]
 name = "OrderedA"
-imports = "import { OrderedA } from '@comp/content/List'"
+imports = "import { OrderedA } from '@comp/List'"
 template = "<OrderedA {...attrs}>{children}</OrderedA>"
 
 [[task.list.custom.ordered]]
 name = "OrderedDefault"
-imports = "import { OrderedDefault } from '@comp/content/List'"
+imports = "import { OrderedDefault } from '@comp/List'"
 template = "<OrderedDefault {...attrs}>{children}</OrderedDefault>"

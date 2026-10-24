@@ -4,6 +4,7 @@ input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
 plugin = "directive,markdown"
 format = "solid"
+no_cache = true
 
 [[task.directive.custom]]
 type = ["asideA", "asideB"]
@@ -12,7 +13,7 @@ bracket_key = "label"
 parentheses_key = "kind"
 backtick_key = "author"
 quote_key = "summary"
-imports = "import { AsideAB } from '@comp/content/AsideAB'"
+imports = "import { AsideAB } from '@comp/AsideAB'"
 template = "<AsideAB slug={\"{attrs.slug}\"} title={\"{attrs.title}\"} type={\"{attrs.type}\"} {...attrs}>{children}</AsideAB>"
 
 [[task.directive.custom]]
@@ -20,7 +21,7 @@ type = ["note"]
 name = "Note"
 bracket_key = "id"
 parentheses_key = "level"
-imports = "import Note from '@comp/content/Note'"
+imports = "import Note from '@comp/Note'"
 template = "<Note {...attrs}>{children}</Note>"
 
 [[task.directive.custom]]
@@ -28,5 +29,10 @@ type = ["warning"]
 name = "Warning"
 bracket_key = "number"
 parentheses_key = "reason"
-imports = "import Warning from '@comp/content/Warning'"
+imports = "import Warning from '@comp/Warning'"
 template = "<Warning {...attrs}>{children}</Warning>"
+
+[[task.directive.custom]]
+name = "DirectiveGeneric"
+imports = "import DirGen from '@comp/DirGen'"
+template = "<DirGen {...attrs}>{children}</DirGen>"

@@ -1,7 +1,7 @@
-import { OrderedDefault } from '@comp/content/List'
-import { QuoteA } from '@comp/content/Quote'
-import { UnorderedA } from '@comp/content/List'
-import { UnorderedDefault } from '@comp/content/List'
+import { OrderedDefault } from '@comp/List'
+import { QuoteA } from '@comp/Quote'
+import { UnorderedA } from '@comp/List'
+import { UnorderedDefault } from '@comp/List'
 
 export default function PendonView() { return (<>
 <h1>List &amp; Blockquote Decorators</h1>

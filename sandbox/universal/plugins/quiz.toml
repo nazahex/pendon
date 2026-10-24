@@ -14,7 +14,7 @@ node_name = "Quiz"
 component_template = "<Quiz>{children}</Quiz>"
 
 [[renderer.solid.imports]]
-module = "@comp/content/Quiz"
+module = "@comp/Quiz"
 default = "Quiz"
 
 [meta]

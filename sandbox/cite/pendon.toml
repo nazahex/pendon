@@ -22,13 +22,13 @@ references_scope = "all" # `cited` (external default) | `all` (frontmatter defau
 
 [task.cite.custom]
 name = "Cite"
-imports = "import { Cite } from '@comp/content/Cite'"
+imports = "import { Cite } from '@comp/Cite'"
 template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
 
 [task.marker.custom]
 type = ["bibliography"]
 name = "Bibliography"
-imports = "import { Bibliography } from '@comp/content/Bibliography'"
+imports = "import { Bibliography } from '@comp/Bibliography'"
 template = "<Bibliography references={references} citations={citations} {...attrs} />"
 
 # === CITE HTML ===

@@ -1,0 +1,25 @@
+##[heading-satu]("Title Heading 1")@@HeadingA{ foo: "bar" }%% Heading Satu
+
+{{MarkerX}}%%numberA akan bernomor 1
+
+{{MarkerX}}%%numberB akan bernomor 1
+
+{{MarkerY}}%%numberA akan bernomor 2
+
+{{MarkerY}}%%%numberA akan bernomor 2.1
+
+{{MarkerZ}}%%%numberA akan bernomor 2.2
+{{MarkerZ}}%%%%numberA akan bernomor 2.2.1
+{{MarkerZ}}%%%%%%numberA akan bernomor 2.2.1.1.1
+{{MarkerC}}%%numberB akan bernomor 2
+{{MarkerZ}}%%numberB akan bernomor 3
+{{MarkerA}}%%%%%%numberB akan bernomor 3.1.1.1.1
+
+@@%%numberB
+```html
+<p>akan bernomor 4</p>
+```
+
+![image foo](/foo.png)@@ImageA{foo:"bar"}%%numberA akan bernomor 3
+
+

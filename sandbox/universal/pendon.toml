@@ -15,7 +15,7 @@ name = "Cite"
 template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
 
 [[task.cite.custom.imports]]
-module = "@comp/content/Cite"
+module = "@comp/Cite"
 default = "Cite"
 
 [task.heading]

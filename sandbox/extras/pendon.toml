@@ -10,11 +10,11 @@ markdown_allow_html = true
 [[task.marker.custom]]
 type = ["markerA"]
 name = "MarkerA"
-imports = "import MarkerA from '@comp/content/MarkerA'"
+imports = "import MarkerA from '@comp/MarkerA'"
 template = "<MarkerA {...attrs} />"
 
 [[task.directive.custom]]
 type = ["DirecA"]
 name = "DirecA"
-imports = "import DirecA from '@comp/content/DirecA'"
+imports = "import DirecA from '@comp/DirecA'"
 template = "<DirecA {...attrs} />"

@@ -1,7 +1,7 @@
-import Cite from "@comp/content/Cite";
+import Cite from "@comp/Cite";
 import Hint from "@comp/shared/Hint";
 import Parego from "@comp/shared/Parego";
-import Epis from '@comp/content/Epis'
+import Epis from '@comp/Epis'
 
 export const frontmatter = {"cites":[{"id":"suryana-2026","index":1,"loc":"hlm. 45"}],"references":{"suryana-2026":{"authors":[{"firstName":"Eko","lastName":"Suryana"}],"id":"suryana-2026","isbn":"978-602-0000-00-0","issuedDate":{"year":2026},"language":"id","publisher":"TechPress Indonesia","publisherLocation":"Jakarta","title":"Masa Depan Rekayasa Perangkat Lunak","type":"book"}},"title":"Universal Custom Syntax"};
 export const headings = [{"id":"custom-plugins","text":"Custom Plugins","level":2},{"id":"joo","text":"Foo","level":2}];

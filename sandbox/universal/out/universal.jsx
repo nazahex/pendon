@@ -1,7 +1,7 @@
-import Cite from "@comp/content/Cite";
+import Cite from "@comp/Cite";
 import Hint from "@comp/shared/Hint";
 import Parego from "@comp/shared/Parego";
-import Epis from '@comp/content/Epis'
+import Epis from '@comp/Epis'
 
 export const frontmatter = {"cites":[{"id":"suryana-2026","index":1},{"id":"suryana-2026","index":2,"loc":"hlm. 45"},{"id":"paper-smith","index":3}],"references":{"paper-smith":{"authors":[{"firstName":"John","lastName":"Smith"},{"firstName":"Jane","lastName":"Doe"}],"containerTitle":"Journal of Web Engineering","doi":"10.1016/j.jwe.2025.08.001","id":"paper-smith","issue":"4","issuedDate":{"month":8,"year":2025},"language":"en","pages":"210-225","title":"Generative MDX to PDF Compilation Architectures","type":"journal","volume":"18"},"suryana-2026":{"authors":[{"firstName":"Eko","lastName":"Suryana"}],"id":"suryana-2026","isbn":"978-602-0000-00-0","issuedDate":{"year":2026},"language":"id","publisher":"TechPress Indonesia","publisherLocation":"Jakarta","title":"Masa Depan Rekayasa Perangkat Lunak","type":"book"}},"title":"Universal Custom Syntax"};
 export const headings = [{"id":"image","text":"Image","level":2},{"id":"anchor","text":"Anchor","level":2},{"id":"cite","text":"Cite","level":2},{"id":"heading-slug","text":"Heading","level":2,"subheadings":[{"id":"foo-bar","text":"Foo Bar Barosa","level":3}]},{"id":"table","text":"Table","level":2},{"id":"latex","text":"Latex","level":2},{"id":"custom-plugins","text":"Custom Plugins","level":2},{"id":"lists","text":"Lists","level":2}];

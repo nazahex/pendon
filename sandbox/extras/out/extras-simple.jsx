@@ -1,4 +1,4 @@
-import DirecA from '@comp/content/DirecA'
+import DirecA from '@comp/DirecA'
 
 export const frontmatter = {"fm1":"This is a frontmatter label"};
 export default function PendonView() { return (<>

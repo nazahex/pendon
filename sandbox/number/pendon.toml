@@ -1,0 +1,11 @@
+[[task.heading.number]]
+type = ["HeadingA, HeadingB"]
+style = ["decimal", "decimal"]
+
+[[task.number.custom]]
+type = ["NumberA"]
+style = "decimal" # all number depth will be decimal
+
+[[task.number.custom]]
+type = ["NumberB"]
+style = ["upper-roman", "lower-alpha", "decimal"] # depth 1 will be upper-roman, depth 2 will be lower-alpha, depth 3 will be decimal. eg. I. a. 1., I.b , IV.c.12

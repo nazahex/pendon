@@ -1,4 +1,4 @@
-import Epis from '@comp/content/Epis'
+import Epis from '@comp/Epis'
 
 export default function PendonView() { return (<>
 <p>Non excepteur velit quis velit aliqua sint deserunt enim. Ut quis anim sit anim. Consectetur id labore officia tempor ea dolore ad magna ut anim proident nostrud. Proident nisi nisi duis commodo ad enim dolor nisi tempor proident nulla proident. <Epis level={3} phase={3} ref={"foo-bar"}>Nostrud non exercitation amet dolore <strong>exercitation</strong> <i>reprehenderit</i> est <a href="https://example.com" title="Aliqua">aliqua</a> aliquip amet.</Epis>

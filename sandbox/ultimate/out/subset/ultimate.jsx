@@ -1,6 +1,6 @@
-import Table from '@comp/content/Table'
+import Table from '@comp/Table'
 import { AnchorAll } from '@comp/shared/Anchor'
-import { TableCellA } from '@comp/content/Table'
+import { TableCellA } from '@comp/Table'
 
 export const frontmatter = {"references":{"doe-2020":{"authors":[{"firstName":"Jane","lastName":"Doe"}],"id":"doe-2020","issuedDate":{"year":2020},"language":"en","publisher":"Test Press","publisherLocation":"Bandung","title":"Edge Cases in Practice","type":"book"},"paper-smith":{"authors":[{"firstName":"John","lastName":"Smith"}],"containerTitle":"Journal of Web Engineering","doi":"10.1016/j.jwe.2025.08.001","id":"paper-smith","issue":"4","issuedDate":{"month":8,"year":2025},"language":"en","pages":"210-225","title":"Generative MDX to PDF Compilation Architectures","type":"journal","volume":"18"},"suryana-2026":{"authors":[{"firstName":"Eko","lastName":"Suryana"}],"id":"suryana-2026","isbn":"978-602-0000-00-0","issuedDate":{"year":2026},"language":"id","publisher":"TechPress Indonesia","publisherLocation":"Jakarta","title":"Masa Depan Rekayasa Perangkat Lunak","type":"book"}},"title":"Unified Syntax Torture Demo"};
 export default function PendonView() { return (<>
@@ -180,12 +180,12 @@ Label pensiun: H22, E44 (setext tidak didukung).
 <h3 class="k" id="h19" title="T19" type="headingX">2.2.1. H19 KS <AnchorAll class="k" href="/x" title="T" type="anchorA">a</AnchorAll> <strong>b</strong> <i>i</i> <code>c</code> [[W]]@@wikiX&#123;.k&#125; <a class="k" href="paper-smith" type="citeX">^^</a> &#123;&#123;footnote&#125;&#125;&#123;.k&#125; ::asideA&#123;.k&#125; d:: $x$</h3>
 <p>&lt;!-- H20: heading with empty text, typed --&gt;
 </p>
-<h3 class="x" type="headingX">2.2.2. 
+<h3 class="x" type="headingX">2.2.2.
 </h3>
 <h3 id="h21">2.2.3. H21 closing hashes ###</h3>
 <p>&lt;!-- H23: heading with empty text, untyped --&gt;
 </p>
-<h3 class="x">2.2.4. 
+<h3 class="x">2.2.4.
 </h3>
 <h3 class="k" id="h24">2.2.5. H24 KSu <a class="k" href="/x" title="T">a</a> <strong>b</strong> <i>i</i> <code>c</code> [[W]]&#123;.k&#125; <a class="k" href="paper-smith">^^</a> &#123;&#123;footnote&#125;&#125;&#123;.k&#125; ::asideA&#123;.k&#125; d:: $x$</h3>
 <h3 class="a" id="i" k="v" title="T25">2.2.6. H25 slug+title+XXYZ untyped</h3>
@@ -627,7 +627,7 @@ lazy continuation without marker
 
 &gt; @@bqA[q26( Q26 malformed inner-head group stays literal, type falls back
 
-&gt; &#123;.q24&#125; KSu 
+&gt; &#123;.q24&#125; KSu
 &lt;!-- §9.3 L1: a container decorator line above a list decorates the container (§9.4 layer = the marker). The `list` item layer (L2/L3) is not wired yet, so the L10/L22 item heads stay literal for now. --&gt;
 
 

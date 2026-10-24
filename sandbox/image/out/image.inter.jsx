@@ -1,5 +1,5 @@
-import AdvancedImage from '@comp/content/AdvancedImage'
-import Figure from '@comp/content/Figure'
+import AdvancedImage from '@comp/AdvancedImage'
+import Figure from '@comp/Figure'
 
 export const references = {};
 export const citations = [];
