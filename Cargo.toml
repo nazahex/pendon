@@ -13,7 +13,7 @@ members = [
   "crates/plugin-directive",
   "crates/plugin-extract-heading",
   "crates/plugin-heading",
-  "crates/plugin-img",
+  "crates/plugin-image",
   "crates/plugin-latex",
   "crates/plugin-list",
   "crates/plugin-markdown",

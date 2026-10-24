@@ -32,7 +32,7 @@ export default function PendonView() { return (<>
 </p>
 <pre lang="html"><code>&lt;figure&gt;&lt;img alt=&quot;&quot; src=&quot;https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp&quot; /&gt;&lt;/figure&gt;
 </code></pre>
-<h2>plugin-img</h2>
+<h2>plugin-image</h2>
 <p>Plugin pendon untuk sintaksis img lebih lanjut.
 </p>
 <figure class="extra class or" data-baz="23" data-foo="bar" id="custom-id" style="--wix: sum; --rotate: 5deg;"><img alt="Aternative Text" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" /></figure>

@@ -2,7 +2,7 @@
 name = "Dialog Demo (HTML)"
 input = "./src/[slug].md"
 output = "./out/[slug].html"
-plugin = "micromatter,img,dialog,markdown"
+plugin = "micromatter,image,dialog,markdown"
 format = "html"
 pretty = true
 markdown_allow_html = true
@@ -11,7 +11,7 @@ markdown_allow_html = true
 name = "Dialog Demo (Solid)"
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "micromatter,img,dialog,markdown"
+plugin = "micromatter,image,dialog,markdown"
 format = "solid"
 pretty = true
 markdown_allow_html = true

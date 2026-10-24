@@ -1,5 +1,13 @@
 # pendon-tui
 
+> **Status: mid-overhaul.** This crate is the CLI's terminal toolkit and it is
+> being rewritten from the ground up — see
+> [`docs/rfc/tui-overhaul.md`](../../docs/rfc/tui-overhaul.md) for the target API
+> (`Report<W>`, `ColorChoice`, `Glyphs::detect`, `Progress`) and the list of things
+> described below that no longer match the code. This README is replaced in Phase 1.
+> The _observable_ contract lives in
+> [`docs/spec/CLI-REPORT.md`](../../docs/spec/CLI-REPORT.md), not here.
+
 A tiny terminal-UI toolkit used by the CLI's optional `--tui` spinner: a spinner
 and a progress bar, with themable glyphs. It writes only to **stderr** and is
 safe for pipelines (it never touches stdout).

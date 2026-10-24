@@ -12,7 +12,7 @@ use crate::chain::{self, ChainConfig, ChainState};
 use crate::config::ConfigTask;
 use crate::plugins::{
     build_anchor_options, build_blockquote_options, build_cite_options, build_directive_options,
-    build_heading_options, build_img_options, build_list_options, build_marker_options,
+    build_heading_options, build_image_options, build_list_options, build_marker_options,
     build_section_options, build_table_options, has_plugin, merge_solid_hints, DocumentContext,
 };
 use crate::utils::{extract_frontmatter_for_cite, maybe_pretty, merge_refs_for_context};
@@ -117,7 +117,7 @@ pub fn process_single_file(
         task_wiki_opts.clone(),
     ));
     config.vicado_hints = vicado_hints_override.cloned();
-    config.img = plugin_options!(build_img_options(task.img.as_ref()));
+    config.image = plugin_options!(build_image_options(task.image.as_ref()));
     config.anchor = plugin_options!(build_anchor_options(task.anchor.as_ref()));
     config.marker = plugin_options!(build_marker_options(task.marker.as_ref()));
     config.directive = plugin_options!(build_directive_options(task.directive.as_ref()));

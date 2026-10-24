@@ -2,14 +2,14 @@
 name = "Golden 27"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,heading,table,img,cite,wiki,anchor,bind,markdown,latex"
+plugin = "micromatter,heading,table,image,cite,wiki,anchor,bind,markdown,latex"
 format = "solid"
 
 # The payload's citation is the page's citation: one context, one numbering.
 [task.cite]
 reference_source = "internal"
 
-[task.img.custom.figure]
+[task.image.custom.figure]
 name = "Figure"
 imports = "import Figure from '@comp/content/Figure'"
 template = "<Figure {...attrs}>{children}</Figure>"

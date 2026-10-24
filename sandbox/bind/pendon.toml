@@ -2,7 +2,7 @@
 name = "Bind Plugin Sandbox"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "img,anchor,directive,marker,blockquote,bind,latex,markdown"
+plugin = "image,anchor,directive,marker,blockquote,bind,latex,markdown"
 format = "solid"
 no_cache = true
 

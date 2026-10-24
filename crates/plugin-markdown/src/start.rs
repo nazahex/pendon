@@ -92,6 +92,11 @@ pub fn handle(ctx: &mut ParseContext, kind: &NodeKind, placement: CustomPlacemen
                     ctx.pending_para_start = false;
                 }
                 ctx.emit_start_element(kind.clone());
+                // The node sits where its marker was, so it continues the current
+                // line: without this the text that follows it is taken for the
+                // start of a source line and its leading space is dropped as
+                // indentation (`<img …>Caption only`).
+                ctx.at_line_start = false;
             }
             CustomPlacement::Inline => {
                 if ctx.pending_para_start {

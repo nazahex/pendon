@@ -1,3 +1,5 @@
 Esse exercitation irure ullamco veniam fugiat eu consequat proident quis do.
 
-~?!!h300w800[lorem ipsum](https://example/foo.png){foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg"} Caption
+~?!h300w800[lorem ipsum](https://example/foo.png)@@TypeX{foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg"} Caption
+
+~?!!h300w800[Alt text](https://res.cloudinary.com/x/upload/fig.webp)@@figureX{.wide, #fig-1, --rotate: "5deg", isLazy} A figure caption with **markup**.

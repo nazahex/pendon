@@ -10,15 +10,15 @@ use serde::{Deserialize, Serialize};
 // --- Configuration & Types ---
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct ImgOptions {
+pub struct ImageOptions {
     /// §11 `img` layer: the `<img>` element itself.
-    pub img: ComponentSet<ImgCustomNode>,
+    pub img: ComponentSet<ImageCustomNode>,
     /// §11 `figure` layer: the `<figure>` container of `~?!!`.
-    pub figure: ComponentSet<ImgCustomNode>,
+    pub figure: ComponentSet<ImageCustomNode>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct ImgCustomNode {
+pub struct ImageCustomNode {
     pub name: String,
     pub template: String,
     #[serde(default)]
@@ -78,13 +78,13 @@ impl ImageMarker {
 
 // --- Main Processor ---
 
-pub fn process(events: &[Event], options: &ImgOptions, inline_pipeline: &Pipeline) -> Vec<Event> {
+pub fn process(events: &[Event], options: &ImageOptions, inline_pipeline: &Pipeline) -> Vec<Event> {
     process_inner(events, options, inline_pipeline, &mut ())
 }
 
 pub fn process_with_context<C, P>(
     events: &[Event],
-    options: &ImgOptions,
+    options: &ImageOptions,
     inline_pipeline: &P,
     context: &mut C,
 ) -> Vec<Event>
@@ -96,7 +96,7 @@ where
 
 fn process_inner<C, P>(
     events: &[Event],
-    options: &ImgOptions,
+    options: &ImageOptions,
     inline_pipeline: &P,
     context: &mut C,
 ) -> Vec<Event>
@@ -164,10 +164,10 @@ where
 /// §11 rule 3 routing of one image: which component renders the outermost node,
 /// and whether the `<img>` element nests inside it.
 struct CustomRoute<'a> {
-    outer: &'a ImgCustomNode,
+    outer: &'a ImageCustomNode,
     /// `Some` when the `img` layer renders the element nested inside the outer
     /// component (a figure whose `figure` *and* `img` layers are configured).
-    inner: Option<&'a ImgCustomNode>,
+    inner: Option<&'a ImageCustomNode>,
     /// `true` when the outer node is the `<figure>` container of `~?!!`.
     outer_is_figure: bool,
 }
@@ -178,7 +178,7 @@ struct CustomRoute<'a> {
 ///   element inside it; either one alone replaces the whole image.
 /// - any other image: the `img` layer is the node; the `figure` layer is used
 ///   when no `img` entry answers the marker (pre-cutover configs keep working).
-fn route_image<'a>(parsed: &ParsedImage, options: &'a ImgOptions) -> Option<CustomRoute<'a>> {
+fn route_image<'a>(parsed: &ParsedImage, options: &'a ImageOptions) -> Option<CustomRoute<'a>> {
     let marker = parsed.type_marker.as_deref();
     let img = options.img.select(marker);
     let figure = options.figure.select(marker);
@@ -302,6 +302,17 @@ fn emit_custom_image<C>(
     let node_kind = NodeKind::Custom(route.outer.name.clone());
     out.push(Event::StartNode(node_kind.clone()));
 
+    // §11 rule 3: the caption and the inner `<img>` component are rendered here,
+    // so the Markdown pass must pass these children through verbatim. Without the
+    // marker it re-lexed them, and its whitespace-only chunks are dropped, which
+    // glued the words of every multi-word caption together
+    // (`Afigurecaptionwith<strong>markup</strong>`). `plugin-table`'s cells carry
+    // the same marker for the same reason.
+    out.push(Event::Attribute {
+        name: "__plugin_kind".to_string(),
+        value: "element".to_string(),
+    });
+
     // Emit component name for renderer template matching
     out.push(Event::Attribute {
         name: "name".to_string(),
@@ -395,7 +406,7 @@ fn emit_custom_image<C>(
 /// Builds SolidRenderHints for the configured image components (the `img` and
 /// `figure` layers, §11). Returns None when neither layer is configured, letting
 /// the renderer fall back to its built-in handler.
-pub fn solid_hints(options: &ImgOptions) -> Option<SolidRenderHints> {
+pub fn solid_hints(options: &ImageOptions) -> Option<SolidRenderHints> {
     let mut hints = SolidRenderHints::default();
     // §11 rule 3: every entry of every layer answers its own instances.
     for custom in options.img.components().chain(options.figure.components()) {
@@ -419,7 +430,10 @@ pub fn solid_hints(options: &ImgOptions) -> Option<SolidRenderHints> {
 
 // --- Unified Parsing (extracts structured data from paragraph text) ---
 
-fn maybe_parse_advanced_image(block_events: &[Event], options: &ImgOptions) -> Option<ParsedImage> {
+fn maybe_parse_advanced_image(
+    block_events: &[Event],
+    options: &ImageOptions,
+) -> Option<ParsedImage> {
     let raw = collect_text_only(block_events)?;
     let line = raw.trim();
     if line.is_empty() || line.contains('\n') {
@@ -429,7 +443,7 @@ fn maybe_parse_advanced_image(block_events: &[Event], options: &ImgOptions) -> O
     parse_figure_syntax(line, options).or_else(|| parse_decorated_image_syntax(line, options))
 }
 
-fn parse_figure_syntax(line: &str, options: &ImgOptions) -> Option<ParsedImage> {
+fn parse_figure_syntax(line: &str, options: &ImageOptions) -> Option<ParsedImage> {
     let core = parse_image_core(line)?;
     if core.marker.container != Some(ContainerKind::Figure) {
         return None;
@@ -451,7 +465,7 @@ fn parse_figure_syntax(line: &str, options: &ImgOptions) -> Option<ParsedImage> 
     ))
 }
 
-fn parse_decorated_image_syntax(line: &str, options: &ImgOptions) -> Option<ParsedImage> {
+fn parse_decorated_image_syntax(line: &str, options: &ImageOptions) -> Option<ParsedImage> {
     let core = parse_image_core(line)?;
     if core.marker.container == Some(ContainerKind::Figure) {
         return None;
@@ -692,7 +706,7 @@ fn build_parsed_image(
     container: Option<ContainerKind>,
     caption: Option<String>,
     blocks: AttachedBlocks<'_>,
-    options: &ImgOptions,
+    options: &ImageOptions,
 ) -> ParsedImage {
     let AttachedBlocks { extras, .. } = blocks;
     let mut flags = Vec::new();
@@ -821,7 +835,7 @@ fn parse_inline_blocks(input: &str) -> (AttachedBlocks<'_>, usize) {
 fn parse_inline_image_at(
     chars: &[char],
     start: usize,
-    options: &ImgOptions,
+    options: &ImageOptions,
 ) -> Option<(usize, ParsedImage)> {
     if !is_inline_marker_char(*chars.get(start)?) {
         return None;
@@ -870,7 +884,7 @@ fn parse_inline_image_at(
 /// rendered representation (raw HTML or a custom component node).
 fn emit_text_with_inline_images<C, P>(
     text: &str,
-    options: &ImgOptions,
+    options: &ImageOptions,
     inline_pipeline: &P,
     context: &mut C,
     out: &mut Vec<Event>,
@@ -903,7 +917,7 @@ fn emit_text_with_inline_images<C, P>(
 
 fn emit_inline_image<C, P>(
     parsed: &ParsedImage,
-    options: &ImgOptions,
+    options: &ImageOptions,
     inline_pipeline: &P,
     context: &mut C,
     out: &mut Vec<Event>,
@@ -1172,7 +1186,7 @@ mod tests {
     fn renders_figure_with_markdown_caption() {
         let pipeline = Pipeline::default();
         let events = paragraph_events("!![Alt](https://x.test/a.webp) Caption **bold** [link](/x)");
-        let out = process(&events, &ImgOptions::default(), &pipeline);
+        let out = process(&events, &ImageOptions::default(), &pipeline);
 
         assert!(out.iter().any(|event| matches!(
             event,
@@ -1199,7 +1213,7 @@ mod tests {
     fn nests_custom_components_inside_figcaption() {
         let pipeline = custom_component_pipeline();
         let events = paragraph_events("!![Alt](https://x.test/a.webp) See {{cite}} for details.");
-        let out = process_with_context(&events, &ImgOptions::default(), &pipeline, &mut ());
+        let out = process_with_context(&events, &ImageOptions::default(), &pipeline, &mut ());
 
         let caption = element_children(&out, "figcaption");
         assert!(caption.iter().any(|event| matches!(
@@ -1228,7 +1242,7 @@ mod tests {
         let events = paragraph_events(
             "![Alt](https://x.test/a.webp){.x, #hero, foo: \"bar\", --r: \"5deg\"}",
         );
-        let out = process(&events, &ImgOptions::default(), &pipeline);
+        let out = process(&events, &ImageOptions::default(), &pipeline);
 
         assert!(out.iter().any(|event| matches!(
             event,
@@ -1246,7 +1260,7 @@ mod tests {
         let events = paragraph_events(
             "Ad ex tempor !?~[Alt](https://x.test/a.webp){.foo, con: \"jux\"} consectetur.",
         );
-        let out = process(&events, &ImgOptions::default(), &pipeline);
+        let out = process(&events, &ImageOptions::default(), &pipeline);
 
         // The paragraph stays open: the image is an inline element inside it.
         assert!(out
@@ -1268,7 +1282,7 @@ mod tests {
     fn leaves_vanilla_inline_image_for_markdown() {
         let pipeline = Pipeline::default();
         let events = paragraph_events("Ad ex tempor ![Alt](https://x.test/a.webp) consectetur.");
-        let out = process(&events, &ImgOptions::default(), &pipeline);
+        let out = process(&events, &ImageOptions::default(), &pipeline);
 
         assert!(!out
             .iter()
@@ -1281,10 +1295,10 @@ mod tests {
     #[test]
     fn emits_custom_node_with_all_attributes() {
         let pipeline = Pipeline::default();
-        let options = ImgOptions {
+        let options = ImageOptions {
             img: ComponentSet::new(),
             figure: ComponentSet::from_entries([TypedComponent::default_component(
-                ImgCustomNode {
+                ImageCustomNode {
                     name: "AdvancedImage".into(),
                     template: "<AdvancedImage />".into(),
                     imports: Vec::new(),
@@ -1313,6 +1327,36 @@ mod tests {
         )));
     }
 
+    /// Custom components are pre-rendered here (inner `<img>` plus caption), so
+    /// they must carry `__plugin_kind = element` (§11 rule 3). Without the marker
+    /// the Markdown pass re-lexed the caption and dropped its whitespace-only
+    /// chunks, gluing the words together (`Afigurecaptionwith<strong>…`).
+    #[test]
+    fn custom_components_are_marked_as_pre_rendered_elements() {
+        let pipeline = Pipeline::default();
+        let component = |name: &str| {
+            ComponentSet::from_entries([TypedComponent::default_component(ImageCustomNode {
+                name: name.into(),
+                template: format!("<{name}>{{children}}</{name}>"),
+                imports: Vec::new(),
+            })])
+        };
+        let options = ImageOptions {
+            img: component("AdvancedImage"),
+            figure: component("Figure"),
+        };
+        let events =
+            paragraph_events("~?!![Alt](https://x.test/a.webp) A figure caption with **markup**.");
+        let out = process(&events, &options, &pipeline);
+
+        assert!(has_attribute(&out, "__plugin_kind", "element"));
+        // The caption keeps the spaces between its words.
+        assert!(
+            has_text(&out, "A figure caption with markup."),
+            "caption words must not be glued: {out:?}"
+        );
+    }
+
     #[test]
     fn parses_marker_with_width_height_and_flags() {
         let marker = parse_marker("~?!!w300h800").unwrap();
@@ -1329,7 +1373,7 @@ mod tests {
         let events = paragraph_events(
             "~?!!h300w800[Alt](https://x.test/a.webp)@@figure{.wide, #fig, foo: \"bar\"} Caption",
         );
-        let out = process(&events, &ImgOptions::default(), &pipeline);
+        let out = process(&events, &ImageOptions::default(), &pipeline);
 
         // §7.1: extras go to the outer `<figure>`, the `w`/`h` marker stays on
         // the inner `<img>`.
@@ -1354,7 +1398,7 @@ mod tests {
         let events = paragraph_events(
             "Ad ex tempor !?~[Alt](https://x.test/a.webp)@@img{con: \"jux\", .foo} consectetur.",
         );
-        let out = process(&events, &ImgOptions::default(), &pipeline);
+        let out = process(&events, &ImageOptions::default(), &pipeline);
 
         assert!(out
             .iter()
@@ -1370,7 +1414,7 @@ mod tests {
     fn extras_class_accumulates() {
         let parsed = parse_figure_syntax(
             "!![Alt](https://x.test/a.webp)@@figure{.head, .extra}",
-            &ImgOptions::default(),
+            &ImageOptions::default(),
         )
         .expect("figure");
         // §6.4: class accumulates.
@@ -1382,7 +1426,7 @@ mod tests {
     fn the_retired_legacy_block_is_literal_text() {
         let pipeline = Pipeline::default();
         let events = paragraph_events("!![Alt](https://x.test/a.webp)[#hero]{k: \"v\"} Cap");
-        let out = process(&events, &ImgOptions::default(), &pipeline);
+        let out = process(&events, &ImageOptions::default(), &pipeline);
 
         assert!(!has_attribute(&out, "id", "hero"));
         assert!(!out.iter().any(|event| matches!(
@@ -1395,7 +1439,7 @@ mod tests {
     fn extras_slug_fills_the_id_when_no_id_is_present() {
         let parsed = parse_figure_syntax(
             "!![Alt](https://x.test/a.webp)@@figure{`the-figure`}",
-            &ImgOptions::default(),
+            &ImageOptions::default(),
         )
         .expect("figure");
         // §6.2: `#id` > head slug > extras slug.
@@ -1406,7 +1450,7 @@ mod tests {
     fn bare_flags_stay_bare_attributes() {
         let pipeline = Pipeline::default();
         let events = paragraph_events("!![Alt](https://x.test/a.webp)@@figure{isFoo} Cap");
-        let out = process(&events, &ImgOptions::default(), &pipeline);
+        let out = process(&events, &ImageOptions::default(), &pipeline);
 
         let figure = element_children(&out, "figure");
         assert!(figure
@@ -1418,7 +1462,7 @@ mod tests {
     fn extras_style_merges_into_the_style_attribute() {
         let pipeline = Pipeline::default();
         let events = paragraph_events("![Alt](https://x.test/a.webp)@@img{--r: \"5deg\"}");
-        let out = process(&events, &ImgOptions::default(), &pipeline);
+        let out = process(&events, &ImageOptions::default(), &pipeline);
 
         assert!(has_attribute(&out, "style", "--r: 5deg;"));
         assert!(!out.iter().any(|event| matches!(
@@ -1431,7 +1475,7 @@ mod tests {
     fn malformed_extras_stay_literal_text() {
         let pipeline = Pipeline::default();
         let events = paragraph_events("Ad ex tempor ![Alt](https://x.test/a.webp)@@figure{.a ex.");
-        let out = process(&events, &ImgOptions::default(), &pipeline);
+        let out = process(&events, &ImageOptions::default(), &pipeline);
 
         assert!(!out.iter().any(
             |event| matches!(event, Event::StartNode(NodeKind::Element(name)) if name == "img")
@@ -1442,10 +1486,10 @@ mod tests {
     #[test]
     fn custom_component_receives_extras_props() {
         let pipeline = Pipeline::default();
-        let options = ImgOptions {
+        let options = ImageOptions {
             img: ComponentSet::new(),
             figure: ComponentSet::from_entries([TypedComponent::default_component(
-                ImgCustomNode {
+                ImageCustomNode {
                     name: "AdvancedImage".into(),
                     template: "<AdvancedImage />".into(),
                     imports: Vec::new(),
@@ -1482,7 +1526,7 @@ mod tests {
 
         let mut count = 0;
         let events = paragraph_events("!![Alt](https://x.test/a.webp) Caption");
-        let out = process_with_context(&events, &ImgOptions::default(), &pipeline, &mut count);
+        let out = process_with_context(&events, &ImageOptions::default(), &pipeline, &mut count);
 
         // A borrowed (&mut) context works with the caption inline pipeline.
         assert!(count > 0, "caption pipeline did not run");

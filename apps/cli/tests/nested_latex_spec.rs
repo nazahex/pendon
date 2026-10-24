@@ -29,7 +29,7 @@ fn latex_renders_inside_figure_caption() {
     let input = "!![Alt](https://x.test/a.webp)[.foo]{con: jux} Et {foo} labore $x^2$ qui.\n";
     let (_code, out, _err) = run_cli(
         input,
-        &["--plugin", "img,markdown,latex", "--format", "solid"],
+        &["--plugin", "image,markdown,latex", "--format", "solid"],
     );
 
     assert!(contains("<figcaption>").eval(&out));
@@ -67,7 +67,7 @@ fn latex_renders_inside_dialog_content() {
 #[test]
 fn without_latex_plugin_math_is_left_literal_but_braces_still_escaped() {
     let input = "!![Alt](https://x.test/a.webp) Et {foo} labore $x^2$ qui.\n";
-    let (_code, out, _err) = run_cli(input, &["--plugin", "img,markdown", "--format", "solid"]);
+    let (_code, out, _err) = run_cli(input, &["--plugin", "image,markdown", "--format", "solid"]);
 
     // No `latex` in the plugin list means `$...$` is not interpreted.
     assert!(!contains("latex latex-inline").eval(&out));
@@ -83,7 +83,7 @@ fn dollar_inside_link_destination_is_not_treated_as_math() {
         "!![Alt](https://x.test/a.webp) Cap [labore](/foo/bar^--$! \"Buy Foo!\") $x^2$ end.\n";
     let (_code, out, _err) = run_cli(
         input,
-        &["--plugin", "img,markdown,latex", "--format", "solid"],
+        &["--plugin", "image,markdown,latex", "--format", "solid"],
     );
 
     // The `$!` inside the link destination must not swallow the link syntax.

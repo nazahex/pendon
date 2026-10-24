@@ -52,7 +52,7 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | -- | ------------------ | ------------------------------------------------------------- |
 | 01 | `extras-head`      | all item kinds, ordering, duplicates, escaping                |
 | 02 | `extras-literal`   | malformed heads → literal text, adjacency failures            |
-| 03 | `img-figure`       | `~?!` / `~?!!` + extras + caption                             |
+| 03 | `image-figure`     | `~?!` / `~?!!` + extras + caption                             |
 | 04 | `anchor`           | head `("title")` vs extras `"title"` priority                 |
 | 05 | `cite`             | `[^^](ref "loc")` + extras, retired forms stay literal        |
 | 06 | `heading`          | `[slug]` + `("title")` + extras, auto-number interaction      |

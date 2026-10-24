@@ -12,7 +12,7 @@ const PENDON_TOML: &str = r#"[[task]]
 name = "Nested Component Demo"
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "table,img,epis,markdown"
+plugin = "table,image,epis,markdown"
 format = "solid"
 
 [plugin-custom]

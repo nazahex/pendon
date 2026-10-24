@@ -20,10 +20,20 @@ Phase 4 wiring of `plugin-list` L2/L3 (the `<li>` item layer) and the docs
 restructure. The container layers (`list`/`unordered`/`ordered`, blockquote)
 landed; the item layer is next.
 
+**Just landed:** caption whitespace. A custom image component is pre-rendered by
+`plugin-image` (inner component + caption), so it now carries
+`__plugin_kind = "element"` (§11 rule 3) and the Markdown pass passes it through
+verbatim instead of dropping the caption's whitespace-only chunks
+(`Afigurecaptionwith<strong>markup</strong>` → `A figure caption with
+<strong>markup</strong>`). In the same pass, an `element` node no longer leaves
+`at_line_start` armed, so the text after an `<img … />` keeps its leading space.
+Golden `03-image-figure` re-frozen; `sandbox/{image,ultimate,universal}`
+re-rendered.
+
 **Just landed:** `mdp` payloads are **sub-documents**
 ([ADR-0007](docs/decisions/0007-mdp-subdocuments.md)): a `{{{mdp[var] …}}}`
 payload is parsed and run through the page's **own plugin chain** (wiki, cite,
-img, table, latex, heading, extras heads, custom components …), so a citation
+image, table, latex, heading, extras heads, custom components …), so a citation
 written inside it joins the page's citation list and numbering and a figure's
 imports reach the page's hint list. It reaches the attribute as a **fragment**
 (`{"$fragment": […]}`): Solid emits `name={(<>…</>)}`, HTML renders escaped
@@ -168,5 +178,8 @@ fixture `25-extras-nested`, and regenerated `sandbox/extras/out/extras-basic.jsx
 
 ## Golden & freeze status (see [`docs/spec/golden/README.md`](docs/spec/golden/README.md))
 
-- Golden fixtures `01–12`, `14–16`, `21–24` are frozen and green; none
-  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (19 fixtures) are the gates.
+- Golden fixtures `01–12`, `14–16`, `21–27` are frozen and green; none
+  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (22 fixtures) are the gates.
+- The `image` fixtures (`03`, `27`) were re-frozen after the `img` → `image`
+  plugin-token rename; their output is byte-identical to the pre-rename goldens,
+  so the rename is behaviour-preserving.

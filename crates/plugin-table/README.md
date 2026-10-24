@@ -16,7 +16,7 @@ Advanced, AsciiDoc-inspired table syntax plugin for Pendon.
 ## Recommended Plugin Order
 
 ```text
-micromatter,img,table,cite,wiki,anchor,markdown
+micromatter,image,table,cite,wiki,anchor,markdown
 ```
 
 **Why this order matters:**
@@ -33,7 +33,7 @@ Example task config:
 [[task]]
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "micromatter,img,table,cite,wiki,anchor,markdown"
+plugin = "micromatter,image,table,cite,wiki,anchor,markdown"
 format = "solid"
 ```
 

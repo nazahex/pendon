@@ -27,18 +27,18 @@ syntax. It fixes:
 
 Implementation units that own this grammar:
 
-| Unit                                                         | Owns                                                            |
-| ------------------------------------------------------------ | --------------------------------------------------------------- |
-| `crates/extra`                                               | extras scanners, `AttrValue`, `ExtrasHead`, `parse_type_marker` |
-| `crates/plugin-marker`                                       | `{{type}}` inline/block markers                                 |
-| `crates/plugin-directive`                                    | `::type` inline and `==type` block directives                   |
-| `crates/plugin-list`                                         | list container + item extras binding (item layer L2/L3 pending) |
-| `crates/plugin-blockquote`                                   | blockquote extras binding                                       |
-| `crates/plugin-bind`                                         | `{{{lang[var] … }}}` data blocks + `$var` binding (§19)         |
-| `crates/plugin-table`                                        | table head, declaration row, cell/row/section extras            |
-| `crates/plugin-section`                                      | heading-driven `Section` outline + section decorator / markers  |
-| `crates/plugin-img`, `-anchor`, `-cite`, `-heading`, `-wiki` | their own head + extras                                         |
-| `crates/plugin-custom`                                       | component rendering (`node = "Component"`)                      |
+| Unit                                                           | Owns                                                            |
+| -------------------------------------------------------------- | --------------------------------------------------------------- |
+| `crates/extra`                                                 | extras scanners, `AttrValue`, `ExtrasHead`, `parse_type_marker` |
+| `crates/plugin-marker`                                         | `{{type}}` inline/block markers                                 |
+| `crates/plugin-directive`                                      | `::type` inline and `==type` block directives                   |
+| `crates/plugin-list`                                           | list container + item extras binding (item layer L2/L3 pending) |
+| `crates/plugin-blockquote`                                     | blockquote extras binding                                       |
+| `crates/plugin-bind`                                           | `{{{lang[var] … }}}` data blocks + `$var` binding (§19)         |
+| `crates/plugin-table`                                          | table head, declaration row, cell/row/section extras            |
+| `crates/plugin-section`                                        | heading-driven `Section` outline + section decorator / markers  |
+| `crates/plugin-image`, `-anchor`, `-cite`, `-heading`, `-wiki` | their own head + extras                                         |
+| `crates/plugin-custom`                                         | component rendering (`node = "Component"`)                      |
 
 ### Non-goals
 
@@ -80,7 +80,7 @@ Implementation units that own this grammar:
 | `\|-…-\|`                   | table declaration line             | `plugin-table`      | new                             |
 | `\|\| cap \|\|`             | table caption line                 | `plugin-table`      | new                             |
 | `\|===\|`                   | table foot separator               | `plugin-table`      | existing (kept)                 |
-| `~?!` / `~?!!`              | image / figure marker              | `plugin-img`        | existing                        |
+| `~?!` / `~?!!`              | image / figure marker              | `plugin-image`      | existing                        |
 | `[^^](ref "loc")`           | citation                           | `plugin-cite`       | **current** (§7.3)              |
 | `[[…]]`                     | wiki link                          | `plugin-wiki`       | existing                        |
 | `>`                         | blockquote                         | `plugin-blockquote` | current (+extras)               |
@@ -312,7 +312,7 @@ emitted):
 ###[slug-a]("Head")@@type{`slug-b`} Foo         → id = "slug-a", title = "Head"
 ```
 
-Additionally, a plugin that owns an element id (`heading`, `img`, `anchor`,
+Additionally, a plugin that owns an element id (`heading`, `image`, `anchor`,
 `cite`, table/cell layers) MUST use `slug` as `id` when no explicit `#id` is
 present: `#id` > head slug > extras slug.
 
@@ -404,7 +404,7 @@ same-key body item outright — the body value is dropped with an §13 `Warning`
 
 Notation: `head?` = optional, `extras?` = optional `@@type{…}`, `∘` = no space.
 
-### 7.1 Image and figure (`plugin-img`)
+### 7.1 Image and figure (`plugin-image`)
 
 ```ebnf
 image    = marker "[" alt "]" "(" url ")" extras? caption?
@@ -420,9 +420,9 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
   are mutually exclusive (e.g. `p!!`, `d!!` are rejected and the line is skipped
   without error).
 - Bare `!` requires at least one modifier (`?`, `~`, `w<digits>`, or `h<digits>`); otherwise the line is left for `plugin-markdown`.
-- Modifiers are order-independent: `?` adds `loading="lazy"`, `~` adds `decoding="async"`, `w<digits>`/`h<digits>` set explicit dimensions on the inner `<img>`.
+- Modifiers are order-independent: `?` adds `loading="lazy"`, `~` adds `decoding="async"`, `w<digits>`/`h<digits>` set explicit dimensions on the inner `<image>`.
 - Invalid marker combinations (e.g., `p!!`, `d!!`) are rejected and the line is skipped without error.
-- Extras attach to the outermost node (`Figure` when `!!`, else `Image`); dimensions from modifiers always apply to the inner `<img>`.
+- Extras attach to the outermost node (`Figure` when `!!`, else `Image`); dimensions from modifiers always apply to the inner `<image>`.
 - Trailing caption text is permitted only in figure mode (`!!`); non-figure markers ignore trailing text.
 - Caption content is processed through the shared inline pipeline (wiki, cite, anchor, markdown) before rendering.
 
@@ -787,8 +787,8 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
 [task.list.custom.unordered] # <ul> container
 [task.list.custom.ordered] # <ol> container
 
-[task.img.custom.img] # <img>
-[task.img.custom.figure] # <figure>
+[task.image.custom.img] # <img>
+[task.image.custom.figure] # <figure>
 [task.wiki.custom.anchor] # <a> produced by plugin-wiki
 [task.wiki.custom.infobox] # infobox
 ```
@@ -805,7 +805,7 @@ Rules:
    **array of tables** (`[[task.table.custom.thead]]`, typed entries plus at
    most one default). Both forms are equivalent to "the default component for
    that layer". The layer name is the element the layer emits (`table`, `thead`,
-   `caption`, `img`, `figure`, `list`, `unordered`, `ordered`, …).
+   `caption`, `image`, `figure`, `list`, `unordered`, `ordered`, …).
 2. `type` accepts a single string or an array; `[]` is equivalent to an absent
    `type`. At most one default per layer; two defaults is a **hard error** at
    config load.
@@ -862,7 +862,7 @@ event stream once:
 1. Resolves sentinels back into `ExtrasHead` values.
 2. Attaches them to the correct target node:
    - _next-block_ decorators → the next `StartNode` at the same nesting level;
-   - _construct_ sentinels (img, anchor, cite, heading, wiki, table layers,
+   - _construct_ sentinels (`image`, `anchor`, `cite`, `heading`, `wiki`, `table` layers,
      markers, directives) → the sentinel's own position.
 3. Removes the sentinel nodes from the output.
 4. Emits diagnostics for dangling sentinels (§13).
@@ -916,17 +916,17 @@ Config-load errors MUST abort the build before any file is processed.
 
 ## 14. Retirement and collisions
 
-| Removed                       | Replaced by                          | Note                                                                                                                                                                                                                                                                                                          |
-| ----------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `[task.cite.section]`         | `plugin-marker` (`{{bibliography}}`) | **removed**: `CiteOptions.section` and `CitationContext::replace_section_markers` are gone; the section component is now a marker.                                                                                                                                                                            |
-| `{{section}}` in sources      | marker block                         | **removed**: the `{{ footnote }}` lines in `sandbox/cite` and `sandbox/img` are gone; `{{…}}` is free for `plugin-marker`.                                                                                                                                                                                    |
-| `:::name` custom blocks       | `==type` block directive             | deprecated alias kept for one release (Warning), then hard-error — §15 OPEN-R1.                                                                                                                                                                                                                               |
-| bare `===` table footer       | `\|===\|`                            | **removed**: only `\|===\|` remains.                                                                                                                                                                                                                                                                          |
-| `o.` ordered-list offset      | first item's number                  | **removed**: an `ol`'s `start` comes from the first item and is not overridable (§9.4).                                                                                                                                                                                                                       |
-| `plugin-quiz` (`:::quiz`)     | —                                    | retired from the pipeline; plugin code stays, deep rework later.                                                                                                                                                                                                                                              |
-| legacy `[.c,#id]{k:v}`        | `{…}` / `@@type{…}`                  | **removed** (D3): plain literal text, no warning, no deprecation path. Gone from the code (`parse_attrs`, `ExtraAttrs`, `legacy_extras_warning`), docs, sandboxes and READMEs.                                                                                                                                |
-| `import = "…"` (string)       | `imports = ["…"]`                    | **removed**: the singular form is accepted with a Warning (§15 OPEN-C2), then hard-errors.                                                                                                                                                                                                                    |
-| `[task.<plugin>.custom_node]` | `[task.<plugin>.custom.<layer>]`     | **removed**: `custom.<layer>` is read for `anchor`, `img` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`); every sandbox/fixture config is migrated. The stale key fails the build with a migration message. Unwired layers (`task.img.custom.img`) are config errors. |
+| Removed                       | Replaced by                          | Note                                                                                                                                                                                                                                                                                                              |
+| ----------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `[task.cite.section]`         | `plugin-marker` (`{{bibliography}}`) | **removed**: `CiteOptions.section` and `CitationContext::replace_section_markers` are gone; the section component is now a marker.                                                                                                                                                                                |
+| `{{section}}` in sources      | marker block                         | **removed**: the `{{ footnote }}` lines in `sandbox/cite` and `sandbox/img` are gone; `{{…}}` is free for `plugin-marker`.                                                                                                                                                                                        |
+| `:::name` custom blocks       | `==type` block directive             | deprecated alias kept for one release (Warning), then hard-error — §15 OPEN-R1.                                                                                                                                                                                                                                   |
+| bare `===` table footer       | `\|===\|`                            | **removed**: only `\|===\|` remains.                                                                                                                                                                                                                                                                              |
+| `o.` ordered-list offset      | first item's number                  | **removed**: an `ol`'s `start` comes from the first item and is not overridable (§9.4).                                                                                                                                                                                                                           |
+| `plugin-quiz` (`:::quiz`)     | —                                    | retired from the pipeline; plugin code stays, deep rework later.                                                                                                                                                                                                                                                  |
+| legacy `[.c,#id]{k:v}`        | `{…}` / `@@type{…}`                  | **removed** (D3): plain literal text, no warning, no deprecation path. Gone from the code (`parse_attrs`, `ExtraAttrs`, `legacy_extras_warning`), docs, sandboxes and READMEs.                                                                                                                                    |
+| `import = "…"` (string)       | `imports = ["…"]`                    | **removed**: the singular form is accepted with a Warning (§15 OPEN-C2), then hard-errors.                                                                                                                                                                                                                        |
+| `[task.<plugin>.custom_node]` | `[task.<plugin>.custom.<layer>]`     | **removed**: `custom.<layer>` is read for `anchor`, `image` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`); every sandbox/fixture config is migrated. The stale key fails the build with a migration message. Unwired layers (`task.image.custom.img`) are config errors. |
 
 ## 15. Open decisions
 
@@ -996,7 +996,7 @@ Rationale lives in [`decisions/`](../decisions/).
   the removal landed with the cite change: `CiteOptions.section`,
   `CitationContext::replace_section_markers`, the section branch of
   `cite::solid_hints` and the `[task.cite.section]` blocks in `sandbox/cite`,
-  `sandbox/cite/custom`, `sandbox/universal` and `sandbox/img/regular` are gone,
+  `sandbox/cite/custom`, `sandbox/universal` and `sandbox/image/regular` are gone,
   together with the `{{ footnote }}` lines in the two sources that used them.
 
 ## 16. Golden set and tests

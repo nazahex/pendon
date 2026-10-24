@@ -44,7 +44,7 @@ Expected result:
 <figure><img alt="" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" /></figure>
 ```
 
-## plugin-img
+## plugin-image
 
 Plugin pendon untuk sintaksis img lebih lanjut.
 

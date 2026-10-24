@@ -1,7 +1,7 @@
 export const frontmatter = {"cites":[]};
 export default function PendonView() { return (<>
 <h2>Extra Syntax</h2>
-<p>Sintaksis tambahan untuk plugin-img
+<p>Sintaksis tambahan untuk plugin-image
 </p>
 <h3>Width and Height</h3>
 <img alt="foo" height="800" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" width="300" />

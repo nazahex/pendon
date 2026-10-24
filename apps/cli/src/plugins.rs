@@ -5,7 +5,7 @@ use pendon_plugin_cite::{CitationContext, CiteCustomNode, CiteOptions, Reference
 use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
 use pendon_plugin_directive::{DirectiveCustomNode, DirectiveOptions};
 use pendon_plugin_heading::{HeadingCustomNode, HeadingOptions};
-use pendon_plugin_img::{ImgCustomNode, ImgOptions};
+use pendon_plugin_image::{ImageCustomNode, ImageOptions};
 use pendon_plugin_list::{ListCustomNode, ListOptions};
 use pendon_plugin_marker::{MarkerCustomNode, MarkerOptions};
 use pendon_plugin_section::{SectionCustomNode, SectionOptions};
@@ -17,7 +17,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::config::{
-    AnchorTaskConfig, BlockquoteTaskConfig, CiteTaskConfig, HeadingTaskConfig, ImgTaskConfig,
+    AnchorTaskConfig, BlockquoteTaskConfig, CiteTaskConfig, HeadingTaskConfig, ImageTaskConfig,
     ListTaskConfig, PluginCustomSection, PluginVicadoSection, SectionTaskConfig, TableTaskConfig,
 };
 use crate::utils::substitute_output;
@@ -54,7 +54,7 @@ impl DocumentContext {
 }
 
 pub fn build_context_inline_pipeline(
-    img_options: ImgOptions,
+    image_options: ImageOptions,
     wiki_options: pendon_plugin_wiki::WikiOptions,
     anchor_options: AnchorOptions,
     latex_options: Option<pendon_plugin_latex::LatexOptions>,
@@ -86,9 +86,14 @@ pub fn build_context_inline_pipeline(
         });
     }
 
-    if enabled_plugins.contains("img") {
+    if enabled_plugins.contains("image") {
         pipeline.add(move |context: &mut DocumentContext, events: Vec<Event>| {
-            pendon_plugin_img::process_with_context(&events, &img_options, &image_pipeline, context)
+            pendon_plugin_image::process_with_context(
+                &events,
+                &image_options,
+                &image_pipeline,
+                context,
+            )
         });
     }
     if enabled_plugins.contains("cite") {
@@ -176,12 +181,10 @@ pub fn load_custom_spec(
     Ok(spec)
 }
 
-/// §11 primary layer of `plugin-anchor`: the `<a>` it emits.
-const ANCHOR_LAYER: &str = "anchor";
-/// §11 primary layer of `plugin-img`: the `<figure>` container. A bare
-/// `[task.img.custom]` table addresses this layer.
-const IMG_LAYER: &str = "figure";
-/// §11 layers of `plugin-img` (§7.1): the `<img>` element and its `<figure>`
+/// §11 primary layer of `plugin-image`: the `<img>` element. A bare
+/// `[task.image.custom]` table addresses this layer.
+const IMG_LAYER: &str = "img";
+/// §11 layers of `plugin-image` (§7.1): the `<img>` element and its `<figure>`
 /// container.
 const IMG_LAYERS: [&str; 2] = ["img", "figure"];
 /// §11 primary layer of `plugin-heading`: the `<h*>` element.
@@ -423,9 +426,9 @@ pub fn build_anchor_options(config: Option<&AnchorTaskConfig>) -> Result<AnchorO
         return Ok(AnchorOptions::default());
     };
     check_custom_node_removed("anchor", config.custom_node.is_some())?;
-    let loaded = load_custom("anchor", ANCHOR_LAYER, config.custom.as_ref())?;
-    check_layers("anchor", loaded.as_ref(), &[ANCHOR_LAYER])?;
-    let custom = layer_set(loaded.as_ref(), ANCHOR_LAYER, |entry| {
+    let loaded = load_custom("anchor", "anchor", config.custom.as_ref())?;
+    check_layers("anchor", loaded.as_ref(), &["anchor"])?;
+    let custom = layer_set(loaded.as_ref(), "anchor", |entry| {
         Ok(AnchorCustomNode {
             name: entry.name.clone().unwrap_or_else(|| "Anchor".to_string()),
             template: entry
@@ -491,20 +494,20 @@ pub fn build_table_options(
     })
 }
 
-pub fn build_img_options(config: Option<&ImgTaskConfig>) -> Result<ImgOptions, String> {
+pub fn build_image_options(config: Option<&ImageTaskConfig>) -> Result<ImageOptions, String> {
     let Some(config) = config else {
-        return Ok(ImgOptions::default());
+        return Ok(ImageOptions::default());
     };
-    check_custom_node_removed("img", config.custom_node.is_some())?;
-    let loaded = load_custom("img", IMG_LAYER, config.custom.as_ref())?;
-    check_layers("img", loaded.as_ref(), &IMG_LAYERS)?;
+    check_custom_node_removed("image", config.custom_node.is_some())?;
+    let loaded = load_custom("image", IMG_LAYER, config.custom.as_ref())?;
+    check_layers("image", loaded.as_ref(), &IMG_LAYERS)?;
     let make = |layer: &'static str| {
         move |entry: &crate::components::ComponentEntry| {
-            Ok::<_, String>(ImgCustomNode {
-                name: require(entry.name.as_ref(), &format!("img.custom.{layer}.name"))?,
+            Ok::<_, String>(ImageCustomNode {
+                name: require(entry.name.as_ref(), &format!("image.custom.{layer}.name"))?,
                 template: require(
                     entry.template.as_ref(),
-                    &format!("img.custom.{layer}.template"),
+                    &format!("image.custom.{layer}.template"),
                 )?,
                 imports: entry.imports.clone(),
             })
@@ -512,7 +515,7 @@ pub fn build_img_options(config: Option<&ImgTaskConfig>) -> Result<ImgOptions, S
     };
     let img = layer_set(loaded.as_ref(), "img", make("img"))?;
     let figure = layer_set(loaded.as_ref(), "figure", make("figure"))?;
-    Ok(ImgOptions { img, figure })
+    Ok(ImageOptions { img, figure })
 }
 
 pub fn build_heading_options(config: Option<&HeadingTaskConfig>) -> Result<HeadingOptions, String> {
@@ -949,14 +952,14 @@ names = ["TableHead"]
             .is_none());
     }
 
-    /// `img` and `heading` gained task-level config, so a half-specified
+    /// `image` and `heading` gained task-level config, so a half-specified
     /// component must be reported instead of emitting a broken import.
     #[test]
     fn img_and_heading_require_name_and_template() {
-        let cfg: ImgTaskConfig =
+        let cfg: ImageTaskConfig =
             toml::from_str("[custom.figure]\nname = \"Figure\"\n").expect("valid img config");
-        let err = build_img_options(Some(&cfg)).expect_err("template is required");
-        assert!(err.contains("img.custom.figure.template"), "{err}");
+        let err = build_image_options(Some(&cfg)).expect_err("template is required");
+        assert!(err.contains("image.custom.figure.template"), "{err}");
 
         let cfg: HeadingTaskConfig =
             toml::from_str("[custom.heading]\ntemplate = \"<H>{children}</H>\"\n")
@@ -967,7 +970,7 @@ names = ["TableHead"]
 
     #[test]
     fn img_and_heading_share_the_import_syntax() {
-        let cfg: ImgTaskConfig = toml::from_str(
+        let cfg: ImageTaskConfig = toml::from_str(
             r#"
 [custom.figure]
 name = "Figure"
@@ -976,7 +979,7 @@ imports = ["import Figure from '@/components/Figure';"]
 "#,
         )
         .expect("valid img config");
-        let options = build_img_options(Some(&cfg)).expect("valid img options");
+        let options = build_image_options(Some(&cfg)).expect("valid img options");
         let node = options
             .figure
             .default_component()
@@ -1147,10 +1150,10 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
         let err = build_table_options(Some(&table)).expect_err("removed key");
         assert!(err.contains("task.table.custom_node was removed"), "{err}");
 
-        let img: ImgTaskConfig =
+        let img: ImageTaskConfig =
             toml::from_str("[custom_node]\nname = \"Figure\"\n").expect("valid img config");
-        let err = build_img_options(Some(&img)).expect_err("removed key");
-        assert!(err.contains("task.img.custom_node was removed"), "{err}");
+        let err = build_image_options(Some(&img)).expect_err("removed key");
+        assert!(err.contains("task.image.custom_node was removed"), "{err}");
 
         let heading: HeadingTaskConfig =
             toml::from_str("[custom_node]\nname = \"Heading\"\n").expect("valid heading config");
@@ -1232,11 +1235,11 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
         assert!(err.contains("cited") && err.contains("all"), "{err}");
     }
 
-    /// `img` reads the `figure` layer (the outermost node) and the `img` layer
+    /// `image` reads the `figure` layer (the outermost node) and the `img` layer
     /// (the element it contains), and reports unknown layers.
     #[test]
     fn img_reads_the_figure_layer() {
-        let cfg: ImgTaskConfig = toml::from_str(
+        let cfg: ImageTaskConfig = toml::from_str(
             r#"
 [custom.figure]
 name = "Figure"
@@ -1244,7 +1247,7 @@ template = "<Figure>{children}</Figure>"
 "#,
         )
         .expect("valid img config");
-        let options = build_img_options(Some(&cfg)).expect("valid img options");
+        let options = build_image_options(Some(&cfg)).expect("valid img options");
         assert_eq!(
             options
                 .figure
@@ -1254,17 +1257,17 @@ template = "<Figure>{children}</Figure>"
             "Figure"
         );
 
-        let cfg: ImgTaskConfig =
+        let cfg: ImageTaskConfig =
             toml::from_str("[custom.figure]\nname = \"Figure\"\n").expect("valid img config");
-        let err = build_img_options(Some(&cfg)).expect_err("template required");
-        assert!(err.contains("img.custom.figure.template"), "{err}");
+        let err = build_image_options(Some(&cfg)).expect_err("template required");
+        assert!(err.contains("image.custom.figure.template"), "{err}");
 
         // The `img` layer is wired: it renders the `<img>` element of a figure
         // or the whole component of a plain image (§7.1).
-        let cfg: ImgTaskConfig =
+        let cfg: ImageTaskConfig =
             toml::from_str("[custom.img]\nname = \"Thumb\"\ntemplate = \"<img />\"\n")
                 .expect("valid img config");
-        let options = build_img_options(Some(&cfg)).expect("img layer wired");
+        let options = build_image_options(Some(&cfg)).expect("img layer wired");
         assert_eq!(
             options.img.default_component().expect("img component").name,
             "Thumb"

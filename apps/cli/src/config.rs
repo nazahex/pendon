@@ -18,7 +18,7 @@ pub struct ConfigTask {
     pub cite: Option<CiteTaskConfig>,
     pub anchor: Option<AnchorTaskConfig>,
     pub heading: Option<HeadingTaskConfig>,
-    pub img: Option<ImgTaskConfig>,
+    pub image: Option<ImageTaskConfig>,
     pub table: Option<TableTaskConfig>,
     pub marker: Option<MarkerTaskConfig>,
     pub directive: Option<DirectiveTaskConfig>,
@@ -65,7 +65,7 @@ impl PostHook {
 }
 
 #[derive(Debug, Deserialize, Default)]
-pub struct ImgTaskConfig {
+pub struct ImageTaskConfig {
     /// §11 layer component sets: `[task.img.custom.figure]`.
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.img.custom_node]`, §14). The table is still

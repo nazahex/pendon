@@ -13,7 +13,7 @@ const PENDON_TOML: &str = r#"[[task]]
 name = "List Render Demo"
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "table,img,epis,aside,markdown"
+plugin = "table,image,epis,aside,markdown"
 format = "solid"
 
 [plugin-custom]

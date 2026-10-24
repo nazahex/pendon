@@ -2,29 +2,29 @@
 name = "Image Demo (Solid)"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "img,cite,anchor,markdown"
+plugin = "image,cite,wiki,anchor,markdown"
 format = "solid"
 no_cache = true
 markdown_allow_html = true
 
-[[task.img.custom.img]]
+[[task.image.custom.img]]
 type = ["imageX", "thumb"]
 name = "ImageThumb"
 imports = "import { ImageThumb } from '@comp/content/AdvancedImage'"
 template = "<ImageThumb type={\"{attrs.type}\"} {...attrs}>{children}</ImageThumb>"
 
-[[task.img.custom.img]]
+[[task.image.custom.img]]
 name = "AdvancedImage"
 imports = "import AdvancedImage from '@comp/content/AdvancedImage'"
 template = "<AdvancedImage {...attrs}>{children}</AdvancedImage>"
 
-[[task.img.custom.figure]]
+[[task.image.custom.figure]]
 type = ["figureX"]
 name = "FigureX"
 imports = "import { FigureX } from '@comp/content/Figure'"
 template = "<FigureX {...attrs}>{children}</FigureX>"
 
-[[task.img.custom.figure]]
+[[task.image.custom.figure]]
 name = "Figure"
 imports = "import Figure from '@comp/content/Figure'"
 template = "<Figure {...attrs}>{children}</Figure>"

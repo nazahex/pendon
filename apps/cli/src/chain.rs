@@ -21,7 +21,7 @@ use pendon_plugin_blockquote::BlockquoteOptions;
 use pendon_plugin_custom::PluginSpec;
 use pendon_plugin_directive::DirectiveOptions;
 use pendon_plugin_heading::HeadingOptions;
-use pendon_plugin_img::ImgOptions;
+use pendon_plugin_image::ImageOptions;
 use pendon_plugin_latex::LatexOptions;
 use pendon_plugin_list::ListOptions;
 use pendon_plugin_markdown::MarkdownOptions;
@@ -34,7 +34,7 @@ use serde_json::Value;
 
 use crate::plugins::{
     build_anchor_options, build_blockquote_options, build_context_inline_pipeline,
-    build_directive_options, build_heading_options, build_img_options, build_list_options,
+    build_directive_options, build_heading_options, build_image_options, build_list_options,
     build_marker_options, build_section_options, build_table_options, latex_target_for_format,
     load_custom_spec, plugin_names, process_stateless_plugin, track_used_spec, DocumentContext,
 };
@@ -52,7 +52,7 @@ pub struct ChainConfig {
     pub markdown: MarkdownOptions,
     pub wiki: WikiOptions,
     pub latex: Option<LatexOptions>,
-    pub img: ImgOptions,
+    pub image: ImageOptions,
     pub anchor: AnchorOptions,
     pub marker: MarkerOptions,
     pub directive: DirectiveOptions,
@@ -98,7 +98,7 @@ impl ChainConfig {
             markdown,
             wiki,
             latex,
-            img: build_img_options(None)?,
+            image: build_image_options(None)?,
             anchor: build_anchor_options(None)?,
             marker: build_marker_options(None)?,
             directive: build_directive_options(None)?,
@@ -122,7 +122,7 @@ impl ChainConfig {
     pub fn pipeline(&self) -> ContextPipeline<DocumentContext> {
         let enabled: HashSet<&str> = self.enabled.iter().map(String::as_str).collect();
         build_context_inline_pipeline(
-            self.img.clone(),
+            self.image.clone(),
             self.wiki.clone(),
             self.anchor.clone(),
             self.latex,
@@ -273,15 +273,15 @@ fn run_chain(
                     events
                 }
             }
-            "img" => {
-                let img_opts = &config.img;
-                let result = pendon_plugin_img::process_with_context(
+            "image" => {
+                let image_opts = &config.image;
+                let result = pendon_plugin_image::process_with_context(
                     &events,
-                    img_opts,
+                    image_opts,
                     &state.pipeline,
                     &mut state.context,
                 );
-                if let Some(hints) = pendon_plugin_img::solid_hints(img_opts) {
+                if let Some(hints) = pendon_plugin_image::solid_hints(image_opts) {
                     state.hints.push(hints);
                 }
                 result

@@ -24,7 +24,7 @@ extra HTML attributes, and external reference files.
 ## Recommended Plugin Order
 
 ```text
-micromatter,img,cite,wiki,anchor,markdown
+micromatter,image,cite,wiki,anchor,markdown
 ```
 
 **Why this order matters:**
@@ -41,7 +41,7 @@ Example task config:
 [[task]]
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "micromatter,img,cite,wiki,anchor,markdown"
+plugin = "micromatter,image,cite,wiki,anchor,markdown"
 format = "solid"
 ```
 
@@ -213,7 +213,7 @@ Extra classes are appended to the base `cite-ref` class. Data attributes and sty
 
 This plugin uses a `CitationContext` that persists across the entire document processing lifecycle. This means:
 
-- Citations inside image captions (`plugin-img`) share the same numbering as citations in regular paragraphs
+- Citations inside image captions (`plugin-image`) share the same numbering as citations in regular paragraphs
 - Identity deduplication works globally — the same citation in a caption and a paragraph gets the same `citation_number`
 - The context is built once per file after `micromatter` extracts frontmatter references
 

@@ -59,9 +59,11 @@ built-in keys.
   `plugin-table`). `block` / `codefence` / `blockquote` re-lexes the body as block
   content, `inline` as inline content, and `element` — or no attribute at all —
   passes the subtree through verbatim (the pre-rendered `figure` / `table`
-  containers of `plugin-img` and `plugin-table`). This is why an unclaimed block
+  containers of `plugin-image` and `plugin-table`). This is why an unclaimed block
   directive (`<div>`) renders the lists and emphasis inside its body instead of
-  leaking the raw Markdown.
+  leaking the raw Markdown. A node placed `element` also continues the current
+  line — it sits where its marker was — so the text after it keeps its leading
+  space (`<img … /> Caption`, not `<img … />Caption`).
 - §9.3/§9.4 (list container merge): a node that declares `unordered` or `ordered`
   is a container wrapper from `plugin-list`. Its body is re-lexed as blocks and
   the list it decorates is built **inside** that node instead of in a `<ul>`/`<ol>`

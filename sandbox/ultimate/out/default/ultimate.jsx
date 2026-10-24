@@ -223,14 +223,14 @@ export default function PendonView() { return (<>
 <section id="s-image">
 <h2>Image and figure</h2>
 <img alt="I01" decoding="async" src="/i.png" width="800" />
-<p><img alt="I02" decoding="async" src="/i.png" width="800" />Caption only
+<p><img alt="I02" decoding="async" src="/i.png" width="800" /> Caption only
 </p>
 <img alt="I03" decoding="async" height="300" src="/i.png" />
 <img alt="I03n" decoding="async" height="300" src="/i.png" />
 <img alt="I04" class="thumb" decoding="async" height="300" src="/i.png" type="imageX" width="800" />
-<p><img alt="I05" class="x" decoding="async" id="i" loading="lazy" src="/i.png" type="imageX" width="800" />Caption <strong>b</strong>
+<p><img alt="I05" class="x" decoding="async" id="i" loading="lazy" src="/i.png" type="imageX" width="800" /> Caption <strong>b</strong>
 </p>
-<p><img alt="I06" class="extra class" data-bar="12" data-foo="bar" data-isFoo="true" data-title="Title Foo" decoding="async" height="300" id="id" isBar loading="lazy" src="/i.png" style="--style-var: 2rem;" type="thumb" width="800" />Caption all
+<p><img alt="I06" class="extra class" data-bar="12" data-foo="bar" data-isFoo="true" data-title="Title Foo" decoding="async" height="300" id="id" isBar loading="lazy" src="/i.png" style="--style-var: 2rem;" type="thumb" width="800" /> Caption all
 </p>
 <figure><img alt="I07" decoding="async" loading="lazy" src="/i.png" width="800" /></figure>
 <figure><img alt="I08" decoding="async" height="300" loading="lazy" src="/i.png" width="800" /><figcaption>Figure caption only</figcaption></figure>
@@ -245,9 +245,9 @@ export default function PendonView() { return (<>
 <p><img alt="I16 plain markdown image" src="/i.png" />
 </p>
 <img alt="I17" class="thumb" decoding="async" height="300" src="/i.png" width="800" />
-<p><img alt="I18" class="extra class" data-bar="12" data-foo="bar" data-isFoo="true" data-title="Title Foo" decoding="async" height="300" id="id" isBar loading="lazy" src="/i.png" style="--style-var: 2rem;" width="800" />Caption all
+<p><img alt="I18" class="extra class" data-bar="12" data-foo="bar" data-isFoo="true" data-title="Title Foo" decoding="async" height="300" id="id" isBar loading="lazy" src="/i.png" style="--style-var: 2rem;" width="800" /> Caption all
 </p>
-<p><img alt="I18n" class="extra class" data-bar="12" data-foo="bar" data-isFoo="true" data-title="Title Foo" decoding="async" height="300" id="id" isBar loading="lazy" src="/i.png" style="--style-var: 2rem;" width="800" />Caption all
+<p><img alt="I18n" class="extra class" data-bar="12" data-foo="bar" data-isFoo="true" data-title="Title Foo" decoding="async" height="300" id="id" isBar loading="lazy" src="/i.png" style="--style-var: 2rem;" width="800" /> Caption all
 </p>
 <figure class="wide" id="fig-2" isLazy style="--rotate: 5deg;"><img alt="I19" decoding="async" height="300" loading="lazy" src="/i.png" width="800" /><figcaption>Caption</figcaption></figure>
 <figure><img alt="I20" decoding="async" loading="lazy" src="/i.png" /></figure>
@@ -375,7 +375,7 @@ export default function PendonView() { return (<>
 </p>
 <p>M06 <span type="footnote"></span>
 </p>
-<div type="bibliography"></div><div class="x" type="bibliography"></div><div type="markerA">trailing text as children</div><p><span class="x" id="i" type="markerA"></span>trailing <strong>text</strong> <a class="k" href="/x" type="anchorA">a</a>
+<div type="bibliography"></div><div class="x" type="bibliography"></div><div type="markerA">trailing text as children</div><p><span class="x" id="i" type="markerA"></span> trailing <strong>text</strong> <a class="k" href="/x" type="anchorA">a</a>
 </p>
 <div bar="12" class="extra class" foo="bar" id="id" isBar isFoo="true" slug="slug-foo" style="--style-var: 2rem" title="Title Foo" type="markerA"></div><div type="unknownType">unclaimed falls to default</div><div class="u" type="unknownType"></div><p>M10 <span class="a" type="footnote"></span> dan <span type="footnote"></span> dan <span class="b" type="markerA"></span><span type="markerA"></span>
 </p>

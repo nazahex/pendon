@@ -8,7 +8,7 @@
 name = "Unified Demo"
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "micromatter,section,heading,table,img,directive,cite,wiki,anchor,marker,markdown,latex,syntect,extract-heading"
+plugin = "micromatter,section,heading,table,image,directive,cite,wiki,anchor,marker,markdown,latex,syntect,extract-heading"
 format = "solid"
 markdown_strip_comments = true
 markdown_allow_html = true
@@ -50,12 +50,12 @@ template = "<HeadingDefault {...attrs}>{children}</HeadingDefault>"
 # `img` is the `<img>` element, `figure` its container; a `~?!!` figure uses
 # both (the container wraps the element), a plain image uses `img` alone.
 
-[task.img.custom.img]
+[task.image.custom.img]
 name = "AdvancedImage"
 imports = "import AdvancedImage from '@comp/content/AdvancedImage'"
 template = "<AdvancedImage {...attrs}>{children}</AdvancedImage>"
 
-[task.img.custom.figure]
+[task.image.custom.figure]
 name = "Figure"
 imports = "import Figure from '@comp/content/Figure'"
 template = "<Figure {...attrs}>{children}</Figure>"

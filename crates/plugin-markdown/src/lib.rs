@@ -195,7 +195,7 @@ fn ordered_marker(line: &str) -> bool {
 /// (`plugin-custom`, `plugin-directive`, `plugin-table`).
 ///
 /// Both `Custom` and `Element` nodes honour it. `Element` nodes are also how
-/// `plugin-img` / `plugin-table` emit structured HTML whose children are already
+/// `plugin-image` / `plugin-table` emit structured HTML whose children are already
 /// rendered, so an `Element` **without** the attribute stays verbatim
 /// ([`CustomPlacement::Element`]); a `Custom` node without it keeps the historic
 /// inline default. Any other attribute may precede it — the very first event
@@ -980,5 +980,25 @@ mod tests {
         let out = process_with_options(&events, MarkdownOptions::default());
         assert!(!has_node(&out, NodeKind::Emphasis), "{out:?}");
         assert!(all_text(&out).contains("*a*"));
+    }
+
+    /// A pre-rendered `Element` node sits where its marker was, so the text that
+    /// follows it continues the same line. Leaving `at_line_start` armed made
+    /// the next chunk look like the start of a source line, so its leading space
+    /// was stripped as indentation: `<img … />Caption only`.
+    #[test]
+    fn element_placement_keeps_the_space_after_the_node() {
+        let img = NodeKind::Element("img".to_string());
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::StartNode(img.clone()),
+            Event::EndNode(img),
+            Event::Text(" Caption only".to_string()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+        let out = process_with_options(&events, MarkdownOptions::default());
+        assert_eq!(all_text(&out), " Caption only", "{out:?}");
     }
 }

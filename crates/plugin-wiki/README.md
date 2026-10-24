@@ -57,7 +57,7 @@ An entry may rename the §6.1 positional slots in its extras head: `backtick_key
 ## Recommended order
 
 ```text
-micromatter,img,cite,wiki,anchor,markdown
+micromatter,image,cite,wiki,anchor,markdown
 ```
 
 `wiki` runs before `anchor` because `[[…]]` is more specific than a generic

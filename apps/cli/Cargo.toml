@@ -18,7 +18,7 @@ pendon-plugin-dialog = { path = "../../crates/plugin-dialog" }
 pendon-plugin-directive = { path = "../../crates/plugin-directive" }
 pendon-plugin-extract-heading = { path = "../../crates/plugin-extract-heading" }
 pendon-plugin-heading = { path = "../../crates/plugin-heading" }
-pendon-plugin-img = { path = "../../crates/plugin-img" }
+pendon-plugin-image = { path = "../../crates/plugin-image" }
 pendon-plugin-latex = { path = "../../crates/plugin-latex" }
 pendon-plugin-list = { path = "../../crates/plugin-list" }
 pendon-plugin-markdown = { path = "../../crates/plugin-markdown" }

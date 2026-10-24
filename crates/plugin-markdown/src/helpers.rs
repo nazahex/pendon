@@ -124,7 +124,7 @@ pub fn emit_inline(s: &str, out: &mut Vec<Event>, opts: MarkdownOptions) {
             continue;
         }
         if bytes[i] == '!' && i + 1 < bytes.len() && bytes[i + 1] == '[' {
-            // Keep !![...](...) reserved for plugin-img advanced figure syntax.
+            // Keep !![...](...) reserved for plugin-image advanced figure syntax.
             if i == 0 || bytes[i.saturating_sub(1)] != '!' {
                 if let Some(close_br) = find_next(&bytes, i + 2, ']') {
                     if close_br + 1 < bytes.len() && bytes[close_br + 1] == '(' {

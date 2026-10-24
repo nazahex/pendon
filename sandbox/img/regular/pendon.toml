@@ -2,18 +2,18 @@
 name = "Image Demo (Solid)"
 input = "./src/img.md"
 output = "./out/img.jsx"
-plugin = "micromatter,img,cite,wiki,anchor,markdown"
+plugin = "micromatter,image,cite,wiki,anchor,markdown"
 format = "solid"
 pretty = true
 markdown_allow_html = true
 
 wiki_link_prefix = "/id/wiki"
 
-[task.img.custom.figure]
+[task.image.custom.figure]
 name = "AdvancedImage"
 template = "<AdvancedImage id=\"{attrs.id}\" src=\"{attrs.src}\" alt=\"{attrs.alt}\" foo=\"{attrs.foo}\" baz=\"{attrs.baz}\" class=\"{attrs.class}\">{children}</AdvancedImage>"
 
-[[task.img.custom.figure.imports]]
+[[task.image.custom.figure.imports]]
 module = "@/components/AdvancedImage"
 default = "AdvancedImage"
 
@@ -23,18 +23,18 @@ default = "AdvancedImage"
 name = "Image Demo (Solid)"
 input = "./src/img-ult.md"
 output = "./out/img-ult.jsx"
-plugin = "micromatter,img,cite,wiki,anchor,markdown"
+plugin = "micromatter,image,cite,wiki,anchor,markdown"
 format = "solid"
 pretty = true
 markdown_allow_html = true
 
 wiki_link_prefix = "/id/wiki"
 
-[task.img.custom.figure]
+[task.image.custom.figure]
 name = "AdvancedImage"
 template = "<AdvancedImage id=\"{attrs.id}\" src=\"{attrs.src}\" alt=\"{attrs.alt}\" foo=\"{attrs.foo}\" baz=\"{attrs.baz}\" class=\"{attrs.class}\">{children}</AdvancedImage>"
 
-[[task.img.custom.figure.imports]]
+[[task.image.custom.figure.imports]]
 module = "@/components/AdvancedImage"
 default = "AdvancedImage"
 

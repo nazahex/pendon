@@ -1,8 +1,8 @@
-# pendon-plugin-img
+# pendon-plugin-image
 
 Advanced image syntax plugin for Pendon.
 
-`pendon-plugin-img` extends standard Markdown image syntax with a compact single-line form that supports figure output, behavior flags, dimensions, custom attributes, and rich figcaptions. It integrates with the shared inline pipeline so captions can contain wiki links, citations, and anchor-processed links. Advanced images work both as standalone blocks and embedded inline within paragraph text.
+`pendon-plugin-image` extends standard Markdown image syntax with a compact single-line form that supports figure output, behavior flags, dimensions, custom attributes, and rich figcaptions. It integrates with the shared inline pipeline so captions can contain wiki links, citations, and anchor-processed links. Advanced images work both as standalone blocks and embedded inline within paragraph text.
 
 ## What This Plugin Does
 
@@ -10,7 +10,7 @@ Advanced image syntax plugin for Pendon.
 - Handles advanced images as standalone blocks **and** inline within paragraph text
 - Supports three container modes: `<figure>`, `<div>`, `<p>`, or bare `<img>`
 - Renders figcaptions with **full inline markdown** including bold, italic, links, wiki links, and citations
-- Supports custom Solid components via `ImgCustomNode` configuration
+- Supports custom Solid components via `ImageCustomNode` configuration
 - Accepts extra classes, IDs, data attributes, and CSS custom properties
 - Provides image behavior flags: lazy loading, async decoding, explicit dimensions
 - Integrates with the shared `Pipeline` so caption sub-parsing runs through wiki, cite, and anchor plugins
@@ -18,13 +18,13 @@ Advanced image syntax plugin for Pendon.
 ## Recommended Plugin Order
 
 ```text
-micromatter,img,cite,wiki,anchor,markdown
+micromatter,image,cite,wiki,anchor,markdown
 ```
 
 **Why this order matters:**
 
 1. `micromatter` must run first if frontmatter is present
-2. `img` runs before markdown to consume advanced image lines before `[alt](src)` is converted to Link nodes
+2. `image` runs before markdown to consume advanced image lines before `[alt](src)` is converted to Link nodes
 3. `cite`, `wiki`, and `anchor` are registered in the inline pipeline (not in the main plugin chain order) and process caption content internally
 4. `markdown` runs last to handle remaining inline formatting outside of image blocks
 
@@ -34,7 +34,7 @@ Example task config:
 [[task]]
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "micromatter,img,cite,wiki,anchor,markdown"
+plugin = "micromatter,image,cite,wiki,anchor,markdown"
 format = "solid"
 pretty = true
 ```
@@ -195,11 +195,11 @@ Every item is optional.
 Replace the default HTML output with a custom Solid component:
 
 ```toml
-[task.img.custom.figure]
+[task.image.custom.figure]
 name = "AdvancedImage"
 template = "<AdvancedImage id=\"{attrs.id}\" src=\"{attrs.src}\" alt=\"{attrs.alt}\" class=\"{attrs.class}\">{children}</AdvancedImage>"
 
-[[task.img.custom.figure.imports]]
+[[task.image.custom.figure.imports]]
 module = "@/components/AdvancedImage"
 default = "AdvancedImage"
 ```
@@ -228,6 +228,11 @@ coming from the same module are merged into a single `import` statement.
 ### Caption as Children
 
 When using a custom component, the figcaption is rendered as **inline JSX children** (not as an attribute). This means captions support full inline markdown processing through the shared pipeline:
+
+The rendered caption is already complete inline AST, so the component node marks
+itself `__plugin_kind = "element"` (§11 rule 3): the Markdown pass passes those
+children through verbatim instead of re-lexing them, which would drop the
+whitespace between the caption's words.
 
 ```tsx
 // AdvancedImage.tsx
@@ -259,14 +264,14 @@ Caption content is processed through the shared inline pipeline **before** markd
 - **Anchor links**: `[text](url^--$!)` → processed by `plugin-anchor` with modifier support
 - **Standard markdown**: `**bold**`, `*italic*`, `` `code` `` → processed by `plugin-markdown`
 
-The inline pipeline is built per-file in `main.rs` and injected into `plugin-img`. Plugin authors integrating with `pendon-plugin-img` should pass their own `Pipeline` instance:
+The inline pipeline is built per-file in `main.rs` and injected into `plugin-image`. Plugin authors integrating with `pendon-plugin-image` should pass their own `Pipeline` instance:
 
 ```rust
 let pipeline = Pipeline::new();
 pipeline.add(move |ev| pendon_plugin_anchor::process(&ev, &anchor_opts));
 pipeline.add(move |ev| pendon_plugin_wiki::process_with_options(&ev, wiki_opts.clone()));
 
-let events = pendon_plugin_img::process(&events, &img_opts, &pipeline);
+let events = pendon_plugin_image::process(&events, &image_opts, &pipeline);
 ```
 
 ### Positional keys (§6.1 / §11 rule 5)

@@ -17,7 +17,7 @@ Link processing and external URL safety plugin for Pendon.
 ## Recommended Plugin Order
 
 ```text
-micromatter,img,cite,wiki,anchor,markdown
+micromatter,image,cite,wiki,anchor,markdown
 ```
 
 **Why this order matters:**
@@ -32,7 +32,7 @@ Example task config:
 [[task]]
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "micromatter,img,cite,wiki,anchor,markdown"
+plugin = "micromatter,image,cite,wiki,anchor,markdown"
 format = "solid"
 ```
 
@@ -189,7 +189,7 @@ entry with no overrides behaves exactly as before.
 
 - This plugin processes **raw text events** — it must run before `plugin-markdown`
 - Links inside code fences, inline code, HTML blocks, and HTML inline elements are ignored
-- Image syntax `![alt](src)` is explicitly skipped (handled by `plugin-img`)
+- Image syntax `![alt](src)` is explicitly skipped (handled by `plugin-image`)
 - Extra attribute items (`.class`, `#id`, `{key: val}`) only support flat values — nested objects are not supported
 - Unquoted values in extra attrs are treated as literal strings (no expression evaluation)
 - Modifier parsing strips tokens from the URL right-to-left; malformed trailing characters that don't match known modifiers are left as part of the URL

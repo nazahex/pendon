@@ -1,6 +1,6 @@
 ## Extra Syntax
 
-Sintaksis tambahan untuk plugin-img
+Sintaksis tambahan untuk plugin-image
 
 ### Width and Height
 

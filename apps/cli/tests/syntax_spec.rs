@@ -128,8 +128,8 @@ fn golden_02_extras_literal() {
 
 /// §16.3 fixture 03: `~?!` / `~?!!` + extras + caption (§7.1).
 #[test]
-fn golden_03_img_figure() {
-    assert_fixture("03-img-figure");
+fn golden_03_image_figure() {
+    assert_fixture("03-image-figure");
 }
 
 /// §16.3 fixture 04: head `("title")` vs extras `"title"` priority (§7.2).

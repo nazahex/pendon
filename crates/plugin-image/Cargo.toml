@@ -1,5 +1,5 @@
 [package]
-name = "pendon-plugin-img"
+name = "pendon-plugin-image"
 version = "0.0.1"
 edition = "2021"
 license = "MIT"
