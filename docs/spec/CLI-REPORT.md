@@ -17,7 +17,7 @@ changes to the shapes below.
 | Stream        | Carries                                                       | Piped-safe                      |
 | ------------- | ------------------------------------------------------------- | ------------------------------- |
 | **stdout**    | the rendered document only (JSON / events / AST / HTML / JSX) | yes — never decorated           |
-| **stderr**    | the report, diagnostics, warnings, errors                     | yes — decorated only when a TTY |
+| **stderr**    | the report, diagnostics, warnings, errors, hook output        | yes — decorated only when a TTY |
 | **exit code** | `0` success · `2` error/failure                               | —                               |
 
 Rules:
@@ -50,6 +50,26 @@ Sink gating (`apps/cli/src/run.rs`, `main.rs`):
 - The `--tui` spinner is gated on both `--tui` and `is_interactive_stderr()`.
 - `-q` / `--quiet` suppresses the `run` report and the `--tui` spinner
   regardless of terminal-ness.
+
+### Hook forwarding (not the report)
+
+A task's `post_hook` commands ([`guides/cli.md`](../guides/cli.md#post_hook)) run
+user-chosen tools. Their stdout **and** stderr are forwarded to stderr one line
+at a time, each prefixed `[post_hook:<task>]` and otherwise byte-preserving:
+
+```
+[post_hook:Site] writing out/index.html
+```
+
+Rules:
+
+- **Never stdout** — a hook must not be able to corrupt the rendered bytes.
+- **Never decorated, never gated on TTY-ness** — the lines are the same in a
+  terminal and in a pipe, so `pendon run 2>&1 | grep '^\[post_hook:'` works.
+- **Never suppressed by `--quiet`** — `--quiet` hides the report, not the
+  tooling a task deliberately runs.
+- **`<task>` is the resolved task name** (`name`, else `task-<index>`), so
+  concurrent tasks stay separable.
 
 ## 3. Styling tokens
 
@@ -135,7 +155,7 @@ Numbers and units:
 | `-q` / `--quiet`    | no     | no           |
 
 `--quiet` never changes stdout or the exit code, and never suppresses
-diagnostics, warnings, or errors.
+diagnostics, warnings, errors, or `post_hook` output (§2).
 
 ## 6. Known gaps (not yet normative)
 
