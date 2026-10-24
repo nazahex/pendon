@@ -1120,12 +1120,34 @@ path       = any non-empty text up to the closing ")"
   strings; `yaml` expands merge keys (`<<`) and maps non-finite floats to `null`;
   `toml` datetimes become RFC 3339 strings; `csv` uses the header row as keys and
   parses each cell as JSON when possible (`NULL` → `null`).
-- `mdp` (Pendon Markdown as a value) is specified but not implemented yet: it
-  warns and drops the block.
+- `mdp` (Pendon Markdown as a value) is a **sub-document**, not opaque text: its
+  body is parsed and run through the **same plugin chain as the page**, so every
+  enabled plugin reaches inside it — wiki links, citations, figures, tables, math,
+  extras heads, custom components. It therefore shares the page's state: a
+  citation written in a payload joins the page's citation list and numbering, and
+  the renderer hints a payload's plugins need join the page's. The block form
+  (body on the line after the head) keeps the payload's block wrappers; the
+  inline form (body on the head line) drops the payload's own `Paragraph`, so the
+  text there contributes inline nodes only. A payload reaches the attribute as a
+  **fragment** — a node list under `renderer_ast::FRAGMENT_KEY`
+  (`{"$fragment": [ … ]}`) — and each renderer owns its own format: Solid emits
+  `name={(<>…</>)}`, HTML renders the markup into the attribute value, and the
+  AST/JSON renderers keep the structured node list.
+
+- **No re-binding inside a payload.** Resolution is one pass over the page's
+  attributes, so an `mdp` payload that itself writes an extras head
+  (`{{markerX}}{data: $foo}`) is rendered by the chain but that `$foo` stays
+  literal — and, because `resolve` never sees it, it raises no warning either.
+  Bind the value outside the payload and pass the payload, not the reference.
 
 `plugin-bind` runs **before** `pendon_core::parse` (a payload's `#`, `-` and blank
-lines would otherwise be markup) and resolves **after** every other plugin. It is
-Solid-first: a bound value reaches the prop as `name={…}`; other renderers keep a
-stringly-typed fallback. Executable contracts: goldens [`23-bind`](golden/README.md)
-(blocks, `$var`, nested values) and [`24-bind-paths`](golden/README.md) (paths,
-spread/merge, a file payload resolved through `../data/`).
+lines would otherwise be markup) and resolves **after** every other plugin, before
+the citation export — which is why a bound payload's citations land in the page's
+list. It is Solid-first: a bound value reaches the prop as `name={…}`, `html`
+renders a structured value as attribute text and a fragment as escaped markup, and
+the `ast`/`json` outputs keep the re-hydrated value. Executable contracts: goldens
+[`23-bind`](golden/README.md) (blocks, `$var`, nested values),
+[`24-bind-paths`](golden/README.md) (paths, spread/merge, a file payload resolved
+through `../data/`) and [`27-bind-mdp`](golden/README.md) (`mdp` as a
+sub-document: the payload runs the page's chain and reaches the prop as a
+fragment).
