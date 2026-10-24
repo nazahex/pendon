@@ -1,9 +1,12 @@
 # ADR-0004 — `plugin-bind` runs a pre-parse text stage
 
 - Status: **Accepted / implemented**
-- Proposal: [`docs/rfc/plugin-bind.md`](../rfc/plugin-bind.md)
-- Evidence: `crates/plugin-bind` unit tests; goldens `23-bind` (body payloads) and
+- Proposal: [`docs/archive/fulfilled/plugin-bind.md`](../archive/fulfilled/plugin-bind.md) (archived)
+- Extended by: [`0007-mdp-subdocuments.md`](0007-mdp-subdocuments.md) — an `mdp`
+  payload now runs the **whole** chain, so `resolve` takes a renderer
+- Evidence: `crates/plugin-bind` unit tests; goldens `23-bind` (body payloads),
   `24-bind-paths` (paths, spread/merge, a file payload resolved through `../data/`)
+  and `27-bind-mdp` (a payload as a sub-document)
 
 ## Context
 
