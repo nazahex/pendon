@@ -56,6 +56,14 @@ impl Default for MarkdownOptions {
     }
 }
 
+/// Renders a string as inline markdown, producing events without any block-level
+/// wrapping (no `<p>` tags). Used by `plugin-bind` for inline `mdp` values (§2.3).
+pub fn render_inline(s: &str, opts: MarkdownOptions) -> Vec<Event> {
+    let mut events = Vec::new();
+    helpers::emit_inline(s, &mut events, opts);
+    events
+}
+
 pub fn process_with_options(events: &[Event], opts: MarkdownOptions) -> Vec<Event> {
     // §9.1: decorator lines that decorate the blocks this pass owns — paragraphs
     // and code fences — are bound here. `plugin-list` and `plugin-blockquote`

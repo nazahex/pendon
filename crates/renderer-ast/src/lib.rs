@@ -1,8 +1,36 @@
 use pendon_core::Event;
-use serde_json;
+use serde_json::{json, Value};
 
 mod builder;
 use builder::build_ast_document;
+
+/// Reserved key of an AST attribute value that carries a **rendered fragment**.
+///
+/// A fragment is a node list produced from a nested Pendon Markdown payload
+/// (`{{{mdp[body] … }}}` in `plugin-bind`, §19): markup, not data. It rides an
+/// attribute as `{"$fragment": [<node>, …]}`, so every renderer owns its own
+/// format — `renderer-solid` emits `name={(<>…</>)}`, `renderer-html` inlines
+/// the HTML into the attribute, and `renderer-ast` / `renderer-json` keep the
+/// node list as structured JSON.
+///
+/// The key is reserved: an object with exactly this one key *is* a fragment.
+pub const FRAGMENT_KEY: &str = "$fragment";
+
+/// Wraps a node list as a fragment attribute value (see [`FRAGMENT_KEY`]).
+pub fn fragment(nodes: Vec<Value>) -> Value {
+    json!({ FRAGMENT_KEY: nodes })
+}
+
+/// The node list of a fragment attribute value, or `None` when `value` is an
+/// ordinary object/array. Requires the [`FRAGMENT_KEY`] to be the only key, so
+/// authored data (`{"$fragment": …, "other": …}`) is never mistaken for markup.
+pub fn fragment_nodes(value: &Value) -> Option<&[Value]> {
+    let map = value.as_object()?;
+    if map.len() != 1 {
+        return None;
+    }
+    map.get(FRAGMENT_KEY)?.as_array().map(Vec::as_slice)
+}
 
 pub fn render_ast_to_string(events: &[Event]) -> Result<String, serde_json::Error> {
     serde_json::to_string(&build_ast_document(events))
@@ -10,6 +38,19 @@ pub fn render_ast_to_string(events: &[Event]) -> Result<String, serde_json::Erro
 
 pub fn render_ast_to_string_pretty(events: &[Event]) -> Result<String, serde_json::Error> {
     serde_json::to_string_pretty(&build_ast_document(events))
+}
+
+/// The `children` of the AST a stream builds — the node list itself, without the
+/// `Document` wrapper or the document-level `diagnostics`.
+///
+/// This is the seam a nested payload uses: the events are already a complete
+/// sub-document, and only their nodes belong inside the host tree.
+pub fn events_to_children(events: &[Event]) -> Result<Vec<Value>, serde_json::Error> {
+    let document = serde_json::to_value(build_ast_document(events))?;
+    Ok(match document.get("children").and_then(Value::as_array) {
+        Some(children) => children.clone(),
+        None => Vec::new(),
+    })
 }
 
 #[cfg(test)]
@@ -253,5 +294,65 @@ mod tests {
         let output = render_ast_to_string(&events).unwrap();
         let parsed: Value = serde_json::from_str(&output).unwrap();
         assert_eq!(parsed["children"][0]["attrs"]["cfg"], "not-json");
+    }
+
+    /// A `$fragment` value is a node list, not data: it survives into the AST as
+    /// structured JSON (the host of every renderer-specific encoding).
+    #[test]
+    fn a_fragment_rehydrates_into_a_node_list() {
+        let fragment = fragment(vec![serde_json::json!({
+            "type": "Paragraph",
+            "children": [{ "type": "Text", "text": "hi" }]
+        })]);
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Custom("Card".to_string())),
+            Event::Attribute {
+                name: "body".to_string(),
+                value: format!("{}{}", pendon_core::JSON_ATTR_PREFIX, fragment),
+            },
+            Event::EndNode(NodeKind::Custom("Card".to_string())),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let output = render_ast_to_string(&events).unwrap();
+        let parsed: Value = serde_json::from_str(&output).unwrap();
+        let body = &parsed["children"][0]["attrs"]["body"];
+
+        assert_eq!(body[FRAGMENT_KEY][0]["type"], "Paragraph");
+        let nodes = fragment_nodes(body).expect("fragment nodes");
+        assert_eq!(nodes.len(), 1);
+    }
+
+    /// Only an object whose *single* key is `$fragment` is markup; authored data
+    /// that happens to carry the key stays data.
+    #[test]
+    fn a_fragment_requires_the_reserved_key_to_be_alone() {
+        assert!(fragment_nodes(&serde_json::json!({ "$fragment": [] })).is_some());
+        assert!(fragment_nodes(&serde_json::json!({ "$fragment": [], "n": 1 })).is_none());
+        assert!(fragment_nodes(&serde_json::json!({ "n": 1 })).is_none());
+        assert!(fragment_nodes(&serde_json::json!([])).is_none());
+    }
+
+    /// The seam a nested payload uses: the `Document` wrapper and the
+    /// diagnostics stay behind, only the nodes are embedded.
+    #[test]
+    fn events_to_children_drops_the_document_wrapper_and_diagnostics() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::Diagnostic {
+                severity: pendon_core::Severity::Warning,
+                message: "careful".to_string(),
+                span: None,
+            },
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text("body".to_string()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let children = events_to_children(&events).unwrap();
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0]["type"], "Paragraph");
     }
 }

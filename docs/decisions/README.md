@@ -11,6 +11,8 @@ rejected alternatives, and the evidence that pins each decision.
 | [0003](0003-positional-groups.md)           | Positional groups `@@type[…](…){…}` (Option 2)      | Accepted / done     |
 | [0004](0004-pre-parse-bind-stage.md)        | `plugin-bind` runs a pre-parse text stage           | Accepted / building |
 | [0005](0005-structured-extras-values.md)    | Structured extras values + the `U+E001` transport   | Accepted / complete |
+| [0006](0006-per-file-cache-records.md)      | One cache record per `(task, input)`                | Accepted / complete |
+| [0007](0007-mdp-subdocuments.md)            | `mdp` payloads are sub-documents (fragments)        | Accepted / complete |
 
 ## Conventions
 

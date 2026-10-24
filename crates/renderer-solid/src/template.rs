@@ -10,6 +10,7 @@ pub fn render_template(
     attrs: Option<&Map<String, Value>>,
     children: &str,
     text: Option<&str>,
+    hints: Option<&SolidRenderHints>,
 ) -> String {
     let mut out = String::new();
     let tpl = template.template.as_str();
@@ -46,7 +47,7 @@ pub fn render_template(
             // Handle the spread operator {...attrs} with smart spacing
             if tpl[i..].starts_with("{...attrs}") {
                 let spread_str = if let Some(map) = attrs {
-                    generate_spread_attrs(map, &used_attr_keys)
+                    generate_spread_attrs(map, &used_attr_keys, hints)
                 } else {
                     String::new()
                 };
@@ -184,7 +185,11 @@ fn get_attr_value(attrs: Option<&Map<String, Value>>, key: &str) -> String {
 
 /// Generates JSX attributes using curly brace expressions for all values.
 /// Automatically infers type from string values (boolean, number, or string).
-fn generate_spread_attrs(map: &Map<String, Value>, used_keys: &BTreeSet<String>) -> String {
+fn generate_spread_attrs(
+    map: &Map<String, Value>,
+    used_keys: &BTreeSet<String>,
+    hints: Option<&SolidRenderHints>,
+) -> String {
     let mut parts = Vec::new();
     for (key, val) in map {
         // Skip internal/special keys used by the AST renderer
@@ -234,7 +239,7 @@ fn generate_spread_attrs(map: &Map<String, Value>, used_keys: &BTreeSet<String>)
                         match parsed {
                             Value::Object(_) | Value::Array(_) => {
                                 part.push_str("={");
-                                part.push_str(&to_js_literal(&parsed));
+                                part.push_str(&to_js_literal(&parsed, hints));
                                 part.push('}');
                                 parts.push(part);
                                 continue;
@@ -254,7 +259,7 @@ fn generate_spread_attrs(map: &Map<String, Value>, used_keys: &BTreeSet<String>)
                 {
                     if let Ok(parsed) = serde_json::from_str::<Value>(trimmed) {
                         part.push_str("={");
-                        part.push_str(&to_js_literal(&parsed));
+                        part.push_str(&to_js_literal(&parsed, hints));
                         part.push('}');
                         parts.push(part);
                         continue;
@@ -302,7 +307,7 @@ fn generate_spread_attrs(map: &Map<String, Value>, used_keys: &BTreeSet<String>)
             _ => {
                 // Arrays or Objects: pass as JS literal expression
                 part.push_str("={");
-                part.push_str(&to_js_literal(val));
+                part.push_str(&to_js_literal(val, hints));
                 part.push('}');
             }
         }

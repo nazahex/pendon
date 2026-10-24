@@ -9,7 +9,9 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
             let children = render_children_to_string(v, hints);
             let attrs = v.get("attrs").and_then(|a| a.as_object());
             let text = v.get("text").and_then(|t| t.as_str());
-            out.push_str(&template::render_template(template, attrs, &children, text));
+            out.push_str(&template::render_template(
+                template, attrs, &children, text, hints,
+            ));
             return;
         }
 
@@ -26,14 +28,14 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
             }
             "Paragraph" => {
                 out.push_str("<p");
-                render_attrs(v, out, &[]);
+                render_attrs(v, out, &[], hints);
                 out.push('>');
                 render_children(v, out, hints);
                 out.push_str("</p>\n");
             }
             "Blockquote" => {
                 out.push_str("<blockquote");
-                render_attrs(v, out, &[]);
+                render_attrs(v, out, &[], hints);
                 out.push_str(">\n");
                 render_children(v, out, hints);
                 out.push_str("</blockquote>\n");
@@ -47,7 +49,7 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                 out.push('<');
                 out.push('h');
                 out.push_str(level);
-                render_attrs(v, out, &["level"]);
+                render_attrs(v, out, &["level"], hints);
                 out.push('>');
                 render_text_or_children(v, out, hints);
                 out.push_str("</h");
@@ -56,7 +58,7 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
             }
             "Section" => {
                 out.push_str("<section");
-                render_attrs(v, out, &[]);
+                render_attrs(v, out, &[], hints);
                 out.push_str(">\n");
                 render_children(v, out, hints);
                 out.push_str("</section>\n");
@@ -66,7 +68,7 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
             }
             "CodeFence" => {
                 out.push_str("<pre");
-                render_attrs(v, out, &["raw_html"]);
+                render_attrs(v, out, &["raw_html"], hints);
                 let raw = v
                     .get("attrs")
                     .and_then(|a| a.get("raw_html"))
@@ -86,7 +88,7 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
             }
             "BulletList" => {
                 out.push_str("<ul");
-                render_attrs(v, out, &[]);
+                render_attrs(v, out, &[], hints);
                 out.push_str(">\n");
                 render_children(v, out, hints);
                 out.push_str("</ul>\n");
@@ -100,7 +102,7 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                         out.push_str("}");
                     }
                 }
-                render_attrs(v, out, &["start"]);
+                render_attrs(v, out, &["start"], hints);
                 out.push_str(">\n");
                 render_children(v, out, hints);
                 out.push_str("</ol>\n");
@@ -176,14 +178,14 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
             }
             "Link" => {
                 out.push_str("<a");
-                render_attrs(v, out, &[]);
+                render_attrs(v, out, &[], hints);
                 out.push('>');
                 render_children(v, out, hints);
                 out.push_str("</a>");
             }
             "Image" => {
                 out.push_str("<img");
-                render_attrs(v, out, &[]);
+                render_attrs(v, out, &[], hints);
                 out.push_str(" />");
             }
             "Element" => render_element(v, out, hints),
@@ -230,7 +232,7 @@ fn render_element(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>)
 
     out.push('<');
     out.push_str(tag);
-    render_attrs(v, out, &[]);
+    render_attrs(v, out, &[], hints);
 
     if pendon_core::is_void_element(tag) {
         out.push_str(" />");
@@ -276,6 +278,18 @@ fn render_children_to_string(v: &Value, hints: Option<&SolidRenderHints>) -> Str
     buf
 }
 
+/// Renders a fragment's node list (a nested `mdp` payload, see
+/// `pendon_renderer_ast::FRAGMENT_KEY`). Every node goes through the same
+/// `render_node` the document body uses, so templates, custom components and
+/// block plugins behave identically inside a bound payload.
+pub(crate) fn render_fragment(nodes: &[Value], hints: Option<&SolidRenderHints>) -> String {
+    let mut buf = String::new();
+    for node in nodes {
+        render_node(node, &mut buf, hints);
+    }
+    buf
+}
+
 fn render_text_or_children(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>) {
     if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
         escape_jsx(text, out);
@@ -289,8 +303,10 @@ fn render_text_or_children(v: &Value, out: &mut String, hints: Option<&SolidRend
 ///
 /// A structured value (object/array, re-hydrated from a data-binding transform,
 /// `docs/rfc/plugin-bind.md`) is emitted as a JSX expression `name={…}`; a raw
-/// JSX fragment (`JSX_ATTR_PREFIX`) is wrapped in parentheses `name={( … )}`.
-fn render_attrs(v: &Value, out: &mut String, skipped: &[&str]) {
+/// JSX expression (`JSX_ATTR_PREFIX`, the extras `( … )` literal) is wrapped in
+/// parentheses `name={( … )}`. A rendered fragment (`$fragment`, a nested
+/// `mdp` payload) reaches this branch too, so it emits `name={(<>…</>)}`.
+fn render_attrs(v: &Value, out: &mut String, skipped: &[&str], hints: Option<&SolidRenderHints>) {
     let Some(attrs) = v.get("attrs").and_then(Value::as_object) else {
         return;
     };
@@ -334,10 +350,11 @@ fn render_attrs(v: &Value, out: &mut String, skipped: &[&str]) {
             }
             // Objects and arrays are JS expressions, not strings. Emit clean JS
             // literal syntax (`{ key: value }`, `[ item, ... ]`) rather than
-            // compact JSON with escaped quotes.
+            // compact JSON with escaped quotes. A fragment value renders its
+            // node list as JSX.
             Value::Object(_) | Value::Array(_) => {
                 out.push_str("={");
-                out.push_str(&to_js_literal(value));
+                out.push_str(&to_js_literal(value, hints));
                 out.push('}');
             }
             Value::Number(_) => {
@@ -411,7 +428,14 @@ pub(crate) fn is_jsx_expression_token(text: &str) -> bool {
 /// string — object literal syntax (`{ key: value }`) rather than compact JSON
 /// with quoted keys and escaped quotes. Used so structured extras values render
 /// as `name={ key: "value" }` instead of `name={"{\"key\":\"value\"}"}`.
-pub(crate) fn to_js_literal(value: &Value) -> String {
+///
+/// A fragment value (a nested `mdp` payload, `renderer_ast::FRAGMENT_KEY`)
+/// renders as a JSX fragment expression `(<>…</>)`, so markup can sit anywhere a
+/// structured value can — including inside an object (`{body: $mdp}`).
+pub(crate) fn to_js_literal(value: &Value, hints: Option<&SolidRenderHints>) -> String {
+    if let Some(nodes) = pendon_renderer_ast::fragment_nodes(value) {
+        return format!("(<>{}</>)", render_fragment(nodes, hints));
+    }
     match value {
         Value::Null => "null".to_string(),
         Value::Bool(b) => b.to_string(),
@@ -437,7 +461,7 @@ pub(crate) fn to_js_literal(value: &Value) -> String {
                 if i > 0 {
                     out.push_str(", ");
                 }
-                out.push_str(&to_js_literal(item));
+                out.push_str(&to_js_literal(item, hints));
             }
             out.push(']');
             out
@@ -464,7 +488,7 @@ pub(crate) fn to_js_literal(value: &Value) -> String {
                     out.push('"');
                 }
                 out.push_str(": ");
-                out.push_str(&to_js_literal(val));
+                out.push_str(&to_js_literal(val, hints));
             }
             out.push('}');
             out

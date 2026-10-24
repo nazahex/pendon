@@ -14,13 +14,43 @@
 //! Structured values travel on [`Event::Attribute`] as
 //! [`pendon_core::JSON_ATTR_PREFIX`] + compact JSON; `renderer-ast` re-hydrates
 //! them and `renderer-solid` emits `name={…}`.
+//!
+//! An `mdp` payload is not a string: [`resolve_with`] hands the Markdown to the
+//! host's own renderer, which parses and runs **the document's plugin chain**
+//! over it, returning a fragment — a node list under
+//! `pendon_renderer_ast::FRAGMENT_KEY` that every renderer turns into its own
+//! format. [`resolve`] is the Markdown-only convenience wrapper.
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use pendon_core::{Event, Severity};
+use pendon_plugin_markdown::{process as process_markdown, render_inline, MarkdownOptions};
+use pendon_renderer_ast::{events_to_children, fragment};
 use serde_json::Value;
+
+/// The form an `mdp` block was written in (§2.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MdpMode {
+    /// Body on the head line (`{{{mdp[var] … }}}`): inline markup, no block
+    /// wrapper.
+    Inline,
+    /// Body on the lines after the head: a sub-document, block elements kept.
+    Block,
+}
+
+/// A rendered `mdp` payload: the node list a renderer consumes, plus every
+/// diagnostic the rendering run produced (warnings from the plugins that ran
+/// over the payload, reported against the host document).
+#[derive(Debug, Clone)]
+pub struct Fragment {
+    pub value: Value,
+    pub diagnostics: Vec<Event>,
+}
+
+/// The host's renderer for `mdp` payloads — see [`resolve_with`].
+pub type MdpRenderer<'a> = dyn FnMut(&str, MdpMode) -> Fragment + 'a;
 
 /// The languages a data block may declare (§2.1 of the RFC).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,6 +95,10 @@ impl Lang {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Registry {
     values: BTreeMap<String, Value>,
+    /// Var names whose bound value is Pendon Markdown (`mdp`), and the form the
+    /// block was written in (§2.3). Such a value is the payload of markup, so a
+    /// bare `$var` reference renders it instead of stringifying it.
+    mdp_vars: BTreeMap<String, MdpMode>,
 }
 
 impl Registry {
@@ -82,9 +116,40 @@ impl Registry {
         self.values.get(name)
     }
 
-    /// Binds `name`; a re-bind replaces the previous value (last wins).
+    /// Binds `name` to a data value; a re-bind replaces the previous value
+    /// (last wins).
     pub fn insert(&mut self, name: impl Into<String>, value: Value) {
         self.values.insert(name.into(), value);
+    }
+
+    /// Binds `name` to an `mdp` (Pendon Markdown) value. `is_inline` is `true`
+    /// when the body was on the head line (no block wrapper) and `false` when
+    /// it was on the following lines (block form).
+    pub fn insert_mdp(&mut self, name: impl Into<String>, markdown: String, is_inline: bool) {
+        let name = name.into();
+        let mode = if is_inline {
+            MdpMode::Inline
+        } else {
+            MdpMode::Block
+        };
+        self.mdp_vars.insert(name.clone(), mode);
+        self.values.insert(name, Value::String(markdown));
+    }
+
+    /// `true` when `name` is bound to an `mdp` value.
+    pub fn is_mdp(&self, name: &str) -> bool {
+        self.mdp_vars.contains_key(name)
+    }
+
+    /// The form the `mdp` value was written in, or `None` when `name` is not an
+    /// `mdp` value.
+    pub fn mdp_mode(&self, name: &str) -> Option<MdpMode> {
+        self.mdp_vars.get(name).copied()
+    }
+
+    /// `true` when `name` is bound to an inline `mdp` value (head-line body).
+    pub fn is_mdp_inline(&self, name: &str) -> bool {
+        self.mdp_mode(name) == Some(MdpMode::Inline)
     }
 
     /// The bound names, in document order.
@@ -459,9 +524,13 @@ fn extract_impl(source: &str, base: Option<&Path>) -> Extract {
                 (Some(error), _) => {
                     diagnostics.push(warning(format!("[bind] {error}; the block was dropped")))
                 }
-                (None, Some(Lang::Mdp)) => diagnostics.push(warning(
-                    "[bind] `mdp` binding is not implemented yet; the block was dropped",
-                )),
+                (None, Some(Lang::Mdp)) => {
+                    // Inline form: the body is on the head line after the
+                    // closing `]`, up to the trailing `}}}`.
+                    let after = head.after.trim_end();
+                    let body = after.strip_suffix("}}}").unwrap_or(after).trim();
+                    registry.insert_mdp(head.var.unwrap_or(""), body.to_string(), head.inline);
+                }
                 (None, Some(lang)) => diagnostics.push(warning(format!(
                     "[bind] `{}` data must start on the line after the head; the block was dropped",
                     lang.name()
@@ -488,9 +557,9 @@ fn extract_impl(source: &str, base: Option<&Path>) -> Extract {
             (Some(error), _) => {
                 diagnostics.push(warning(format!("[bind] {error}; the block was dropped")))
             }
-            (None, Some(Lang::Mdp)) => diagnostics.push(warning(
-                "[bind] `mdp` binding is not implemented yet; the block was dropped",
-            )),
+            (None, Some(Lang::Mdp)) => {
+                registry.insert_mdp(name, body, false);
+            }
             (None, Some(lang)) => match parse_body(lang, &body) {
                 Ok(value) => {
                     if registry.get(name).is_some() {
@@ -612,7 +681,7 @@ fn parse_body(lang: Lang, body: &str) -> Result<Value, String> {
             Ok(toml_to_json(&value))
         }
         Lang::Csv => parse_csv_value(body),
-        Lang::Mdp => Err("mdp is Markdown, not a data serialization".to_string()),
+        Lang::Mdp => Ok(Value::String(body.to_string())),
     }
 }
 
@@ -879,14 +948,35 @@ fn parse_csv_rows(body: &str) -> Result<Vec<Vec<String>>, String> {
 /// their literal `$var` attribute values. A resolved value is transported as
 /// [`pendon_core::JSON_ATTR_PREFIX`] + compact JSON; an unresolved reference is
 /// reported and left as text.
+///
+/// An `mdp` value is **rendered**, not stringified: it goes through
+/// `render`, the host's own pipeline (`resolve_with`), or the Markdown-only
+/// fallback (this function).
 pub fn resolve(events: &[Event], registry: &Registry) -> Vec<Event> {
+    resolve_with(events, registry, &mut markdown_only_payload)
+}
+
+/// [`resolve`] with the host's renderer for `mdp` values.
+///
+/// `render` receives the payload's Markdown and whether the block was written in
+/// the inline form (body on the head line) or the block form (body on the lines
+/// below), and returns the rendered [`Fragment`] — a node list plus whatever
+/// diagnostics the run produced. Passing the document's own plugin chain here is
+/// what makes a bound payload behave exactly like the surrounding document:
+/// `[^]` citations, `[[wiki]]` links, figures, tables, math, extras heads and
+/// custom components all work inside `{{{mdp[…] … }}}`.
+pub fn resolve_with(
+    events: &[Event],
+    registry: &Registry,
+    render: &mut MdpRenderer<'_>,
+) -> Vec<Event> {
     let mut out = Vec::with_capacity(events.len() + 4);
     let mut diagnostics = Vec::new();
     for event in events {
         match event {
             Event::Attribute { name, value } => out.push(Event::Attribute {
                 name: name.clone(),
-                value: resolve_value(value, registry, name, &mut diagnostics),
+                value: resolve_value(value, registry, name, &mut diagnostics, render),
             }),
             other => out.push(other.clone()),
         }
@@ -902,10 +992,17 @@ fn resolve_value(
     registry: &Registry,
     name: &str,
     diagnostics: &mut Vec<Event>,
+    render: &mut MdpRenderer<'_>,
 ) -> String {
     if let Some(reference) = parse_ref(value) {
         return match lookup(registry, &reference) {
-            Some(bound) => encode_json(bound),
+            Some(bound) => encode_json(&bound_value(
+                bound,
+                &reference,
+                registry,
+                diagnostics,
+                render,
+            )),
             None => {
                 diagnostics.push(unresolved(&reference, name));
                 value.to_string()
@@ -920,11 +1017,38 @@ fn resolve_value(
         return value.to_string();
     }
 
-    let changed = substitute(&mut parsed, registry, name, diagnostics);
+    let changed = substitute(&mut parsed, registry, name, diagnostics, render);
     if changed {
         encode_json(&parsed)
     } else {
         value.to_string()
+    }
+}
+
+/// Resolves a reference that hit a bound value.
+///
+/// A **bare** reference to an `mdp` value is rendered through `render` and comes
+/// back as a fragment; anything else (a non-`mdp` value, or a path *into* a
+/// value) is data and travels as JSON.
+fn bound_value(
+    bound: &Value,
+    reference: &Ref<'_>,
+    registry: &Registry,
+    diagnostics: &mut Vec<Event>,
+    render: &mut MdpRenderer<'_>,
+) -> Value {
+    let mode = if reference.is_bare() {
+        registry.mdp_mode(&reference.root)
+    } else {
+        None
+    };
+    match (mode, bound) {
+        (Some(mode), Value::String(markdown)) => {
+            let payload = render(markdown, mode);
+            diagnostics.extend(payload.diagnostics);
+            payload.value
+        }
+        _ => bound.clone(),
     }
 }
 
@@ -939,12 +1063,15 @@ fn substitute(
     registry: &Registry,
     name: &str,
     diagnostics: &mut Vec<Event>,
+    render: &mut MdpRenderer<'_>,
 ) -> bool {
     match value {
         Value::String(text) => match parse_ref(text) {
             Some(reference) => match lookup(registry, &reference) {
                 Some(bound) => {
-                    *value = bound.clone();
+                    // A fragment nests as a real `{"$fragment": …}` value, so a
+                    // bound object may carry markup at any leaf (`{body: $mdp}`).
+                    *value = bound_value(bound, &reference, registry, diagnostics, render);
                     true
                 }
                 None => {
@@ -957,7 +1084,7 @@ fn substitute(
         Value::Array(items) => {
             let mut changed = false;
             for item in items {
-                changed |= substitute(item, registry, name, diagnostics);
+                changed |= substitute(item, registry, name, diagnostics, render);
             }
             changed
         }
@@ -967,7 +1094,7 @@ fn substitute(
             let spreads = object.remove(pendon_extra::SPREAD_KEY);
             let mut changed = spreads.is_some();
             for item in object.values_mut() {
-                changed |= substitute(item, registry, name, diagnostics);
+                changed |= substitute(item, registry, name, diagnostics, render);
             }
             let Some(spreads) = spreads else {
                 return changed;
@@ -1048,6 +1175,36 @@ fn not_an_object(text: &str, name: &str) -> Event {
     ))
 }
 
+/// The fallback renderer: Markdown only, no host plugins.
+///
+/// `resolve` (the library entry point) uses it so the crate stays usable without
+/// a plugin chain. A host that wants full parity — the CLI does — calls
+/// [`resolve_with`] and renders through its own pipeline; math, wiki links,
+/// custom components and citations only exist there.
+fn markdown_only_payload(markdown: &str, mode: MdpMode) -> Fragment {
+    let options = pendon_core::Options::default();
+    let events = match mode {
+        MdpMode::Inline => render_inline(markdown, MarkdownOptions::default()),
+        MdpMode::Block => {
+            let parsed = pendon_core::parse(markdown, &options);
+            process_markdown(&parsed)
+        }
+    };
+    let (content, diagnostics) = pendon_core::split_diagnostics(events);
+    match events_to_children(&content) {
+        Ok(nodes) => Fragment {
+            value: fragment(nodes),
+            diagnostics,
+        },
+        // A payload that cannot be turned into a tree degrades to a string, so
+        // the attribute is still bound (§4.3-style resilience).
+        Err(_) => Fragment {
+            value: Value::String(markdown.to_string()),
+            diagnostics,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1087,6 +1244,22 @@ mod tests {
             Event::Attribute { value, .. } => value.clone(),
             other => panic!("unexpected {other:?}"),
         }
+    }
+
+    /// The decoded JSON value of an `Attribute` event.
+    fn decoded_attr(event: &Event) -> Value {
+        decode(&value_of(event))
+    }
+
+    /// The fragment value carried by the `index`-th event, panicking when the
+    /// attribute holds something other than a fragment.
+    fn fragment_of(events: &[Event], index: usize) -> Value {
+        let value = decoded_attr(&events[index]);
+        assert!(
+            pendon_renderer_ast::fragment_nodes(&value).is_some(),
+            "not a fragment: {value}"
+        );
+        value
     }
 
     /// A fresh temp directory for the external-file tests.
@@ -1193,17 +1366,149 @@ mod tests {
     }
 
     #[test]
-    fn mdp_is_reported_as_not_implemented() {
+    fn mdp_block_is_bound_and_rendered() {
         let result = extract(&block("mdp", "m", "Foo *bar* baz."));
-        assert!(result.registry.is_empty());
-        assert!(messages(&result.diagnostics)[0].contains("mdp"));
+        assert_eq!(
+            result.registry.get("m"),
+            Some(&serde_json::json!("Foo *bar* baz."))
+        );
+        assert!(result.registry.is_mdp("m"));
+        assert!(!result.registry.is_mdp("other"));
+        assert!(
+            result.diagnostics.is_empty(),
+            "{:?}",
+            messages(&result.diagnostics)
+        );
+    }
 
-        // A `(…)` group is a path only for a data language: for `mdp` the
-        // head-line body keeps its meaning, and an `mdp` file payload stays a
-        // phase-2 question alongside `mdp` itself (§2.7).
-        let inline = extract("{{{mdp[m](hello) }}}\n");
-        assert!(inline.registry.is_empty());
-        assert!(messages(&inline.diagnostics)[0].contains("mdp"));
+    #[test]
+    fn mdp_inline_form_is_bound() {
+        let result = extract("{{{mdp[m] Foo *bar* baz. }}}\n");
+        assert_eq!(
+            result.registry.get("m"),
+            Some(&serde_json::json!("Foo *bar* baz."))
+        );
+        assert!(result.registry.is_mdp("m"));
+        assert!(
+            result.diagnostics.is_empty(),
+            "{:?}",
+            messages(&result.diagnostics)
+        );
+    }
+
+    #[test]
+    fn mdp_inline_form_keeps_body_meaning_with_path_group() {
+        // For `mdp`, a `(…)` group is not a file path: the head-line body
+        // keeps its meaning (§2.7 decision 10). Everything after `]` on the
+        // head line is the inline body.
+        let result = extract("{{{mdp[m](hello) Foo *bar* baz. }}}\n");
+        assert_eq!(
+            result.registry.get("m"),
+            Some(&serde_json::json!("(hello) Foo *bar* baz."))
+        );
+        assert!(result.registry.is_mdp("m"));
+    }
+
+    #[test]
+    fn mdp_block_resolves_to_a_fragment() {
+        let mut registry = Registry::new();
+        registry.insert_mdp("m", "Foo *bar* baz.".to_string(), false);
+        let events = vec![attr("x", "$m")];
+        let out = resolve(&events, &registry);
+        let fragment = fragment_of(&out, 0);
+        let nodes = pendon_renderer_ast::fragment_nodes(&fragment).expect("fragment nodes");
+        assert_eq!(nodes.len(), 1, "{fragment}");
+        assert_eq!(nodes[0]["type"], "Paragraph");
+        let emphasis = &nodes[0]["children"][1];
+        assert_eq!(emphasis["type"], "Emphasis", "{fragment}");
+        assert_eq!(emphasis["children"][0]["text"], "bar", "{fragment}");
+        assert!(out.iter().all(|e| !matches!(e, Event::Diagnostic { .. })));
+    }
+
+    /// The inline form keeps the payload's own block structure out of the way:
+    /// one paragraph's children become the fragment, so no `<p>` wrapper is
+    /// added around text that the author wrote on the head line.
+    #[test]
+    fn mdp_inline_resolves_to_the_paragraphs_children() {
+        let mut registry = Registry::new();
+        registry.insert_mdp("m", "Foo *bar* baz.".to_string(), true);
+        let events = vec![attr("x", "$m")];
+        let out = resolve(&events, &registry);
+        let fragment = fragment_of(&out, 0);
+        let nodes = pendon_renderer_ast::fragment_nodes(&fragment).expect("fragment nodes");
+        assert!(
+            nodes.iter().all(|node| node["type"] != "Paragraph"),
+            "{fragment}"
+        );
+        let emphasis = nodes
+            .iter()
+            .find(|node| node["type"] == "Emphasis")
+            .expect("emphasis kept");
+        assert_eq!(emphasis["children"][0]["text"], "bar", "{fragment}");
+    }
+
+    /// `resolve_with` is the seam the CLI uses: the host renders the payload
+    /// through the document's own plugin chain. The renderer's diagnostics are
+    /// reported against the host document, and the payload is not stringified.
+    #[test]
+    fn resolve_with_uses_the_host_renderer() {
+        let mut registry = Registry::new();
+        registry.insert_mdp("m", "body".to_string(), false);
+        let events = vec![attr("x", "$m")];
+        let mut mode_seen = None;
+        let mut out = resolve_with(&events, &registry, &mut |markdown, mode| {
+            mode_seen = Some((markdown.to_string(), mode));
+            Fragment {
+                value: pendon_renderer_ast::fragment(vec![
+                    json!({ "type": "Custom", "attrs": { "name": "Host" } }),
+                ]),
+                diagnostics: vec![warning("[host] rendered")],
+            }
+        });
+        assert_eq!(mode_seen, Some(("body".to_string(), MdpMode::Block)));
+        let fragment = fragment_of(&out, 0);
+        assert_eq!(fragment["$fragment"][0]["attrs"]["name"], "Host");
+        assert!(out.iter().any(|e| matches!(e, Event::Diagnostic { .. })));
+        out.retain(|e| !matches!(e, Event::Diagnostic { .. }));
+        assert_eq!(out.len(), 1);
+    }
+
+    /// A fragment nests inside a structured value, so a bound object can carry
+    /// markup at any leaf.
+    #[test]
+    fn a_fragment_nests_inside_a_structured_value() {
+        let mut registry = Registry::new();
+        registry.insert_mdp("m", "body".to_string(), false);
+        let events = vec![attr("x", &json!({ "body": "$m" }).to_string())];
+        let out = resolve(&events, &registry);
+        let value = decoded_attr(&out[0]);
+        let nodes = pendon_renderer_ast::fragment_nodes(&value["body"])
+            .unwrap_or_else(|| panic!("nested fragment: {value}"));
+        assert_eq!(nodes[0]["type"], "Paragraph");
+    }
+
+    /// A path *into* an `mdp` value is data, not markup: only a bare reference
+    /// renders the payload.
+    #[test]
+    fn a_path_into_an_mdp_value_stays_data() {
+        let mut registry = Registry::new();
+        registry.insert("m", json!({ "first": "body" }));
+        registry.insert_mdp("mdp_text", "body".to_string(), false);
+        let events = vec![attr("x", "$m.first")];
+        let out = resolve(&events, &registry);
+        assert_eq!(decoded_attr(&out[0]), json!("body"));
+    }
+
+    #[test]
+    fn mdp_unbound_reference_warns_and_stays_literal() {
+        let registry = Registry::new();
+        let events = vec![attr("x", "$missing_mdp")];
+        let out = resolve(&events, &registry);
+        match &out[0] {
+            Event::Attribute { value, .. } => assert_eq!(value, "$missing_mdp"),
+            other => panic!("unexpected {other:?}"),
+        }
+        assert!(out.iter().any(|e| matches!(e, Event::Diagnostic { .. })));
     }
 
     #[test]

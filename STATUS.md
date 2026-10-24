@@ -20,6 +20,28 @@ Phase 4 wiring of `plugin-list` L2/L3 (the `<li>` item layer) and the docs
 restructure. The container layers (`list`/`unordered`/`ordered`, blockquote)
 landed; the item layer is next.
 
+**Just landed:** `mdp` payloads are **sub-documents**
+([ADR-0007](docs/decisions/0007-mdp-subdocuments.md)): a `{{{mdp[var] …}}}`
+payload is parsed and run through the page's **own plugin chain** (wiki, cite,
+img, table, latex, heading, extras heads, custom components …), so a citation
+written inside it joins the page's citation list and numbering and a figure's
+imports reach the page's hint list. It reaches the attribute as a **fragment**
+(`{"$fragment": […]}`): Solid emits `name={(<>…</>)}`, HTML renders escaped
+markup, AST/JSON keep the node list. `apps/cli/src/chain.rs` is now the single
+chain, entered as `prelude` (text stages; `micromatter` must run before the
+citation context exists) then `run`. Goldens: `23-bind` re-frozen (its old
+expectation froze broken output) and the new `27-bind-mdp`.
+
+**Just landed:** `pendon run`'s cache is **one TOML record per `(task, input)`**
+under `.pendon/cache/<shard>/`, written atomically and versioned
+([ADR-0006](docs/decisions/0006-per-file-cache-records.md),
+[guide](docs/guides/cli.md#cache)). Two tasks over the same `input` no longer
+overwrite each other, a warm run writes nothing, and a deleted output is rebuilt
+instead of skipped. Alongside it, per-task `no_cache` and `post_hook`
+([RFC](docs/rfc/no-cache-and-post-hook.md)): `no_cache` drops exactly one task
+from the cache, `post_hook` runs a string or ordered array of shell commands after
+each rendered file and is part of the task config hash.
+
 **Just landed:** `cite.references_scope` (`"cited"` | `"all"`) chooses what the
 `references` export carries; the default follows `reference_source`
 (frontmatter → `all`, external → `cited`) and an explicit value always wins
@@ -97,7 +119,7 @@ fixture `25-extras-nested`, and regenerated `sandbox/extras/out/extras-basic.jsx
       math, blockquote inline fallback and the other approximations are listed in
       [`editors/vscode/README.md`](editors/vscode/README.md).
 - [ ] **RFCs: diagnostics + VS Code plugin (drafts).**
-      `docs/rfc/advanced-diagnostic.md` and `docs/rfc/plugin-vsc.md` authored; no
+      `docs/rfc/advanced-diagnostic.md` and `docs/archive/fulfilled/plugin-vsc.md` authored; no
       code yet. Note: today diagnostics are silent (the CLI uses them only for the
       exit code, `--strict` covers only core-parser limit guards, and
       `Event::Diagnostic.span` is never populated).
@@ -147,10 +169,4 @@ fixture `25-extras-nested`, and regenerated `sandbox/extras/out/extras-basic.jsx
 ## Golden & freeze status (see [`docs/spec/golden/README.md`](docs/spec/golden/README.md))
 
 - Golden fixtures `01–12`, `14–16`, `21–24` are frozen and green; none
-  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (19 fixtures) and
-  `cargo test -p pendon --test ultimate_freeze_spec` are the gates.
-- `sandbox/ultimate` frozen baseline `out.frozen/` is gated by
-  `ultimate_freeze_spec` — re-freeze deliberately only. It is currently **red**:
-  the baseline predates the RFC-0002 cite migration and the `a46684a` attr-format
-  cleanup (`href={"/a"}` → `href="/a"`), and the sandbox is being reworked — so
-  ignore it until L37 lands, then re-render and re-freeze in one pass.
+  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (19 fixtures) are the gates.

@@ -2,7 +2,7 @@ use pendon_core::Event;
 use serde_json::Value;
 
 use crate::events_to_ast_value;
-use crate::utils::{attr_bool, attr_str, children, escape_html, render_attrs_except};
+use crate::utils::{attr_bool, attr_str, children, escape_html, render_attr, render_attrs_except};
 
 pub fn render_html_pretty(events: &[Event]) -> String {
     let ast = events_to_ast_value(events);
@@ -258,15 +258,7 @@ fn render_node(v: &Value, out: &mut String, indent: &mut usize) {
                         if matches!(name.as_str(), "href" | "title") {
                             continue;
                         }
-                        out.push(' ');
-                        out.push_str(name);
-                        out.push_str("=\"");
-                        if let Some(value) = value.as_str() {
-                            escape_html(value, out);
-                        } else {
-                            escape_html(&value.to_string(), out);
-                        }
-                        out.push_str("\"");
+                        render_attr(name, value, out);
                     }
                 }
                 out.push('>');

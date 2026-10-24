@@ -18,6 +18,10 @@ pub(crate) fn attr_bool(v: &Value, key: &str) -> bool {
 
 /// Emits every attribute except `skip` as HTML: `name="value"`, or a bare `name`
 /// for a flag (§6.3), matching what the JSX renderer emits.
+///
+/// A fragment (`$fragment`, a nested `mdp` payload) is markup, not data: its node
+/// list is rendered to HTML and escaped into the attribute value, so a bound
+/// `data: $mdp` reads as `<a data="<p>…</p>">` instead of leaking the AST JSON.
 pub(crate) fn render_attrs_except(v: &Value, out: &mut String, skip: &[&str]) {
     let Some(attrs) = v.get("attrs").and_then(|attrs| attrs.as_object()) else {
         return;
@@ -28,28 +32,67 @@ pub(crate) fn render_attrs_except(v: &Value, out: &mut String, skip: &[&str]) {
         if name.starts_with("__") || skip.contains(&name.as_str()) {
             continue;
         }
-        out.push(' ');
-        out.push_str(name);
-        if matches!(value, Value::Bool(true)) {
-            continue;
+        render_attr(name, value, out);
+    }
+}
+
+/// Emits one attribute: `name="value"`, or a bare `name` for a flag (§6.3).
+///
+/// The value goes through [`fragment_aware_text`], so a fragment is markup here
+/// too — including in the nodes that render their own attributes (`Link`).
+pub(crate) fn render_attr(name: &str, value: &Value, out: &mut String) {
+    out.push(' ');
+    out.push_str(name);
+    if matches!(value, Value::Bool(true)) {
+        return;
+    }
+    // A `JSX_ATTR_PREFIX` payload (an extras `( … )` expression) is a
+    // Solid-only concept; in HTML it is emitted as an escaped string so
+    // the sentinel never leaks into markup.
+    if let Value::String(text) = value {
+        if let Some(payload) = pendon_core::jsx_attr_payload(text) {
+            out.push_str("=\"");
+            escape_html(payload, out);
+            out.push('"');
+            return;
         }
-        // A `JSX_ATTR_PREFIX` payload (a JSX expression reference) is a
-        // Solid-only concept; in HTML it is emitted as an escaped string so
-        // the sentinel never leaks into markup.
-        if let Value::String(text) = value {
-            if let Some(payload) = pendon_core::jsx_attr_payload(text) {
-                out.push_str("=\"");
-                escape_html(payload, out);
-                out.push('"');
-                continue;
-            }
+    }
+    out.push_str("=\"");
+    escape_html(&fragment_aware_text(value), out);
+    out.push('"');
+}
+
+/// The text of an attribute value, with every fragment rendered to HTML.
+///
+/// A whole-attribute fragment renders as its markup; a fragment nested inside a
+/// structured value (`{body: $mdp}`) renders in place, so the surrounding JSON
+/// stays readable.
+pub(crate) fn fragment_aware_text(value: &Value) -> String {
+    if let Some(nodes) = pendon_renderer_ast::fragment_nodes(value) {
+        let mut out = String::new();
+        crate::compact::render_fragment_nodes(nodes, &mut out);
+        return out;
+    }
+    match value {
+        Value::String(text) => text.clone(),
+        Value::Array(items) => {
+            let rendered: Vec<String> = items.iter().map(fragment_aware_text).collect();
+            format!("[{}]", rendered.join(","))
         }
-        out.push_str("=\"");
-        match value {
-            Value::String(value) => escape_html(value, out),
-            other => escape_html(&other.to_string(), out),
+        Value::Object(map) => {
+            let rendered: Vec<String> = map
+                .iter()
+                .map(|(key, item)| {
+                    format!(
+                        "{}:{}",
+                        serde_json::Value::String(key.clone()),
+                        fragment_aware_text(item)
+                    )
+                })
+                .collect();
+            format!("{{{}}}", rendered.join(","))
         }
-        out.push('"');
+        other => other.to_string(),
     }
 }
 

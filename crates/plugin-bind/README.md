@@ -2,7 +2,7 @@
 
 Binds data declared in `{{{lang[var] … }}}` blocks into extras values as real
 JavaScript props. Grammar: [`docs/spec/SYNTAX.md` §19](../../docs/spec/SYNTAX.md).
-Rationale: [`docs/rfc/plugin-bind.md`](../../docs/rfc/plugin-bind.md) and
+Rationale: [`docs/archive/fulfilled/plugin-bind.md`](../../docs/archive/fulfilled/plugin-bind.md) and
 [ADR-0004](../../docs/decisions/0004-pre-parse-bind-stage.md).
 
 ```md
@@ -41,9 +41,24 @@ The CLI enables both whenever `bind` appears in `task.plugin` (or `--plugin`);
   (`{{{csv[rows](../data/rows.csv)}}}`); every file read is listed in
   `Extract.external_files`, and the CLI adds those to the task's cache
   dependencies so editing one re-renders the page.
-- A `$var` that is the **entire** extras value is replaced with
-  `JSON_ATTR_PREFIX` + compact JSON; `renderer-ast` re-hydrates it and
-  `renderer-solid` emits `name={…}`.
+- `mdp` (Pendon Markdown) payloads → the body is Pendon Markdown, and it is a
+  **sub-document**: it is parsed and run through the **same chain of plugins as
+  the page**, so wiki links, citations, figures, tables, math, extras heads and
+  custom components all render inside it. The plugin does not know those plugins:
+  the caller hands it a renderer (`resolve_with(events, &registry, &mut render)`),
+  which is what lets a bound payload share the host's citation numbering and
+  renderer hints. Its tree travels as a **fragment** — a node list under
+  `renderer_ast::FRAGMENT_KEY` (`{"$fragment": […]}`) — and every renderer owns
+  its own format: Solid emits `name={(<>…</>)}`, HTML renders the markup into the
+  attribute value, and the AST/JSON renderers keep the structured node list.
+  Block form (body on the line after the head) keeps the payload's block
+  wrappers; inline form (body on the head line) drops the payload's own paragraph.
+  A `(path)` file payload is **not** legal for `mdp` (§2.7 decision 10) — the
+  head-line body keeps its meaning. `resolve(events, &registry)` is the
+  Markdown-only wrapper (payloads rendered by `plugin-markdown` alone).
+- A `$var` that is the **entire** non-`mdp` extras value is replaced with
+  `JSON_ATTR_PREFIX` + compact JSON; `renderer-ast` re-hydrates it, so a renderer
+  sees a real value (`name={…}` in Solid, the same structured value in the AST).
 - A **path** reaches one leaf: `$config.db.host`, `$rows[0].nama`,
   `$m["a-b"]`. A miss warns and stays literal.
 - A nested extras value (`{rows: $rows, n: 2}`) is walked and each string leaf
@@ -60,13 +75,6 @@ The CLI enables both whenever `bind` appears in `task.plugin` (or `--plugin`);
 ## Options
 
 None. `[task.bind]` is reserved; the plugin needs no configuration.
-
-## Not implemented yet
-
-- `mdp` (Pendon Markdown as a value): recognised, warns, drops the block. Phase 2
-  needs the inline-pipeline entry point and the `U+E002` policy pinned — and the
-  question whether `mdp` gets a `(path)` payload, which for now it does not (its
-  head-line body keeps its meaning).
 
 ## Decided against
 

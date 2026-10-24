@@ -8,6 +8,8 @@ description = "The {{{lang[var] …}}} data-binding processor for Pendon (RFC do
 [dependencies]
 pendon-core = { path = "../core" }
 pendon-extra = { path = "../extra" }
+pendon-plugin-markdown = { path = "../plugin-markdown" }
+pendon-renderer-ast = { path = "../renderer-ast" }
 serde_json = "1"
 serde_yaml = "0.9"
 toml = "0.8"

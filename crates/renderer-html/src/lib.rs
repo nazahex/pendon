@@ -148,4 +148,50 @@ mod tests {
             "pretty output = {pretty}"
         );
     }
+
+    /// A link's own attributes go through the same renderer as every other
+    /// node's, so a fragment (`$fragment`, a bound `mdp` payload) is markup
+    /// here too — escaped into the attribute value, never the raw AST JSON.
+    fn link_with_fragment_events() -> Vec<Event> {
+        let fragment = pendon_renderer_ast::fragment(vec![serde_json::json!({
+            "type": "Paragraph",
+            "children": [{ "type": "Text", "text": "hi" }],
+        })]);
+        let encoded = format!(
+            "{}{}",
+            pendon_core::JSON_ATTR_PREFIX,
+            serde_json::to_string(&fragment).expect("fragment json")
+        );
+        vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::StartNode(NodeKind::Link),
+            Event::Attribute {
+                name: "href".to_string(),
+                value: "/docs".to_string(),
+            },
+            Event::Attribute {
+                name: "body".to_string(),
+                value: encoded,
+            },
+            Event::Text("Card".to_string()),
+            Event::EndNode(NodeKind::Link),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ]
+    }
+
+    #[test]
+    fn link_fragment_attribute_is_rendered_as_escaped_markup() {
+        for output in [
+            render_html(&link_with_fragment_events()),
+            render_html_pretty(&link_with_fragment_events()),
+        ] {
+            assert!(
+                output.contains("body=\"&lt;p&gt;hi&lt;/p&gt;"),
+                "output = {output}"
+            );
+            assert!(!output.contains("$fragment"), "output = {output}");
+        }
+    }
 }

@@ -32,12 +32,19 @@ let jsx = render_solid_with_hints(&events, hints);
 
 ## Attribute typing (§6.3)
 
-| Item             | Solid output                                   |
-| ---------------- | ---------------------------------------------- |
-| bare flag        | `k` (bare JSX shorthand, verbatim)             |
-| typed string     | `k="v"`                                        |
-| `Int`/`Float`    | `k="12"` (fallback path only)                  |
-| custom component | typed value via the `attrs` map (`12`, `true`) |
+| Item             | Solid output                                                                                       |
+| ---------------- | -------------------------------------------------------------------------------------------------- |
+| bare flag        | `k` (bare JSX shorthand, verbatim)                                                                 |
+| typed string     | `k="v"`                                                                                            |
+| `Int`/`Float`    | `k="12"` (fallback path only)                                                                      |
+| custom component | typed value via the `attrs` map (`12`, `true`)                                                     |
+| fragment         | `k={(<>…</>)}` — a bound `mdp` payload ([ADR-0007](../../docs/decisions/0007-mdp-subdocuments.md)) |
+
+A fragment is a node list (`pendon_renderer_ast::FRAGMENT_KEY`), not a string, so
+it is emitted as a JSX expression that keeps the markup parseable. Its nodes are
+rendered exactly as page nodes are — including their own attrs, and their
+components' imports: `collect_fragment_nodes` walks every fragment in the stream
+so a payload's `~?!!…` figure still contributes its `Figure` import.
 
 ## Usage
 

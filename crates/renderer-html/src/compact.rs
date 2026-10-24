@@ -2,13 +2,23 @@ use pendon_core::Event;
 use serde_json::Value;
 
 use crate::events_to_ast_value;
-use crate::utils::{attr_bool, attr_str, children, escape_html, render_attrs_except};
+use crate::utils::{attr_bool, attr_str, children, escape_html, render_attr, render_attrs_except};
 
 pub fn render_html(events: &[Event]) -> String {
     let ast = events_to_ast_value(events);
     let mut out = String::new();
     render_node(&ast, &mut out);
     out
+}
+
+/// Renders a fragment's node list (`$fragment`, a nested `mdp` payload) to
+/// compact HTML. Used for attribute values in both HTML modes: an attribute is a
+/// single line by definition, so the pretty mode renders attribute fragments
+/// compactly too.
+pub(crate) fn render_fragment_nodes(nodes: &[Value], out: &mut String) {
+    for node in nodes {
+        render_node(node, out);
+    }
 }
 
 fn render_node(v: &Value, out: &mut String) {
@@ -195,15 +205,7 @@ fn render_node(v: &Value, out: &mut String) {
                         if matches!(name.as_str(), "href" | "title") {
                             continue;
                         }
-                        out.push(' ');
-                        out.push_str(name);
-                        out.push_str("=\"");
-                        if let Some(value) = value.as_str() {
-                            escape_html(value, out);
-                        } else {
-                            escape_html(&value.to_string(), out);
-                        }
-                        out.push_str("\"");
+                        render_attr(name, value, out);
                     }
                 }
                 out.push('>');

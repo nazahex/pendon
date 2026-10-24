@@ -22,6 +22,12 @@ Container attributes are **not** dropped: a bare flag reaches JSON as `true` and
 list/blockquote/paragraph/code-fence attributes survive (verified by the §16
 fixture 17/18 test in this crate).
 
+A **fragment** value (a bound `mdp` payload,
+[ADR-0007](../../docs/decisions/0007-mdp-subdocuments.md)) is emitted as the node
+list itself — `attrs.body = {"$fragment": [ … ]}` — the same shape the AST
+renderer produces, so a consumer decides how to present it. Only the HTML and
+Solid renderers turn a fragment into markup.
+
 ## Usage
 
 ```bash

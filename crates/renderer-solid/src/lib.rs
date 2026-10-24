@@ -95,6 +95,37 @@ fn collect_used_nodes(v: &Value, out: &mut BTreeSet<(String, Option<String>)>) {
             collect_used_nodes(ch, out);
         }
     }
+
+    // A fragment (`$fragment`, a nested `mdp` payload) is a node list stored in
+    // an attribute value. Its components need their imports just like the
+    // document's own children.
+    if let Some(attrs) = v.get("attrs").and_then(|a| a.as_object()) {
+        for value in attrs.values() {
+            collect_fragment_nodes(value, out);
+        }
+    }
+}
+
+fn collect_fragment_nodes(v: &Value, out: &mut BTreeSet<(String, Option<String>)>) {
+    if let Some(nodes) = pendon_renderer_ast::fragment_nodes(v) {
+        for node in nodes {
+            collect_used_nodes(node, out);
+        }
+        return;
+    }
+    match v {
+        Value::Array(items) => {
+            for item in items {
+                collect_fragment_nodes(item, out);
+            }
+        }
+        Value::Object(map) => {
+            for item in map.values() {
+                collect_fragment_nodes(item, out);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn collect_used_markers(
