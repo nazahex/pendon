@@ -244,6 +244,17 @@ fn golden_24_bind_paths() {
     assert_fixture("24-bind-paths");
 }
 
+/// §16.3 fixture 27: `mdp` is a **sub-document** (§19) — its payload runs
+/// through the page's own chain, so a heading, a wiki link, a citation, inline
+/// math, a figure with a caption and a table all render inside the fragment, and
+/// the payload's citation shares the page's numbering. The payload reaches the
+/// prop as a fragment, which Solid carries as `(<>{…}</>)`, and the inline form
+/// drops the payload's own paragraph wrapper.
+#[test]
+fn golden_27_bind_mdp() {
+    assert_fixture("27-bind-mdp");
+}
+
 /// §16.3 fixture 25: nested objects/arrays in extras values plus JSX brackets
 /// (`{valueA}` → `name={valueA}`), including a bind-resolved `$theme` inside a
 /// nested value combined with non-bind nested values in the same head (§5, §6.3).

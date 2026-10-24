@@ -176,6 +176,25 @@ pub fn jsx_attr_payload(value: &str) -> Option<&str> {
     value.strip_prefix(JSX_ATTR_PREFIX)
 }
 
+/// Splits an event stream into `(content, diagnostics)`.
+///
+/// Diagnostics are advisory (`Severity`), never structural: a renderer that
+/// embeds one stream inside another (e.g. `plugin-bind` rendering an `mdp`
+/// payload) keeps the content for its own tree and hands the diagnostics to the
+/// host document, where they are reported once.
+pub fn split_diagnostics(events: Vec<Event>) -> (Vec<Event>, Vec<Event>) {
+    let mut content = Vec::with_capacity(events.len());
+    let mut diagnostics = Vec::new();
+    for event in events {
+        if matches!(event, Event::Diagnostic { .. }) {
+            diagnostics.push(event);
+        } else {
+            content.push(event);
+        }
+    }
+    (content, diagnostics)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
     StartNode(NodeKind),

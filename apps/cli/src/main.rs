@@ -1,29 +1,25 @@
 use std::process::ExitCode;
 
 use pendon_core::{parse, Options};
-use pendon_plugin_anchor::AnchorOptions;
 use pendon_plugin_cite::CiteOptions;
 use pendon_plugin_markdown::MarkdownOptions;
-use pendon_plugin_quiz::solid_hints as quiz_solid_hints;
-use pendon_plugin_vicado::solid_hints as vicado_solid_hints;
 use pendon_plugin_wiki::WikiOptions;
 use pendon_renderer_json::render_to_string;
-use pendon_renderer_solid::{render_solid_with_hints, SolidRenderHints};
+use pendon_renderer_solid::render_solid_with_hints;
 
 mod cache;
+mod chain;
 mod cli;
 mod components;
 mod config;
+mod hook;
 mod plugins;
 mod process;
 mod run;
 mod utils;
 
 use cli::{parse_args, read_input};
-use plugins::{
-    build_anchor_options, build_context_inline_pipeline, load_custom_spec, merge_solid_hints,
-    plugin_names, DocumentContext,
-};
+use plugins::{merge_solid_hints, DocumentContext};
 use utils::{extract_frontmatter_for_cite, maybe_pretty, merge_refs_for_context};
 
 fn main() -> ExitCode {
@@ -100,29 +96,35 @@ fn main() -> ExitCode {
         events.extend(bind.diagnostics.iter().cloned());
     }
 
-    if let Some(plugins) = args.plugin.as_deref() {
-        if plugins::has_plugin(Some(plugins), "micromatter") {
-            events = pendon_plugin_micromatter::process(&events);
-        }
-    }
-
     let markdown_opts = MarkdownOptions {
         allow_html: args.markdown_allow_html,
         strip_comments: args.markdown_strip_comments,
     };
-    let enabled_plugins: std::collections::HashSet<&str> =
-        plugin_names(args.plugin.as_deref()).into_iter().collect();
-    let latex_options = if enabled_plugins.contains("latex") {
-        Some(pendon_plugin_latex::LatexOptions {
-            target: plugins::latex_target_for_format(format),
-        })
-    } else {
-        None
-    };
     let wiki_opts = WikiOptions {
         link_prefix: args.wiki_link_prefix.clone(),
-        latex: latex_options,
+        latex: None,
     };
+
+    let mut config = match chain::ChainConfig::new(
+        "cli",
+        args.plugin.as_deref(),
+        format,
+        markdown_opts,
+        wiki_opts,
+    ) {
+        Ok(config) => config,
+        Err(msg) => {
+            eprintln!("Error: {}", msg);
+            return ExitCode::from(2);
+        }
+    };
+    // `--wiki-link-prefix` and `--latex` reach the wiki plugin through its
+    // options, exactly as they do for a task.
+    config.wiki.latex = config.latex;
+
+    // Text stages first: a leading `---` block only becomes a node here, and the
+    // citation context is built from the references it holds.
+    events = chain::prelude(events, &config);
 
     let frontmatter = extract_frontmatter_for_cite(&events);
     let references = frontmatter
@@ -131,136 +133,32 @@ fn main() -> ExitCode {
         .cloned()
         .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
     let references = merge_refs_for_context(&references, None);
-    let mut document_context = DocumentContext::new(pendon_plugin_cite::CitationContext::new(
+    let document_context = DocumentContext::new(pendon_plugin_cite::CitationContext::new(
         references,
         CiteOptions::default(),
     ));
-    let inline_pipeline = build_context_inline_pipeline(
-        pendon_plugin_img::ImgOptions::default(),
-        wiki_opts.clone(),
-        build_anchor_options(None).unwrap_or_default(),
-        latex_options,
-        &enabled_plugins,
-    );
 
-    let mut used_custom_specs: Vec<pendon_plugin_custom::PluginSpec> = Vec::new();
-    let mut custom_cache: std::collections::HashMap<String, pendon_plugin_custom::PluginSpec> =
-        std::collections::HashMap::new();
-    let mut builtin_hints: Vec<SolidRenderHints> = Vec::new();
-    let mut used_quiz = false;
-    let mut used_vicado = false;
+    let pipeline = config.pipeline();
+    let mut state =
+        chain::ChainState::new(document_context, std::collections::HashMap::new(), pipeline);
+    events = chain::run(events, &config, &mut state);
 
-    let events = if let Some(pstr) = args.plugin.as_deref() {
-        let mut ev = events;
-        let mut markdown_ran = false;
-        let mut quiz_pending = false;
-        for name in plugin_names(Some(pstr)) {
-            // micromatter runs before the loop; `bind` is a pre-parse + resolve
-            // stage with no work of its own inside the loop (ADR-0004).
-            if name == "micromatter" || name == "bind" {
-                continue;
-            }
-            if let Some(path) = name.strip_prefix("toml:") {
-                let spec = match load_custom_spec(path, &mut custom_cache) {
-                    Ok(spec) => spec,
-                    Err(msg) => {
-                        eprintln!("Error: {}", msg);
-                        return ExitCode::from(2);
-                    }
-                };
-                plugins::track_used_spec(&mut used_custom_specs, spec.clone());
-                ev = pendon_plugin_custom::process_with_context(
-                    &ev,
-                    &spec,
-                    &inline_pipeline,
-                    &mut document_context,
-                );
-                continue;
-            }
-
-            if let Some(processed) =
-                plugins::process_stateless_plugin(name, &ev, &wiki_opts, latex_options.as_ref())
-            {
-                ev = processed;
-                continue;
-            }
-
-            ev = match name {
-                "micromatter" => pendon_plugin_micromatter::process(&ev),
-                "quiz" => {
-                    used_quiz = true;
-                    if markdown_ran {
-                        pendon_plugin_quiz::process(&ev)
-                    } else {
-                        quiz_pending = true;
-                        ev
-                    }
-                }
-                "img" => pendon_plugin_img::process_with_context(
-                    &ev,
-                    &pendon_plugin_img::ImgOptions::default(),
-                    &inline_pipeline,
-                    &mut document_context,
-                ),
-                "table" => pendon_plugin_table::process_with_context(
-                    &ev,
-                    &pendon_plugin_table::TableOptions::default(),
-                    &inline_pipeline,
-                    &mut document_context,
-                ),
-                "heading" => {
-                    let mut opts = pendon_plugin_heading::HeadingOptions::default();
-                    opts.section_owns_id = enabled_plugins.contains("section");
-                    pendon_plugin_heading::process(&ev, &opts)
-                }
-                "section" => pendon_plugin_section::process(
-                    &ev,
-                    &pendon_plugin_section::SectionOptions::default(),
-                ),
-                "anchor" => pendon_plugin_anchor::process(&ev, &AnchorOptions::default()),
-                "cite" => document_context.process_citations(&ev),
-                "vicado" => {
-                    used_vicado = true;
-                    pendon_plugin_vicado::process(&ev)
-                }
-                "markdown" => {
-                    let processed =
-                        pendon_plugin_markdown::process_with_options(&ev, markdown_opts);
-                    markdown_ran = true;
-                    if quiz_pending {
-                        quiz_pending = false;
-                        pendon_plugin_quiz::process(&processed)
-                    } else {
-                        processed
-                    }
-                }
-                other => {
-                    if let Some(spec) = custom_cache.get(other) {
-                        plugins::track_used_spec(&mut used_custom_specs, spec.clone());
-                        pendon_plugin_custom::process_with_context(
-                            &ev,
-                            &spec,
-                            &inline_pipeline,
-                            &mut document_context,
-                        )
-                    } else {
-                        ev
-                    }
-                }
+    // `resolve` runs after every plugin has emitted its extras attributes
+    // (ADR-0004) and before the citation export, so a citation inside a bound
+    // `mdp` payload belongs to the page's citation list.
+    let events = match bind.as_ref() {
+        Some(bind) => {
+            let mut render = |markdown: &str, mode: pendon_plugin_bind::MdpMode| {
+                chain::render_mdp(markdown, mode, &config, &mut state)
             };
+            pendon_plugin_bind::resolve_with(&events, &bind.registry, &mut render)
         }
-        if quiz_pending {
-            ev = pendon_plugin_quiz::process(&ev);
-        }
-        ev
-    } else {
-        events
+        None => events,
     };
 
-    let events = if enabled_plugins.contains("cite") {
-        let (cite_diagnostics, citations, references, options) =
-            document_context.finalize_citations();
-        builtin_hints.push(pendon_plugin_cite::solid_hints(
+    let events = if state.cite_ran {
+        let (cite_diagnostics, citations, references, options) = state.context.finalize_citations();
+        state.hints.push(pendon_plugin_cite::solid_hints(
             &options,
             &citations,
             &references,
@@ -272,19 +170,7 @@ fn main() -> ExitCode {
         events
     };
 
-    // `resolve` runs last, after every extras head has emitted its attributes
-    // (ADR-0004).
-    let events = match bind.as_ref() {
-        Some(bind) => pendon_plugin_bind::resolve(&events, &bind.registry),
-        None => events,
-    };
-
-    if used_quiz {
-        builtin_hints.push(quiz_solid_hints());
-    }
-    if used_vicado {
-        builtin_hints.push(vicado_solid_hints());
-    }
+    chain::finish(&config, &mut state);
 
     let has_error = events.iter().any(|e| match e {
         pendon_core::Event::Diagnostic { severity, .. } => {
@@ -357,7 +243,7 @@ fn main() -> ExitCode {
             }
         }
         "solid" => {
-            let hints = merge_solid_hints(&used_custom_specs, &builtin_hints);
+            let hints = merge_solid_hints(&state.used_specs, &state.hints);
             let s = match hints.as_ref() {
                 Some(h) => render_solid_with_hints(&events, Some(h)),
                 None => pendon_renderer_solid::render_solid(&events),

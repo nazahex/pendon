@@ -1,33 +1,58 @@
-use pendon_core::{Event, NodeKind, Options};
+use pendon_core::{Event, Options};
 use pendon_plugin_custom::PluginSpec;
 use pendon_plugin_markdown::MarkdownOptions;
 use pendon_plugin_wiki::WikiOptions;
 use pendon_renderer_solid::{render_solid_with_hints, SolidRenderHints};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use crate::cache::{create_cache_entry, CacheFile};
+use crate::cache::{create_entry, CacheEntry};
+use crate::chain::{self, ChainConfig, ChainState};
 use crate::config::ConfigTask;
 use crate::plugins::{
-    build_anchor_options, build_blockquote_options, build_cite_options,
-    build_context_inline_pipeline, build_directive_options, build_heading_options,
-    build_img_options, build_list_options, build_marker_options, build_section_options,
-    build_table_options, has_plugin, latex_target_for_format, load_custom_spec, merge_solid_hints,
-    plugin_names, process_stateless_plugin, track_used_spec, DocumentContext,
+    build_anchor_options, build_blockquote_options, build_cite_options, build_directive_options,
+    build_heading_options, build_img_options, build_list_options, build_marker_options,
+    build_section_options, build_table_options, has_plugin, merge_solid_hints, DocumentContext,
 };
 use crate::utils::{extract_frontmatter_for_cite, maybe_pretty, merge_refs_for_context};
 
 pub struct ProcessResult {
     pub success: bool,
     pub bytes_written: usize,
-    pub cache_entry: Option<(String, CacheFile)>,
+    pub cache_entry: Option<CacheEntry>,
     pub skipped_write: bool,
+}
+
+/// The result of a file that cannot be rendered. A task error is reported on
+/// stderr and renders nothing; it must not abort the other files of the run.
+fn failure() -> ProcessResult {
+    ProcessResult {
+        success: false,
+        bytes_written: 0,
+        cache_entry: None,
+        skipped_write: false,
+    }
+}
+
+/// Unwraps a plugin-option builder (`build_*_options`), reporting its message the
+/// way the CLI reports any task error.
+macro_rules! plugin_options {
+    ($call:expr) => {
+        match $call {
+            Ok(options) => options,
+            Err(msg) => {
+                eprintln!("Error: {}", msg);
+                return failure();
+            }
+        }
+    };
 }
 
 pub fn process_single_file(
     task: &ConfigTask,
     task_name: &str,
+    config_hash: &str,
     path_str: &str,
     out_path: &str,
     map: &HashMap<String, String>,
@@ -41,12 +66,7 @@ pub fn process_single_file(
         Ok(text) => text,
         Err(e) => {
             eprintln!("Error: cannot read input file '{}': {}", path_str, e);
-            return ProcessResult {
-                success: false,
-                bytes_written: 0,
-                cache_entry: None,
-                skipped_write: false,
-            };
+            return failure();
         }
     };
 
@@ -86,27 +106,43 @@ pub fn process_single_file(
         events.extend(bind.diagnostics.iter().cloned());
     }
 
-    // Run micromatter FIRST if it's in the plugin list
-    if let Some(pstr) = task.plugin.as_deref() {
-        if has_plugin(Some(pstr), "micromatter") {
-            events = pendon_plugin_micromatter::process(&events);
-        }
+    // The task's own options, over the plugin defaults. `table` and `heading`
+    // are only built when the task enables them, so an unused table's config
+    // never fails a page.
+    let mut config = plugin_options!(ChainConfig::new(
+        task_name,
+        task.plugin.as_deref(),
+        &task.format,
+        task_markdown_opts,
+        task_wiki_opts.clone(),
+    ));
+    config.vicado_hints = vicado_hints_override.cloned();
+    config.img = plugin_options!(build_img_options(task.img.as_ref()));
+    config.anchor = plugin_options!(build_anchor_options(task.anchor.as_ref()));
+    config.marker = plugin_options!(build_marker_options(task.marker.as_ref()));
+    config.directive = plugin_options!(build_directive_options(task.directive.as_ref()));
+    config.list = plugin_options!(build_list_options(task.list.as_ref()));
+    config.blockquote = plugin_options!(build_blockquote_options(task.blockquote.as_ref()));
+    config.section = plugin_options!(build_section_options(task.section.as_ref()));
+    if config.has("table") {
+        config.table = plugin_options!(build_table_options(task.table.as_ref()));
+    }
+    if config.has("heading") {
+        let mut heading = plugin_options!(build_heading_options(task.heading.as_ref()));
+        heading.section_owns_id = config.has("section");
+        config.heading = heading;
     }
 
-    // Extract frontmatter and build CitationContext
-    let cite_options =
-        match build_cite_options(task.cite.as_ref(), &task.input, path_str, Some(map)) {
-            Ok(o) => o,
-            Err(msg) => {
-                eprintln!("Error: {}", msg);
-                return ProcessResult {
-                    success: false,
-                    bytes_written: 0,
-                    cache_entry: None,
-                    skipped_write: false,
-                };
-            }
-        };
+    // Text stages first: a leading `---` block only becomes a node here, and the
+    // citation context is built from the references it holds.
+    events = chain::prelude(events, &config);
+
+    let cite_options = plugin_options!(build_cite_options(
+        task.cite.as_ref(),
+        &task.input,
+        path_str,
+        Some(map)
+    ));
     let frontmatter_data = extract_frontmatter_for_cite(&events);
     let front_refs = frontmatter_data
         .as_ref()
@@ -115,362 +151,34 @@ pub fn process_single_file(
         .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
     let merged_refs =
         merge_refs_for_context(&front_refs, cite_options.external_references.as_ref());
-    let mut document_context = DocumentContext::new(pendon_plugin_cite::CitationContext::new(
+    let document_context = DocumentContext::new(pendon_plugin_cite::CitationContext::new(
         merged_refs,
         cite_options.clone(),
     ));
 
-    let enabled_plugins: HashSet<&str> = plugin_names(task.plugin.as_deref()).into_iter().collect();
+    let pipeline = config.pipeline();
+    let mut state = ChainState::new(document_context, custom_registry.clone(), pipeline);
 
-    let latex_options = if enabled_plugins.contains("latex") {
-        Some(pendon_plugin_latex::LatexOptions {
-            target: latex_target_for_format(&task.format),
-        })
-    } else {
-        None
-    };
+    events = chain::run(events, &config, &mut state);
 
-    let img_options = match build_img_options(task.img.as_ref()) {
-        Ok(o) => o,
-        Err(msg) => {
-            eprintln!("Error: {}", msg);
-            return ProcessResult {
-                success: false,
-                bytes_written: 0,
-                cache_entry: None,
-                skipped_write: false,
-            };
-        }
-    };
-
-    let anchor_options = match build_anchor_options(task.anchor.as_ref()) {
-        Ok(o) => o,
-        Err(msg) => {
-            eprintln!("Error: {}", msg);
-            return ProcessResult {
-                success: false,
-                bytes_written: 0,
-                cache_entry: None,
-                skipped_write: false,
-            };
-        }
-    };
-
-    let marker_options = match build_marker_options(task.marker.as_ref()) {
-        Ok(o) => o,
-        Err(msg) => {
-            eprintln!("Error: {}", msg);
-            return ProcessResult {
-                success: false,
-                bytes_written: 0,
-                cache_entry: None,
-                skipped_write: false,
-            };
-        }
-    };
-
-    let directive_options = match build_directive_options(task.directive.as_ref()) {
-        Ok(o) => o,
-        Err(msg) => {
-            eprintln!("Error: {}", msg);
-            return ProcessResult {
-                success: false,
-                bytes_written: 0,
-                cache_entry: None,
-                skipped_write: false,
-            };
-        }
-    };
-
-    let list_options = match build_list_options(task.list.as_ref()) {
-        Ok(o) => o,
-        Err(msg) => {
-            eprintln!("Error: {}", msg);
-            return ProcessResult {
-                success: false,
-                bytes_written: 0,
-                cache_entry: None,
-                skipped_write: false,
-            };
-        }
-    };
-
-    let blockquote_options = match build_blockquote_options(task.blockquote.as_ref()) {
-        Ok(o) => o,
-        Err(msg) => {
-            eprintln!("Error: {}", msg);
-            return ProcessResult {
-                success: false,
-                bytes_written: 0,
-                cache_entry: None,
-                skipped_write: false,
-            };
-        }
-    };
-
-    let section_options = match build_section_options(task.section.as_ref()) {
-        Ok(o) => o,
-        Err(msg) => {
-            eprintln!("Error: {}", msg);
-            return ProcessResult {
-                success: false,
-                bytes_written: 0,
-                cache_entry: None,
-                skipped_write: false,
-            };
-        }
-    };
-
-    let inline_pipeline = build_context_inline_pipeline(
-        img_options.clone(),
-        task_wiki_opts.clone(),
-        anchor_options.clone(),
-        latex_options,
-        &enabled_plugins,
-    );
-
-    // Run remaining plugins
-    let mut used_custom_specs: Vec<PluginSpec> = Vec::new();
-    let mut builtin_hints: Vec<SolidRenderHints> = Vec::new();
-    let mut used_quiz = false;
-    let mut used_vicado = false;
-    let mut anchor_ran = false;
-    let mut cite_ran = false;
-    let mut markdown_ran = false;
-    let mut quiz_pending = false;
-    let mut custom_cache: HashMap<String, PluginSpec> = HashMap::new();
-    // §13: report each unknown plugin name once per task.
-    let mut reported_plugins: HashSet<String> = HashSet::new();
-
-    if let Some(pstr) = task.plugin.as_deref() {
-        for name in plugin_names(Some(pstr)) {
-            // micromatter runs before the loop; `bind` is a pre-parse + resolve
-            // stage with no work of its own inside the loop (ADR-0004).
-            if name == "micromatter" || name == "bind" {
-                continue;
-            }
-
-            if let Some(path) = name.strip_prefix("toml:") {
-                let spec = match load_custom_spec(path, &mut custom_cache) {
-                    Ok(spec) => spec,
-                    Err(msg) => {
-                        eprintln!("Error: {}", msg);
-                        return ProcessResult {
-                            success: false,
-                            bytes_written: 0,
-                            cache_entry: None,
-                            skipped_write: false,
-                        };
-                    }
-                };
-                track_used_spec(&mut used_custom_specs, spec.clone());
-                events = pendon_plugin_custom::process_with_context(
-                    &events,
-                    &spec,
-                    &inline_pipeline,
-                    &mut document_context,
-                );
-                continue;
-            }
-
-            if let Some(processed) =
-                process_stateless_plugin(name, &events, &task_wiki_opts, latex_options.as_ref())
-            {
-                events = processed;
-                continue;
-            }
-
-            events = match name {
-                "quiz" => {
-                    used_quiz = true;
-                    if let Some(spec) = custom_registry.get("quiz") {
-                        track_used_spec(&mut used_custom_specs, spec.clone());
-                    }
-                    if markdown_ran {
-                        pendon_plugin_quiz::process(&events)
-                    } else {
-                        quiz_pending = true;
-                        events
-                    }
-                }
-                "img" => {
-                    let img_opts = &img_options;
-                    let result = pendon_plugin_img::process_with_context(
-                        &events,
-                        &img_opts,
-                        &inline_pipeline,
-                        &mut document_context,
-                    );
-                    if let Some(hints) = pendon_plugin_img::solid_hints(img_opts) {
-                        builtin_hints.push(hints);
-                    }
-                    result
-                }
-                "table" => {
-                    let table_opts = match build_table_options(task.table.as_ref()) {
-                        Ok(o) => o,
-                        Err(msg) => {
-                            eprintln!("Error: {}", msg);
-                            return ProcessResult {
-                                success: false,
-                                bytes_written: 0,
-                                cache_entry: None,
-                                skipped_write: false,
-                            };
-                        }
-                    };
-                    let result = pendon_plugin_table::process_with_context(
-                        &events,
-                        &table_opts,
-                        &inline_pipeline,
-                        &mut document_context,
-                    );
-                    if let Some(hints) = pendon_plugin_table::solid_hints(&table_opts) {
-                        builtin_hints.push(hints);
-                    }
-                    result
-                }
-                "heading" => {
-                    let mut opts = match build_heading_options(task.heading.as_ref()) {
-                        Ok(o) => o,
-                        Err(msg) => {
-                            eprintln!("Error: {}", msg);
-                            return ProcessResult {
-                                success: false,
-                                bytes_written: 0,
-                                cache_entry: None,
-                                skipped_write: false,
-                            };
-                        }
-                    };
-                    // §9.5: when the section outline owns the ids, the heading
-                    // yields its id (it transfers to the section).
-                    opts.section_owns_id = enabled_plugins.contains("section");
-                    let result = pendon_plugin_heading::process(&events, &opts);
-                    if let Some(hints) = pendon_plugin_heading::solid_hints(&opts) {
-                        builtin_hints.push(hints);
-                    }
-                    result
-                }
-                "anchor" => {
-                    anchor_ran = true;
-                    pendon_plugin_anchor::process(&events, &anchor_options)
-                }
-                "cite" => {
-                    cite_ran = true;
-                    document_context.process_citations(&events)
-                }
-                "marker" => {
-                    // §10.1: markers are plain text patterns, so this plugin runs
-                    // before markdown like the other construct plugins.
-                    let result = pendon_plugin_marker::process(&events, &marker_options);
-                    if let Some(hints) = pendon_plugin_marker::solid_hints(&marker_options) {
-                        builtin_hints.push(hints);
-                    }
-                    result
-                }
-                "directive" => {
-                    // §10.2/§10.3: directives are text constructs, so this plugin
-                    // runs before markdown like the other construct plugins.
-                    let result = pendon_plugin_directive::process(&events, &directive_options);
-                    if let Some(hints) = pendon_plugin_directive::solid_hints(&directive_options) {
-                        builtin_hints.push(hints);
-                    }
-                    result
-                }
-                "blockquote" => {
-                    // §9.2: `>` stays plain Markdown; this plugin only binds the
-                    // extras a quote may carry, so it runs before markdown re-lexes
-                    // the stripped body as blocks.
-                    let result = pendon_plugin_blockquote::process(&events, &blockquote_options);
-                    if let Some(hints) = pendon_plugin_blockquote::solid_hints(&blockquote_options)
-                    {
-                        builtin_hints.push(hints);
-                    }
-                    result
-                }
-                "section" => {
-                    // §9.5: the section outline runs before markdown so it can see
-                    // the raw heading text, the section decorator and the level
-                    // markers (`>---<` would otherwise be a blockquote). Markdown
-                    // then parses the interior of every `Section` it emits.
-                    let result = pendon_plugin_section::process(&events, &section_options);
-                    if let Some(hints) = pendon_plugin_section::solid_hints(&section_options) {
-                        builtin_hints.push(hints);
-                    }
-                    result
-                }
-                "list" => {
-                    // §9.3: the list markers stay plain Markdown; this plugin only
-                    // binds a container decorator to the list below it, so it runs
-                    // before markdown parses the list.
-                    let result = pendon_plugin_list::process(&events, &list_options);
-                    if let Some(hints) = pendon_plugin_list::solid_hints(&list_options) {
-                        builtin_hints.push(hints);
-                    }
-                    result
-                }
-                "vicado" => {
-                    used_vicado = true;
-                    pendon_plugin_vicado::process(&events)
-                }
-                "markdown" => {
-                    let result =
-                        pendon_plugin_markdown::process_with_options(&events, task_markdown_opts);
-                    markdown_ran = true;
-                    if quiz_pending {
-                        quiz_pending = false;
-                        pendon_plugin_quiz::process(&result)
-                    } else {
-                        result
-                    }
-                }
-                other => {
-                    if let Some(spec) = custom_registry.get(other) {
-                        let spec = spec.clone();
-                        track_used_spec(&mut used_custom_specs, spec.clone());
-                        pendon_plugin_custom::process_with_context(
-                            &events,
-                            &spec,
-                            &inline_pipeline,
-                            &mut document_context,
-                        )
-                    } else {
-                        // §13: an unknown plugin name used to be ignored without a
-                        // word. Report it once per name; the build still succeeds.
-                        if reported_plugins.insert(other.to_string()) {
-                            eprintln!(
-                                "Warning: [{task_name}] unknown plugin '{other}' in task.plugin; \
-                                 it is ignored (§13)"
-                            );
-                        }
-                        events
-                    }
-                }
-            };
-        }
+    // `resolve` runs after every plugin has emitted its extras attributes
+    // (ADR-0004) and **before** the citation export: an `mdp` payload may cite,
+    // and the citation list is the page's, not the payload's.
+    if let Some(bind) = bind.as_ref() {
+        let mut render = |markdown: &str, mode: pendon_plugin_bind::MdpMode| {
+            chain::render_mdp(markdown, mode, &config, &mut state)
+        };
+        events = pendon_plugin_bind::resolve_with(&events, &bind.registry, &mut render);
     }
-    if quiz_pending {
-        events = pendon_plugin_quiz::process(&events);
-    }
-    if used_quiz {
-        builtin_hints.push(pendon_plugin_quiz::solid_hints());
-    }
-    if used_vicado {
-        if let Some(override_hints) = vicado_hints_override {
-            builtin_hints.push(override_hints.clone());
-        } else {
-            builtin_hints.push(pendon_plugin_vicado::solid_hints());
-        }
-    }
+
     // Finalize cite
-    if cite_ran {
-        let (diagnostics, citations, references, options) = document_context.finalize_citations();
+    if state.cite_ran {
+        let (diagnostics, citations, references, options) = state.context.finalize_citations();
 
         if !diagnostics.is_empty() {
             let insert_at = events
                 .iter()
-                .position(|e| matches!(e, Event::StartNode(NodeKind::Document)))
+                .position(|e| matches!(e, Event::StartNode(pendon_core::NodeKind::Document)))
                 .map(|i| i + 1)
                 .unwrap_or(0);
             for (off, diag) in diagnostics.into_iter().enumerate() {
@@ -478,22 +186,14 @@ pub fn process_single_file(
             }
         }
 
-        builtin_hints.push(pendon_plugin_cite::solid_hints(
+        state.hints.push(pendon_plugin_cite::solid_hints(
             &options,
             &citations,
             &references,
         ));
     }
-    if anchor_ran {
-        if let Some(hints) = pendon_plugin_anchor::solid_hints(&anchor_options) {
-            builtin_hints.push(hints);
-        }
-    }
-    // `resolve` runs last, after every extras head has emitted its attributes
-    // (ADR-0004).
-    if let Some(bind) = bind.as_ref() {
-        events = pendon_plugin_bind::resolve(&events, &bind.registry);
-    }
+
+    chain::finish(&config, &mut state);
 
     let pretty = task.pretty.unwrap_or(false);
     let rendered = match task.format.as_str() {
@@ -513,7 +213,7 @@ pub fn process_single_file(
             pendon_renderer_html::render_html(&events)
         }),
         "solid" => {
-            let hints = merge_solid_hints(&used_custom_specs, &builtin_hints);
+            let hints = merge_solid_hints(&state.used_specs, &state.hints);
             Ok(match hints.as_ref() {
                 Some(h) => render_solid_with_hints(&events, Some(h)),
                 None => pendon_renderer_solid::render_solid(&events),
@@ -560,10 +260,7 @@ pub fn process_single_file(
             let bytes_written = out_str.len();
 
             // Keep updating the cache entry even if the file was not written to disk
-            let cache_entry = match create_cache_entry(task_name, path_str, out_path, deps) {
-                Ok(entry) => Some((path_str.to_string(), entry)),
-                Err(_) => None,
-            };
+            let cache_entry = create_entry(task_name, config_hash, path_str, out_path, deps).ok();
 
             return ProcessResult {
                 success: true,

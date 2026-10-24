@@ -25,11 +25,43 @@ pub struct ConfigTask {
     pub list: Option<ListTaskConfig>,
     pub blockquote: Option<BlockquoteTaskConfig>,
     pub section: Option<SectionTaskConfig>,
+    /// `true` bypasses the cache for **this** task only: it is never consulted
+    /// and nothing is recorded for it, while the other tasks keep theirs.
+    /// See `docs/rfc/no-cache-and-post-hook.md`.
+    pub no_cache: Option<bool>,
+    /// Shell command(s) run after this task rendered a file successfully.
+    /// See `docs/rfc/no-cache-and-post-hook.md`.
+    pub post_hook: Option<PostHook>,
     /// §13: keys this version does not know. They are reported as warnings
     /// instead of being dropped silently (a typo must never change the output
     /// without saying so).
     #[serde(flatten)]
     pub unknown: std::collections::BTreeMap<String, toml::Value>,
+}
+
+/// A task's `post_hook`: one command, or an ordered list of commands.
+///
+/// Deserialized from either TOML shape:
+///
+/// ```toml
+/// post_hook = "prettier --write ./out/[slug].jsx"
+/// post_hook = ["prettier --write ./out/[slug].jsx", "eslint ./out"]
+/// ```
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum PostHook {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl PostHook {
+    /// The commands in declared (execution) order.
+    pub fn commands(&self) -> Vec<&str> {
+        match self {
+            Self::One(command) => vec![command.as_str()],
+            Self::Many(commands) => commands.iter().map(String::as_str).collect(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -180,4 +212,52 @@ pub struct SectionTaskConfig {
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.section.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_task(extra: &str) -> ConfigTask {
+        toml::from_str(&format!(
+            "input = \"./src/[slug].mdp\"\noutput = \"./out/[slug].jsx\"\nformat = \"solid\"\n{extra}"
+        ))
+        .expect("valid task config")
+    }
+
+    /// `no_cache` is optional and defaults to "cache enabled".
+    #[test]
+    fn no_cache_defaults_to_none() {
+        assert!(parse_task("").no_cache.is_none());
+        assert_eq!(parse_task("no_cache = true\n").no_cache, Some(true));
+        assert_eq!(parse_task("no_cache = false\n").no_cache, Some(false));
+    }
+
+    /// `post_hook` accepts a single command string.
+    #[test]
+    fn post_hook_accepts_one_command() {
+        let task = parse_task("post_hook = \"prettier --write ./out/[slug].jsx\"\n");
+        let hooks = task.post_hook.expect("post_hook parsed");
+        assert_eq!(hooks.commands(), vec!["prettier --write ./out/[slug].jsx"]);
+    }
+
+    /// `post_hook` accepts an array, and its order is preserved.
+    #[test]
+    fn post_hook_accepts_an_ordered_array() {
+        let task = parse_task("post_hook = [\"one\", \"two\", \"three\"]\n");
+        let hooks = task.post_hook.expect("post_hook parsed");
+        assert_eq!(hooks.commands(), vec!["one", "two", "three"]);
+    }
+
+    /// Both new keys are known to the schema, so §13's unknown-key warning
+    /// must stay silent for them.
+    #[test]
+    fn new_keys_are_not_reported_as_unknown() {
+        let task = parse_task("no_cache = true\npost_hook = \"echo hi\"\n");
+        assert!(
+            task.unknown.is_empty(),
+            "unexpected unknown keys: {:?}",
+            task.unknown.keys().collect::<Vec<_>>()
+        );
+    }
 }

@@ -3,6 +3,7 @@ use predicates::prelude::*;
 use serde_json::Value;
 use std::fs::File;
 use std::io::Write;
+use std::path::Path;
 use tempfile::tempdir;
 
 #[test]
@@ -953,4 +954,282 @@ fn run_config_cite_rejects_an_unknown_references_scope() {
             predicate::str::contains("unsupported cite.references_scope 'everything'")
                 .and(predicate::str::contains("cited or all")),
         );
+}
+
+// === `no_cache` / `post_hook` (docs/rfc/no-cache-and-post-hook.md) ===
+
+/// Writes an HTML task named `Hooked` over `src/[slug].md` and appends `extra`
+/// to the `[[task]]` table. Returns the temp project.
+fn hook_project(extra: &str) -> tempfile::TempDir {
+    let dir = tempdir().expect("temp dir");
+    let src_dir = dir.path().join("src");
+    std::fs::create_dir_all(&src_dir).expect("create src dir");
+    std::fs::write(src_dir.join("page.md"), "Body text.\n").expect("write markdown file");
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        format!(
+            "[[task]]\nname = \"Hooked\"\ninput = \"./src/[slug].md\"\n\
+             output = \"./out/[slug].html\"\nplugin = \"markdown\"\nformat = \"html\"\n{extra}"
+        ),
+    )
+    .expect("write config file");
+    dir
+}
+
+/// Runs `pendon run` inside the project root.
+fn run_pendon(dir: &Path) -> assert_cmd::assert::Assert {
+    let mut cmd = cargo_bin_cmd!("pendon");
+    cmd.current_dir(dir).arg("run").assert()
+}
+
+/// Every cache record under `.pendon/cache`, as raw TOML (empty when nothing is
+/// cached).
+fn cache_records(dir: &Path) -> Vec<String> {
+    let mut records = Vec::new();
+    let mut stack = vec![dir.join(".pendon").join("cache")];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|ext| ext == "toml") {
+                if let Ok(text) = std::fs::read_to_string(&path) {
+                    records.push(text);
+                }
+            }
+        }
+    }
+    records.sort();
+    records
+}
+
+/// `no_cache = true` must render every run and leave the cache alone.
+#[test]
+fn run_task_no_cache_always_rebuilds_and_never_touches_the_cache() {
+    let dir = hook_project("no_cache = true\n");
+    run_pendon(dir.path()).success();
+
+    let out = dir.path().join("out").join("page.html");
+    assert!(out.exists(), "first run did not render the output");
+    assert!(
+        !dir.path().join(".pendon").exists(),
+        "no_cache must not create a cache"
+    );
+
+    // A cached task would skip a file its manifest calls up to date, leaving the
+    // deleted output deleted; a no_cache task has to render it again.
+    std::fs::remove_file(&out).expect("remove output");
+    run_pendon(dir.path()).success();
+    assert!(out.exists(), "no_cache task skipped a missing output");
+    assert!(
+        !dir.path().join(".pendon").exists(),
+        "no_cache wrote a cache entry"
+    );
+}
+
+/// Caching is disabled only for the task that opts out.
+#[test]
+fn run_task_no_cache_leaves_other_tasks_cached() {
+    let dir = tempdir().expect("temp dir");
+    let src_dir = dir.path().join("src");
+    std::fs::create_dir_all(&src_dir).expect("create src dir");
+    std::fs::write(src_dir.join("cached.md"), "Cached body.\n").expect("write cached source");
+    std::fs::write(src_dir.join("uncached.md"), "Uncached body.\n").expect("write uncached source");
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        "[[task]]\nname = \"Cached\"\ninput = \"./src/cached.md\"\n\
+         output = \"./out/cached.html\"\nplugin = \"markdown\"\nformat = \"html\"\n\n\
+         [[task]]\nname = \"Uncached\"\ninput = \"./src/uncached.md\"\n\
+         output = \"./out/uncached.html\"\nplugin = \"markdown\"\nformat = \"html\"\n\
+         no_cache = true\n",
+    )
+    .expect("write config file");
+
+    run_pendon(dir.path()).success();
+
+    let records = cache_records(dir.path());
+    assert_eq!(
+        records.len(),
+        1,
+        "the cached task must record exactly one file: {records:#?}"
+    );
+    assert!(
+        records[0].contains("task = \"Cached\""),
+        "wrong record: {}",
+        records[0]
+    );
+    assert!(
+        !records[0].contains("Uncached"),
+        "no_cache task leaked into the cache: {}",
+        records[0]
+    );
+}
+
+/// One input, two tasks: each keeps its own record, so both stay cached. The
+/// single-manifest layout let one task's entry overwrite the other's.
+#[test]
+fn run_task_two_tasks_over_one_input_both_stay_cached() {
+    let dir = tempdir().expect("temp dir");
+    let src_dir = dir.path().join("src");
+    std::fs::create_dir_all(&src_dir).expect("create src dir");
+    std::fs::write(src_dir.join("page.md"), "Body text.\n").expect("write source");
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        "[[task]]\nname = \"Html\"\ninput = \"./src/[slug].md\"\n\
+         output = \"./out/[slug].html\"\nplugin = \"markdown\"\nformat = \"html\"\n\
+         post_hook = \"echo html >> hooks.log\"\n\n\
+         [[task]]\nname = \"Json\"\ninput = \"./src/[slug].md\"\n\
+         output = \"./out/[slug].json\"\nplugin = \"markdown\"\nformat = \"json\"\n\
+         post_hook = \"echo json >> hooks.log\"\n",
+    )
+    .expect("write config file");
+
+    run_pendon(dir.path()).success();
+    run_pendon(dir.path()).success();
+
+    assert_eq!(
+        cache_records(dir.path()).len(),
+        2,
+        "one record per (task, input)"
+    );
+    let log = std::fs::read_to_string(dir.path().join("hooks.log")).expect("hooks.log");
+    assert_eq!(
+        log.lines().collect::<Vec<_>>(),
+        vec!["html", "json"],
+        "a shared input re-ran a hook instead of hitting the cache: {log}"
+    );
+}
+
+/// A record only proves "up to date" while the output is still there.
+#[test]
+fn run_task_a_deleted_output_is_rebuilt() {
+    let dir = hook_project("");
+    run_pendon(dir.path()).success();
+
+    let out = dir.path().join("out").join("page.html");
+    std::fs::remove_file(&out).expect("remove output");
+    run_pendon(dir.path()).success();
+
+    assert!(out.exists(), "a deleted output stayed deleted");
+}
+
+/// `--no-cache` reads nothing *and* records nothing, so the next run is cold.
+#[test]
+fn run_task_the_no_cache_flag_records_nothing() {
+    let dir = hook_project("");
+
+    let mut cmd = cargo_bin_cmd!("pendon");
+    cmd.current_dir(dir.path())
+        .arg("run")
+        .arg("--no-cache")
+        .assert()
+        .success();
+
+    assert!(
+        !dir.path().join(".pendon").exists(),
+        "--no-cache created a cache"
+    );
+}
+
+/// A single `post_hook` string runs after the render, in the project root, with
+/// `[slug]` expanded, and its output is forwarded with the task prefix.
+#[test]
+fn run_task_post_hook_runs_after_render_with_expanded_placeholders() {
+    let dir =
+        hook_project("post_hook = \"echo formatting [slug] && echo [slug] > hook-[slug].txt\"\n");
+
+    run_pendon(dir.path())
+        .success()
+        .stderr(predicate::str::contains(
+            "[post_hook:Hooked] formatting page",
+        ));
+
+    assert!(dir.path().join("out").join("page.html").exists());
+    let marker = dir.path().join("hook-page.txt");
+    let contents = std::fs::read_to_string(&marker)
+        .expect("hook wrote its marker relative to the project root");
+    assert_eq!(contents.trim(), "page");
+}
+
+/// An array runs in declared order and aborts at the first non-zero exit.
+#[test]
+fn run_task_post_hook_array_aborts_on_the_first_failure() {
+    let dir = hook_project("post_hook = [\"echo first\", \"exit 3\", \"echo third\"]\n");
+
+    run_pendon(dir.path()).failure().stderr(
+        predicate::str::contains("[post_hook:Hooked] first")
+            .and(predicate::str::contains("exited with status 3"))
+            .and(predicate::str::contains("third").not()),
+    );
+
+    // A failed hook marks the task failed, so nothing records it as cached.
+    assert!(
+        !dir.path().join(".pendon").exists(),
+        "a failed task must not record a cache"
+    );
+}
+
+/// An unknown placeholder in a hook is an error, not literal text.
+#[test]
+fn run_task_post_hook_rejects_an_unknown_placeholder() {
+    let dir = hook_project("post_hook = \"echo [missing]\"\n");
+
+    run_pendon(dir.path())
+        .failure()
+        .stderr(predicate::str::contains("bad placeholder"));
+}
+
+/// A task that fails to render never reaches its hooks.
+#[test]
+fn run_task_post_hook_is_skipped_when_the_task_fails() {
+    let dir = hook_project("");
+    // Break the task after the helper wrote it: an unsupported renderer fails
+    // every file, so no hook may run.
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        "[[task]]\nname = \"Hooked\"\ninput = \"./src/[slug].md\"\n\
+         output = \"./out/[slug].html\"\nplugin = \"markdown\"\nformat = \"bogus\"\n\
+         post_hook = \"echo should-not-run\"\n",
+    )
+    .expect("write config file");
+
+    run_pendon(dir.path())
+        .failure()
+        .stderr(predicate::str::contains("should-not-run").not());
+}
+
+/// Files served from the cache did not run the pipeline, so their hooks do not
+/// re-run; editing the hook invalidates the task once so it reaches them.
+#[test]
+fn run_task_post_hook_does_not_rerun_for_cached_files() {
+    let dir = hook_project("post_hook = \"echo hooked >> hooks.log\"\n");
+    run_pendon(dir.path()).success();
+    run_pendon(dir.path()).success();
+
+    let log_path = dir.path().join("hooks.log");
+    let log = std::fs::read_to_string(&log_path).expect("hooks.log");
+    assert_eq!(
+        log.lines().count(),
+        1,
+        "a cached file re-ran its post_hook: {log}"
+    );
+
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        "[[task]]\nname = \"Hooked\"\ninput = \"./src/[slug].md\"\n\
+         output = \"./out/[slug].html\"\nplugin = \"markdown\"\nformat = \"html\"\n\
+         post_hook = \"echo changed >> hooks.log\"\n",
+    )
+    .expect("write changed config file");
+
+    run_pendon(dir.path()).success();
+    let log = std::fs::read_to_string(&log_path).expect("hooks.log");
+    assert_eq!(
+        log.lines().collect::<Vec<_>>(),
+        vec!["hooked", "changed"],
+        "a changed post_hook must reach already-cached files: {log}"
+    );
 }

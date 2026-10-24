@@ -6,8 +6,9 @@ use std::path::Path;
 use std::process::ExitCode;
 use walkdir::WalkDir;
 
-use crate::cache::{should_skip_file, CacheManifest, CacheTask};
-use crate::config::PendonConfig;
+use crate::cache::{hash_content, hash_file, CacheStore};
+use crate::config::{PendonConfig, PostHook};
+use crate::hook::run_post_hooks;
 use crate::plugins::{build_vicado_hints_override, load_custom_registry};
 use crate::process::process_single_file;
 use crate::utils::{captures_to_map, input_pattern_to_regex, substitute_output};
@@ -57,27 +58,25 @@ pub fn run_from_config() -> ExitCode {
 
     let no_cache = pargs.contains("--no-cache");
     let clean_cache = pargs.contains("--clean-cache");
-    // Ignore existing cache but save the new one at the end.
+    // Ignore existing cache but record the fresh state for the next run.
     let force_rebuild = pargs.contains(["-F", "--force"]);
     // `-q` / `--quiet` silences the `run` report (`docs/spec/CLI-REPORT.md` §5).
     // Diagnostics, warnings and errors are unaffected.
     let quiet = pargs.contains(["-q", "--quiet"]);
 
     if clean_cache {
-        if let Err(e) = CacheManifest::clean() {
+        if let Err(e) = CacheStore::clean() {
             eprintln!("Warning: {}", e);
         }
     }
 
-    // Determine initial cache state based on the provided flags.
-    let mut manifest = if clean_cache {
-        CacheManifest::default()
-    } else if no_cache || force_rebuild {
-        // Start with an empty manifest to force a full rebuild.
-        CacheManifest::default()
-    } else {
-        CacheManifest::load()
-    };
+    // The cache is one record per rendered file (ADR-0006), so there is nothing
+    // to load or save: reads and writes are gated per run and per task instead.
+    // `--no-cache` reads nothing *and* records nothing, so the next run starts
+    // cold; `-F/--force` only declines to read, and refreshes every record.
+    let store = CacheStore::open();
+    let read_cache = !no_cache && !force_rebuild;
+    let write_cache = !no_cache;
 
     let theme = pendon_tui::Theme::default();
     if !quiet && pendon_tui::is_interactive_stderr() {
@@ -92,32 +91,44 @@ pub fn run_from_config() -> ExitCode {
             .clone()
             .unwrap_or_else(|| format!("task-{}", task_idx));
 
+        // Per-task `no_cache` (`docs/rfc/no-cache-and-post-hook.md`): the file is
+        // always rendered, and nothing is read or recorded for this task. Other
+        // tasks keep their records.
+        let cache_disabled = task.no_cache.unwrap_or(false);
+        let cache_read = read_cache && !cache_disabled;
+        let cache_write = write_cache && !cache_disabled;
+
+        // A failed render or post-hook marks the whole task failed: its remaining
+        // hooks are skipped and its cache record is not refreshed.
+        let mut task_failed = false;
+
+        // Resolved once per task, expanded per file (the placeholders are
+        // file-scoped).
+        let task_hooks: Option<Vec<&str>> = task.post_hook.as_ref().map(PostHook::commands);
+
         let mut total_skipped = 0usize;
         let mut total_processed = 0usize;
         let mut total_skipped_write = 0usize;
 
-        // Hash task config
+        // Hash task config. `post_hook` participates: hooks only run for files
+        // this run actually rendered, so adding or editing a hook must
+        // invalidate the task once — otherwise a warm cache would never format.
+        // Commands are joined with a unit separator so a `:` inside a command
+        // can never collide with the field separator.
+        let hook_signature = task_hooks
+            .as_ref()
+            .map(|commands| commands.join("\u{1f}"))
+            .unwrap_or_default();
         let task_config_str = format!(
-            "{}:{}:{}:{}:{}",
+            "{}:{}:{}:{}:{}:{}",
             task.plugin.as_deref().unwrap_or(""),
             task.markdown_allow_html.unwrap_or(false),
             task.markdown_strip_comments.unwrap_or(false),
             task.wiki_link_prefix.as_deref().unwrap_or(""),
-            task.format
+            task.format,
+            hook_signature
         );
-        let task_config_hash = crate::cache::hash_content(&task_config_str);
-
-        // Update task in cache
-        manifest.update_task(
-            task_name.clone(),
-            CacheTask {
-                config_hash: task_config_hash.clone(),
-                input_pattern: task.input.clone(),
-                output_pattern: task.output.clone(),
-                plugin: task.plugin.clone().unwrap_or_default(),
-                format: task.format.clone(),
-            },
-        );
+        let task_config_hash = hash_content(&task_config_str);
 
         let re = match input_pattern_to_regex(&task.input) {
             Ok(r) => r,
@@ -146,7 +157,10 @@ pub fn run_from_config() -> ExitCode {
         let mut unique_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         for entry in WalkDir::new(Path::new("."))
+            // The cache is not a document tree: pruning `.pendon` keeps its
+            // records out of every task's glob *and* out of the walk itself.
             .into_iter()
+            .filter_entry(|e| e.path() != Path::new("./.pendon"))
             .filter_map(|e| e.ok())
         {
             if !entry.file_type().is_file() {
@@ -175,9 +189,10 @@ pub fn run_from_config() -> ExitCode {
                     }
                 };
 
-                // Check cache
-                let (should_skip, _changed_deps) =
-                    should_skip_file(&manifest, &path_str, &out_path, &task_config_hash);
+                // Check cache. A `no_cache` task never consults it, so it always
+                // renders from scratch (RFC `no-cache-and-post-hook`).
+                let should_skip = cache_read
+                    && store.is_fresh(&task_name, &path_str, &out_path, &task_config_hash);
 
                 if should_skip {
                     total_skipped += 1;
@@ -220,6 +235,7 @@ pub fn run_from_config() -> ExitCode {
                 let result = process_single_file(
                     task,
                     &task_name,
+                    &task_config_hash,
                     &path_str,
                     &out_path,
                     &map,
@@ -232,6 +248,7 @@ pub fn run_from_config() -> ExitCode {
 
                 if !result.success {
                     exit = ExitCode::from(2);
+                    task_failed = true;
                     continue;
                 }
 
@@ -240,12 +257,46 @@ pub fn run_from_config() -> ExitCode {
                     total_skipped_write += 1;
                 }
 
-                // Update cache
-                if let Some((path, entry)) = result.cache_entry {
-                    manifest.update_file(path, entry);
+                // Post-hooks (RFC `no-cache-and-post-hook`): per rendered file,
+                // never for a task that already failed. A file served from the
+                // cache did not run the pipeline, so its hooks are not re-run.
+                let mut cache_entry = result.cache_entry;
+                if let Some(commands) = task_hooks.as_deref() {
+                    if !task_failed {
+                        match run_post_hooks(&task_name, commands, &map) {
+                            Ok(()) => {
+                                // A hook may rewrite the output; keep the cache
+                                // record's `output_hash` honest.
+                                if let Some(entry) = cache_entry.as_mut() {
+                                    if let Ok(hash) = hash_file(Path::new(&out_path)) {
+                                        entry.output_hash = hash;
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                task_failed = true;
+                                exit = ExitCode::from(2);
+                                // Do not record a success the task did not reach,
+                                // so the next run renders and hooks it again.
+                                cache_entry = None;
+                            }
+                        }
+                    }
+                }
+
+                // Record the render (never for a `no_cache` task). Written after
+                // the hooks, so what a formatter rewrote is what gets remembered.
+                if cache_write {
+                    if let Some(entry) = cache_entry {
+                        if let Err(e) = store.put(&entry) {
+                            eprintln!("Warning: {}", e);
+                        }
+                    }
                 }
             }
         }
+
         if !quiet && pendon_tui::is_interactive_stderr() {
             pendon_tui::render_severity_line(
                 pendon_tui::SeverityLine::Info,
@@ -291,14 +342,6 @@ pub fn run_from_config() -> ExitCode {
                 ];
                 pendon_tui::render_kv_list("› Wrote:", &items, theme);
             }
-        }
-    }
-
-    // Save cache to disk unless --no-cache was explicitly requested.
-    // --force and --clean-cache are allowed to save the new cache state.
-    if !no_cache {
-        if let Err(e) = manifest.save() {
-            eprintln!("Warning: failed to save cache: {}", e);
         }
     }
 
