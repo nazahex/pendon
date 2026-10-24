@@ -54,3 +54,22 @@ targets = ["aarch64", "x86_64"]
 An undefined `$ghost` warns and stays literal text:
 
 [Ghost](/docs)@@anchorA{data: $ghost}
+
+
+`mdp` (Pendon Markdown) binds a **sub-document**: the payload runs through the
+same plugin chain as the page (wiki, cite, figures, tables, math, …) and reaches
+the prop as a fragment. Block form (body on following lines) keeps the payload's
+`<p>`; inline form (body on head line) drops it:
+
+{{{mdp[block-mdp]
+This is **block** mdp *mode* with `code` and a [link](https://example.com).
+}}}
+
+{{{mdp[inline-mdp] This is **inline** mdp *mode* with `code` and a [link](https://example.com). }}}
+
+[BlockMdp](/docs)@@anchorA{data: $block-mdp}
+[InlineMdp](/docs)@@anchorA{data: $inline-mdp}
+
+An undefined `$missing-mdp` warns and stays literal text:
+
+[MissingMdp](/docs)@@anchorA{data: $missing-mdp}

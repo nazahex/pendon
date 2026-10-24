@@ -21,5 +21,18 @@ tables:
 </p>
 <p><a data="$ghost" href="/docs" type="anchorA">Ghost</a>
 </p>
+<p><code>mdp</code> (Pendon Markdown) binds a <strong>sub-document</strong>: the payload runs through the
+same plugin chain as the page (wiki, cite, figures, tables, math, …) and reaches
+the prop as a fragment. Block form (body on following lines) keeps the payload&#39;s
+<code>&lt;p&gt;</code>; inline form (body on head line) drops it:
+</p>
+<p><a data={(<><p>This is <strong>block</strong> mdp <em>mode</em> with <code>code</code> and a <a href="https://example.com" rel="noopener" target="_blank">link</a>.</p>
+</>)} href="/docs" type="anchorA">BlockMdp</a>
+<a data={(<>This is <strong>inline</strong> mdp <em>mode</em> with <code>code</code> and a <a href="https://example.com" rel="noopener" target="_blank">link</a>.</>)} href="/docs" type="anchorA">InlineMdp</a>
+</p>
+<p>An undefined <code>$missing-mdp</code> warns and stays literal text:
+</p>
+<p><a data="$missing-mdp" href="/docs" type="anchorA">MissingMdp</a>
+</p>
 
 </>); }

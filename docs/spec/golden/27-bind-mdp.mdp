@@ -1,0 +1,34 @@
+---
+references:
+  book:
+    id: book
+    type: book
+    title: A Book
+---
+
+An `mdp` payload is a **sub-document**: it is parsed and run through the *same*
+chain as the page, so every enabled plugin reaches inside it — not just
+Markdown. The payload becomes a fragment prop, and each renderer decides how to
+carry a node list (Solid: `(<>{…}</>)`).
+
+{{{mdp[card-body]
+## Payload heading
+
+A [[Nested Wiki]] link, a citation [^^](book "hlm. 45") and inline math $x^2$
+all resolve against the page's own state.
+
+~?!!w400[Chart](https://example.com/chart.png)@@figureX{.wide} A caption from the payload.
+
+| Name | Value |
+| ---- | ----: |
+| a    |     1 |
+}}}
+
+[Card](/docs)@@anchorA{body: $card-body}
+
+The inline form drops the payload's own `<p>` wrapper, so a payload written on
+the head line contributes inline nodes only:
+
+{{{mdp[card-note] See [[Wireless]] and [^^](book). }}}
+
+[Note](/docs)@@anchorA{note: $card-note}
