@@ -1,14 +1,14 @@
 import Hint from "@comp/shared/Hint";
 import Parego from "@comp/shared/Parego";
 
-export const headings = [{"id":"advanced-commonmark-list-demonstration","text":"Advanced CommonMark List Demonstration","level":1,"subheadings":[{"id":"multi-paragraph-nested-lists","text":"Multi-Paragraph & Nested Lists","level":2},{"id":"lists-containing-code-blocks-complex-elements","text":"Lists containing Code Blocks & Complex Elements","level":2},{"id":"mixed-ordering-complex-indentation","text":"Mixed Ordering & Complex Indentation","level":2}]}];
+export const headings = [{"id":"advanced-commonmark-list-demonstration","level":1,"subheadings":[{"id":"multi-paragraph-nested-lists","level":2,"text":"Multi-Paragraph & Nested Lists"},{"id":"lists-containing-code-blocks-complex-elements","level":2,"text":"Lists containing Code Blocks & Complex Elements"},{"id":"mixed-ordering-complex-indentation","level":2,"text":"Mixed Ordering & Complex Indentation"}],"text":"Advanced CommonMark List Demonstration"}];
 export const references = {};
 export const citations = [];
 export default function PendonView() { return (<>
 <section id="advanced-commonmark-list-demonstration">
-<h1>1. Advanced CommonMark List Demonstration</h1>
+<h1 number={["1"]}>Advanced CommonMark List Demonstration</h1>
 <section id="multi-paragraph-nested-lists">
-<h2>1.1. Multi-Paragraph &amp; Nested Lists</h2>
+<h2 number={["1", "1"]}>Multi-Paragraph &amp; Nested Lists</h2>
 <ol start={1}>
 <li><strong>Fase Perencanaan Utama</strong><p>Pada fase ini, seluruh tim wajib menyelaraskan visi dan menentukan cakupan proyek secara mendalam. Jangan terburu-buru melakukan eksekusi sebelum dokumen <i>PRD</i> (<i>Product Requirement Document</i>) disetujui.
 </p>
@@ -35,7 +35,7 @@ export default function PendonView() { return (<>
 </ol>
 </section>
 <section id="lists-containing-code-blocks-complex-elements">
-<h2>1.2. Lists containing Code Blocks &amp; Complex Elements</h2>
+<h2 number={["1", "2"]}>Lists containing Code Blocks &amp; Complex Elements</h2>
 <ul>
 <li><strong>Arsitektur Kode Backend</strong><p>Gunakan arsitektur modular agar pemeliharaan kode (<i>maintenance</i>) menjadi lebih mudah di masa depan. Contoh struktur konfigurasi:
 </p>
@@ -83,7 +83,7 @@ export default function PendonView() { return (<>
 </ul>
 </section>
 <section id="mixed-ordering-complex-indentation">
-<h2>1.3. Mixed Ordering &amp; Complex Indentation</h2>
+<h2 number={["1", "3"]}>Mixed Ordering &amp; Complex Indentation</h2>
 <ol start={1}>
 <li>Item Utama Pertama<ol start={1}>
 <li>Sub-item berurutan (tingkat 2)<ul>

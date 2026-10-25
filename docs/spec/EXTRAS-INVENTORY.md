@@ -63,10 +63,10 @@ A row whose `source` cannot name a §N, an `emit` site **and** a golden stays
 
 ## heading
 
-| field        | source                                                                                         | recommended | notes                                                             |
-| ------------ | ---------------------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------- |
-| _all extras_ | [`SYNTAX.md` §7.4](../spec/SYNTAX.md); `crates/plugin-heading/src/lib.rs`; golden `06-heading` | TODO        | seed row; `level`, `slug`, `title`, `number` are the known ones   |
-| `number`     | `crates/plugin-number/src/lib.rs` (Phase 3); golden `29-number`                                | TODO        | reserved once `plugin-number` runs (D-10); `__number` on the wire |
+| field        | source                                                                                         | recommended | notes                                                                              |
+| ------------ | ---------------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------- |
+| _all extras_ | [`SYNTAX.md` §7.4](../spec/SYNTAX.md); `crates/plugin-heading/src/lib.rs`; golden `06-heading` | TODO        | seed row; `level`, `slug`, `title`, `number` are the known ones                    |
+| `number`     | `crates/plugin-number/src/lib.rs`; goldens `30-number-heading`, `31-number-custom`             | TODO        | written by `plugin-number` (ADR-0010, §10.5); `__number` is the marker on the wire |
 
 ## image
 

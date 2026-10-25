@@ -29,6 +29,10 @@ structure the AST renderer produces.
   (`data="&lt;p&gt;…"`), in compact _and_ pretty mode. A fragment nested inside a
   structured value renders in place, so the surrounding JSON stays readable.
 - HTML passthrough is opt-in via `plugin-markdown`'s `allow_html` option.
+- A **`__`-prefixed** attribute (`__layer`, `__plugin_kind`, `__number`) is
+  internal transport, never output (§11 rule 3, ADR-0005/ADR-0010). The generic
+  attribute writer drops it, and so does `Link` — which writes `href`/`title`
+  itself and then falls back to the same skip.
 
 ## Usage
 

@@ -46,6 +46,13 @@ keeps its Markdown highlighting. All Pendon scopes are suffixed `.pendon` under
 a `meta.<construct>.pendon` root scope (e.g. `meta.figure.pendon`,
 `meta.citation.pendon`), so a theme can target them without touching Markdown.
 
+The §5/§10.5 numbering marker gets one rule of its own (`#numberMark`,
+`meta.number-mark.pendon`): the `%` run is `punctuation.definition.number.pendon`
+and the type name `entity.name.type.number.pendon`. The regex bounds the run on
+both sides (`(?<!%)(%{2,7})(?!%)`), so the three literal cases of D-9 — a single
+`%`, `%%` without a name, and a run of 8+ `%` — stay unstyled rather than being
+half-highlighted.
+
 ## Checking a change
 
 Both tools run the real engine (`vscode-textmate` + `vscode-oniguruma`), so what

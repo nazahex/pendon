@@ -24,6 +24,7 @@ pendon-plugin-list = { path = "../../crates/plugin-list" }
 pendon-plugin-markdown = { path = "../../crates/plugin-markdown" }
 pendon-plugin-marker = { path = "../../crates/plugin-marker" }
 pendon-plugin-micromatter = { path = "../../crates/plugin-micromatter" }
+pendon-plugin-number = { path = "../../crates/plugin-number" }
 pendon-plugin-quiz = { path = "../../crates/plugin-quiz" }
 pendon-plugin-section = { path = "../../crates/plugin-section" }
 pendon-plugin-table = { path = "../../crates/plugin-table" }

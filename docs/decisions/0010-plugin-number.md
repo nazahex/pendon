@@ -1,12 +1,12 @@
 # ADR-0010 — `plugin-number`: one numbering plugin for every element
 
-- Status: **Proposed** (Phase 3 of
+- Status: **Accepted** (landed in Phase 3 of
   [`workflows/numbering-extract-type-export.md`](../workflows/numbering-extract-type-export.md))
 - Depends on: [`0005`](0005-structured-extras-values.md) (structured attribute
   values), [`0008`](0008-type-selectors.md) (selector-scoped blocks)
-- Spec: [`SYNTAX.md`](../spec/SYNTAX.md) §10.4 (`%%` markers), §11-style
-  `[[task.<element>.number]]` config (§15 open decision D-10)
-- Evidence: goldens for `29-number`, `30-number-custom`, `31-number-cite`
+- Spec: [`SYNTAX.md`](../spec/SYNTAX.md) §5 (`%%` item), §10.5 (`%%` markers and
+  the `number` config), §15 open decision D-10
+- Evidence: goldens `30-number-heading`, `31-number-custom`
 
 ## Context
 
@@ -41,6 +41,16 @@ sequence", and it is an **extras item**, so its grammar belongs in `crates/extra
    enum for a follow-up (`D-8`).
 7. `plugin-cite` keeps its own citation numbering (out of scope) — extraction
    must be able to read `attrs.number` from headings, anchors and images.
+8. **Marker types match case-insensitively.** The marker is authored CamelCase
+   (`%%numberB`) while a `[[task.number.custom]]` selector is written however the
+   config author likes; both sides of that one comparison are lowercased.
+   Element selectors keep ADR-0008's case-sensitive literals, so a `type = …`
+   over `HeadingA` still means exactly `HeadingA`.
+9. **A marker's depth is absolute**, a grouped element's depth is relative to the
+   group minimum. `%%%` is depth 2 on any element (a missing parent counts as
+   the style's first value); `[[task.heading.number]]` reads `style[n−1]` for the
+   group's _n_-th smallest occurring depth, because the document decides which
+   depth is deepest.
 
 ## Rejected alternatives
 

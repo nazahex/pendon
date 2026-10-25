@@ -355,4 +355,38 @@ mod tests {
         assert_eq!(children.len(), 1);
         assert_eq!(children[0]["type"], "Paragraph");
     }
+
+    /// ADR-0010/D-9: `__number` is an internal transport attribute. The AST
+    /// builder drops it, so neither the AST nor the JSON renderer (which shares
+    /// this builder) can leak it; `number` itself stays a real JS array.
+    #[test]
+    fn the_internal_number_marker_never_reaches_the_ast() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Heading),
+            Event::Attribute {
+                name: "level".to_string(),
+                value: "2".to_string(),
+            },
+            Event::Attribute {
+                name: "__number".to_string(),
+                value: "{\"depth\":1,\"type\":\"numberB\"}".to_string(),
+            },
+            Event::Attribute {
+                name: "number".to_string(),
+                value: format!("{}{}", pendon_core::JSON_ATTR_PREFIX, "[\"1\",\"a\"]"),
+            },
+            Event::Text("Title".to_string()),
+            Event::EndNode(NodeKind::Heading),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let output = render_ast_to_string(&events).unwrap();
+        assert!(!output.contains("__number"), "{output}");
+        let parsed: Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(
+            parsed["children"][0]["attrs"]["number"],
+            serde_json::json!(["1", "a"])
+        );
+    }
 }

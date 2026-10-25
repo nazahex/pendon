@@ -379,4 +379,65 @@ mod tests {
             "output = {output}"
         );
     }
+
+    /// ADR-0010/D-9: the `__number` transport attribute is stripped (every
+    /// `__`-prefixed key is), while `attrs.number` reaches JSX as a real array.
+    #[test]
+    fn the_internal_number_marker_never_reaches_the_jsx() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Attribute {
+                name: "__number".to_string(),
+                value: "{\"depth\":1,\"type\":\"numberB\"}".to_string(),
+            },
+            Event::Attribute {
+                name: "number".to_string(),
+                value: format!("{}{}", pendon_core::JSON_ATTR_PREFIX, "[\"1\",\"a\"]"),
+            },
+            Event::Text("Body".to_string()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let output = render_solid(&events);
+        assert!(!output.contains("__number"), "output = {output}");
+        assert!(
+            output.contains("number={[\"1\", \"a\"]}"),
+            "output = {output}"
+        );
+    }
+
+    /// The built-in `<h*>` fallback prints `attrs.number` like any other
+    /// attribute: numbering is no longer heading-template-only, so a heading
+    /// without a custom component would otherwise lose its number (ADR-0010).
+    #[test]
+    fn the_builtin_heading_fallback_keeps_the_number() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Heading),
+            Event::Attribute {
+                name: "level".to_string(),
+                value: "2".to_string(),
+            },
+            Event::Attribute {
+                name: "number".to_string(),
+                value: format!("{}{}", pendon_core::JSON_ATTR_PREFIX, "[\"1\",\"a\"]"),
+            },
+            Event::Attribute {
+                name: "raw_title".to_string(),
+                value: "Title".to_string(),
+            },
+            Event::Text("Title".to_string()),
+            Event::EndNode(NodeKind::Heading),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let output = render_solid(&events);
+        assert!(
+            output.contains("<h2 number={[\"1\", \"a\"]}>"),
+            "output = {output}"
+        );
+        assert!(!output.contains("raw_title"), "output = {output}");
+    }
 }

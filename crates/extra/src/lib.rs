@@ -27,10 +27,10 @@ pub use decorator::{
 };
 
 pub use typed::{
-    parse_directive_head, parse_extras, parse_extras_body, parse_type_marker,
+    parse_directive_head, parse_extras, parse_extras_body, parse_type_marker, read_number_mark,
     read_positional_groups, to_attributes, Attrs, DirectiveHead, DirectiveMatch, DirectiveSigil,
     ExtrasAttr, ExtrasError, ExtrasHead, ExtrasItem, ExtrasMatch, ExtrasOptions, ExtrasWarning,
-    PositionalKeys,
+    NumberMark, PositionalKeys,
 };
 
 /// Resolves the §6.1 [`ExtrasOptions`] for a node's `type` marker (§11 rule 5).

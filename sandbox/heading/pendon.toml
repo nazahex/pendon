@@ -2,12 +2,11 @@
 name = "Plugin Heading Demo Solid"
 input = "./src/heading.mdp"
 output = "./out/heading.jsx"
-plugin = "micromatter,section,heading,markdown,extract-heading"
+plugin = "micromatter,section,heading,number,markdown,extract-heading"
 format = "solid"
 
-[task.heading]
-auto_number = true
-number_style = "nested-number"
+[[task.heading.number]]
+style = "decimal"
 
 [task.heading.custom.heading]
 name = "DocHeading"

@@ -139,6 +139,9 @@
           "include": "#headTypeOnly"
         },
         {
+          "include": "#numberMark"
+        },
+        {
           "include": "#headBare"
         }
       ]
@@ -272,6 +275,19 @@
           "include": "#headItems"
         }
       ]
+    },
+    "numberMark": {
+      "comment": "§5/§10.5 — the `%%numberType` numbering marker: a `%` run of 2..7, then a name. A single `%`, a run of 8+ and `%%` with no name stay literal text (D-9), so the run is bounded on both sides.",
+      "match": "(?<!%)(%{2,7})(?!%)([A-Za-z][A-Za-z0-9]*)",
+      "name": "meta.number-mark.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.number.pendon"
+        },
+        "2": {
+          "name": "entity.name.type.number.pendon"
+        }
+      }
     },
     "headTypeOnly": {
       "comment": "§4.4 — a typed head with neither groups nor body. A type followed by whitespace and a body is literal text, so nothing is claimed here (§4.3).",
@@ -771,6 +787,9 @@
         },
         {
           "include": "#itemComma"
+        },
+        {
+          "include": "#numberMark"
         },
         {
           "include": "#itemNestedObject"

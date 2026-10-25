@@ -1,0 +1,21 @@
+`[[task.heading.number]]` scopes one counter with `type` selectors (ADR-0010).
+The plugin writes `attrs.number` — an array of one string per depth — and never
+renders it; here the component's `{...attrs}` spread prints the array.
+
+#@@HeadingA Will Be Numbered 1
+
+##@@HeadingB Will Be Numbered 1.1
+
+##@@HeadingA Will Be Numbered 1.2
+
+###@@HeadingB Will Be Numbered 1.2.a
+
+#####@@HeadingB Will Be Numbered 1.2.a.1.1 (an undefined depth style defaults to decimal)
+
+##@@HeadingC Will Not Be Numbered
+
+## Will Not Be Numbered
+
+# Will Not Be Numbered
+
+##@@HeadingA Will Be Numbered 1.3

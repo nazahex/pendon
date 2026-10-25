@@ -331,15 +331,15 @@ order (frontmatter → headings → references → citations) through
 
 ### 7.4 Acceptance criteria
 
-- [ ] The P.1 illustration renders 1, 1.1, 1.2, 1.2.a, 1.2.a.1.1, nothing for
+- [x] The P.1 illustration renders 1, 1.1, 1.2, 1.2.a, 1.2.a.1.1, nothing for
       `HeadingC`/untyped, then 1.3.
-- [ ] Both "initial depth does not exist" cases match the proposal, including the
+- [x] Both "initial depth does not exist" cases match the proposal, including the
       minimum appearing in the middle.
-- [ ] The P.2 illustration renders `I.a`, `II.`, `II.a`, `II.b`, `II.b.1`,
+- [x] The P.2 illustration renders `I.a`, `II.`, `II.a`, `II.b`, `II.b.1`,
       `II.b.1.1.1`, `II.c`, `III.`, `A.`, `A.A.A.`, `A.B.`, `B.`, `B.A.A.A.`,
       `A.a.I.i.1.1.`, `IV`, `IV.a.1`, `A`, `A.a`, `B`.
-- [ ] `auto_number`/`number_style` produce the §14 migration error, not silence.
-- [ ] Golden `06-heading` re-frozen without numbers (fixture table updated); new
+- [x] `auto_number`/`number_style` produce the §14 migration error, not silence.
+- [x] Golden `06-heading` re-frozen without numbers (fixture table updated); new
       goldens `30-number-heading`, `31-number-custom`.
 
 ---

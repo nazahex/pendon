@@ -1,44 +1,52 @@
 # pendon-plugin-heading
 
-Heading processing, auto-numbering, and custom component plugin for Pendon.
+Heading parsing and custom-component plugin for Pendon.
 
-`pendon-plugin-heading` transforms heading nodes with support for hierarchical auto-numbering, custom IDs, extra HTML attributes, and custom Solid components. It handles documents that skip heading levels gracefully by suppressing leading zeros in numbered output.
+`pendon-plugin-heading` turns a heading line into a structured `Heading` node with
+an id, extras attributes and a `raw_title`, and routes it to a §11 component. It
+runs **before** `markdown` (§7.4 of [`SYNTAX.md`](../../docs/spec/SYNTAX.md));
+numbering is not part of it any more — [`plugin-number`](../plugin-number/README.md)
+owns `attrs.number` (ADR-0010).
 
 ## What This Plugin Does
 
 - Extracts custom IDs from the `[id]` prefix syntax in heading text
 - Parses extra classes, IDs, key-value attributes and flags from a `{…}` extras head
-- Provides hierarchical auto-numbering with two styles: nested (`1.2.3.`) and flat (`3.`)
-- Suppresses leading zeros when documents start below H1 (e.g., H2-first documents produce `1.` not `0.1.`)
+- Emits the §11 layer tag `__layer = "heading"` in both modes
 - Auto-generates URL-safe slugs as fallback IDs when no custom ID is provided
-- Supports custom Solid components with full attribute access including raw title and computed number
+- Supports custom Solid components with full attribute access, including `raw_title`
 - Strips all extras syntax from visible heading text in both standard and custom modes
 
 ## Recommended Plugin Order
 
 ```text
-markdown,heading,extract-heading
+micromatter,heading,anchor,image,number,markdown
 ```
 
 **Why this order matters:**
 
-1. `markdown` must run first to convert raw `## Title` text into structured `Heading` nodes with `level` attributes
-2. `heading` processes the structured heading nodes, extracting extras and applying numbering
-3. `extract-heading` collects heading metadata for table of contents generation
+1. `heading` runs **before** `markdown`: it rewrites heading lines itself, so it
+   must see the raw text
+2. `number` follows every element plugin that produces nodes it numbers and
+   precedes `markdown`; the CLI rejects any other position
+3. `markdown` converts whatever is left into the remaining core nodes
 
 Example task config:
 
 ```toml
 [[task]]
-input = "./src/[slug].md"
+input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "markdown,heading,extract-heading"
+plugin = "micromatter,heading,anchor,image,number,markdown"
 format = "solid"
 
-[task.heading]
-auto_number = true
-number_style = "nested-number"
+[[task.heading.number]]
+type = ["HeadingA"]
+style = ["decimal", "decimal", "lower-alpha"]
 ```
+
+`[[task.heading.number]]` belongs to `plugin-number`, not to this crate; see its
+README for styles, depth and the `%%numberType` marker.
 
 ## Heading Extras Syntax
 
@@ -82,53 +90,17 @@ Produces heading with `data-section="overview"` and `style="--accent: blue;"`.
 in that order. The retired `[.class]` bracket and `{key: value}` blocks written
 apart from the head are literal text.
 
-## Auto-Numbering
+## Numbering
 
-### Configuration
+This plugin does **not** number headings. `[[task.heading.number]]` and the
+`%%numberType` marker are `plugin-number`'s (`crates/plugin-number/README.md`,
+ADR-0010): it writes `attrs.number` as an array of strings per depth, and a
+component decides how to display it. An authored `number:` prop still passes
+through as an ordinary extras prop when no `number` block selects the element
+(golden `06-heading`).
 
-```toml
-[task.heading]
-auto_number = true
-number_style = "nested-number" # or "flat"
-```
-
-### Nested Number Style (Default)
-
-```md
-## First Chapter → 1. First Chapter
-
-### Section → 1.1. Section
-
-### Another Section → 1.2. Another Section
-
-## Second Chapter → 2. Second Chapter
-
-### Subsection → 2.1. Subsection
-```
-
-### Flat Number Style
-
-```md
-## First Chapter → 1. First Chapter
-
-### Section → 1. Section
-
-### Another Section → 2. Another Section
-
-## Second Chapter → 3. Second Chapter
-```
-
-### Leading Zero Suppression
-
-Documents that skip H1 produce clean numbering automatically:
-
-```md
-## First Section → 1. First Section (not 0.1.)
-
-### Subsection → 1.1. Subsection (not 0.1.1.)
-```
-
-This works for any starting level — an H3-first document produces `1.`, `1.1.`, etc.
+The retired `[task.heading]` keys `auto_number` and `number_style` fail the build
+with a §14 migration message pointing at `[[task.heading.number]]`.
 
 ## Custom Solid Component
 
@@ -137,7 +109,9 @@ Replace the default `<hN>` output with a custom Solid component:
 ```toml
 [task.heading.custom.heading]
 name = "DocHeading"
-template = "<DocHeading level={{attrs.level}} id=\"{attrs.id}\" number=\"{attrs.number}\" class=\"{attrs.class}\">{children}</DocHeading>"
+# `{...attrs}` spreads every attribute, so the component receives `number` as a
+# real array when `plugin-number` wrote one (golden `30-number-heading`).
+template = "<DocHeading {...attrs}>{children}</DocHeading>"
 
 [[task.heading.custom.heading.imports]]
 module = "@/components/DocHeading"
@@ -150,37 +124,23 @@ coming from the same module are merged into a single `import` statement.
 
 ### Available Template Attributes
 
-| Attribute           | Description                                                     |
-| :------------------ | :-------------------------------------------------------------- |
-| `{attrs.level}`     | Heading level as string (`"2"`, `"3"`, etc.)                    |
-| `{attrs.id}`        | Custom ID from `[id]` syntax                                    |
-| `{attrs.slug}`      | Auto-generated slug (only when no custom ID is provided)        |
-| `{attrs.number}`    | Formatted number string without trailing space (`"1"`, `"1.2"`) |
-| `{attrs.raw_title}` | Heading text without extras prefix or number                    |
-| `{attrs.class}`     | Space-separated class list from the extras head                 |
-| `{attrs.data-*}`    | Any extra data attributes from `{key: val}`                     |
-| `{attrs.style}`     | Inline style string from `{--var: val}`                         |
-| `{children}`        | Heading inline content (extras stripped, number NOT prepended)  |
-
-### Number Handling in Custom Mode
-
-In custom node mode, the number is **not** prepended to children text. It is available exclusively via `{attrs.number}` so the template has full control over placement and styling:
-
-```tsx
-// DocHeading.tsx
-export default function DocHeading(props) {
-  return (
-    <div class={`heading heading-${props.level} ${props.class || ""}`} id={props.id}>
-      {props.number && <span class="heading-number">{props.number}</span>}
-      <span class="heading-title">{props.children}</span>
-    </div>
-  );
-}
-```
+| Attribute           | Description                                                                  |
+| :------------------ | :--------------------------------------------------------------------------- |
+| `{attrs.level}`     | Heading level as string (`"2"`, `"3"`, etc.)                                 |
+| `{attrs.id}`        | Custom ID from `[id]` syntax                                                 |
+| `{attrs.slug}`      | Auto-generated slug (only when no custom ID is provided)                     |
+| `{attrs.number}`    | Written by `plugin-number` when a `number` block selects the heading (array) |
+| `{attrs.raw_title}` | Heading text after the head, extras stripped                                 |
+| `{attrs.class}`     | Space-separated class list from the extras head                              |
+| `{attrs.data-*}`    | Any extra data attributes from `{key: val}`                                  |
+| `{attrs.style}`     | Inline style string from `{--var: val}`                                      |
+| `{children}`        | Heading inline content (the head stripped, nothing prepended)                |
 
 ### Standard Mode Behavior
 
-Without a custom node, the plugin emits standard `Heading` nodes with `level` and `id` attributes. The formatted number is prepended directly to the first text child. Extra attributes are emitted as node attributes for renderer consumption.
+Without a custom component the plugin emits a `Heading` node with `level`, the
+optional `id` (or fallback `slug`), `raw_title` and the extras attributes
+(§6.4). The heading text is the node's content; nothing is prepended to it.
 
 ### Positional keys (§6.1 / §11 rule 5)
 
@@ -194,13 +154,13 @@ Only the **extras** head is affected: the heading's own `[slug]` bracket (§7.4
 
 ## Behavioral Notes
 
-- This plugin processes **structured Heading nodes** — it must run after `plugin-markdown`
+- This plugin parses heading lines itself — it must run **before** `plugin-markdown`
 - Extras syntax (the `[id]` / `("title")` head and the `{…}` extras head) is stripped from visible text in all modes
 - The head must be adjacent: `## Title {.x}`, `##[id]{.class}` and `{key: val}` written apart are literal text
 - Unquoted values in `{key: val}` are accepted (numbers, booleans stored as strings)
 - Slug generation uses lowercase alphanumeric characters and hyphens only
-- Empty headings (after extras stripping) still receive numbering and ID/slug
-- The counter resets per document — each file processed independently
+- §9.5: with `section_owns_id = true` no `id`/`slug` is emitted (the section owns it)
+- Empty headings (after extras stripping) still receive an ID/slug
 
 ## Scope and Limitations
 
@@ -209,7 +169,6 @@ Only the **extras** head is affected: the heading's own `[slug]` bracket (§7.4
 - Nested braces inside `{key: val}` are not supported
 - Comma-separated values inside attribute values are not supported (commas delimit pairs)
 - The plugin does not generate anchor links or permalink icons — use a custom component for those patterns
-- Auto-numbering state is not shared across files; each document starts from 1
 - `raw_title` does not include inline formatting markers — it contains the plain text content after extras removal
 
 ## License

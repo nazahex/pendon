@@ -6,7 +6,6 @@ plugin = "micromatter,heading,markdown"
 format = "solid"
 
 [task.heading]
-auto_number = false
 
 # R.1: Global default fallback for all types, using a generic component
 [[task.heading.custom]]

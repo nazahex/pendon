@@ -281,3 +281,22 @@ fn golden_28_type_selectors() {
 fn golden_26_cite_scope() {
     assert_fixture("26-cite-scope");
 }
+
+/// §16.3 fixture 30: `plugin-number` numbers headings from
+/// `[[task.heading.number]]` (ADR-0010, `D-1`/`D-5`). One counter answers the
+/// `HeadingA`+`HeadingB` selector, `style[n]` formats depth n, a depth without a
+/// style falls back to decimal, and a type no block selects stays bare. The
+/// number is an **attribute** (`number={["1","2","a"]}`), never text.
+#[test]
+fn golden_30_number_heading() {
+    assert_fixture("30-number-heading");
+}
+
+/// §16.3 fixture 31: the `%%numberType` marker (ADR-0010, `D-4`/`D-9`). `%`-count
+/// − 1 is the depth, the type matches a `[[task.number.custom]]` block
+/// case-insensitively, the marker always beats the element's own numbering, and
+/// the same counter runs across headings, anchors and images.
+#[test]
+fn golden_31_number_custom() {
+    assert_fixture("31-number-custom");
+}

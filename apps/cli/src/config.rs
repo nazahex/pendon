@@ -26,6 +26,8 @@ pub struct ConfigTask {
     pub list: Option<ListTaskConfig>,
     pub blockquote: Option<BlockquoteTaskConfig>,
     pub section: Option<SectionTaskConfig>,
+    /// `[[task.number.custom]]`: the `%%numberType` group (ADR-0010).
+    pub number: Option<NumberTaskConfig>,
     /// `true` bypasses the cache for **this** task only: it is never consulted
     /// and nothing is recorded for it, while the other tasks keep theirs.
     /// See `docs/rfc/no-cache-and-post-hook.md`.
@@ -65,8 +67,50 @@ impl PostHook {
     }
 }
 
+/// One `[[task.<element>.number]]` block (ADR-0010).
+///
+/// Both keys are optional: no `type` numbers every element of that element, no
+/// `style` is `decimal` at every depth.
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct NumberRule {
+    /// `type = "HeadingA"` / `type = ["HeadingA", "HeadingB"]` / `?` / `_` /
+    /// `*` — §11 selectors, validated by `build_number_options`.
+    #[serde(rename = "type")]
+    pub types: Option<OneOrMany>,
+    /// `style = "lower-alpha"` (every depth) or an array (one per depth).
+    pub style: Option<OneOrMany>,
+}
+
+/// A config value that accepts one string or a list of strings.
+#[derive(Debug, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum OneOrMany {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl OneOrMany {
+    /// The value as a list, in authored order.
+    pub fn tokens(&self) -> Vec<&str> {
+        match self {
+            Self::One(token) => vec![token.as_str()],
+            Self::Many(tokens) => tokens.iter().map(String::as_str).collect(),
+        }
+    }
+}
+
+/// `[task.number]`: the task-level numbering group.
+#[derive(Debug, Deserialize, Default)]
+pub struct NumberTaskConfig {
+    #[serde(default)]
+    pub custom: Vec<NumberRule>,
+}
+
 #[derive(Debug, Deserialize, Default)]
 pub struct ImageTaskConfig {
+    /// `[[task.image.number]]` — numbering blocks (ADR-0010).
+    #[serde(default)]
+    pub number: Vec<NumberRule>,
     /// §11 layer component sets: `[task.img.custom.figure]`.
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.img.custom_node]`, §14). The table is still
@@ -77,8 +121,15 @@ pub struct ImageTaskConfig {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct HeadingTaskConfig {
-    pub auto_number: Option<bool>,
-    pub number_style: Option<pendon_plugin_heading::NumberStyle>,
+    /// Removed in favour of `[[task.heading.number]]` (ADR-0010, §14). Parsed as
+    /// an opaque value so a stale config fails with a migration message instead
+    /// of silently rendering an unnumbered document.
+    pub auto_number: Option<toml::Value>,
+    /// Removed with `auto_number` (§14).
+    pub number_style: Option<toml::Value>,
+    /// `[[task.heading.number]]` — numbering blocks (ADR-0010).
+    #[serde(default)]
+    pub number: Vec<NumberRule>,
     /// §11 layer component sets: `[task.heading.custom.heading]`.
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.heading.custom_node]`, §14).
@@ -87,6 +138,9 @@ pub struct HeadingTaskConfig {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct AnchorTaskConfig {
+    /// `[[task.anchor.number]]` — numbering blocks (ADR-0010).
+    #[serde(default)]
+    pub number: Vec<NumberRule>,
     /// §11 layer component sets: `[task.anchor.custom]`.
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.anchor.custom_node]`, §14).
@@ -95,6 +149,9 @@ pub struct AnchorTaskConfig {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct CiteTaskConfig {
+    /// `[[task.cite.number]]` — numbering blocks (ADR-0010).
+    #[serde(default)]
+    pub number: Vec<NumberRule>,
     pub reference_source: Option<String>,
     pub reference_file: Option<String>,
     /// Prefix for the bibliography anchor `href`s (`ref_id_prefix`).
@@ -126,6 +183,9 @@ pub struct CiteTaskConfig {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct TableTaskConfig {
+    /// `[[task.table.number]]` — numbering blocks (ADR-0010).
+    #[serde(default)]
+    pub number: Vec<NumberRule>,
     /// §11 layer component sets: `[task.table.custom.table]`, `…custom.thead`, …
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.table.custom_node]`, §14).
@@ -170,6 +230,9 @@ pub struct PendonConfig {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct MarkerTaskConfig {
+    /// `[[task.marker.number]]` — numbering blocks (ADR-0010).
+    #[serde(default)]
+    pub number: Vec<NumberRule>,
     /// §11 layer component sets: `[task.marker.custom.marker]` (the primary
     /// layer, so `[task.marker.custom]` addresses it too).
     pub custom: Option<toml::Value>,
@@ -179,6 +242,9 @@ pub struct MarkerTaskConfig {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct DirectiveTaskConfig {
+    /// `[[task.directive.number]]` — numbering blocks (ADR-0010).
+    #[serde(default)]
+    pub number: Vec<NumberRule>,
     /// §11 layer component sets: `[task.directive.custom.directive]` (the primary
     /// layer, so `[task.directive.custom]` addresses it too).
     pub custom: Option<toml::Value>,
@@ -188,6 +254,9 @@ pub struct DirectiveTaskConfig {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct ListTaskConfig {
+    /// `[[task.list.number]]` — numbering blocks (ADR-0010).
+    #[serde(default)]
+    pub number: Vec<NumberRule>,
     /// §11/§9.4 layer component sets: `[task.list.custom.list]` (the primary
     /// layer, the `<li>` item) plus `…custom.unordered` / `…custom.ordered`
     /// (the `<ul>` / `<ol>` containers). A bare `[task.list.custom]` addresses
@@ -199,6 +268,9 @@ pub struct ListTaskConfig {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct BlockquoteTaskConfig {
+    /// `[[task.blockquote.number]]` — numbering blocks (ADR-0010).
+    #[serde(default)]
+    pub number: Vec<NumberRule>,
     /// §11/§9.2 layer component set: `[task.blockquote.custom.blockquote]`
     /// (the primary layer, so `[task.blockquote.custom]` addresses it too).
     pub custom: Option<toml::Value>,
@@ -208,6 +280,9 @@ pub struct BlockquoteTaskConfig {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct SectionTaskConfig {
+    /// `[[task.section.number]]` — numbering blocks (ADR-0010).
+    #[serde(default)]
+    pub number: Vec<NumberRule>,
     /// §11/§9.5 layer component set: `[task.section.custom.section]`
     /// (the primary layer, so `[task.section.custom]` addresses it too).
     pub custom: Option<toml::Value>,

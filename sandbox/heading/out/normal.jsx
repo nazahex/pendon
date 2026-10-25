@@ -1,4 +1,4 @@
-export const headings = [{"id":"foo-bar","text":"Foo Bar","level":2},{"id":"bar-qux","text":"Bar Qux","level":2}];
+export const headings = [{"id":"foo-bar","level":2,"text":"Foo Bar"},{"id":"bar-qux","level":2,"text":"Bar Qux"}];
 export default function PendonView() { return (<>
 <section id="foo-bar">
 <h2>Foo Bar</h2>

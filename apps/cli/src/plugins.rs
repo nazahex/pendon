@@ -8,6 +8,7 @@ use pendon_plugin_heading::{HeadingCustomNode, HeadingOptions};
 use pendon_plugin_image::{ImageCustomNode, ImageOptions};
 use pendon_plugin_list::{ListCustomNode, ListOptions};
 use pendon_plugin_marker::{MarkerCustomNode, MarkerOptions};
+use pendon_plugin_number::{NumberBlock, NumberOptions, NumberStyles};
 use pendon_plugin_section::{SectionCustomNode, SectionOptions};
 use pendon_renderer_solid::{
     ComponentSet, ComponentTemplate, DataExport, ImportEntry, SolidRenderHints, TypedComponent,
@@ -17,11 +18,12 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::config::{
-    AnchorTaskConfig, BindTaskConfig, BlockquoteTaskConfig, CiteTaskConfig, HeadingTaskConfig,
-    ImageTaskConfig, ListTaskConfig, PluginCustomSection, PluginVicadoSection, SectionTaskConfig,
-    TableTaskConfig,
+    AnchorTaskConfig, BindTaskConfig, BlockquoteTaskConfig, CiteTaskConfig, ConfigTask,
+    HeadingTaskConfig, ImageTaskConfig, ListTaskConfig, NumberRule, OneOrMany, PluginCustomSection,
+    PluginVicadoSection, SectionTaskConfig, TableTaskConfig,
 };
 use crate::utils::{substitute_output, validate_export_identifier};
+use pendon_types::Selector;
 
 #[derive(Clone)]
 pub struct DocumentContext {
@@ -556,6 +558,15 @@ pub fn build_heading_options(config: Option<&HeadingTaskConfig>) -> Result<Headi
         return Ok(HeadingOptions::default());
     };
     check_custom_node_removed("heading", config.custom_node.is_some())?;
+    // ADR-0010/§14: the heading plugin no longer numbers anything. A stale key
+    // must fail loudly, not render an unnumbered document.
+    if config.auto_number.is_some() || config.number_style.is_some() {
+        return Err(concat!(
+            "task.heading.auto_number / number_style were removed; ",
+            "use [[task.heading.number]] with plugin-number (ADR-0010, §14)"
+        )
+        .to_string());
+    }
     let loaded = load_custom("heading", HEADING_LAYER, config.custom.as_ref())?;
     check_layers("heading", loaded.as_ref(), &[HEADING_LAYER])?;
     let custom = layer_set(loaded.as_ref(), HEADING_LAYER, |entry| {
@@ -566,8 +577,6 @@ pub fn build_heading_options(config: Option<&HeadingTaskConfig>) -> Result<Headi
         })
     })?;
     Ok(HeadingOptions {
-        auto_number: config.auto_number.unwrap_or_default(),
-        number_style: config.number_style.clone().unwrap_or_default(),
         custom,
         // §9.5: the CLI flips this when `plugin-section` is enabled.
         section_owns_id: false,
@@ -706,6 +715,83 @@ pub fn build_section_options(config: Option<&SectionTaskConfig>) -> Result<Secti
         })
     })?;
     Ok(SectionOptions { section: custom })
+}
+
+/// The element plugins whose nodes can be numbered, in the order their blocks
+/// are registered. A block's `element` is the plugin token, so
+/// `[[task.image.number]]` numbers both the `img` and the `figure` layers.
+pub const NUMBER_ELEMENTS: [&str; 10] = [
+    "heading",
+    "anchor",
+    "image",
+    "table",
+    "marker",
+    "directive",
+    "list",
+    "blockquote",
+    "section",
+    "cite",
+];
+
+/// Every numbering block of a task: one per `[[task.<element>.number]]` entry,
+/// then the `[[task.number.custom]]` group (ADR-0010).
+///
+/// A block is validated here rather than in the plugin so a typo names the
+/// config key (`task.heading.number[0] '??'`), exactly like a `custom` selector.
+pub fn build_number_options(task: &ConfigTask) -> Result<NumberOptions, String> {
+    let mut blocks = Vec::new();
+    for element in NUMBER_ELEMENTS {
+        let rules: Option<&Vec<NumberRule>> = match element {
+            "heading" => task.heading.as_ref().map(|config| &config.number),
+            "anchor" => task.anchor.as_ref().map(|config| &config.number),
+            "image" => task.image.as_ref().map(|config| &config.number),
+            "table" => task.table.as_ref().map(|config| &config.number),
+            "marker" => task.marker.as_ref().map(|config| &config.number),
+            "directive" => task.directive.as_ref().map(|config| &config.number),
+            "list" => task.list.as_ref().map(|config| &config.number),
+            "blockquote" => task.blockquote.as_ref().map(|config| &config.number),
+            "section" => task.section.as_ref().map(|config| &config.number),
+            "cite" => task.cite.as_ref().map(|config| &config.number),
+            _ => None,
+        };
+        let Some(rules) = rules else {
+            continue;
+        };
+        for (index, rule) in rules.iter().enumerate() {
+            let key = format!("task.{element}.number[{index}]");
+            blocks.push(number_block(Some(element), rule, &key)?);
+        }
+    }
+    if let Some(custom) = task.number.as_ref() {
+        for (index, rule) in custom.custom.iter().enumerate() {
+            let key = format!("task.number.custom[{index}]");
+            blocks.push(number_block(None, rule, &key)?);
+        }
+    }
+    Ok(NumberOptions { blocks })
+}
+
+/// One `[[…number]]` entry as a [`NumberBlock`], naming its own key in errors.
+fn number_block(
+    element: Option<&str>,
+    rule: &NumberRule,
+    key: &str,
+) -> Result<NumberBlock, String> {
+    let selectors = match &rule.types {
+        Some(types) => {
+            let tokens = types.tokens();
+            Selector::parse_all(tokens).map_err(|error| format!("{key}.type {error}"))?
+        }
+        None => Vec::new(),
+    };
+    let styles = match &rule.style {
+        Some(style) => match style {
+            OneOrMany::One(system) => NumberStyles::One(system.clone()),
+            OneOrMany::Many(systems) => NumberStyles::PerDepth(systems.clone()),
+        },
+        None => NumberStyles::default(),
+    };
+    Ok(NumberBlock::new(element, selectors, styles))
 }
 
 pub fn track_used_spec(list: &mut Vec<PluginSpec>, spec: PluginSpec) {
@@ -920,7 +1006,6 @@ pub fn load_custom_registry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pendon_plugin_heading::NumberStyle;
 
     /// The component a task config wires into one layer for a `type` marker: a
     /// literal entry beats the layer default (§11 rule 3). The real decision is
@@ -1043,8 +1128,6 @@ imports = ["import Figure from '@/components/Figure';"]
 
         let cfg: HeadingTaskConfig = toml::from_str(
             r#"
-auto_number = true
-
 [custom.heading]
 name = "DocHeading"
 template = "<DocHeading level={{attrs.level}}>{children}</DocHeading>"
@@ -1056,8 +1139,6 @@ default = "DocHeading"
         )
         .expect("valid heading config");
         let options = build_heading_options(Some(&cfg)).expect("valid heading options");
-        assert!(options.auto_number);
-        assert_eq!(options.number_style, NumberStyle::NestedNumber);
         let node = options
             .custom
             .default_component()
@@ -1226,6 +1307,22 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
         let err = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
             .expect_err("removed key");
         assert!(err.contains("task.cite.custom_node was removed"), "{err}");
+    }
+
+    /// ADR-0010/§14: `plugin-heading` no longer numbers anything, so a stale
+    /// `auto_number` / `number_style` must fail the build with a message naming
+    /// their replacement instead of rendering an unnumbered document.
+    #[test]
+    fn heading_rejects_the_removed_numbering_keys() {
+        for source in ["auto_number = true\n", "number_style = \"nested-number\"\n"] {
+            let heading: HeadingTaskConfig = toml::from_str(source).expect("valid heading config");
+            let err = build_heading_options(Some(&heading)).expect_err("removed key");
+            assert!(
+                err.contains("task.heading.auto_number / number_style were removed"),
+                "{err}"
+            );
+            assert!(err.contains("[[task.heading.number]]"), "{err}");
+        }
     }
 
     /// RFC-0002 §2.1/§2.3: a renamed cite key or a malformed export name must

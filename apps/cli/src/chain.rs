@@ -26,6 +26,7 @@ use pendon_plugin_latex::LatexOptions;
 use pendon_plugin_list::ListOptions;
 use pendon_plugin_markdown::MarkdownOptions;
 use pendon_plugin_marker::MarkerOptions;
+use pendon_plugin_number::NumberOptions;
 use pendon_plugin_section::SectionOptions;
 use pendon_plugin_table::TableOptions;
 use pendon_plugin_wiki::WikiOptions;
@@ -61,6 +62,8 @@ pub struct ChainConfig {
     pub list: ListOptions,
     pub table: TableOptions,
     pub heading: HeadingOptions,
+    /// `[[task.<element>.number]]` + `[[task.number.custom]]` (ADR-0010).
+    pub number: NumberOptions,
     /// A `[task.plugin.vicado.renderer.solid]` override (§11), when configured.
     pub vicado_hints: Option<SolidRenderHints>,
 }
@@ -79,6 +82,11 @@ impl ChainConfig {
             .into_iter()
             .map(str::to_string)
             .collect();
+        // ADR-0010: `number` reads attributes, so the chain's order is part of
+        // the contract. Fail before a document is parsed rather than silently
+        // numbering nothing (or only half the elements).
+        let ordered = plugin_names(plugin_list);
+        validate_number_order(task_name, &ordered)?;
         let latex = if enabled.contains("latex") {
             Some(LatexOptions {
                 target: latex_target_for_format(format),
@@ -107,6 +115,7 @@ impl ChainConfig {
             list: build_list_options(None)?,
             table: build_table_options(None)?,
             heading,
+            number: NumberOptions::default(),
             vicado_hints: None,
         })
     }
@@ -129,6 +138,33 @@ impl ChainConfig {
             &enabled,
         )
     }
+}
+
+/// §7.3 of `workflows/numbering-extract-type-export.md`: `number` must follow
+/// every element plugin that emits attributes and precede `markdown`.
+///
+/// A misordered chain is rejected before a document is parsed, because the
+/// alternative — numbering nothing, or only the elements a later plugin has
+/// already converted — is invisible in the output (ADR-0010).
+pub fn validate_number_order(task_name: &str, names: &[&str]) -> Result<(), String> {
+    let Some(position) = names.iter().position(|name| *name == "number") else {
+        return Ok(());
+    };
+    if let Some(markdown) = names.iter().position(|name| *name == "markdown") {
+        if markdown < position {
+            return Err(format!(
+                "[{task_name}] plugin `number` comes after `markdown`; `number` must run before `markdown` so it sees the parsed elements (ADR-0010)"
+            ));
+        }
+    }
+    for (index, name) in names.iter().enumerate() {
+        if index > position && crate::plugins::NUMBER_ELEMENTS.contains(name) {
+            return Err(format!(
+                "[{task_name}] plugin `number` comes before `{name}`; `number` must follow every element plugin that emits attributes (ADR-0010)"
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// The chain's accumulated state: one document context (citations are shared by
@@ -300,6 +336,13 @@ fn run_chain(
                 result
             }
 
+            "number" => {
+                // ADR-0010: numbering runs after every element plugin has emitted
+                // its attributes and before `markdown` re-lexes the rest. The
+                // position is validated up front (`validate_number_order`), so a
+                // misordered chain is a config error, not a silent difference.
+                pendon_plugin_number::process(&events, &config.number)
+            }
             "heading" => {
                 let result = pendon_plugin_heading::process(&events, &config.heading);
                 if let Some(hints) = pendon_plugin_heading::solid_hints(&config.heading) {
@@ -503,4 +546,54 @@ fn single_top_level(events: &[Event]) -> bool {
         }
     }
     depth == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_number_order;
+
+    /// ADR-0010: the only accepted shape is "every element plugin, then
+    /// `number`, then `markdown`".
+    #[test]
+    fn number_after_the_elements_and_before_markdown_is_accepted() {
+        assert!(validate_number_order(
+            "T",
+            &["micromatter", "heading", "anchor", "number", "markdown"]
+        )
+        .is_ok());
+        // `markdown` is optional (a chain may end with `number`).
+        assert!(validate_number_order("T", &["heading", "number"]).is_ok());
+    }
+
+    /// A chain without `number` numbers nothing but is still a valid chain.
+    #[test]
+    fn a_chain_without_number_is_accepted() {
+        assert!(validate_number_order("T", &["heading", "markdown"]).is_ok());
+        assert!(validate_number_order("T", &[]).is_ok());
+    }
+
+    /// `number` reads attributes, so it must not run after `markdown` has
+    /// consumed them into components.
+    #[test]
+    fn number_after_markdown_is_rejected() {
+        let err = validate_number_order("T", &["heading", "markdown", "number"])
+            .expect_err("misordered chain");
+        assert!(
+            err.contains("[T] plugin `number` comes after `markdown`"),
+            "{err}"
+        );
+    }
+
+    /// An element plugin that runs *after* `number` would emit its attributes
+    /// too late — silently unnumbered output is the failure mode this guard
+    /// exists for.
+    #[test]
+    fn number_before_an_element_plugin_is_rejected() {
+        let err = validate_number_order("T", &["number", "heading", "markdown"])
+            .expect_err("misordered chain");
+        assert!(
+            err.contains("[T] plugin `number` comes before `heading`"),
+            "{err}"
+        );
+    }
 }

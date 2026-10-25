@@ -196,8 +196,10 @@ The alphanumeric run ends at the first symbol. What follows decides the head:
 ```ebnf
 extras-head = ( "@@" )? [ type ] "{" [ ws items ] ws "}"    # typed / untyped / empty
             | "@@" type                                     # type-only (§4.4)
+            | number-mark                                   # bare `%%numberType` (§10.5)
 items       = item { ws "," ws item } [ ws "," ]
-item        = slug | title | class | id | cssvar | prop | flag
+item        = slug | title | class | id | cssvar | prop | flag | number-mark
+number-mark = "%"(2..7) name                            # depth = run − 1
 slug        = "`" { char } "`"
 title       = dquote | squote
 class       = "." name
@@ -244,6 +246,17 @@ ws          = 1*( " " | "\t" )
   whitespace) rejects the **whole head**, which then falls back to literal text
   (§4.3). Extras are never partially applied.
 - Escape inside a value: `\,` `\"` `\'` `\` ``\\`.
+- A `number-mark` is the `%%numberType` **numbering marker** (§10.5,
+  [ADR-0010](../decisions/0010-plugin-number.md)). It is one whole item — no
+  separator and nothing trailing — and it has three legal positions: alone as
+  the head (`[link](/u)%%numberA`, `##%%numberB`), the **last** item of a `{…}`
+  body (`@@headingA{foo: "bar", %%%numberB}`), or directly after a head
+  (`@@anchorA%%numberB`, `@@headingA{…}%%%numberB`, `@@%%%numberB`). `depth` is
+  normalized once, here (`%%` → 1 … `%%%%%%%` → 6), and the item reaches the
+  plugin as the internal attribute `__number` with
+  `{"depth":1,"type":"numberB"}`; the type keeps the authored spelling, because
+  resolving it is `plugin-number`'s job (§10.5). `%` alone, `%%` with no name and
+  a run of 8+ `%` are literal text with no diagnostic (`D-9`).
 
 ### 5.1 Worked example
 
@@ -473,6 +486,10 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
   MUST NOT become part of the title).
 - Extras attach to the heading element; extras `slug` is ignored when `[slug]`
   exists.
+- The heading does **not** number itself: `[[task.heading.number]]` and
+  `%%numberType` are `plugin-number`'s (§10.5), which reads `level` as the
+  natural depth and writes `attrs.number`. An authored `number:` prop passes
+  through untouched when no block selects the heading.
 
 ### 7.5 Wiki (`plugin-wiki`)
 
@@ -753,14 +770,74 @@ like a marker (§11 rule 3). The node is never rendered as a bare child containe
 
 ### 10.4 Priority summary
 
-| Slot                     | Winner                                                    |
-| ------------------------ | --------------------------------------------------------- |
-| element `id`             | `#id` > head slug > extras slug                           |
-| `title`                  | head `("…")` > extras `"…"`                               |
-| `class`                  | union of head classes and `.x` items, in source order     |
-| `href` / `src` / `start` | construct-owned, never overridable                        |
-| positional group vs body | the group (`[…]` / `(…)`) wins; body value dropped (§6.4) |
-| any other key            | head prop > extras prop                                   |
+| Slot                     | Winner                                                      |
+| ------------------------ | ----------------------------------------------------------- |
+| element `id`             | `#id` > head slug > extras slug                             |
+| `title`                  | head `("…")` > extras `"…"`                                 |
+| `class`                  | union of head classes and `.x` items, in source order       |
+| `href` / `src` / `start` | construct-owned, never overridable                          |
+| positional group vs body | the group (`[…]` / `(…)`) wins; body value dropped (§6.4)   |
+| `number`                 | `%%numberType` marker > `[[task.<element>.number]]` (§10.5) |
+| any other key            | head prop > extras prop                                     |
+
+### 10.5 Numbering (`plugin-number`)
+
+`%%numberType` and `attrs.number` are one plugin's job
+([ADR-0010](../decisions/0010-plugin-number.md)); no element plugin numbers
+anything itself.
+
+```ebnf
+number-type = ALPHA { ALPHA | DIGIT }                # `%%numberB` → "numberB"
+style       = number-system | "[" number-system { "," number-system } "]"
+number-system = "decimal" | "lower-roman"  | "upper-roman"
+              | "lower-alpha" | "upper-alpha" | "lower-latin" | "upper-latin"
+              | "lower-greek"
+```
+
+- **Grammar** (shape, positions, depth normalization, the literal cases) is §5
+  and lives in `crates/extra`. A marker is transported as the internal attribute
+  `__number = {"depth":n,"type":"…"}` and is **stripped by every renderer**,
+  exactly like a `__`-prefixed key.
+- **Config** is repeatable and order-sensitive; a block _is_ a counter:
+
+  ```toml
+  [[task.<element>.number]]     # `<element>` is a chain token: heading, anchor, image, …
+  type = [ … ]                  # §11 selectors: `*` / literal / `_` / `?`; omit = `*`
+  style = "…"                   # one system = every depth
+  style = [ "…", "…" ]          # entry n−1 = the n-th visible depth, `decimal` beyond
+
+  [[task.number.custom]]        # the task-level group a `%%numberType` names
+  type = [ "NumberA" ]
+  style = "upper-alpha"
+  ```
+
+- **Depth.** An element without a natural depth is depth 1 (a heading uses its
+  `level`). The two kinds of block differ here:
+  - **Element blocks** are relative: the **smallest depth is decided across the
+    whole document**, so a `##` written after `###` sections renumbers them and
+    `style[0]` is the group's smallest occurring depth, not necessarily 1.
+  - **Marker blocks** are absolute: a marker's depth is `%`-count − 1 and always
+    counts from 1, so `%%%` is depth 2 on any element and a missing parent counts
+    as the style's first value (`I`, `A`, `1`).
+- **Output** is `attrs.number`: an array of exactly `depth` strings
+  (`["1","2","a"]`), carried through ADR-0005's structured transport so it is a
+  real array in Solid. The plugin never writes the number into the text — a
+  display format (`1.2.a.`) belongs to the component.
+- **Matching.** The marker's type is matched against `[[task.number.custom]]`
+  selectors **case-insensitively** (the source spelling is CamelCase,
+  `%%numberB`). Element types keep §11's case-sensitive literals.
+- **Authored `number:` (D-10).** While a `number` block selects the element, an
+  authored `number:` prop is reserved: it becomes a diagnostic instead of a
+  competing attribute. With no block selecting it, the prop passes through as an
+  ordinary extras value (golden `06-heading`).
+- **Order.** `number` MUST follow every element plugin producing numbered nodes
+  and precede `markdown`; the CLI rejects any other position with a config error
+  naming both plugins.
+- A construct that owns the rest of its line is required for a marker to attach:
+  `![alt](/a.png)%%numberA` numbers the image, while `![alt](/a.png)%%numberA x`
+  leaves `%%numberA` as text (§7.1). Citation numbering stays in `plugin-cite`.
+- Frozen by golden `30-number-heading` (element numbering) and
+  `31-number-custom` (`%%` markers across heading/anchor/image).
 
 ## 11. Custom component config
 
@@ -948,17 +1025,18 @@ Config-load errors MUST abort the build before any file is processed.
 
 ## 14. Retirement and collisions
 
-| Removed                       | Replaced by                          | Note                                                                                                                                                                                                                                                                                                              |
-| ----------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `[task.cite.section]`         | `plugin-marker` (`{{bibliography}}`) | **removed**: `CiteOptions.section` and `CitationContext::replace_section_markers` are gone; the section component is now a marker.                                                                                                                                                                                |
-| `{{section}}` in sources      | marker block                         | **removed**: the `{{ footnote }}` lines in `sandbox/cite` and `sandbox/img` are gone; `{{…}}` is free for `plugin-marker`.                                                                                                                                                                                        |
-| `:::name` custom blocks       | `==type` block directive             | deprecated alias kept for one release (Warning), then hard-error — §15 OPEN-R1.                                                                                                                                                                                                                                   |
-| bare `===` table footer       | `\|===\|`                            | **removed**: only `\|===\|` remains.                                                                                                                                                                                                                                                                              |
-| `o.` ordered-list offset      | first item's number                  | **removed**: an `ol`'s `start` comes from the first item and is not overridable (§9.4).                                                                                                                                                                                                                           |
-| `plugin-quiz` (`:::quiz`)     | —                                    | retired from the pipeline; plugin code stays, deep rework later.                                                                                                                                                                                                                                                  |
-| legacy `[.c,#id]{k:v}`        | `{…}` / `@@type{…}`                  | **removed** (D3): plain literal text, no warning, no deprecation path. Gone from the code (`parse_attrs`, `ExtraAttrs`, `legacy_extras_warning`), docs, sandboxes and READMEs.                                                                                                                                    |
-| `import = "…"` (string)       | `imports = ["…"]`                    | **removed**: the singular form is accepted with a Warning (§15 OPEN-C2), then hard-errors.                                                                                                                                                                                                                        |
-| `[task.<plugin>.custom_node]` | `[task.<plugin>.custom.<layer>]`     | **removed**: `custom.<layer>` is read for `anchor`, `image` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`); every sandbox/fixture config is migrated. The stale key fails the build with a migration message. Unwired layers (`task.image.custom.img`) are config errors. |
+| Removed                                         | Replaced by                          | Note                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `[task.cite.section]`                           | `plugin-marker` (`{{bibliography}}`) | **removed**: `CiteOptions.section` and `CitationContext::replace_section_markers` are gone; the section component is now a marker.                                                                                                                                                                                |
+| `{{section}}` in sources                        | marker block                         | **removed**: the `{{ footnote }}` lines in `sandbox/cite` and `sandbox/img` are gone; `{{…}}` is free for `plugin-marker`.                                                                                                                                                                                        |
+| `:::name` custom blocks                         | `==type` block directive             | deprecated alias kept for one release (Warning), then hard-error — §15 OPEN-R1.                                                                                                                                                                                                                                   |
+| bare `===` table footer                         | `\|===\|`                            | **removed**: only `\|===\|` remains.                                                                                                                                                                                                                                                                              |
+| `o.` ordered-list offset                        | first item's number                  | **removed**: an `ol`'s `start` comes from the first item and is not overridable (§9.4).                                                                                                                                                                                                                           |
+| `plugin-quiz` (`:::quiz`)                       | —                                    | retired from the pipeline; plugin code stays, deep rework later.                                                                                                                                                                                                                                                  |
+| legacy `[.c,#id]{k:v}`                          | `{…}` / `@@type{…}`                  | **removed** (D3): plain literal text, no warning, no deprecation path. Gone from the code (`parse_attrs`, `ExtraAttrs`, `legacy_extras_warning`), docs, sandboxes and READMEs.                                                                                                                                    |
+| `import = "…"` (string)                         | `imports = ["…"]`                    | **removed**: the singular form is accepted with a Warning (§15 OPEN-C2), then hard-errors.                                                                                                                                                                                                                        |
+| `[task.<plugin>.custom_node]`                   | `[task.<plugin>.custom.<layer>]`     | **removed**: `custom.<layer>` is read for `anchor`, `image` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`); every sandbox/fixture config is migrated. The stale key fails the build with a migration message. Unwired layers (`task.image.custom.img`) are config errors. |
+| `[task.heading]` `auto_number` / `number_style` | `[[task.heading.number]]`            | **removed** (ADR-0010): both keys are read only to raise the §14 migration error. Numbering is `plugin-number` (§10.5), which writes `attrs.number` as an array and never prefixes the text.                                                                                                                      |
 
 ## 15. Open decisions
 

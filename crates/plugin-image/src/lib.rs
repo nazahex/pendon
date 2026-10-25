@@ -849,6 +849,12 @@ fn push_common_attrs(out: &mut Vec<Event>, attrs: &ImageAttrs, flags: &[String])
             attribute(out, "type", v);
             continue;
         }
+        // `D-9`: a double-underscore key is internal transport (`__number`), not
+        // an extra prop; the renderers strip it, so it must not be `data-`-prefixed.
+        if k.starts_with("__") {
+            attribute(out, k, v);
+            continue;
+        }
         attribute(out, &format!("data-{}", k), v);
     }
 
@@ -1150,6 +1156,26 @@ mod tests {
         assert!(has_attribute(&out, "class", "x"));
         assert!(has_attribute(&out, "data-foo", "bar"));
         assert!(has_attribute(&out, "style", "--r: 5deg;"));
+    }
+
+    /// ADR-0010 `D-9`: `__number` is internal transport, not an extra prop, so the
+    /// HTML fallback passes it verbatim instead of `data-`-prefixing it (the
+    /// renderers strip it; `plugin-number` reads it).
+    #[test]
+    fn internal_number_attribute_is_not_prefixed() {
+        let pipeline = Pipeline::default();
+        let events = paragraph_events("![Alt](https://x.test/a.webp)%%numberA");
+        let out = process(&events, &ImageOptions::default(), &pipeline);
+
+        assert!(has_attribute(&out, "__layer", "img"));
+        assert!(has_attribute(
+            &out,
+            "__number",
+            r#"{"depth":1,"type":"numberA"}"#
+        ));
+        assert!(!out.iter().any(
+            |event| matches!(event, Event::Attribute { name, .. } if name == "data-__number")
+        ));
     }
 
     #[test]

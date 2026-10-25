@@ -13,8 +13,8 @@ use crate::config::ConfigTask;
 use crate::plugins::{
     build_anchor_options, build_bind_injects, build_blockquote_options, build_cite_options,
     build_directive_options, build_heading_options, build_image_options, build_list_options,
-    build_marker_options, build_section_options, build_table_options, has_plugin,
-    merge_solid_hints, DocumentContext,
+    build_marker_options, build_number_options, build_section_options, build_table_options,
+    has_plugin, merge_solid_hints, DocumentContext,
 };
 use crate::utils::{extract_frontmatter_for_cite, maybe_pretty, merge_refs_for_context};
 
@@ -145,6 +145,10 @@ pub fn process_single_file(
         heading.section_owns_id = config.has("section");
         config.heading = heading;
     }
+    // ADR-0010: the numbering blocks are validated for every task, so a typo in
+    // a `type` selector fails even before the plugin is enabled; the pass itself
+    // only runs when `number` is in `task.plugin`.
+    config.number = plugin_options!(build_number_options(task));
 
     // Text stages first: a leading `---` block only becomes a node here, and the
     // citation context is built from the references it holds.

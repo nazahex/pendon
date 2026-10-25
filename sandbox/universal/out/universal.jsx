@@ -4,32 +4,32 @@ import Parego from "@comp/shared/Parego";
 import Epis from '@comp/Epis'
 
 export const frontmatter = {"references":{"paper-smith":{"authors":[{"firstName":"John","lastName":"Smith"},{"firstName":"Jane","lastName":"Doe"}],"containerTitle":"Journal of Web Engineering","doi":"10.1016/j.jwe.2025.08.001","id":"paper-smith","issue":"4","issuedDate":{"month":8,"year":2025},"language":"en","pages":"210-225","title":"Generative MDX to PDF Compilation Architectures","type":"journal","volume":"18"},"suryana-2026":{"authors":[{"firstName":"Eko","lastName":"Suryana"}],"id":"suryana-2026","isbn":"978-602-0000-00-0","issuedDate":{"year":2026},"language":"id","publisher":"TechPress Indonesia","publisherLocation":"Jakarta","title":"Masa Depan Rekayasa Perangkat Lunak","type":"book"}},"title":"Universal Custom Syntax"};
-export const headings = [{"id":"image","text":"Image","level":2},{"id":"anchor","text":"Anchor","level":2},{"id":"cite","text":"Cite","level":2},{"id":"heading-slug","text":"Heading","level":2,"subheadings":[{"id":"foo-bar","text":"Foo Bar Barosa","level":3}]},{"id":"table","text":"Table","level":2},{"id":"latex","text":"Latex","level":2},{"id":"custom-plugins","text":"Custom Plugins","level":2},{"id":"lists","text":"Lists","level":2}];
+export const headings = [{"id":"image","level":2,"text":"Image"},{"id":"anchor","level":2,"text":"Anchor"},{"id":"cite","level":2,"text":"Cite"},{"id":"heading-slug","level":2,"subheadings":[{"id":"foo-bar","level":3,"text":"Foo Bar Barosa"}],"text":"Heading"},{"id":"table","level":2,"text":"Table"},{"id":"latex","level":2,"text":"Latex"},{"id":"custom-plugins","level":2,"text":"Custom Plugins"},{"id":"lists","level":2,"text":"Lists"}];
 export const references = {"paper-smith":{"authors":[{"firstName":"John","lastName":"Smith"},{"firstName":"Jane","lastName":"Doe"}],"containerTitle":"Journal of Web Engineering","doi":"10.1016/j.jwe.2025.08.001","id":"paper-smith","issue":"4","issuedDate":{"month":8,"year":2025},"language":"en","pages":"210-225","title":"Generative MDX to PDF Compilation Architectures","type":"journal","volume":"18"},"suryana-2026":{"authors":[{"firstName":"Eko","lastName":"Suryana"}],"id":"suryana-2026","isbn":"978-602-0000-00-0","issuedDate":{"year":2026},"language":"id","publisher":"TechPress Indonesia","publisherLocation":"Jakarta","title":"Masa Depan Rekayasa Perangkat Lunak","type":"book"}};
 export const citations = [{"citation_number":1,"instance_index":1,"ref_id":"suryana-2026"},{"citation_number":1,"instance_index":2,"ref_id":"suryana-2026"},{"citation_number":2,"instance_index":3,"loc":"hlm. 45","ref_id":"suryana-2026"},{"citation_number":1,"instance_index":4,"ref_id":"suryana-2026"},{"citation_number":2,"instance_index":5,"loc":"hlm. 45","ref_id":"suryana-2026"},{"citation_number":3,"instance_index":6,"ref_id":"paper-smith"},{"citation_number":1,"instance_index":7,"ref_id":"suryana-2026"},{"citation_number":2,"instance_index":8,"loc":"hlm. 45","ref_id":"suryana-2026"}];
 export default function PendonView() { return (<>
 <section id="image">
-<h2>1. Image</h2>
+<h2 number={["1"]}>Image</h2>
 <figure class="extra class or" data-baz="23" data-foo="bar" id="custom-id" style="--wix: sum; --rotate: 5deg;"><img alt="lorem ipsum" decoding="async" height="300" loading="lazy" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" width="800" /><figcaption>Exercitation qui <strong>exercitation</strong> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>o</mi><mi>l</mi><mi>o</mi><mi>r</mi></mrow><annotation encoding="application/x-tex">dolor</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal">o</span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="mord mathnormal" style="margin-right:0.02778em;">or</span></span></span></span>`}></span> &#123;velit&#125; <i>aliqua</i> <a href="/Anim_Esta_(Officia)" title="Anim Esta (Officia)">Anim</a> consectetur <Cite reference={references["suryana-2026"]} citation_number={1} instance_index={4} /> voluptate <a href="/foo/bar" rel="noopener noreferrer sponsored nofollow" target="_blank" title="Buy Foo!">labore</a> labore elit non esse occaecat. <Cite reference={references["suryana-2026"]} citation_number={2} instance_index={5} loc="hlm. 45" /> <Epis level={2}>Et deserunt sunt consectetur elit.</Epis></figcaption></figure>
 </section>
 <section id="anchor">
-<h2>2. Anchor</h2>
+<h2 number={["2"]}>Anchor</h2>
 <p><a class="extra qur" href="https://foo.com/bar" hreflang="en" id="rew" qux="rox" rel="noopener noreferrer nofollow sponsored prefetch" target="_self" title="Title Foo">consectetur</a> Incididunt &#123;cupidatat&#125; quis et pariatur commodo laborum consectetur anim do minim anim in.
 </p>
 </section>
 <section id="cite">
-<h2>3. Cite</h2>
+<h2 number={["3"]}>Cite</h2>
 <p>Minim <Cite reference={references["paper-smith"]} citation_number={3} cite-id="smith" class="paper" instance_index={6} rox="hen" /> esse do ut anim proident est qui <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi></mrow><annotation encoding="application/x-tex">F</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span></span></span></span>`}></span> magna non elit quis eiusmod dolore.
 </p>
 </section>
 <section id="heading-slug">
-<h2>4. Heading</h2>
+<h2 number={["4"]}>Heading</h2>
 <section id="foo-bar">
-<h3 class="hoo" qun="anu">4.1. Foo Bar Barosa</h3>
+<h3 class="hoo" number={["4", "1"]} qun="anu">Foo Bar Barosa</h3>
 </section>
 </section>
 <section id="table">
-<h2>5. Table</h2>
+<h2 number={["5"]}>Table</h2>
 <table>
   <caption class="striped foo" id="sales-table" qux="true" sortable="true">Laporan <a href="https://foo.com" rel="noopener" target="_blank" title="Foo">Penjualan</a> 2026 <a href="/Foo" title="Foo">Foo Bar</a></caption>
   <thead>
@@ -77,7 +77,7 @@ export default function PendonView() { return (<>
 </p>
 </section>
 <section id="latex">
-<h2>6. Latex</h2>
+<h2 number={["6"]}>Latex</h2>
 <p><span class="latex latex-block" style="display: block;" innerHTML={`<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mo stretchy="false">(</mo><mo stretchy="false">(</mo><mi>H</mi><mo>→</mo><mi>O</mi><mo stretchy="false">)</mo><mo>∧</mo><mi mathvariant="normal">¬</mi><mi>O</mi><mo stretchy="false">)</mo><mo>→</mo><mi mathvariant="normal">¬</mi><mi>H</mi></mrow><annotation encoding="application/x-tex">((H \\rightarrow O) \\land \\lnot O) \\rightarrow \\lnot H</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">((</span><span class="mord mathnormal" style="margin-right:0.08125em;">H</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">∧</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">¬</span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">¬</span><span class="mord mathnormal" style="margin-right:0.08125em;">H</span></span></span></span></span>`}></span>
 
 </p>
@@ -85,7 +85,7 @@ export default function PendonView() { return (<>
 </p>
 </section>
 <section id="custom-plugins">
-<h2>7. Custom Plugins</h2>
+<h2 number={["7"]}>Custom Plugins</h2>
 <Parego type="note" title="Foo Bar" tag="Bax Xo"><p>Ullamco excepteur adipisicing quis ullamco ea mollit et nulla sint non et id commodo commodo <Cite reference={references["suryana-2026"]} citation_number={2} cite-id="surya" class="suyn" instance_index={8} loc="hlm. 45" rox="hen" /><Epis level={3}>Aliquip commodo commodo et ut reprehenderit qui magna laboris et.</Epis>.
 </p>
 <Hint type="!"><p>In amet deserunt consequat cupidatat laboris cupidatat.
@@ -103,7 +103,7 @@ export default function PendonView() { return (<>
 </ul>
 </Parego></section>
 <section id="lists">
-<h2>8. Lists</h2>
+<h2 number={["8"]}>Lists</h2>
 <ul>
 <li>Alpha</li>
 <li>Beta</li>

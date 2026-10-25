@@ -37,8 +37,8 @@ Kanonik: &#123;...&#125; tanpa @@. @@type hanya untuk routing. @@&#123;...&#125;
 Label pensiun: H22, E44 (setext tidak didukung).
 --&gt;
 </p>
-<h1 id="s-top">1. Unified Demo</h1>
-<h2 id="s-anchor">1.1. Anchor</h2>
+<h1 id="s-top" number={["1"]}>Unified Demo</h1>
+<h2 id="s-anchor" number={["1", "1"]}>Anchor</h2>
 <p>A01 <a href="/a">plain</a>
 </p>
 <p>A02 <a href="/a" title="T">title</a>
@@ -153,45 +153,43 @@ Label pensiun: H22, E44 (setext tidak didukung).
 </p>
 <p>A52 <a class="x" href="/a" type="anchor1">t</a>
 </p>
-<h2 id="s-heading">1.2. Heading</h2>
-<h3 id="h01">1.2.1. H01 slug</h3>
-<h3 title="T02">1.2.2. H02 title</h3>
-<h3 class="x" type="headingX">1.2.3. H03 type+X</h3>
-<h3>1.2.4. H04 plain</h3>
-<h3 id="h05" title="T05">1.2.5. H05 slug+title</h3>
-<h3 class="x" id="h06" type="headingX">1.2.6. H06 slug+X</h3>
-<h3 class="x" id="i" title="T07" type="headingY">1.2.7. H07 title+XY</h3>
-<h3 class="a b" id="i" k="v" n="2" title="T08" type="headingX">1.2.8. H08 XXYZZ</h3>
-<h3 bar="12" class="extra class" foo="bar" id="id" isBar isFoo="true" style="--style-var: 2rem" title="T09" type="headingX">1.2.9. H09 all</h3>
-<h3 class="x">1.2.10. H10 untyped</h3>
-<h3 class="x">1.2.11. H10n untyped non-canonical</h3>
-<h3>1.2.12. H11 empty</h3>
-<h3>1.2.13. H11n empty non-canonical</h3>
-<h3 class="x" type="headingZ">1.2.14. H12 unclaimed</h3>
-<h3 type="headingX">1.2.15. H13 type only</h3>
-<h3 class="x" id="h14" title="T14">1.2.16. H14 precedence</h3>
-<h3 class="x" id="h14n" title="T14n">1.2.17. H14n precedence non-canonical</h3>
-<h1 class="l1" id="h15" type="headingX">2. H15 level 1</h1>
-<h2 class="l2">2.1. H16 level 2</h2>
-<h2 class="l2n">2.2. H16n level 2 non-canonical</h2>
-<h4 class="l4" id="h17" type="headingY">2.2.0.1. H17 level 4</h4>
-<h6 class="l6" title="T18">2.2.0.1.0.1. H18 level 6 (skips 5)</h6>
-<h6 class="l6n" title="T18n">2.2.0.1.0.2. H18n level 6 non-canonical</h6>
-<h3 class="k" id="h19" title="T19" type="headingX">2.2.1. H19 KS <AnchorAll class="k" href="/x" title="T" type="anchorA">a</AnchorAll> <strong>b</strong> <i>i</i> <code>c</code> [[W]]@@wikiX&#123;.k&#125; <a class="k" href="paper-smith" type="citeX">^^</a> &#123;&#123;footnote&#125;&#125;&#123;.k&#125; ::asideA&#123;.k&#125; d:: $x$</h3>
+<h2 id="s-heading" number={["1", "2"]}>Heading</h2>
+<h3 id="h01" number={["1", "2", "1"]}>H01 slug</h3>
+<h3 number={["1", "2", "2"]} title="T02">H02 title</h3>
+<h3 class="x" number={["1", "2", "3"]} type="headingX">H03 type+X</h3>
+<h3 number={["1", "2", "4"]}>H04 plain</h3>
+<h3 id="h05" number={["1", "2", "5"]} title="T05">H05 slug+title</h3>
+<h3 class="x" id="h06" number={["1", "2", "6"]} type="headingX">H06 slug+X</h3>
+<h3 class="x" id="i" number={["1", "2", "7"]} title="T07" type="headingY">H07 title+XY</h3>
+<h3 class="a b" id="i" k="v" n="2" number={["1", "2", "8"]} title="T08" type="headingX">H08 XXYZZ</h3>
+<h3 bar="12" class="extra class" foo="bar" id="id" isBar isFoo="true" number={["1", "2", "9"]} style="--style-var: 2rem" title="T09" type="headingX">H09 all</h3>
+<h3 class="x" number={["1", "2", "10"]}>H10 untyped</h3>
+<h3 class="x" number={["1", "2", "11"]}>H10n untyped non-canonical</h3>
+<h3 number={["1", "2", "12"]}>H11 empty</h3>
+<h3 number={["1", "2", "13"]}>H11n empty non-canonical</h3>
+<h3 class="x" number={["1", "2", "14"]} type="headingZ">H12 unclaimed</h3>
+<h3 number={["1", "2", "15"]} type="headingX">H13 type only</h3>
+<h3 class="x" id="h14" number={["1", "2", "16"]} title="T14">H14 precedence</h3>
+<h3 class="x" id="h14n" number={["1", "2", "17"]} title="T14n">H14n precedence non-canonical</h3>
+<h1 class="l1" id="h15" number={["2"]} type="headingX">H15 level 1</h1>
+<h2 class="l2" number={["2", "1"]}>H16 level 2</h2>
+<h2 class="l2n" number={["2", "2"]}>H16n level 2 non-canonical</h2>
+<h4 class="l4" id="h17" number={["2", "2", "1", "1"]} type="headingY">H17 level 4</h4>
+<h6 class="l6" number={["2", "2", "1", "1", "1", "1"]} title="T18">H18 level 6 (skips 5)</h6>
+<h6 class="l6n" number={["2", "2", "1", "1", "1", "2"]} title="T18n">H18n level 6 non-canonical</h6>
+<h3 class="k" id="h19" number={["2", "2", "2"]} title="T19" type="headingX">H19 KS <AnchorAll class="k" href="/x" title="T" type="anchorA">a</AnchorAll> <strong>b</strong> <i>i</i> <code>c</code> [[W]]@@wikiX&#123;.k&#125; <a class="k" href="paper-smith" type="citeX">^^</a> &#123;&#123;footnote&#125;&#125;&#123;.k&#125; ::asideA&#123;.k&#125; d:: $x$</h3>
 <p>&lt;!-- H20: heading with empty text, typed --&gt;
 </p>
-<h3 class="x" type="headingX">2.2.2. 
-</h3>
-<h3 id="h21">2.2.3. H21 closing hashes ###</h3>
+<h3 class="x" number={["2", "2", "3"]} type="headingX"></h3>
+<h3 id="h21" number={["2", "2", "4"]}>H21 closing hashes ###</h3>
 <p>&lt;!-- H23: heading with empty text, untyped --&gt;
 </p>
-<h3 class="x">2.2.4. 
-</h3>
-<h3 class="k" id="h24">2.2.5. H24 KSu <a class="k" href="/x" title="T">a</a> <strong>b</strong> <i>i</i> <code>c</code> [[W]]&#123;.k&#125; <a class="k" href="paper-smith">^^</a> &#123;&#123;footnote&#125;&#125;&#123;.k&#125; ::asideA&#123;.k&#125; d:: $x$</h3>
-<h3 class="a" id="i" k="v" title="T25">2.2.6. H25 slug+title+XXYZ untyped</h3>
-<h3 class="a" title="T26">2.2.7. H26 title+X untyped</h3>
-<h3 class="a" id="h27">2.2.8. H27 slug+X untyped, slug precedence</h3>
-<h2 id="s-image">2.3. Image and figure</h2>
+<h3 class="x" number={["2", "2", "5"]}></h3>
+<h3 class="k" id="h24" number={["2", "2", "6"]}>H24 KSu <a class="k" href="/x" title="T">a</a> <strong>b</strong> <i>i</i> <code>c</code> [[W]]&#123;.k&#125; <a class="k" href="paper-smith">^^</a> &#123;&#123;footnote&#125;&#125;&#123;.k&#125; ::asideA&#123;.k&#125; d:: $x$</h3>
+<h3 class="a" id="i" k="v" number={["2", "2", "7"]} title="T25">H25 slug+title+XXYZ untyped</h3>
+<h3 class="a" number={["2", "2", "8"]} title="T26">H26 title+X untyped</h3>
+<h3 class="a" id="h27" number={["2", "2", "9"]}>H27 slug+X untyped, slug precedence</h3>
+<h2 id="s-image" number={["2", "3"]}>Image and figure</h2>
 <p>~!w800<a href="/i.png">I01</a>
 </p>
 <p>~!w800<a href="/i.png">I02</a> Caption only
@@ -246,7 +244,7 @@ Label pensiun: H22, E44 (setext tidak didukung).
 </p>
 <p>~?!!w100<a class="f" href="/i.png">I23</a> Caption KSu <a class="k" href="/x">a</a><a class="k" href="paper-smith">^^</a> [[W]]&#123;.k&#125; &#123;&#123;footnote&#125;&#125;&#123;.k&#125; ::asideA&#123;.k&#125; d:: $x$ <strong>b</strong>
 </p>
-<h2 id="s-cite">2.4. Cite</h2>
+<h2 id="s-cite" number={["2", "4"]}>Cite</h2>
 <p>&lt;!-- Cite form: <a href="id" title="loc">^^</a>. The old <a href="" title="id&quot;, &quot;loc">^^</a> is obsolete. --&gt;
 </p>
 <p>C01 Minim <a href="paper-smith">^^</a> esse.
@@ -301,7 +299,7 @@ Label pensiun: H22, E44 (setext tidak didukung).
 </p>
 <p>C23 Minim <a href="paper-smith" type="citeX">^^</a>. esse
 </p>
-<h2 id="s-wiki">2.5. Wiki</h2>
+<h2 id="s-wiki" number={["2", "5"]}>Wiki</h2>
 <p>W01 [[Wireless]]
 </p>
 <p>W02 [[Anim Esta (Officia) | Anim]]
@@ -350,7 +348,7 @@ Label pensiun: H22, E44 (setext tidak didukung).
 </p>
 <p>W21 [[Wireless]]@@wikiX.
 </p>
-<h2 id="s-marker">2.6. Marker</h2>
+<h2 id="s-marker" number={["2", "6"]}>Marker</h2>
 <p>M01 inline &#123;&#123;footnote&#125;&#125; ipsum.
 </p>
 <p>M02 inline &#123;&#123;footnote&#125;&#125;&#123;.x&#125; ipsum.
@@ -403,7 +401,7 @@ order) and the marker renders bare. --&gt;
 </p>
 <p>M19 inline &#123;&#123;footnote&#125;&#125;[m19] and &#123;&#123;markerA&#125;&#125;(&quot;M19&quot;) ipsum.
 </p>
-<h2 id="s-table">2.7. Table</h2>
+<h2 id="s-table" number={["2", "7"]}>Table</h2>
 <p>&lt;!--
 </p>
 <table>
@@ -506,7 +504,7 @@ x</blockquote>
 </p>
 <Table><thead><tr><th>A</th><th>B</th><th>C</th></tr></thead><tbody><tr><td></td><td>x</td><td>y</td></tr><tr><td class="s" rowspan="2">@@cellB&#123;&#125; &gt;</td><td>x</td><td>y</td></tr><tr><td>x</td><td>y</td></tr><tr><td class="s" colspan="2">a</td><td>y</td></tr><tr><td></td><td>@@cellB&#123;.span&#125; merged</td><td>z</td></tr></tbody></Table><p>T31 a cell starting with a marker touching the pipe (head vs marker, edge):
 </p>
-<Table><thead><tr><th>A</th><th>B</th><th>C</th></tr></thead><tbody><tr><td>&#123;&#123;footnote&#125;&#125;&#123;.m&#125; x</td><td>&#123;&#123;markerA&#125;&#125; y</td><td>z</td></tr><tr><td>&#123;&#123;footnote&#125;&#125;</td><td>w</td><td>v</td></tr></tbody></Table><h2 id="s-quote">2.8. Blockquote</h2>
+<Table><thead><tr><th>A</th><th>B</th><th>C</th></tr></thead><tbody><tr><td>&#123;&#123;footnote&#125;&#125;&#123;.m&#125; x</td><td>&#123;&#123;markerA&#125;&#125; y</td><td>z</td></tr><tr><td>&#123;&#123;footnote&#125;&#125;</td><td>w</td><td>v</td></tr></tbody></Table><h2 id="s-quote" number={["2", "8"]}>Blockquote</h2>
 <p>&lt;!-- §9.2: inner head (right after <code>&gt;</code>) + a decorator line directly above the quote. The inner head wins; an unclaimed type falls back to the layer default (§11 rule 3). §6.1 groups: a bracket group becomes the inner head&#39;s slug and a parentheses group its title; a bracket group immediately followed by a parentheses group is an anchor head and the anchor layer runs first, so the head keeps only its type. --&gt;
 </p>
 <blockquote>

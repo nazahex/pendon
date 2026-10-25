@@ -194,4 +194,63 @@ mod tests {
             assert!(!output.contains("$fragment"), "output = {output}");
         }
     }
+
+    /// ADR-0010/D-9: the `__number` transport attribute is stripped, and the
+    /// numbering reaches HTML as its JSON text (the §6.3 structured fallback).
+    #[test]
+    fn the_internal_number_marker_never_reaches_the_html() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Attribute {
+                name: "__number".to_string(),
+                value: "{\"depth\":1,\"type\":\"numberB\"}".to_string(),
+            },
+            Event::Attribute {
+                name: "number".to_string(),
+                value: format!("{}{}", pendon_core::JSON_ATTR_PREFIX, "[\"1\",\"a\"]"),
+            },
+            Event::Text("Body".to_string()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let output = render_html(&events);
+        assert!(!output.contains("__number"), "output = {output}");
+        assert!(output.contains("number="), "output = {output}");
+    }
+
+    /// §11 rule 3: `__layer` (and every other `__`-prefixed key) is an internal
+    /// marker. `Link` writes its own attributes, so it needs the same skip as
+    /// `render_attrs_except` — otherwise an anchor would leak its routing layer.
+    #[test]
+    fn a_links_internal_marker_never_reaches_the_html() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::StartNode(NodeKind::Link),
+            Event::Attribute {
+                name: "href".to_string(),
+                value: "/foo".to_string(),
+            },
+            Event::Attribute {
+                name: "__layer".to_string(),
+                value: "anchor".to_string(),
+            },
+            Event::Attribute {
+                name: "rel".to_string(),
+                value: "noopener".to_string(),
+            },
+            Event::Text("link".to_string()),
+            Event::EndNode(NodeKind::Link),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        for output in [render_html(&events), render_html_pretty(&events)] {
+            assert!(!output.contains("__layer"), "output = {output}");
+            assert!(output.contains("href=\"/foo\""), "output = {output}");
+            assert!(output.contains("rel=\"noopener\""), "output = {output}");
+        }
+    }
 }

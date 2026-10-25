@@ -346,7 +346,7 @@ Workflow: §6. One writer, a list of registrations, `format != solid` drops them
 
 Workflow: §7. All numbering lives in one plugin; `attrs.number` is an array.
 
-### [ ] T3.1 — Parse `%%type` in `crates/extra`
+### [x] T3.1 — Parse `%%type` in `crates/extra`
 
 - **C**: `extra`.
 - **R**: `crates/extra/src/{lib,decorator,extras}.rs` (`ParsedExtras`,
@@ -362,7 +362,7 @@ Workflow: §7. All numbering lives in one plugin; `attrs.number` is an array.
 - **Verify**: `cargo test -p pendon-extra` + the `02-extras-literal` golden.
 - **Done**: unit tests cover all four literal cases and both legal positions.
 
-### [ ] T3.2 — Confirm `__number` never reaches output
+### [x] T3.2 — Confirm `__number` never reaches output
 
 - **R**: `crates/renderer-html/src/utils.rs:32`,
   `crates/renderer-solid/src/{node,template}.rs` (both already skip
@@ -373,7 +373,7 @@ Workflow: §7. All numbering lives in one plugin; `attrs.number` is an array.
 - **Verify**: `cargo test -p pendon-renderer-solid -p pendon-renderer-html`.
 - **Done**: three tests, one per renderer family.
 
-### [ ] T3.3 — `crates/plugin-number` skeleton + number systems
+### [x] T3.3 — `crates/plugin-number` skeleton + number systems
 
 - **C**: new crate.
 - **R**: `docs/guides/plugin-authoring.md`, `crates/plugin-heading/README.md`
@@ -388,7 +388,7 @@ Workflow: §7. All numbering lives in one plugin; `attrs.number` is an array.
 - **Done**: every tier-1 system has a test at 1, 4, 9, 27, 3999 and 4000 (roman
   falls back past 3999).
 
-### [ ] T3.4 — Two passes, group minimum, counters
+### [x] T3.4 — Two passes, group minimum, counters
 
 - **Do**: pass 1 collects member depths per group → group minimum; pass 2 assigns
   numbers. State per winning rule: `levels: Vec<u64>`, increment at the
@@ -402,14 +402,14 @@ Workflow: §7. All numbering lives in one plugin; `attrs.number` is an array.
 - **Done**: both edge cases from §7.1 of the proposal are covered by tests, not
   only by goldens.
 
-### [ ] T3.5 — Styles resolve per depth
+### [x] T3.5 — Styles resolve per depth
 
 - **Do**: string style → all depths; array style → depth _n_ uses entry _n−1_;
   deeper depths and out-of-range entries fall back to `decimal`.
 - **Verify**: `cargo test -p pendon-plugin-number style`.
 - **Done**: the P.2 style table (`I.a`, `II.`, `A.`, …) is a unit test.
 
-### [ ] T3.6 — `plugin-heading` loses numbering
+### [x] T3.6 — `plugin-heading` loses numbering
 
 - **R**: `crates/plugin-heading/src/lib.rs` (the `NumberStyle` enum, the counter,
   `lib.rs:351`), `crates/plugin-heading/README.md`.
@@ -421,7 +421,7 @@ Workflow: §7. All numbering lives in one plugin; `attrs.number` is an array.
   the migration message text.
 - **Done**: no `number` attribute is produced by any heading code path.
 
-### [ ] T3.7 — CLI wiring
+### [x] T3.7 — CLI wiring
 
 - **C**: `apps/cli`.
 - **Do**: add the crate to workspace `members` and `apps/cli/Cargo.toml`;
@@ -433,7 +433,7 @@ Workflow: §7. All numbering lives in one plugin; `attrs.number` is an array.
 - **Done**: a misordered `plugin = "number,heading"` fails before rendering with
   a message naming both plugins.
 
-### [ ] T3.8 — Goldens
+### [x] T3.8 — Goldens
 
 - **Do**: re-freeze `06-heading` (the fixture loses its numbers; update the
   README row's description), add `30-number-heading` (the P.1 illustration) and
@@ -441,14 +441,30 @@ Workflow: §7. All numbering lives in one plugin; `attrs.number` is an array.
 - **Verify**: `cargo test -p pendon --test syntax_spec`.
 - **Done**: `30`/`31` byte-freeze the two acceptance lists in §7.4 verbatim.
 
-### [ ] T3.9 — Docs + Phase 3 gate
+### [x] T3.9 — Docs + Phase 3 gate
 
 - **Do**: SYNTAX §5 gains the `%%` item and §N for `number` config (one place;
   link from `crates/plugin-number/README.md`), ADR for the `__number` transport
   decision, `STATUS.md`.
 - **Gate**: `cargo test --workspace`, `cargo clippy --workspace --all-targets`.
 
-### [ ] T3.10 — Editor grammar for `%%` (optional, skippable)
+> Landed with four deviations from the sketch:
+>
+> - The `%%` grammar has **three** positions, not two: a bare `%%name` head of its
+>   own (`[link](/u)%%a`, `##%%a`), the last item of a `{…}` body, and a trailing
+>   mark after a head (`@@anchorA%%a`, `@@headingA{…}%%a`).
+> - `plugin-image`'s HTML fallback prefixed the internal attribute as
+>   `data-__number`, so `plugin-number` never saw it. A `__`-prefixed key now
+>   passes through verbatim (one test), matching the renderers' strip rule.
+> - A marker can only attach to a construct that owns the rest of its line, so a
+>   plain image is numbered as `![alt](/a.png)%%numberA` alone on its line; the
+>   P.2 illustration's trailing prose stays literal text (§7.1). Golden `31`
+>   reflects that.
+> - Golden names stayed `30-number-heading` / `31-number-custom` (this file's
+>   sketch, not the ADR's stale `29/30/31-…cite` placeholders); ADR-0010's
+>   evidence line was corrected.
+
+### [x] T3.10 — Editor grammar for `%%` (optional, skippable)
 
 - **C**: `editors/vscode/`.
 - **R**: `editors/vscode/README.md`, `editors/vscode/syntaxes/pendon.tmLanguage.json`
@@ -460,6 +476,11 @@ Workflow: §7. All numbering lives in one plugin; `attrs.number` is an array.
 - **Verify**: the scope harness named in `editors/vscode/README.md`, plus a manual
   check against golden `30-number-heading`.
 - **Done**: plain `%` and `8+` `%` stay unstyled in the editor.
+
+> Landed as `#numberMark` in both grammars (the `.md` injection shares the
+> repository), scoped `meta.number-mark.pendon`; `tools/self-test.mjs` and
+> `check-scopes` on golden `31` confirm `%%{2,7}name` matches while `%% text`,
+> a single `%` and an 8+ run stay plain.
 
 ---
 

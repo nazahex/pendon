@@ -1,0 +1,29 @@
+[[task]]
+name = "Golden 31"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,heading,anchor,image,number,markdown"
+format = "solid"
+
+[[task.heading.custom]]
+name = "Heading"
+imports = "import { Heading } from '@comp/Heading'"
+template = "<Heading {...attrs}>{children}</Heading>"
+
+# P.2 of docs/issues/plugin-number.md: the element block, then one block per
+# `numberType`. A string `style` applies to every depth, an array to depth n.
+[[task.heading.number]]
+type = ["HeadingA"]
+style = ["upper-alpha", "lower-alpha"]
+
+[[task.number.custom]]
+type = ["NumberA"]
+style = "upper-alpha"
+
+[[task.number.custom]]
+type = ["NumberB"]
+style = ["upper-roman", "lower-alpha", "decimal"]
+
+[[task.number.custom]]
+type = ["NumberC"]
+style = ["upper-alpha", "lower-alpha", "upper-roman", "lower-roman"]

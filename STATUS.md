@@ -16,121 +16,30 @@ line is done, delete it (the git history is the record) — keep this file short
 
 ## Current focus
 
-Phase 4 wiring of `plugin-list` L2/L3 (the `<li>` item layer) and the docs
-restructure. The container layers (`list`/`unordered`/`ordered`, blockquote)
-landed; the item layer is next.
+Four proposals, one sequenced plan ([`docs/workflows/`](docs/workflows/), 40 tasks
+in [`TASKS.md`](docs/workflows/TASKS.md)). **Phases 0–3 are landed**; Phase 4
+(`plugin-extract`) is next.
 
-**In flight — Phase 1 (Type Upgrade):** four proposals are one sequenced plan
-([`docs/workflows/`](docs/workflows/), 40 tasks in
-[`TASKS.md`](docs/workflows/TASKS.md)). Phase 0 is signed off: D-1…D-5 accepted,
-**D-3a** chosen (renderer resolves, plugins stop choosing), ADR-0008…0011 created
-and [`spec/EXTRAS-INVENTORY.md`](docs/spec/EXTRAS-INVENTORY.md) seeded.
-`crates/types` (`pendon-types`) is done and green (T1.1–T1.6: `Selector`,
-`TypeSet`, `Rule`, `Group`, `winner`, `matching`); the CLI parses `type` into
-selectors and rejects typos (T1.7); positional keys are literal-only (T1.9).
-**Phase 1 is complete.** The gate (T1.12) is green: `cargo test --workspace
---no-fail-fast` — 75 test binaries, 0 failures; `cargo test -p pendon --test
-syntax_spec` — 23/23 fixtures, none `#[ignore]`d; `cargo fmt --all --check`
-clean; `cargo clippy --workspace --all-targets` exits 0 (pre-existing style
-lints only). Every golden that configures `[task.*.custom]` is **byte-identical**
-to its pre-cutover text, so the document-wide resolution is behaviour-preserving.
+- **Phase 0/1 — shared types.** `pendon-types` (`Selector`, `TypeSet`, `Rule`,
+  `Group`, `winner`, `matching`) answers `type = …` selectors; `D-3a`: the
+  renderer resolves each layer once per document and plugins stop choosing
+  (ADR-0008). Every `[task.*.custom]` golden stayed byte-identical.
+- **Phase 2 — exports.** `SolidRenderHints.exports: Vec<DataExport>`, written by
+  `renderer-solid` alone; `frontmatter`/`headings` are automatic, `plugin-cite`
+  pushes `references` then `citations`, `[[task.bind.inject]]` publishes a file
+  (SYNTAX §20, ADR-0009).
+- **Phase 3 — numbering.** `plugin-number` owns all numbering (ADR-0010):
+  `[[task.<element>.number]]` + `[[task.number.custom]]`, the `%%numberType`
+  marker parsed in `crates/extra` (§5, §10.5) and carried as `__number`,
+  `attrs.number` written as an array. `plugin-heading` numbers nothing (its
+  `auto_number`/`number_style` are a §14 migration error); `plugin-image` no
+  longer `data-`prefixes `__` keys. Goldens `30-number-heading`,
+  `31-number-custom` frozen, `06-heading` re-frozen (numbers gone). Found while
+  re-rendering: `renderer-html` leaked `__layer` on a `Link` (it writes
+  `href`/`title` itself, bypassing the `__` skip) — fixed + tested.
 
-**Phase 2 (Export Const Upgrade) has landed.** `SolidRenderHints` carries one
-ordered `exports: Vec<DataExport>` and `renderer-solid` is the only writer;
-`frontmatter`/`headings` are automatic registrations, `plugin-cite` pushes
-`references` then `citations`, and `[[task.bind.inject]]` publishes a whole file
-(SYNTAX §20, ADR-0009). Goldens `25`/`26`/`27` stayed byte-identical;
-`apps/cli/tests/bind_inject_spec.rs` covers the new producer.
-**Next:** Phase 3 — `plugin-number` (T3.1).
-
-**Just landed:** T1.10 — the `28-type-selectors` golden. One document occurs
-`TypeA…TypeD` **and** untyped, configured with `docs/issues/type-upgrade.md`
-R.1–R.4 verbatim (`*` / `TypeA` / `_` / `?`): the literal wins for `TypeA`,
-`TypeB`/`TypeC`/`TypeD` fall to `_`, both untyped headings to `?`, and
-`HeadingDefault` (R.1) loses every type so its import line never appears. In the
-same pass the last per-node selection plumbing went: `ComponentSet::select` and
-`single()` are gone (a plugin cannot ask "which component is mine?" any more),
-the CLI keeps its config-side entries for `layer_templates`, and
-`plugin-extract-heading` extracts the `__layer`-tagged `Heading` natively while
-keeping the identity fallback.
-
-**Just landed:** T1.8 — the last ten plugins stopped choosing. `anchor`,
-`blockquote`, `cite`, `directive`, `heading`, `image`, `list`, `marker`,
-`section` and `table` now emit their **own** built-in nodes, keep the `type`
-marker and tag each node with the layer that owns it; `renderer-solid`'s
-`resolve.rs` answers every layer once for the whole document
-([§11](docs/spec/SYNTAX.md), ADR-0008 `D-3a`), so `_` / `*` finally see the
-document and only the winning entry's imports are emitted. `NodeKind::Custom`
-now belongs to `plugin-custom` / `plugin-quiz` / `plugin-vicado` alone — and
-those last two are **deleted in the next workflow**, together with the wiki
-infobox, so they are ignored from here on (no migration, no golden, no triage).
-The table
-was the largest cutover: `attrs.rs` builds typed attrs per layer, `emit.rs` emits
-them, `custom.rs`/`render.rs` are gone, and its pre-rendered cells carry
-`__plugin_kind = "element"`. Goldens `08-table-decl` and `09-table-layers`
-re-rendered **byte-identical**, which is the proof the move is
-behaviour-preserving.
-
-**Just landed:** caption whitespace. A custom image component is pre-rendered by
-`plugin-image` (inner component + caption), so it now carries
-`__plugin_kind = "element"` (§11 rule 3) and the Markdown pass passes it through
-verbatim instead of dropping the caption's whitespace-only chunks
-(`Afigurecaptionwith<strong>markup</strong>` → `A figure caption with
-<strong>markup</strong>`). In the same pass, an `element` node no longer leaves
-`at_line_start` armed, so the text after an `<img … />` keeps its leading space.
-Golden `03-image-figure` re-frozen; `sandbox/{image,ultimate,universal}`
-re-rendered.
-
-**Just landed:** `mdp` payloads are **sub-documents**
-([ADR-0007](docs/decisions/0007-mdp-subdocuments.md)): a `{{{mdp[var] …}}}`
-payload is parsed and run through the page's **own plugin chain** (wiki, cite,
-image, table, latex, heading, extras heads, custom components …), so a citation
-written inside it joins the page's citation list and numbering and a figure's
-imports reach the page's hint list. It reaches the attribute as a **fragment**
-(`{"$fragment": […]}`): Solid emits `name={(<>…</>)}`, HTML renders escaped
-markup, AST/JSON keep the node list. `apps/cli/src/chain.rs` is now the single
-chain, entered as `prelude` (text stages; `micromatter` must run before the
-citation context exists) then `run`. Goldens: `23-bind` re-frozen (its old
-expectation froze broken output) and the new `27-bind-mdp`.
-
-**Just landed:** `pendon run`'s cache is **one TOML record per `(task, input)`**
-under `.pendon/cache/<shard>/`, written atomically and versioned
-([ADR-0006](docs/decisions/0006-per-file-cache-records.md),
-[guide](docs/guides/cli.md#cache)). Two tasks over the same `input` no longer
-overwrite each other, a warm run writes nothing, and a deleted output is rebuilt
-instead of skipped. Alongside it, per-task `no_cache` and `post_hook`
-([RFC](docs/rfc/no-cache-and-post-hook.md)): `no_cache` drops exactly one task
-from the cache, `post_hook` runs a string or ordered array of shell commands after
-each rendered file and is part of the task config hash.
-
-**Just landed:** `cite.references_scope` (`"cited"` | `"all"`) chooses what the
-`references` export carries; the default follows `reference_source`
-(frontmatter → `all`, external → `cited`) and an explicit value always wins
-([RFC-0002 §2.6](docs/rfc/plugin-cite-upgrade.md)). `citations`,
-`citation_number` / `instance_index` and diagnostics are untouched. Covered by
-golden `26-cite-scope`, `apps/cli/tests/cli_spec.rs` and plugin unit tests.
-
-**Just landed:** `plugin-cite` migrated to the RFC-0002 shape
-([`docs/rfc/plugin-cite-upgrade.md`](docs/rfc/plugin-cite-upgrade.md)): config
-keys are `ref_id_prefix` / `citation_id_prefix` / `reference_source` /
-`references_export` / `citations_export` (old keys now fail with a rename hint),
-the node carries `ref_id` + `citation_number` (display ordinal, deduped on
-`(ref_id, loc)`) + `instance_index` (unique per occurrence, `cite-1…N`), and the
-data leaves frontmatter for two JS module exports (`export const references` /
-`citations`, emitted after `frontmatter`/`headings`). Goldens `05-cite` and the
-`sandbox/{cite,ultimate,unified,universal}` configs were re-rendered. The
-fallback citation template is `<Citation reference={references["{attrs.ref_id}"]}
-{...attrs} />` and follows a renamed `references_export`, so custom components
-never bind an undefined name.
-
-**Just landed:** extras nested values + JSX brackets — a `{ … }` group holding a
-single identifier/dotted path (`{valueA}`, `{frontmatter.fm1}`) now parses as
-`AttrValue::JsxExpr` instead of rejecting the whole head (§4.3 fallback).
-Transported via `JSX_ATTR_PREFIX` (`U+E002`); `renderer-solid` emits
-`name={valueA}` unquoted (direct-node and `{...attrs}` template paths),
-`renderer-html` emits the escaped string; object/array/`$var` bind behaviour is
-preserved. Covered by unit tests in `crates/extra/tests/extras_spec.rs`, golden
-fixture `25-extras-nested`, and regenerated `sandbox/extras/out/extras-basic.jsx`.
+**Next:** Phase 4 — `plugin-extract` (T4.1). The only open blockers are the
+`plugin-list` item layer (L37) and the sandbox/docs cleanup listed below.
 
 ## Open blockers
 
@@ -212,6 +121,15 @@ fixture `25-extras-nested`, and regenerated `sandbox/extras/out/extras-basic.jsx
 
 ## Deferred
 
+- **Stale sandbox baselines (from Phases 1–2).** `sandbox/anchor`,
+  `sandbox/custom/inline`, `sandbox/img/*`, `sandbox/list/*` and
+  `sandbox/table/integ` still hold older output: `"cites"` where the exports are
+  now `references` + `citations`, `class={"q"}` where a typed string now renders
+  `class="q"`, `cra-1` where the cite id is `cite-1` (and
+  `img/image/out/extra.html` drifts near L37). Re-rendering them is a reviewable
+  separate pass — do not cite them as truth until then. `sandbox/number/` is a
+  pre-implementation sketch (no source, non-runnable `pendon.toml`).
+
 - **§11 threading gaps** (from the positional-keys pass):
   - `plugin-table`: `extras_to_layer(head)` still uses `ExtrasOptions::default()`;
     thread `TableOptions` into the 7-layer head scan.
@@ -229,8 +147,8 @@ fixture `25-extras-nested`, and regenerated `sandbox/extras/out/extras-basic.jsx
 
 ## Golden & freeze status (see [`docs/spec/golden/README.md`](docs/spec/golden/README.md))
 
-- Golden fixtures `01–12`, `14–16`, `21–27` are frozen and green; none
-  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (22 fixtures) are the gates.
-- The `image` fixtures (`03`, `27`) were re-frozen after the `img` → `image`
-  plugin-token rename; their output is byte-identical to the pre-rename goldens,
-  so the rename is behaviour-preserving.
+- Golden fixtures `01–12`, `14–16`, `21–28`, `30–31` are frozen and green; none
+  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (25 fixtures) is the gate.
+- `06-heading` was re-frozen for Phase 3: it loses the numbers `plugin-heading`
+  used to compute, and keeps its authored `number:` props (they pass through now).
+  `28-type-selectors` dropped its `auto_number` key with no output change.

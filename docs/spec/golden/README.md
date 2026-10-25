@@ -55,7 +55,7 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | 03 | `image-figure`     | `~?!` / `~?!!` + extras + caption                             |
 | 04 | `anchor`           | head `("title")` vs extras `"title"` priority                 |
 | 05 | `cite`             | `[^^](ref "loc")` + extras, retired forms stay literal        |
-| 06 | `heading`          | `[slug]` + `("title")` + extras, auto-number interaction      |
+| 06 | `heading`          | `[slug]` + `("title")` + extras, an authored `number:` passes through (numbering is `plugin-number`) |
 | 07 | `wiki`             | `[[…]]` + extras, `href` not overridable                      |
 | 08 | `table-decl`       | `\|-…-\|`, `\|\| caption \|\|`, decl head `[slug]`            |
 | 09 | `table-layers`     | column/th/td/tr/tbody/tfoot extras routing                    |
@@ -74,6 +74,8 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | 26 | `cite-scope`       | `references_scope`: frontmatter defaults to `all`, uncited entry still exported (§2.6) |
 | 27 | `bind-mdp`         | `mdp` is a sub-document: the payload runs the page's chain (heading, wiki, cite, math, figure, table) and reaches the prop as a fragment |
 | 28 | `type-selectors`   | `type` as selectors — `*` / literal / `_` / `?` against one document (§11, ADR-0008 `D-3a`) |
+| 30 | `number-heading`   | `[[task.heading.number]]` — one counter for `HeadingA`+`HeadingB`, styles per depth, undefined depth defaults to decimal, unselected types stay bare (ADR-0010, P.1) |
+| 31 | `number-custom`    | `%%numberType` markers: marker depth (`%`−1), marker beats element numbering, `[[task.number.custom]]` blocks, numbers on headings/anchors/images (ADR-0010, P.2) |
 
 Fixtures 17–20 are covered by unit tests in the renderer/CLI crates rather than as
 golden files.

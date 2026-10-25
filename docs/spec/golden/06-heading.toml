@@ -5,9 +5,9 @@ output = "./out/[slug].jsx"
 plugin = "micromatter,heading,markdown"
 format = "solid"
 
+# Numbering moved to `plugin-number` (ADR-0010): a heading no longer counts, and
+# an authored `number:` prop now simply passes through to the component.
 [task.heading]
-auto_number = true
-number_style = "nested-number"
 
 [[task.heading.custom]]
 type = ["headingX", "headingY"]

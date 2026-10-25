@@ -2,7 +2,7 @@
 name = "Universal Integration (Solid)"
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "micromatter,table,image,epis,parego,cite,wiki,anchor,section,markdown,latex,syntect,heading,extract-heading,hint"
+plugin = "micromatter,table,image,epis,parego,cite,wiki,anchor,section,heading,number,markdown,latex,syntect,extract-heading,hint"
 format = "solid"
 markdown_strip_comments = true
 markdown_allow_html = true
@@ -18,9 +18,8 @@ template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
 module = "@comp/Cite"
 default = "Cite"
 
-[task.heading]
-auto_number = true
-number_style = "nested-number"
+[[task.heading.number]]
+style = "decimal"
 
 [plugin-custom]
 source = ["./plugins/index.toml"]

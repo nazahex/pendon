@@ -1,0 +1,47 @@
+`%%numberType` is an extras item (§5): the marker names a `[[task.number.custom]]`
+block and carries its own depth (`%` count − 1). It always beats the element's
+own numbering, so the same counter can run across headings, anchors and images.
+
+##[slug-heading]("Title Heading")@@HeadingA{foo: "bar"}%%%numberB Title Heading - I.a (depth 2, so the missing parent counts as I)
+
+[link](/foo)@@AnchorA%%numberB will be numbered II.
+
+[link](/foo)@@AnchorA%%%numberB will be numbered II.a.
+
+[link](/foo)@@AnchorA%%%numberB will be numbered II.b.
+
+[link](/foo)@@AnchorA%%%%numberB will be numbered II.b.1.
+
+[link](/foo)@@AnchorA%%%%%%numberB will be numbered II.b.1.1.1.
+
+[link](/foo)@@%%%numberB will be numbered II.c.
+
+[link](/foo)@@%%numberB will be numbered III.
+
+[link](/foo)%%numberA will be numbered A.
+
+[link](/foo)%%%%numberA will be numbered A.A.A.
+
+[link](/foo)%%%numberA will be numbered A.B.
+
+![image foo](/foo.png)%%numberA
+
+Will be numbered B.
+
+![image foo](/foo.png)%%%%%numberA
+
+Will be numbered B.A.A.A.
+
+![image foo](/foo.png)%%%%%%%numberC
+
+Will be numbered A.a.I.i.1.1.
+
+##[slug]%%numberB Will Be Numbered IV
+
+##%%%%numberB Will Be Numbered IV.a.1 (number depth 3, even though heading depth is 2)
+
+##("Title")@@HeadingA Will Be Numbered A
+
+###@@HeadingA Will Be Numbered A.a
+
+##@@HeadingA{} Will Be Numbered B

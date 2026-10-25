@@ -54,6 +54,54 @@ pub enum ExtrasItem {
     CssVar { name: String, value: String },
     /// `isFoo` — rendered verbatim.
     Flag { name: String },
+    /// `%%numberType` — a numbering marker (ADR-0010).
+    Number(NumberMark),
+}
+
+/// The `%%numberType` numbering marker (§5, ADR-0010).
+///
+/// `depth` is **already normalized** — the `%` run length − 1, so `%%` is depth
+/// 1 and `%%%%%%%` is depth 6. Normalization happens here, once, because two
+/// parsers of `%` would be the layering violation `CONTRIBUTORS.md` forbids;
+/// `plugin-number` only reads the depth back out of `__number`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NumberMark {
+    /// Normalized depth, 1…=6 (the `%` count minus one).
+    pub depth: u8,
+    /// The `numberType` the marker names (`numberB`).
+    pub number_type: String,
+}
+
+/// Reads a `%%numberType` marker off the front of `input`, returning it and the
+/// bytes consumed.
+///
+/// The shape is `%{2,7}` immediately followed by a name (`[A-Za-z][A-Za-z0-9]*`)
+/// and then a non-name character or the end. Anything else is `None`, i.e.
+/// literal text: a bare `%`, `%%` with no name, a run of 8+ `%` and a name that
+/// runs into punctuation all stay exactly as authored (D-9, no diagnostic).
+pub fn read_number_mark(input: &str) -> Option<(NumberMark, usize)> {
+    let bytes = input.as_bytes();
+    let mut run = 0usize;
+    while matches!(bytes.get(run), Some(b'%')) {
+        run += 1;
+    }
+    if !(2..=7).contains(&run) {
+        return None;
+    }
+    if !matches!(bytes.get(run), Some(byte) if byte.is_ascii_alphabetic()) {
+        return None;
+    }
+    let mut cursor = run + 1;
+    while matches!(bytes.get(cursor), Some(byte) if byte.is_ascii_alphanumeric()) {
+        cursor += 1;
+    }
+    Some((
+        NumberMark {
+            depth: (run - 1) as u8,
+            number_type: input[run..cursor].to_string(),
+        },
+        cursor,
+    ))
 }
 
 /// A parsed `@@type{…}` / `@@{…}` head.
@@ -306,6 +354,21 @@ impl Attrs {
 /// by whitespace — is [`ExtrasMatch::Absent`] or [`ExtrasMatch::Malformed`], and
 /// is rendered verbatim (§4.3).
 pub fn parse_extras(input: &str) -> ExtrasMatch<'_> {
+    // A bare `%%numberType` is a head of its own: it is the marker's canonical
+    // stand-alone spelling, attached directly to a construct (`[link](/foo)%%a`).
+    // A bare `%`, `%%` with no name and a run of 8+ `%` are literal text (D-9).
+    if input.starts_with('%') {
+        return match read_number_mark(input) {
+            Some((mark, consumed)) => ExtrasMatch::Head {
+                head: ExtrasHead {
+                    items: vec![ExtrasItem::Number(mark)],
+                    ..ExtrasHead::default()
+                },
+                rest: &input[consumed..],
+            },
+            None => ExtrasMatch::Absent { rest: input },
+        };
+    }
     if let Some(after) = input.strip_prefix("@@") {
         return match read_head(after) {
             Ok((head, consumed)) => ExtrasMatch::Head {
@@ -379,19 +442,37 @@ fn read_head(after: &str) -> Result<(ExtrasHead, usize), ExtrasError> {
 
     if bytes.get(cursor) == Some(&b'{') {
         let (mut head, consumed) = read_body(&after[cursor..])?;
+        let mut total = cursor + consumed;
+        // §5: `%%numberType` sits at the very end of the extras and attaches to
+        // the body it follows (`@@headingA{…}%%%numberB`), with no separator.
+        if let Some((mark, used)) = read_number_mark(&after[total..]) {
+            head.items.push(ExtrasItem::Number(mark));
+            total += used;
+        }
         head.type_marker = type_marker;
         head.bracket = bracket;
         head.parentheses = parentheses;
-        return Ok((head, cursor + consumed));
+        return Ok((head, total));
     }
 
-    // No `{` follows. A type or a positional group can carry the head on its
+    // No `{` follows. A trailing `%%numberType` still attaches to the type-only
+    // head (`@@AnchorA%%numberB`, and the bare `@@%%%numberB` form).
+    let mut number = None;
+    if let Some((mark, used)) = read_number_mark(&after[cursor..]) {
+        number = Some(mark);
+        cursor += used;
+    }
+
+    // A type, a positional group or a number marker can carry the head on its
     // own (§4.1/§6.1); a bare `@@` cannot.
-    if type_marker.is_none() && bracket.is_none() && parentheses.is_none() {
+    if type_marker.is_none() && bracket.is_none() && parentheses.is_none() && number.is_none() {
         return Err(ExtrasError::InvalidHead);
     }
     // §4.1: `@@type {…}` is not a head — the `{` must touch the type.
-    if matches!(bytes.get(cursor), Some(b' ' | b'\t')) && opens_brace_on_line(&after[cursor..]) {
+    if number.is_none()
+        && matches!(bytes.get(cursor), Some(b' ' | b'\t'))
+        && opens_brace_on_line(&after[cursor..])
+    {
         return Err(ExtrasError::InvalidHead);
     }
     // A type-only (or groups-only) head: the run ends at the first symbol (or
@@ -402,7 +483,7 @@ fn read_head(after: &str) -> Result<(ExtrasHead, usize), ExtrasError> {
             type_marker,
             bracket,
             parentheses,
-            items: Vec::new(),
+            items: number.into_iter().map(ExtrasItem::Number).collect(),
         },
         cursor,
     ))
@@ -552,6 +633,14 @@ fn parse_item(part: &str) -> Result<ExtrasItem, ExtrasError> {
         Some(b'#') => Ok(ExtrasItem::Id(read_name(&part[1..])?)),
         Some(b'`') => Ok(ExtrasItem::Slug(read_scalar(part)?)),
         Some(b'"') | Some(b'\'') => Ok(ExtrasItem::Title(read_scalar(part)?)),
+        Some(b'%') => {
+            // §5: a number marker is one whole item — nothing may trail it.
+            let (mark, consumed) = read_number_mark(part).ok_or(ExtrasError::InvalidItem)?;
+            if consumed != part.len() {
+                return Err(ExtrasError::InvalidItem);
+            }
+            Ok(ExtrasItem::Number(mark))
+        }
         Some(_) => {
             if let Some((key, value)) = split_key_value(part) {
                 let key = key.trim();
@@ -932,6 +1021,17 @@ pub fn to_attributes(head: &ExtrasHead, options: &ExtrasOptions) -> Attrs {
             ExtrasItem::Prop { key, value } => {
                 set(&mut rest, key, ExtrasAttr::Value(value.clone()))
             }
+            // §5/D-9: the marker is re-emitted as the internal `__number`
+            // attribute (ADR-0001's transport carries the object intact), so
+            // every construct plugin forwards it without knowing about it.
+            ExtrasItem::Number(mark) => set(
+                &mut rest,
+                "__number",
+                ExtrasAttr::Value(AttrValue::Object(vec![
+                    ("depth".to_string(), AttrValue::Int(i64::from(mark.depth))),
+                    ("type".to_string(), AttrValue::Str(mark.number_type.clone())),
+                ])),
+            ),
             ExtrasItem::Flag { name } if group_keys.contains(&name.as_str()) => {
                 warnings.push(ExtrasWarning::Overridden { key: name.clone() });
             }
@@ -1074,4 +1174,118 @@ fn unquote_wrapping(text: &str) -> String {
         }
     }
     text.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn head(source: &str) -> (ExtrasHead, &str) {
+        match parse_extras(source) {
+            ExtrasMatch::Head { head, rest } => (head, rest),
+            other => panic!("expected a head for {source:?}, got {other:?}"),
+        }
+    }
+
+    fn mark(head: &ExtrasHead) -> &NumberMark {
+        head.items
+            .iter()
+            .find_map(|item| match item {
+                ExtrasItem::Number(mark) => Some(mark),
+                _ => None,
+            })
+            .expect("a number mark")
+    }
+
+    /// §5: the marker is the whole item, and its depth is stored already
+    /// normalized (`%` count − 1, so `%%` is 1 and `%%%%%%%` is 6).
+    #[test]
+    fn a_bare_mark_is_a_head_with_a_normalized_depth() {
+        let (parsed, rest) = head("%%numberB tail");
+        assert_eq!(rest, " tail");
+        assert_eq!(
+            mark(&parsed),
+            &NumberMark {
+                depth: 1,
+                number_type: "numberB".to_string()
+            }
+        );
+
+        let (parsed, rest) = head("%%%%%%%numberB");
+        assert_eq!(rest, "");
+        assert_eq!(mark(&parsed).depth, 6);
+    }
+
+    /// The two legal positions: attached to a body and to a type-only head.
+    #[test]
+    fn a_mark_attaches_to_a_body_and_to_a_type_only_head() {
+        let (parsed, rest) = head("@@headingA{foo: \"bar\"}%%%numberB Body");
+        assert_eq!(rest, " Body");
+        assert_eq!(parsed.type_marker.as_deref(), Some("headingA"));
+        assert_eq!(mark(&parsed).depth, 2);
+        assert!(parsed
+            .items
+            .iter()
+            .any(|item| matches!(item, ExtrasItem::Prop { key, .. } if key == "foo")));
+
+        let (parsed, rest) = head("@@AnchorA%%numberB rest");
+        assert_eq!(rest, " rest");
+        assert_eq!(parsed.type_marker.as_deref(), Some("AnchorA"));
+        assert_eq!(mark(&parsed).number_type, "numberB");
+
+        // A bare `@@` before the marker is valid and only contributes the mark.
+        let (parsed, rest) = head("@@%%%numberB rest");
+        assert_eq!(rest, " rest");
+        assert_eq!(parsed.type_marker, None);
+        assert_eq!(mark(&parsed).depth, 2);
+
+        // Inside a body, as the canonical last item.
+        let (parsed, rest) = head("{.a, %%numberB} tail");
+        assert_eq!(rest, " tail");
+        assert_eq!(mark(&parsed).number_type, "numberB");
+    }
+
+    /// D-9: a bare `%`, `%%` with no name and a run of 8+ `%` are literal text,
+    /// with no diagnostic.
+    #[test]
+    fn malformed_marks_stay_literal() {
+        for source in ["%numberB", "%% no", "%% ", "%%%%%%%%numberA"] {
+            assert!(
+                matches!(parse_extras(source), ExtrasMatch::Absent { .. }),
+                "{source:?} was not literal"
+            );
+        }
+        assert!(read_number_mark("%%").is_none());
+        assert!(read_number_mark("%").is_none());
+        assert!(read_number_mark("%%%%%%%%numberA").is_none());
+        // A marker that runs into a symbol ends there, exactly like a type-only
+        // head (`@@anchorA.`): the symbol stays text.
+        let (parsed, rest) = head("%%numberB- tail");
+        assert_eq!(rest, "- tail");
+        assert_eq!(mark(&parsed).number_type, "numberB");
+        // …and a body keeps the same policy: the whole head stays literal.
+        for source in ["{%%numberB extra}", "{%}", "{%%numberB-}"] {
+            assert!(
+                matches!(parse_extras(source), ExtrasMatch::Malformed { .. }),
+                "{source:?} was not malformed"
+            );
+        }
+    }
+
+    /// The marker is re-emitted as the internal `__number` object attribute.
+    #[test]
+    fn the_marker_becomes_the_internal_number_attribute() {
+        let (parsed, _) = head("@@headingA{foo: \"bar\"}%%%numberB");
+        let attrs = to_attributes(&parsed, &ExtrasOptions::default());
+        let value = attrs.value("__number").expect("a __number value");
+        assert_eq!(
+            value.literal(),
+            "{\"depth\":2,\"type\":\"numberB\"}".to_string()
+        );
+        // Its canonical place is last, after the body's own items.
+        assert_eq!(
+            attrs.items.last().map(|(key, _)| key.as_str()),
+            Some("__number")
+        );
+    }
 }

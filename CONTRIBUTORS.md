@@ -19,6 +19,8 @@ Pendon is an event-driven, plugin-first Markdown-as-DSL engine. It is still alph
 - `crates/types` (`pendon-types`): type selectors and document-scoped type
   resolution shared by the renderer, numbering and extraction (ADR-0008).
 - `crates/plugin-*`: document transforms and syntax-specific behavior.
+  `crates/plugin-number` is the only producer of `attrs.number` (ADR-0010): the
+  `%%numberType` marker itself belongs to `crates/extra`.
 - `crates/renderer-*`: output renderers; Solid output is the JSX/TSX contract.
 - `apps/cli`: direct CLI and config-driven document processing.
 - `sandbox`: executable integration examples and generated output.

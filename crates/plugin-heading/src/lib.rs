@@ -7,24 +7,8 @@ use std::collections::BTreeMap;
 
 // --- Configuration & Types ---
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum NumberStyle {
-    NestedNumber,
-    Flat,
-}
-
-impl Default for NumberStyle {
-    fn default() -> Self {
-        Self::NestedNumber
-    }
-}
-
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct HeadingOptions {
-    pub auto_number: bool,
-    #[serde(default)]
-    pub number_style: NumberStyle,
     /// §11 component set of the `heading` layer: typed entries plus at most one
     /// default, resolved for the whole document by the renderer against the
     /// `@@type{…}` markers it occurs (rule 3, ADR-0008 `D-3a`).
@@ -41,54 +25,6 @@ pub struct HeadingCustomNode {
     pub template: String,
     #[serde(default)]
     pub imports: Vec<ImportEntry>,
-}
-
-// --- Counter Logic ---
-
-struct HeadingCounters {
-    counts: Vec<usize>,
-}
-
-impl HeadingCounters {
-    fn new() -> Self {
-        Self { counts: Vec::new() }
-    }
-
-    fn increment(&mut self, level: usize) {
-        if level == 0 {
-            return;
-        }
-        if self.counts.len() < level {
-            self.counts.resize(level, 0);
-        } else {
-            self.counts.truncate(level);
-        }
-        if let Some(last) = self.counts.last_mut() {
-            *last += 1;
-        }
-    }
-
-    /// Returns a formatted number string (e.g. "1.2. ") or empty if no significant digits exist.
-    fn format(&self, style: &NumberStyle) -> String {
-        if self.counts.is_empty() {
-            return String::new();
-        }
-
-        // Suppress leading zeros from the counter stack
-        let significant: Vec<&usize> = self.counts.iter().skip_while(|&&n| n == 0).collect();
-
-        if significant.is_empty() {
-            return String::new();
-        }
-
-        match style {
-            NumberStyle::Flat => format!("{}. ", significant.last().unwrap_or(&&0)),
-            NumberStyle::NestedNumber => {
-                let nums: Vec<String> = significant.iter().map(|n| n.to_string()).collect();
-                format!("{}. ", nums.join("."))
-            }
-        }
-    }
 }
 
 // --- Extra Attributes Parsing ---
@@ -280,7 +216,6 @@ fn find_char(chars: &[char], mut index: usize, wanted: char) -> Option<usize> {
 
 pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
     let mut out = Vec::with_capacity(events.len());
-    let mut counters = HeadingCounters::new();
     let slug_regex = Regex::new(r"[^a-z0-9]+").unwrap();
 
     let mut i = 0;
@@ -347,25 +282,24 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
                 inner_events.retain(|e| !matches!(e, Event::Text(t) if t.is_empty()));
             }
 
-            // 4. Compute numbering for current heading level
-            counters.increment(heading_level);
-            let num_str = if options.auto_number {
-                counters.format(&options.number_style)
-            } else {
-                String::new()
-            };
-
-            // 5. §11 rule 3 / D-3a: the node always stays a `Heading` — which
+            // 4. §11 rule 3 / D-3a: the node always stays a `Heading` — which
             // entry answers it is decided by the renderer from the whole
             // document. A configured `heading` layer therefore puts *every*
-            // heading in component mode: the template attributes (`number`,
-            // `raw_title`, the marker) are emitted and the number is not
-            // injected into the children (§11 rule 5).
+            // heading in component mode: the template attributes (`raw_title`,
+            // the marker) are emitted. Numbering is `plugin-number`'s job
+            // (ADR-0010); this plugin no longer counts anything.
             let component_mode = !options.custom.is_empty();
             let node_kind = NodeKind::Heading;
 
-            // 6. Emit StartNode and the §13 warnings the head resolved.
+            // 5. Emit StartNode, the §11 layer tag and the §13 warnings.
             out.push(Event::StartNode(node_kind.clone()));
+            // §11 rule 3 / D-3a: every node names the layer that owns it, in both
+            // modes, so whole-document consumers (`plugin-number`,
+            // `plugin-extract`) can tell the element kind from the event stream.
+            out.push(Event::Attribute {
+                name: "__layer".to_string(),
+                value: HEADING_LAYER.to_string(),
+            });
             for warning in &head.warnings {
                 out.push(Event::Diagnostic {
                     severity: Severity::Warning,
@@ -374,14 +308,10 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
                 });
             }
 
-            // 7. Emit attributes based on rendering mode
+            // 6. Emit attributes based on rendering mode
             if component_mode {
                 // Component mode: everything a Solid template may read, plus the
-                // layer and the `type` the renderer routes on.
-                out.push(Event::Attribute {
-                    name: "__layer".to_string(),
-                    value: HEADING_LAYER.to_string(),
-                });
+                // `type` the renderer routes on.
                 if let Some(marker) = &head.type_marker {
                     out.push(Event::Attribute {
                         name: "type".to_string(),
@@ -414,13 +344,6 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
                             });
                         }
                     }
-                }
-
-                if !num_str.is_empty() {
-                    out.push(Event::Attribute {
-                        name: "number".to_string(),
-                        value: num_str.trim_end().to_string(),
-                    });
                 }
 
                 // raw_title: heading text without any extras prefix
@@ -464,26 +387,7 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
                 out.push(Event::AttributeFlag { name: name.clone() });
             }
 
-            // 8. Prepend number to first text child (standard mode only).
-            // In custom node mode, the number is available via {attrs.number}
-            // and should NOT be injected into children.
-            if !component_mode && !num_str.is_empty() {
-                let mut prefixed = false;
-                for ev in inner_events.iter_mut() {
-                    if let Event::Text(t) = ev {
-                        if !prefixed && !t.is_empty() {
-                            *ev = Event::Text(format!("{}{}", num_str, t));
-                            prefixed = true;
-                            break;
-                        }
-                    }
-                }
-                if !prefixed {
-                    inner_events.insert(0, Event::Text(num_str));
-                }
-            }
-
-            // 9. Emit inner children and closing EndNode
+            // 7. Emit inner children and closing EndNode
             out.extend(inner_events);
             out.push(Event::EndNode(node_kind));
 
@@ -677,5 +581,32 @@ mod tests {
         assert!(out
             .iter()
             .any(|e| matches!(e, Event::Text(text) if text == "Body")));
+    }
+
+    /// ADR-0010: numbering belongs to `plugin-number`. No heading code path may
+    /// emit a `number` attribute or inject a number into the heading text any
+    /// more (the legacy `auto_number` / `number_style` behaviour is gone).
+    #[test]
+    fn no_heading_path_produces_a_number() {
+        let events = vec![
+            Event::StartNode(NodeKind::Heading),
+            Event::Attribute {
+                name: "level".to_string(),
+                value: "2".to_string(),
+            },
+            Event::Text("## Title".to_string()),
+            Event::EndNode(NodeKind::Heading),
+        ];
+        let out = process(&events, &HeadingOptions::default());
+        assert!(!out
+            .iter()
+            .any(|event| matches!(event, Event::Attribute { name, .. } if name == "number")));
+        assert!(out
+            .iter()
+            .any(|event| matches!(event, Event::Text(text) if text == "Title")));
+        // …and the §11 layer tag is emitted in standard mode too.
+        assert!(out.iter().any(
+            |event| matches!(event, Event::Attribute { name, value } if name == "__layer" && value == HEADING_LAYER)
+        ));
     }
 }
