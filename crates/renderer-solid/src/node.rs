@@ -1,16 +1,28 @@
 // node.rs
 use serde_json::Value;
 
-use crate::{imports::SolidRenderHints, template};
+use crate::{
+    imports::ComponentTemplate,
+    resolve::{Ctx, LayerKey},
+    template,
+};
 
-pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>) {
+pub fn render_node(v: &Value, out: &mut String, ctx: &Ctx) {
     if let Some(kind) = v.get("type").and_then(|t| t.as_str()) {
-        if let Some(template) = template::select_template(hints, kind, v) {
-            let children = render_children_to_string(v, hints);
-            let attrs = v.get("attrs").and_then(|a| a.as_object());
+        let attrs = v.get("attrs").and_then(Value::as_object);
+        if let Some(template) = template_for(kind, attrs, ctx) {
             let text = v.get("text").and_then(|t| t.as_str());
+            let mut children = render_children_to_string(v, ctx);
+            // A node whose content is pure text is serialized as `text` rather
+            // than `children` (see `renderer-ast`), but a template's
+            // `{children}` must still see that content.
+            if children.is_empty() {
+                if let Some(text) = text {
+                    escape_jsx(text, &mut children);
+                }
+            }
             out.push_str(&template::render_template(
-                template, attrs, &children, text, hints,
+                template, attrs, &children, text, ctx,
             ));
             return;
         }
@@ -19,7 +31,7 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
             "Document" => {
                 if let Some(children) = v.get("children").and_then(|c| c.as_array()) {
                     for ch in children {
-                        render_node(ch, out, hints);
+                        render_node(ch, out, ctx);
                     }
                 }
             }
@@ -28,16 +40,16 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
             }
             "Paragraph" => {
                 out.push_str("<p");
-                render_attrs(v, out, &[], hints);
+                render_attrs(v, out, &[], ctx);
                 out.push('>');
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</p>\n");
             }
             "Blockquote" => {
                 out.push_str("<blockquote");
-                render_attrs(v, out, &[], hints);
+                render_attrs(v, out, &[], ctx);
                 out.push_str(">\n");
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</blockquote>\n");
             }
             "Heading" => {
@@ -49,18 +61,21 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                 out.push('<');
                 out.push('h');
                 out.push_str(level);
-                render_attrs(v, out, &["level"], hints);
+                // `number` / `raw_title` / `slug` are template-only reads (§11
+                // rule 3): the built-in `<h*>` fallback keeps the authored
+                // extras, including the `type` marker, but none of those.
+                render_attrs(v, out, &["level", "number", "raw_title", "slug"], ctx);
                 out.push('>');
-                render_text_or_children(v, out, hints);
+                render_text_or_children(v, out, ctx);
                 out.push_str("</h");
                 out.push_str(level);
                 out.push_str(">\n");
             }
             "Section" => {
                 out.push_str("<section");
-                render_attrs(v, out, &[], hints);
+                render_attrs(v, out, &[], ctx);
                 out.push_str(">\n");
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</section>\n");
             }
             "ThematicBreak" => {
@@ -68,7 +83,7 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
             }
             "CodeFence" => {
                 out.push_str("<pre");
-                render_attrs(v, out, &["raw_html"], hints);
+                render_attrs(v, out, &["raw_html"], ctx);
                 let raw = v
                     .get("attrs")
                     .and_then(|a| a.get("raw_html"))
@@ -88,9 +103,9 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
             }
             "BulletList" => {
                 out.push_str("<ul");
-                render_attrs(v, out, &[], hints);
+                render_attrs(v, out, &[], ctx);
                 out.push_str(">\n");
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</ul>\n");
             }
             "OrderedList" => {
@@ -99,12 +114,12 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                     if let Some(start) = attrs.get("start").and_then(|s| s.as_str()) {
                         out.push_str(" start={");
                         out.push_str(start);
-                        out.push_str("}");
+                        out.push('}');
                     }
                 }
-                render_attrs(v, out, &["start"], hints);
+                render_attrs(v, out, &["start"], ctx);
                 out.push_str(">\n");
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</ol>\n");
             }
             "ListItem" => {
@@ -112,27 +127,27 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                 if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
                     escape_jsx(text, out);
                 }
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</li>\n");
             }
             "Table" => {
                 out.push_str("<table>\n");
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</table>\n");
             }
             "TableHead" => {
                 out.push_str("<thead>\n");
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</thead>\n");
             }
             "TableBody" => {
                 out.push_str("<tbody>\n");
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</tbody>\n");
             }
             "TableRow" => {
                 out.push_str("<tr>\n");
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</tr>\n");
             }
             "TableCell" => {
@@ -146,49 +161,49 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                 out.push('<');
                 out.push_str(tag);
                 out.push('>');
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</");
                 out.push_str(tag);
                 out.push_str(">\n");
             }
             "Emphasis" => {
                 out.push_str("<em>");
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</em>");
             }
             "Strong" => {
                 out.push_str("<strong>");
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</strong>");
             }
             "Bold" => {
                 out.push_str("<b>");
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</b>");
             }
             "Italic" => {
                 out.push_str("<i>");
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</i>");
             }
             "InlineCode" => {
                 out.push_str("<code>");
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</code>");
             }
             "Link" => {
                 out.push_str("<a");
-                render_attrs(v, out, &[], hints);
+                render_attrs(v, out, &[], ctx);
                 out.push('>');
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
                 out.push_str("</a>");
             }
             "Image" => {
                 out.push_str("<img");
-                render_attrs(v, out, &[], hints);
+                render_attrs(v, out, &[], ctx);
                 out.push_str(" />");
             }
-            "Element" => render_element(v, out, hints),
+            "Element" => render_element(v, out, ctx),
             "Text" => {
                 if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
                     escape_jsx(text, out);
@@ -199,40 +214,65 @@ pub fn render_node(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>
                     render_raw_html(text, out);
                     out.push('\n');
                 } else {
-                    render_children(v, out, hints);
+                    render_children(v, out, ctx);
                 }
             }
             "HtmlInline" => {
                 if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
                     render_raw_html(text, out);
                 } else {
-                    render_children(v, out, hints);
+                    render_children(v, out, ctx);
                 }
             }
             _ => {
-                render_children(v, out, hints);
+                render_children(v, out, ctx);
             }
         }
     }
 }
 
+/// The §11 template `kind`/`attrs` resolves to, if any (ADR-0008, `D-3a`).
+///
+/// The decision is document-wide: the plugin only tagged the node with the layer
+/// it belongs to (`__layer`) and kept its `type` marker; [`Ctx::resolution`] has
+/// already worked out which entry of that layer answers each occurring type, so
+/// `?` / `_` / `*` see the whole document rather than this one element.
+fn template_for<'a>(
+    kind: &str,
+    attrs: Option<&serde_json::Map<String, Value>>,
+    ctx: &'a Ctx,
+) -> Option<&'a ComponentTemplate> {
+    let hints = ctx.hints?;
+    let key = ctx.resolution.key_for(kind, attrs)?;
+    // A §11 layer keys on the `type` marker; a node identity (`plugin-custom`,
+    // `plugin-vicado`) has no marker to answer and keeps matching as before.
+    let marker = match key {
+        LayerKey::Layer(_) => attrs
+            .and_then(|attrs| attrs.get("type"))
+            .and_then(Value::as_str),
+        LayerKey::Identity(..) => None,
+    };
+    let index = ctx.resolution.select(key, marker)?;
+    hints.templates.get(index)
+}
+
 /// Renders a structured `Element` node as a real JSX element, so custom
 /// components nested in its children (e.g. `<Cite/>` inside a `<figcaption>`)
 /// keep working. The tag name is carried in the `name` attribute.
-fn render_element(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>) {
+fn render_element(v: &Value, out: &mut String, ctx: &Ctx) {
     let tag = v
         .get("attrs")
         .and_then(|a| a.get("name"))
         .and_then(|n| n.as_str());
 
     let Some(tag) = tag else {
-        render_children(v, out, hints);
+        render_children(v, out, ctx);
         return;
     };
 
     out.push('<');
     out.push_str(tag);
-    render_attrs(v, out, &[], hints);
+    render_attrs(v, out, &[], ctx);
 
     if pendon_core::is_void_element(tag) {
         out.push_str(" />");
@@ -240,7 +280,7 @@ fn render_element(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>)
     }
 
     out.push('>');
-    render_children(v, out, hints);
+    render_children(v, out, ctx);
     out.push_str("</");
     out.push_str(tag);
     out.push('>');
@@ -260,19 +300,19 @@ fn render_raw_html(text: &str, out: &mut String) {
     }
 }
 
-fn render_children(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>) {
+fn render_children(v: &Value, out: &mut String, ctx: &Ctx) {
     if let Some(children) = v.get("children").and_then(|c| c.as_array()) {
         for ch in children {
-            render_node(ch, out, hints);
+            render_node(ch, out, ctx);
         }
     }
 }
 
-fn render_children_to_string(v: &Value, hints: Option<&SolidRenderHints>) -> String {
+fn render_children_to_string(v: &Value, ctx: &Ctx) -> String {
     let mut buf = String::new();
     if let Some(children) = v.get("children").and_then(|c| c.as_array()) {
         for ch in children {
-            render_node(ch, &mut buf, hints);
+            render_node(ch, &mut buf, ctx);
         }
     }
     buf
@@ -282,19 +322,19 @@ fn render_children_to_string(v: &Value, hints: Option<&SolidRenderHints>) -> Str
 /// `pendon_renderer_ast::FRAGMENT_KEY`). Every node goes through the same
 /// `render_node` the document body uses, so templates, custom components and
 /// block plugins behave identically inside a bound payload.
-pub(crate) fn render_fragment(nodes: &[Value], hints: Option<&SolidRenderHints>) -> String {
+pub(crate) fn render_fragment(nodes: &[Value], ctx: &Ctx) -> String {
     let mut buf = String::new();
     for node in nodes {
-        render_node(node, &mut buf, hints);
+        render_node(node, &mut buf, ctx);
     }
     buf
 }
 
-fn render_text_or_children(v: &Value, out: &mut String, hints: Option<&SolidRenderHints>) {
+fn render_text_or_children(v: &Value, out: &mut String, ctx: &Ctx) {
     if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
         escape_jsx(text, out);
     } else {
-        render_children(v, out, hints);
+        render_children(v, out, ctx);
     }
 }
 
@@ -306,7 +346,7 @@ fn render_text_or_children(v: &Value, out: &mut String, hints: Option<&SolidRend
 /// JSX expression (`JSX_ATTR_PREFIX`, the extras `( … )` literal) is wrapped in
 /// parentheses `name={( … )}`. A rendered fragment (`$fragment`, a nested
 /// `mdp` payload) reaches this branch too, so it emits `name={(<>…</>)}`.
-fn render_attrs(v: &Value, out: &mut String, skipped: &[&str], hints: Option<&SolidRenderHints>) {
+fn render_attrs(v: &Value, out: &mut String, skipped: &[&str], ctx: &Ctx) {
     let Some(attrs) = v.get("attrs").and_then(Value::as_object) else {
         return;
     };
@@ -354,7 +394,7 @@ fn render_attrs(v: &Value, out: &mut String, skipped: &[&str], hints: Option<&So
             // node list as JSX.
             Value::Object(_) | Value::Array(_) => {
                 out.push_str("={");
-                out.push_str(&to_js_literal(value, hints));
+                out.push_str(&to_js_literal(value, ctx));
                 out.push('}');
             }
             Value::Number(_) => {
@@ -432,9 +472,9 @@ pub(crate) fn is_jsx_expression_token(text: &str) -> bool {
 /// A fragment value (a nested `mdp` payload, `renderer_ast::FRAGMENT_KEY`)
 /// renders as a JSX fragment expression `(<>…</>)`, so markup can sit anywhere a
 /// structured value can — including inside an object (`{body: $mdp}`).
-pub(crate) fn to_js_literal(value: &Value, hints: Option<&SolidRenderHints>) -> String {
+pub(crate) fn to_js_literal(value: &Value, ctx: &Ctx) -> String {
     if let Some(nodes) = pendon_renderer_ast::fragment_nodes(value) {
-        return format!("(<>{}</>)", render_fragment(nodes, hints));
+        return format!("(<>{}</>)", render_fragment(nodes, ctx));
     }
     match value {
         Value::Null => "null".to_string(),
@@ -461,7 +501,7 @@ pub(crate) fn to_js_literal(value: &Value, hints: Option<&SolidRenderHints>) -> 
                 if i > 0 {
                     out.push_str(", ");
                 }
-                out.push_str(&to_js_literal(item, hints));
+                out.push_str(&to_js_literal(item, ctx));
             }
             out.push(']');
             out
@@ -488,7 +528,7 @@ pub(crate) fn to_js_literal(value: &Value, hints: Option<&SolidRenderHints>) -> 
                     out.push('"');
                 }
                 out.push_str(": ");
-                out.push_str(&to_js_literal(val, hints));
+                out.push_str(&to_js_literal(val, ctx));
             }
             out.push('}');
             out

@@ -30,6 +30,7 @@ members = [
   "crates/renderer-json",
   "crates/renderer-solid",
   "crates/tui",
+  "crates/types",
 ]
 resolver = "2"
 

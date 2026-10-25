@@ -4,7 +4,7 @@ use pendon_core::{
 };
 use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead, ExtrasOptions};
 use pendon_plugin_markdown::process as process_markdown;
-use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
+use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
 
 // --- Configuration & Types ---
@@ -37,8 +37,6 @@ struct ParsedImage {
     marker: ImageMarker,
     /// Bare flags of the §7.1 extras head (§6.3), emitted on the outermost node.
     flags: Vec<String>,
-    /// The `@@type{…}` marker, when present: the §11 routing key (rule 3).
-    type_marker: Option<String>,
     /// §13 warnings raised while resolving the head and extras.
     warnings: Vec<String>,
 }
@@ -111,17 +109,10 @@ where
             if let Some(end) = find_matching_end(events, i, NodeKind::Paragraph) {
                 let block = &events[i + 1..end];
                 if let Some(parsed) = maybe_parse_advanced_image(block, options) {
-                    match route_image(&parsed, options) {
-                        Some(route) => {
-                            emit_custom_image(&parsed, &route, inline_pipeline, context, &mut out);
-                        }
-                        None => {
-                            emit_element_image(&parsed, inline_pipeline, context, &mut out);
-                            // Block level images own their line (the old HtmlBlock
-                            // rendering appended a newline after the markup).
-                            out.extend(raw_inline("\n"));
-                        }
-                    }
+                    emit_image(&parsed, options, inline_pipeline, context, &mut out);
+                    // Block level images own their line (the old HtmlBlock
+                    // rendering appended a newline after the markup).
+                    out.extend(raw_inline("\n"));
                     i = end + 1;
                     continue;
                 }
@@ -159,246 +150,57 @@ where
     out
 }
 
-// --- §11 routing -----------------------------------------------------------
+// --- §11 layers (ADR-0008 `D-3a`) ------------------------------------------
 
-/// §11 rule 3 routing of one image: which component renders the outermost node,
-/// and whether the `<img>` element nests inside it.
-struct CustomRoute<'a> {
-    outer: &'a ImageCustomNode,
-    /// `Some` when the `img` layer renders the element nested inside the outer
-    /// component (a figure whose `figure` *and* `img` layers are configured).
-    inner: Option<&'a ImageCustomNode>,
-    /// `true` when the outer node is the `<figure>` container of `~?!!`.
-    outer_is_figure: bool,
+/// §11 primary layer of `plugin-image`: the `<img>` element itself.
+const IMG_LAYER: &str = "img";
+/// §11 layer of the `<figure>` container a `~?!!` marker emits.
+const FIGURE_LAYER: &str = "figure";
+
+/// The layer key `[[task.image.custom]]` addresses (always the primary).
+pub fn primary_layer() -> &'static str {
+    IMG_LAYER
 }
 
-/// Selects the component of the outermost node (§11 rule 3).
+/// Every §11 layer this plugin emits, in the order a config may name them.
+pub fn layers() -> [&'static str; 2] {
+    [IMG_LAYER, FIGURE_LAYER]
+}
+
+/// §11 rule 3 / ADR-0008 `D-3a`: the plugin no longer picks a component. Every
+/// node it emits keeps its built-in kind, is tagged with the layer that owns it
+/// (`__layer`) and keeps its `type` marker; the renderer resolves the two
+/// against the whole document.
 ///
-/// - `~?!!` (a figure): the `figure` layer is the container, the `img` layer the
-///   element inside it; either one alone replaces the whole image.
-/// - any other image: the `img` layer is the node; the `figure` layer is used
-///   when no `img` entry answers the marker (pre-cutover configs keep working).
-fn route_image<'a>(parsed: &ParsedImage, options: &'a ImageOptions) -> Option<CustomRoute<'a>> {
-    let marker = parsed.type_marker.as_deref();
-    let img = options.img.select(marker);
-    let figure = options.figure.select(marker);
-    let is_figure = matches!(
-        parsed.container.or(parsed.marker.container),
-        Some(ContainerKind::Figure)
-    );
-
-    match (is_figure, figure, img) {
-        // Both layers on a figure: the container wraps the element.
-        (true, Some(figure), Some(img)) => Some(CustomRoute {
-            outer: figure,
-            inner: Some(img),
-            outer_is_figure: true,
-        }),
-        (true, Some(figure), None) => Some(CustomRoute {
-            outer: figure,
-            inner: None,
-            outer_is_figure: true,
-        }),
-        // A single component replaces the whole image (pre-cutover behaviour).
-        (_, None, Some(img)) => Some(CustomRoute {
-            outer: img,
-            inner: None,
-            outer_is_figure: false,
-        }),
-        // A non-figure image with both layers: the `img` layer is the node — the
-        // `figure` layer only has meaning for a figure.
-        (false, Some(_), Some(img)) => Some(CustomRoute {
-            outer: img,
-            inner: None,
-            outer_is_figure: false,
-        }),
-        (false, Some(figure), None) => Some(CustomRoute {
-            outer: figure,
-            inner: None,
-            outer_is_figure: false,
-        }),
-        (true, None, None) | (false, None, None) => None,
-    }
+/// A layer with **no** component can never answer anything, so for that layer
+/// the plugin emits the plain HTML shape (the built-in element, `data-`-prefixed
+/// props, `<figcaption>` around the caption). That decision is per document and
+/// per layer, never per element, so a `_` / `*` selector still sees one shape.
+fn figure_props(options: &ImageOptions) -> bool {
+    !options.figure.is_empty()
 }
 
-/// Emits `id`/`class`/props/`style`/flags of the outermost node. Custom
-/// components receive the keys verbatim (`type` included), unlike the HTML
-/// fallback which prefixes extra props with `data-`.
-fn push_custom_extra_attrs(parsed: &ParsedImage, out: &mut Vec<Event>) {
-    if let Some(id) = &parsed.attrs.id {
-        attribute(out, "id", id);
-    }
-    if !parsed.attrs.classes.is_empty() {
-        attribute(out, "class", &parsed.attrs.classes.join(" "));
-    }
-    for (k, v) in &parsed.attrs.properties {
-        if !k.starts_with("--") && k != "style" {
-            attribute(out, k, v);
-        }
-    }
-    let style_str = image_style(&parsed.attrs);
-    if !style_str.is_empty() {
-        attribute(out, "style", &style_str);
-    }
-    // §6.3: a bare flag stays a bare attribute, also on a custom component.
-    for name in &parsed.flags {
-        out.push(Event::AttributeFlag { name: name.clone() });
-    }
+fn img_props(options: &ImageOptions) -> bool {
+    !options.img.is_empty()
 }
 
-/// The `container` attribute, when the marker asked for one.
-fn push_container_attribute(parsed: &ParsedImage, out: &mut Vec<Event>) {
-    if let Some(container) = parsed.container.or(parsed.marker.container) {
-        let value = match container {
-            ContainerKind::Figure => "figure",
-            ContainerKind::Paragraph => "p",
-            ContainerKind::Division => "div",
-        };
-        attribute(out, "container", value);
-    }
+/// Tags a node with the §11 layer that owns it (§11 rule 3, `D-3a`).
+fn push_layer(out: &mut Vec<Event>, layer: &str) {
+    out.push(Event::Attribute {
+        name: "__layer".to_string(),
+        value: layer.to_string(),
+    });
 }
 
-/// `alt`/`src` plus the `w`/`h` and lazy/async marker attributes: the payload of
-/// the `<img>` element itself, which stays on the inner node (§7.1).
-fn push_image_element_attrs(parsed: &ParsedImage, out: &mut Vec<Event>) {
-    attribute(out, "alt", &parsed.alt);
-    attribute(out, "src", &parsed.src);
-    if parsed.marker.lazy {
-        attribute(out, "lazy", "1");
-    }
-    if parsed.marker.async_decoding {
-        attribute(out, "async_decoding", "1");
-    }
-    if let Some(width) = parsed.marker.width {
-        attribute(out, "width", &width.to_string());
-    }
-    if let Some(height) = parsed.marker.height {
-        attribute(out, "height", &height.to_string());
-    }
-}
-
-fn emit_caption_children<C>(
-    parsed: &ParsedImage,
-    inline_pipeline: &impl InlinePipeline<C>,
-    context: &mut C,
-    out: &mut Vec<Event>,
-) {
-    let Some(caption) = &parsed.caption else {
-        return;
-    };
-    out.extend(render_caption_events(caption, inline_pipeline, context));
-}
-
-// --- Custom Node Emission ---
-
-fn emit_custom_image<C>(
-    parsed: &ParsedImage,
-    route: &CustomRoute<'_>,
-    inline_pipeline: &impl InlinePipeline<C>,
-    context: &mut C,
-    out: &mut Vec<Event>,
-) {
-    push_image_warnings(parsed, out);
-    let node_kind = NodeKind::Custom(route.outer.name.clone());
-    out.push(Event::StartNode(node_kind.clone()));
-
-    // §11 rule 3: the caption and the inner `<img>` component are rendered here,
-    // so the Markdown pass must pass these children through verbatim. Without the
-    // marker it re-lexed them, and its whitespace-only chunks are dropped, which
-    // glued the words of every multi-word caption together
-    // (`Afigurecaptionwith<strong>markup</strong>`). `plugin-table`'s cells carry
-    // the same marker for the same reason.
+/// Marks a node whose children are already rendered events (`plugin-markdown`
+/// then passes them through verbatim). Without the marker it re-lexed the
+/// caption and dropped its whitespace-only chunks, which glued the words of
+/// every multi-word caption together (`Afigurecaptionwith<strong>markup</strong>`).
+fn push_pre_rendered(out: &mut Vec<Event>) {
     out.push(Event::Attribute {
         name: "__plugin_kind".to_string(),
         value: "element".to_string(),
     });
-
-    // Emit component name for renderer template matching
-    out.push(Event::Attribute {
-        name: "name".to_string(),
-        value: route.outer.name.clone(),
-    });
-
-    if route.outer_is_figure {
-        // §7.1: the extras belong to the outermost node (here the `<figure>`),
-        // its caption stays a child, and the `<img>` element nests inside (§11).
-        push_container_attribute(parsed, out);
-        push_custom_extra_attrs(parsed, out);
-        match route.inner {
-            Some(inner) => {
-                let inner_kind = NodeKind::Custom(inner.name.clone());
-                out.push(Event::StartNode(inner_kind.clone()));
-                out.push(Event::Attribute {
-                    name: "name".to_string(),
-                    value: inner.name.clone(),
-                });
-                push_image_element_attrs(parsed, out);
-                out.push(Event::EndNode(inner_kind));
-            }
-            None => push_img_element(parsed, out),
-        }
-        emit_caption_children(parsed, inline_pipeline, context, out);
-        out.push(Event::EndNode(node_kind));
-        return;
-    }
-
-    // Core image attributes
-    out.push(Event::Attribute {
-        name: "alt".to_string(),
-        value: parsed.alt.clone(),
-    });
-    out.push(Event::Attribute {
-        name: "src".to_string(),
-        value: parsed.src.clone(),
-    });
-
-    // Container type
-    if let Some(container) = parsed.container.or(parsed.marker.container) {
-        let value = match container {
-            ContainerKind::Figure => "figure",
-            ContainerKind::Paragraph => "p",
-            ContainerKind::Division => "div",
-        };
-        out.push(Event::Attribute {
-            name: "container".to_string(),
-            value: value.to_string(),
-        });
-    }
-
-    // Marker modifiers
-    if parsed.marker.lazy {
-        out.push(Event::Attribute {
-            name: "lazy".to_string(),
-            value: "1".to_string(),
-        });
-    }
-    if parsed.marker.async_decoding {
-        out.push(Event::Attribute {
-            name: "async_decoding".to_string(),
-            value: "1".to_string(),
-        });
-    }
-    if let Some(w) = parsed.marker.width {
-        out.push(Event::Attribute {
-            name: "width".to_string(),
-            value: w.to_string(),
-        });
-    }
-    if let Some(h) = parsed.marker.height {
-        out.push(Event::Attribute {
-            name: "height".to_string(),
-            value: h.to_string(),
-        });
-    }
-
-    // Extra attributes (id, class, props, style) and the bare flags (§6.3):
-    // custom Solid components receive the keys verbatim (unlike the HTML path).
-    push_custom_extra_attrs(parsed, out);
-
-    // Caption as rendered inline children with full inline pipeline support
-    emit_caption_children(parsed, inline_pipeline, context, out);
-
-    out.push(Event::EndNode(node_kind));
 }
 
 // --- Solid Hints Integration ---
@@ -407,24 +209,20 @@ fn emit_custom_image<C>(
 /// `figure` layers, §11). Returns None when neither layer is configured, letting
 /// the renderer fall back to its built-in handler.
 pub fn solid_hints(options: &ImageOptions) -> Option<SolidRenderHints> {
-    let mut hints = SolidRenderHints::default();
-    // §11 rule 3: every entry of every layer answers its own instances.
-    for custom in options.img.components().chain(options.figure.components()) {
-        let key = (custom.name.clone(), Some(custom.name.clone()));
-        hints.templates.push(ComponentTemplate {
-            node_type: custom.name.clone(),
-            node_name: Some(custom.name.clone()),
-            template: custom.template.clone(),
-        });
-
-        if !custom.imports.is_empty() {
-            hints.template_imports.insert(key, custom.imports.clone());
-        }
-    }
-
-    if hints.templates.is_empty() {
+    let sets = [&options.img, &options.figure];
+    if sets.iter().all(|set| set.is_empty()) {
         return None;
     }
+    // §11 rule 3 / D-3a: one template per entry, tagged with its own layer; the
+    // renderer decides per document which entry answers which `type`.
+    let payload = |custom: &ImageCustomNode| (custom.template.clone(), custom.imports.clone());
+    let mut hints = SolidRenderHints::default();
+    hints
+        .templates
+        .extend(layer_templates(IMG_LAYER, &options.img, payload));
+    hints
+        .templates
+        .extend(layer_templates(FIGURE_LAYER, &options.figure, payload));
     Some(hints)
 }
 
@@ -499,15 +297,73 @@ fn parse_decorated_image_syntax(line: &str, options: &ImageOptions) -> Option<Pa
     Some(build_parsed_image(core, None, None, blocks, options))
 }
 
-// --- Structured Element Emission (used when no custom component is configured) ---
+/// Emits `id`/`class`/props/`style`/flags of a node whose layer has components:
+/// they receive the keys verbatim (`type` included), unlike the HTML fallback
+/// which prefixes extra props with `data-`.
+fn push_custom_extra_attrs(parsed: &ParsedImage, out: &mut Vec<Event>) {
+    if let Some(id) = &parsed.attrs.id {
+        attribute(out, "id", id);
+    }
+    if !parsed.attrs.classes.is_empty() {
+        attribute(out, "class", &parsed.attrs.classes.join(" "));
+    }
+    for (k, v) in &parsed.attrs.properties {
+        if !k.starts_with("--") && k != "style" {
+            attribute(out, k, v);
+        }
+    }
+    let style_str = image_style(&parsed.attrs);
+    if !style_str.is_empty() {
+        attribute(out, "style", &style_str);
+    }
+    // §6.3: a bare flag stays a bare attribute, also on a custom component.
+    for name in &parsed.flags {
+        out.push(Event::AttributeFlag { name: name.clone() });
+    }
+}
 
-/// Emits the image as structured [`NodeKind::Element`] events.
+/// The `container` attribute, when the marker asked for one.
+fn push_container_attribute(parsed: &ParsedImage, out: &mut Vec<Event>) {
+    if let Some(container) = parsed.container.or(parsed.marker.container) {
+        let value = match container {
+            ContainerKind::Figure => "figure",
+            ContainerKind::Paragraph => "p",
+            ContainerKind::Division => "div",
+        };
+        attribute(out, "container", value);
+    }
+}
+
+/// `alt`/`src` plus the `w`/`h` and lazy/async marker attributes: the payload of
+/// the `<img>` element itself, which stays on the element node (§7.1).
+fn push_image_element_attrs(parsed: &ParsedImage, out: &mut Vec<Event>) {
+    attribute(out, "alt", &parsed.alt);
+    attribute(out, "src", &parsed.src);
+    if parsed.marker.lazy {
+        attribute(out, "lazy", "1");
+    }
+    if parsed.marker.async_decoding {
+        attribute(out, "async_decoding", "1");
+    }
+    if let Some(width) = parsed.marker.width {
+        attribute(out, "width", &width.to_string());
+    }
+    if let Some(height) = parsed.marker.height {
+        attribute(out, "height", &height.to_string());
+    }
+}
+
+// --- Structured Element Emission (§11 rule 3 / `D-3a`) ---
+
+/// Emits the image as structured [`NodeKind::Element`] events, one node per HTML
+/// element, each tagged with the §11 layer that owns it.
 ///
-/// Emitting real events (instead of one raw HTML string) keeps custom
-/// components alive inside `<figcaption>`: citations, custom inline plugins and
-/// custom anchors all nest correctly in every renderer.
-fn emit_element_image<C, P>(
+/// Emitting real events (instead of one raw HTML string) keeps custom components
+/// alive inside `<figcaption>`: citations, custom inline plugins and custom
+/// anchors all nest correctly in every renderer.
+fn emit_image<C, P>(
     parsed: &ParsedImage,
+    options: &ImageOptions,
     inline_pipeline: &P,
     context: &mut C,
     out: &mut Vec<Event>,
@@ -519,49 +375,95 @@ fn emit_element_image<C, P>(
 
     match container {
         Some(ContainerKind::Figure) => {
+            // §7.1: the extras belong to the outermost node (here the `<figure>`),
+            // its caption stays a child and the `<img>` element nests inside
+            // (§11). A component on the `figure` layer replaces this node, so it
+            // receives the extras verbatim and the caption as children.
+            let props = figure_props(options);
             out.extend(element_open("figure"));
-            push_common_attrs(out, &parsed.attrs, &parsed.flags);
-            push_img_element(parsed, out);
+            push_pre_rendered(out);
+            push_layer(out, FIGURE_LAYER);
+            if props {
+                push_container_attribute(parsed, out);
+                push_custom_extra_attrs(parsed, out);
+            } else {
+                push_common_attrs(out, &parsed.attrs, &parsed.flags);
+            }
+            push_img_element(parsed, img_props(options), out);
 
             if let Some(caption) = &parsed.caption {
                 let caption_events = render_caption_events(caption, inline_pipeline, context);
                 if !caption_events.is_empty() {
-                    out.extend(element_open("figcaption"));
-                    out.extend(caption_events);
-                    out.push(element_close("figcaption"));
+                    if props {
+                        // A component renders its own caption wrapper (§7.1);
+                        // the child list is the pre-rendered inline AST.
+                        out.extend(caption_events);
+                    } else {
+                        out.extend(element_open("figcaption"));
+                        out.extend(caption_events);
+                        out.push(element_close("figcaption"));
+                    }
                 }
             }
 
             out.push(element_close("figure"));
         }
         Some(ContainerKind::Paragraph) | Some(ContainerKind::Division) => {
-            let tag = match container {
-                Some(ContainerKind::Paragraph) => "p",
-                Some(ContainerKind::Division) => "div",
-                _ => unreachable!(),
+            let (tag, value) = match container {
+                Some(ContainerKind::Division) => ("div", "div"),
+                _ => ("p", "p"),
             };
-            out.extend(element_open(tag));
-            push_common_attrs(out, &parsed.attrs, &parsed.flags);
-            push_img_element(parsed, out);
-            out.push(element_close(tag));
+            if img_props(options) {
+                // The `<img>` layer replaces the element and renders its own
+                // wrapper from `{attrs.container}`, so no built-in wrapper is
+                // emitted around it.
+                out.extend(element_open("img"));
+                push_layer(out, IMG_LAYER);
+                push_image_element_attrs(parsed, out);
+                attribute(out, "container", value);
+                push_custom_extra_attrs(parsed, out);
+                out.push(element_close("img"));
+            } else {
+                out.extend(element_open(tag));
+                push_common_attrs(out, &parsed.attrs, &parsed.flags);
+                push_img_element(parsed, false, out);
+                out.push(element_close(tag));
+            }
         }
         None => {
+            // A bare image is the `<img>` element itself: the `img` layer owns
+            // it, so the extras land on the same node.
             out.extend(element_open("img"));
-            push_image_marker_attrs(out, &parsed.marker);
-            attribute(out, "alt", &parsed.alt);
-            push_common_attrs(out, &parsed.attrs, &parsed.flags);
-            attribute(out, "src", &parsed.src);
+            push_layer(out, IMG_LAYER);
+            if img_props(options) {
+                push_image_element_attrs(parsed, out);
+                push_custom_extra_attrs(parsed, out);
+            } else {
+                push_image_marker_attrs(out, &parsed.marker);
+                attribute(out, "alt", &parsed.alt);
+                push_common_attrs(out, &parsed.attrs, &parsed.flags);
+                attribute(out, "src", &parsed.src);
+            }
             out.push(element_close("img"));
         }
     }
 }
 
-/// Emits the `<img … />` element itself.
-fn push_img_element(parsed: &ParsedImage, out: &mut Vec<Event>) {
+/// Emits the `<img … />` element itself, tagged with the `img` layer.
+///
+/// `props` selects the component shape of the marker attributes
+/// (`lazy`/`async_decoding` as props) over the built-in HTML one
+/// (`loading`/`decoding`); see [`img_props`].
+fn push_img_element(parsed: &ParsedImage, props: bool, out: &mut Vec<Event>) {
     out.extend(element_open("img"));
-    push_image_marker_attrs(out, &parsed.marker);
-    attribute(out, "alt", &parsed.alt);
-    attribute(out, "src", &parsed.src);
+    push_layer(out, IMG_LAYER);
+    if props {
+        push_image_element_attrs(parsed, out);
+    } else {
+        push_image_marker_attrs(out, &parsed.marker);
+        attribute(out, "alt", &parsed.alt);
+        attribute(out, "src", &parsed.src);
+    }
     out.push(element_close("img"));
 }
 
@@ -744,7 +646,6 @@ fn build_parsed_image(
         attrs,
         marker: core.marker,
         flags,
-        type_marker,
         warnings,
     }
 }
@@ -924,10 +825,7 @@ fn emit_inline_image<C, P>(
 ) where
     P: InlinePipeline<C>,
 {
-    match route_image(parsed, options) {
-        Some(route) => emit_custom_image(parsed, &route, inline_pipeline, context, out),
-        None => emit_element_image(parsed, inline_pipeline, context, out),
-    }
+    emit_image(parsed, options, inline_pipeline, context, out);
 }
 
 fn push_common_attrs(out: &mut Vec<Event>, attrs: &ImageAttrs, flags: &[String]) {
@@ -1292,8 +1190,11 @@ mod tests {
             .any(|e| matches!(e, Event::Text(t) if t.contains("![Alt](https://x.test/a.webp)"))));
     }
 
+    /// §11 rule 3 / `D-3a`: the figure keeps its built-in kind and names the
+    /// layer it belongs to; the renderer picks the component document-wide. The
+    /// extras of the outermost node reach it verbatim (no `data-` prefix).
     #[test]
-    fn emits_custom_node_with_all_attributes() {
+    fn figure_layer_keeps_its_extras_verbatim() {
         let pipeline = Pipeline::default();
         let options = ImageOptions {
             img: ComponentSet::new(),
@@ -1311,8 +1212,9 @@ mod tests {
 
         assert!(out.iter().any(|e| matches!(
             e,
-            Event::StartNode(NodeKind::Custom(name)) if name == "AdvancedImage"
+            Event::StartNode(NodeKind::Element(name)) if name == "figure"
         )));
+        assert!(has_attribute(&out, "__layer", "figure"));
         assert!(out.iter().any(|e| matches!(
             e,
             Event::Attribute { name, value } if name == "src" && value == "https://x.test/a.webp"
@@ -1503,8 +1405,9 @@ mod tests {
 
         assert!(out.iter().any(|e| matches!(
             e,
-            Event::StartNode(NodeKind::Custom(name)) if name == "AdvancedImage"
+            Event::StartNode(NodeKind::Element(name)) if name == "figure"
         )));
+        assert!(has_attribute(&out, "__layer", "figure"));
         assert!(out.iter().any(|e| matches!(
             e,
             Event::Attribute { name, value } if name == "class" && value == "hero"

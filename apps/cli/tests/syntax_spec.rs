@@ -263,6 +263,17 @@ fn golden_25_extras_nested() {
     assert_fixture("25-extras-nested");
 }
 
+/// §16.3 fixture 28: `type` is a **selector** and the renderer resolves the whole
+/// layer once per document (§11, ADR-0008 `D-3a`). Reproduces R.1–R.4 of
+/// `docs/issues/type-upgrade.md`: the literal beats `*`, `_` is the remainder of
+/// the occurring types minus what the layer defines (so `?` removes untyped from
+/// `_` even though it is written later), `?` answers the untyped nodes, and a
+/// `*` entry that loses everywhere contributes no import line.
+#[test]
+fn golden_28_type_selectors() {
+    assert_fixture("28-type-selectors");
+}
+
 /// §16.3 fixture 26: the reference export scope (§2.6 of RFC-0002) — frontmatter
 /// references default to `all`, so an uncited entry still reaches the
 /// `references` binding, while `citations` only lists what was cited.

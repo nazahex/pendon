@@ -3,12 +3,14 @@ import Hint from "@comp/shared/Hint";
 import Parego from "@comp/shared/Parego";
 import Epis from '@comp/Epis'
 
-export const frontmatter = {"cites":[{"id":"suryana-2026","index":1},{"id":"suryana-2026","index":2,"loc":"hlm. 45"},{"id":"paper-smith","index":3}],"references":{"paper-smith":{"authors":[{"firstName":"John","lastName":"Smith"},{"firstName":"Jane","lastName":"Doe"}],"containerTitle":"Journal of Web Engineering","doi":"10.1016/j.jwe.2025.08.001","id":"paper-smith","issue":"4","issuedDate":{"month":8,"year":2025},"language":"en","pages":"210-225","title":"Generative MDX to PDF Compilation Architectures","type":"journal","volume":"18"},"suryana-2026":{"authors":[{"firstName":"Eko","lastName":"Suryana"}],"id":"suryana-2026","isbn":"978-602-0000-00-0","issuedDate":{"year":2026},"language":"id","publisher":"TechPress Indonesia","publisherLocation":"Jakarta","title":"Masa Depan Rekayasa Perangkat Lunak","type":"book"}},"title":"Universal Custom Syntax"};
+export const frontmatter = {"references":{"paper-smith":{"authors":[{"firstName":"John","lastName":"Smith"},{"firstName":"Jane","lastName":"Doe"}],"containerTitle":"Journal of Web Engineering","doi":"10.1016/j.jwe.2025.08.001","id":"paper-smith","issue":"4","issuedDate":{"month":8,"year":2025},"language":"en","pages":"210-225","title":"Generative MDX to PDF Compilation Architectures","type":"journal","volume":"18"},"suryana-2026":{"authors":[{"firstName":"Eko","lastName":"Suryana"}],"id":"suryana-2026","isbn":"978-602-0000-00-0","issuedDate":{"year":2026},"language":"id","publisher":"TechPress Indonesia","publisherLocation":"Jakarta","title":"Masa Depan Rekayasa Perangkat Lunak","type":"book"}},"title":"Universal Custom Syntax"};
 export const headings = [{"id":"image","text":"Image","level":2},{"id":"anchor","text":"Anchor","level":2},{"id":"cite","text":"Cite","level":2},{"id":"heading-slug","text":"Heading","level":2,"subheadings":[{"id":"foo-bar","text":"Foo Bar Barosa","level":3}]},{"id":"table","text":"Table","level":2},{"id":"latex","text":"Latex","level":2},{"id":"custom-plugins","text":"Custom Plugins","level":2},{"id":"lists","text":"Lists","level":2}];
+export const references = {"paper-smith":{"authors":[{"firstName":"John","lastName":"Smith"},{"firstName":"Jane","lastName":"Doe"}],"containerTitle":"Journal of Web Engineering","doi":"10.1016/j.jwe.2025.08.001","id":"paper-smith","issue":"4","issuedDate":{"month":8,"year":2025},"language":"en","pages":"210-225","title":"Generative MDX to PDF Compilation Architectures","type":"journal","volume":"18"},"suryana-2026":{"authors":[{"firstName":"Eko","lastName":"Suryana"}],"id":"suryana-2026","isbn":"978-602-0000-00-0","issuedDate":{"year":2026},"language":"id","publisher":"TechPress Indonesia","publisherLocation":"Jakarta","title":"Masa Depan Rekayasa Perangkat Lunak","type":"book"}};
+export const citations = [{"citation_number":1,"instance_index":1,"ref_id":"suryana-2026"},{"citation_number":1,"instance_index":2,"ref_id":"suryana-2026"},{"citation_number":2,"instance_index":3,"loc":"hlm. 45","ref_id":"suryana-2026"},{"citation_number":1,"instance_index":4,"ref_id":"suryana-2026"},{"citation_number":2,"instance_index":5,"loc":"hlm. 45","ref_id":"suryana-2026"},{"citation_number":3,"instance_index":6,"ref_id":"paper-smith"},{"citation_number":1,"instance_index":7,"ref_id":"suryana-2026"},{"citation_number":2,"instance_index":8,"loc":"hlm. 45","ref_id":"suryana-2026"}];
 export default function PendonView() { return (<>
 <section id="image">
 <h2>1. Image</h2>
-<figure class="extra class or" data-baz="23" data-foo="bar" id="custom-id" style="--wix: sum; --rotate: 5deg;"><img alt="lorem ipsum" decoding="async" height="300" loading="lazy" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" width="800" /><figcaption>Exercitation qui <strong>exercitation</strong> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>o</mi><mi>l</mi><mi>o</mi><mi>r</mi></mrow><annotation encoding="application/x-tex">dolor</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal">o</span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="mord mathnormal" style="margin-right:0.02778em;">or</span></span></span></span>`}></span> &#123;velit&#125; <i>aliqua</i> <a href="/Anim_Esta_(Officia)" title="Anim Esta (Officia)">Anim</a> consectetur <Cite reference={frontmatter.references["suryana-2026"]} index={1} /> voluptate <a href="/foo/bar" rel="noopener noreferrer sponsored nofollow" target="_blank" title="Buy Foo!">labore</a> labore elit non esse occaecat. <Cite reference={frontmatter.references["suryana-2026"]} index={2} loc={"hlm. 45"} /> <Epis level={2}>Et deserunt sunt consectetur elit.</Epis></figcaption></figure>
+<figure class="extra class or" data-baz="23" data-foo="bar" id="custom-id" style="--wix: sum; --rotate: 5deg;"><img alt="lorem ipsum" decoding="async" height="300" loading="lazy" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" width="800" /><figcaption>Exercitation qui <strong>exercitation</strong> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>o</mi><mi>l</mi><mi>o</mi><mi>r</mi></mrow><annotation encoding="application/x-tex">dolor</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal">o</span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="mord mathnormal" style="margin-right:0.02778em;">or</span></span></span></span>`}></span> &#123;velit&#125; <i>aliqua</i> <a href="/Anim_Esta_(Officia)" title="Anim Esta (Officia)">Anim</a> consectetur <Cite reference={references["suryana-2026"]} citation_number={1} instance_index={4} /> voluptate <a href="/foo/bar" rel="noopener noreferrer sponsored nofollow" target="_blank" title="Buy Foo!">labore</a> labore elit non esse occaecat. <Cite reference={references["suryana-2026"]} citation_number={2} instance_index={5} loc="hlm. 45" /> <Epis level={2}>Et deserunt sunt consectetur elit.</Epis></figcaption></figure>
 </section>
 <section id="anchor">
 <h2>2. Anchor</h2>
@@ -17,7 +19,7 @@ export default function PendonView() { return (<>
 </section>
 <section id="cite">
 <h2>3. Cite</h2>
-<p>Minim <Cite reference={frontmatter.references["paper-smith"]} cite-id={"smith"} class={"paper"} index={3} rox={"hen"} /> esse do ut anim proident est qui <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi></mrow><annotation encoding="application/x-tex">F</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span></span></span></span>`}></span> magna non elit quis eiusmod dolore.
+<p>Minim <Cite reference={references["paper-smith"]} citation_number={3} cite-id="smith" class="paper" instance_index={6} rox="hen" /> esse do ut anim proident est qui <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi></mrow><annotation encoding="application/x-tex">F</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span></span></span></span>`}></span> magna non elit quis eiusmod dolore.
 </p>
 </section>
 <section id="heading-slug">
@@ -52,7 +54,7 @@ export default function PendonView() { return (<>
 </td>
     </tr>
     <tr class="row-danger">
-      <td class="v-top" rowspan="2" style="text-align: left; width: 200px;">&#123;Keyboard&#125; Mekanikal<Cite reference={frontmatter.references["suryana-2026"]} index={1} /></td>
+      <td class="v-top" rowspan="2" style="text-align: left; width: 200px;">&#123;Keyboard&#125; Mekanikal<Cite reference={references["suryana-2026"]} citation_number={1} instance_index={1} /></td>
       <td class="v-top text-red" style="text-align: center;">0</td>
       <td class="v-bottom" style="text-align: right; width: 30%;"><span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>850.000</mn></mrow><annotation encoding="application/x-tex">850.000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">850.000</span></span></span></span>`}></span></td>
       <td style="text-align: center;">Habis</td>
@@ -60,7 +62,7 @@ export default function PendonView() { return (<>
     <tr>
       <td class="v-top" style="text-align: center;">5</td>
       <td class="v-bottom" style="text-align: right; width: 30%;">5.200.000</td>
-      <td style="text-align: center;"><img alt="lorem ipsum" class="extra class or" data-baz="23" data-foo="bar" decoding="async" height="300" id="custom-id" loading="lazy" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" style="--wix: sum; --rotate: 5deg;" width="800" /> Exercitation qui <strong>exercitation</strong> dolor velit <i>aliqua</i> <a href="/Anim_Esta_(Officia)" title="Anim Esta (Officia)">Anim</a> consectetur <Cite reference={frontmatter.references["suryana-2026"]} index={1} /> voluptate <a href="/foo/bar" rel="noopener noreferrer sponsored nofollow" target="_blank" title="Buy Foo!">labore</a> labore elit non esse occaecat. <Cite reference={frontmatter.references["suryana-2026"]} index={2} loc={"hlm. 45"} /></td>
+      <td style="text-align: center;"><img alt="lorem ipsum" class="extra class or" data-baz="23" data-foo="bar" decoding="async" height="300" id="custom-id" loading="lazy" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" style="--wix: sum; --rotate: 5deg;" width="800" /> Exercitation qui <strong>exercitation</strong> dolor velit <i>aliqua</i> <a href="/Anim_Esta_(Officia)" title="Anim Esta (Officia)">Anim</a> consectetur <Cite reference={references["suryana-2026"]} citation_number={1} instance_index={2} /> voluptate <a href="/foo/bar" rel="noopener noreferrer sponsored nofollow" target="_blank" title="Buy Foo!">labore</a> labore elit non esse occaecat. <Cite reference={references["suryana-2026"]} citation_number={2} instance_index={3} loc="hlm. 45" /></td>
     </tr>
   </tbody>
   <tfoot>
@@ -71,7 +73,7 @@ export default function PendonView() { return (<>
     </tr>
   </tfoot>
 </table>
-<p><Cite reference={frontmatter.references["suryana-2026"]} index={1} />
+<p><Cite reference={references["suryana-2026"]} citation_number={1} instance_index={7} />
 </p>
 </section>
 <section id="latex">
@@ -84,7 +86,7 @@ export default function PendonView() { return (<>
 </section>
 <section id="custom-plugins">
 <h2>7. Custom Plugins</h2>
-<Parego type="note" title="Foo Bar" tag={"Bax Xo"}><p>Ullamco excepteur adipisicing quis ullamco ea mollit et nulla sint non et id commodo commodo <Cite reference={frontmatter.references["suryana-2026"]} cite-id={"surya"} class={"suyn"} index={2} loc={"hlm. 45"} rox={"hen"} /><Epis level={3}>Aliquip commodo commodo et ut reprehenderit qui magna laboris et.</Epis>.
+<Parego type="note" title="Foo Bar" tag="Bax Xo"><p>Ullamco excepteur adipisicing quis ullamco ea mollit et nulla sint non et id commodo commodo <Cite reference={references["suryana-2026"]} citation_number={2} cite-id="surya" class="suyn" instance_index={8} loc="hlm. 45" rox="hen" /><Epis level={3}>Aliquip commodo commodo et ut reprehenderit qui magna laboris et.</Epis>.
 </p>
 <Hint type="!"><p>In amet deserunt consequat cupidatat laboris cupidatat.
 </p>
@@ -120,7 +122,7 @@ export default function PendonView() { return (<>
 <li>Beta</li>
 </ul>
 </blockquote>
-<Parego type="note" title="List in a Parego block" tag={"Ordered"}><ol start={1}>
+<Parego type="note" title="List in a Parego block" tag="Ordered"><ol start={1}>
 <li>Primero</li>
 <li>Segundo</li>
 <li>Tercero</li>

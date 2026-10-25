@@ -62,6 +62,39 @@ default → built-in element (which MUST still carry all extras as attributes);
 `imports` is canonical (singular `import` warns); `template` validation is a hard
 error when children would be silently dropped or the element is unbalanced.
 
+### Emitting a layer (ADR-0008 `D-3a`)
+
+A plugin **never chooses a component**. It emits its own built-in node, keeps the
+`type` marker it parsed and tags the node with the layer that owns it:
+
+```rust
+const CELL_LAYER: &str = "cell";
+
+fn emit_cell(out: &mut Vec<Event>) {
+    out.push(Event::StartNode(NodeKind::Element("td".into())));
+    out.push(Event::Attribute { name: "__layer".into(), value: CELL_LAYER.into() });
+    // …then the `type` attribute and the extras…
+}
+```
+
+The hints are built with `layer_templates`, so each template carries the layer it
+answers plus that entry's selectors and imports:
+
+```rust
+hints.templates.extend(layer_templates(CELL_LAYER, &options.cell, |entry| {
+    (entry.template.clone(), entry.imports.clone())
+}));
+```
+
+`renderer-solid` resolves every layer once per document (`resolve.rs`), which is
+what makes `_` (the remainder) and `*` (everything) mean anything: they need the
+document's occurring types. A node that carries no `__layer` keeps the older
+node-identity behaviour, which is what `plugin-custom`, `plugin-quiz` and
+`plugin-vicado` rely on. `plugin-quiz`, `plugin-vicado` and the wiki infobox
+are scheduled for deletion in the next workflow: do not migrate them and do not
+build on them. `__`-prefixed attributes are internal: the Solid and
+HTML renderers strip them, and they never reach a component's `attrs`.
+
 ## Diagnostics
 
 Diagnostics are document-level events, consistent across plugins. Do not use

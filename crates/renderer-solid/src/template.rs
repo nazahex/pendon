@@ -1,8 +1,9 @@
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 
-use crate::imports::{ComponentTemplate, SolidRenderHints};
+use crate::imports::ComponentTemplate;
 use crate::node::{is_jsx_expression_token, to_js_literal};
+use crate::resolve::Ctx;
 use pendon_core::{json_attr_payload, jsx_attr_payload};
 
 pub fn render_template(
@@ -10,7 +11,7 @@ pub fn render_template(
     attrs: Option<&Map<String, Value>>,
     children: &str,
     text: Option<&str>,
-    hints: Option<&SolidRenderHints>,
+    ctx: &Ctx,
 ) -> String {
     let mut out = String::new();
     let tpl = template.template.as_str();
@@ -47,7 +48,7 @@ pub fn render_template(
             // Handle the spread operator {...attrs} with smart spacing
             if tpl[i..].starts_with("{...attrs}") {
                 let spread_str = if let Some(map) = attrs {
-                    generate_spread_attrs(map, &used_attr_keys, hints)
+                    generate_spread_attrs(map, &used_attr_keys, ctx)
                 } else {
                     String::new()
                 };
@@ -143,35 +144,6 @@ fn enclosing_attribute(tpl: &str, attr_start: usize, attr_end: usize) -> Option<
     Some((start, end))
 }
 
-pub fn select_template<'a>(
-    hints: Option<&'a SolidRenderHints>,
-    node_type: &str,
-    v: &Value,
-) -> Option<&'a ComponentTemplate> {
-    let Some(h) = hints else {
-        return None;
-    };
-    let node_name = v
-        .get("attrs")
-        .and_then(|a: &Value| a.get("name"))
-        .and_then(|n| n.as_str());
-
-    let mut fallback: Option<&ComponentTemplate> = None;
-    for tpl in &h.templates {
-        if tpl.node_type != node_type {
-            continue;
-        }
-        if let Some(expected) = tpl.node_name.as_deref() {
-            if Some(expected) == node_name {
-                return Some(tpl);
-            }
-        } else if fallback.is_none() {
-            fallback = Some(tpl);
-        }
-    }
-    fallback
-}
-
 fn get_attr_value(attrs: Option<&Map<String, Value>>, key: &str) -> String {
     let Some(map) = attrs else {
         return String::new();
@@ -188,7 +160,7 @@ fn get_attr_value(attrs: Option<&Map<String, Value>>, key: &str) -> String {
 fn generate_spread_attrs(
     map: &Map<String, Value>,
     used_keys: &BTreeSet<String>,
-    hints: Option<&SolidRenderHints>,
+    ctx: &Ctx,
 ) -> String {
     let mut parts = Vec::new();
     for (key, val) in map {
@@ -239,7 +211,7 @@ fn generate_spread_attrs(
                         match parsed {
                             Value::Object(_) | Value::Array(_) => {
                                 part.push_str("={");
-                                part.push_str(&to_js_literal(&parsed, hints));
+                                part.push_str(&to_js_literal(&parsed, ctx));
                                 part.push('}');
                                 parts.push(part);
                                 continue;
@@ -259,7 +231,7 @@ fn generate_spread_attrs(
                 {
                     if let Ok(parsed) = serde_json::from_str::<Value>(trimmed) {
                         part.push_str("={");
-                        part.push_str(&to_js_literal(&parsed, hints));
+                        part.push_str(&to_js_literal(&parsed, ctx));
                         part.push('}');
                         parts.push(part);
                         continue;
@@ -307,7 +279,7 @@ fn generate_spread_attrs(
             _ => {
                 // Arrays or Objects: pass as JS literal expression
                 part.push_str("={");
-                part.push_str(&to_js_literal(val, hints));
+                part.push_str(&to_js_literal(val, ctx));
                 part.push('}');
             }
         }

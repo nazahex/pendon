@@ -130,6 +130,22 @@ layer of the table: `table`, `caption`, `thead`, `tbody`, `tfoot`, `row`, and
 `cell`. Every layer is independent — configure the ones you need and the rest
 keep rendering as plain elements, so a partial config degrades gracefully.
 
+The plugin never picks a component itself (§11 rule 3,
+[ADR-0008](../../docs/decisions/0008-type-selectors.md) `D-3a`): it emits all
+seven layers as its own elements, tags each node with the layer that owns it
+(`__layer`, an internal attribute every renderer strips) and keeps the `type`
+marker it already parsed. `pendon-renderer-solid` then decides **once per
+document** which entry of each layer answers which occurring `type` — which is
+what lets `type = ["_"]` (the remainder) and `type = ["*"]` (everything) see the
+whole document instead of a single cell.
+
+One consequence is visible in the output: a layer that has a component reports
+its attributes as **typed props** (`align="left"`, `colspan={2}`), while a layer
+without one keeps the DOM shape it would have in a plain table
+(`style="text-align: left;"`). A table with any component is also emitted
+without layout whitespace, so no component receives a stray whitespace text
+child.
+
 ```toml
 [task.table.custom.table]
 name = "CustomTable"

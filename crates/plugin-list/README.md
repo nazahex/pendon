@@ -23,9 +23,10 @@ Three layers, mirroring `[[task.list.<layer>.custom]]`:
 - two
 ```
 
-The plugin wraps the list's events in the container node —
-`NodeKind::Custom(name)` when the `type` is claimed (§11 rule 3),
-`NodeKind::Element("ul"|"ol")` otherwise (D8) — carrying
+The plugin wraps the list's events in the container node — always the built-in
+`NodeKind::Element("ul"|"ol")` (D8), tagged `__layer = "unordered"|"ordered"`
+so the renderer answers that layer with the matching
+`[[task.list.custom.<layer>]]` entry (§11 rule 3, ADR-0008 `D-3a`) — carrying
 `__plugin_kind = "unordered" | "ordered"`, the extras, the `type` marker and the
 `name`. The layer follows the **marker** (`-` → `unordered`, `1.` → `ordered`),
 never the decorator's own type (§9.4). The decorators that bind to nothing are
@@ -63,17 +64,17 @@ is older than this crate and is carried by the frozen CLI baselines.)
 [[task.list.unordered.custom]]
 type = ["unorderedA"]
 name = "UL"
-imports = "import { UL } from '@comp/content/List'"
+imports = "import { UL } from '@comp/List'"
 template = "<UL {...attrs}>{children}</UL>"
 
 [task.list.ordered.custom] # single form = the layer default
 name = "OL"
-imports = "import { OL } from '@comp/content/List'"
+imports = "import { OL } from '@comp/List'"
 template = "<OL {...attrs}>{children}</OL>"
 
 [[task.list.list.custom]] # the item layer (§9.4)
 name = "LI"
-imports = "import { LI } from '@comp/content/List'"
+imports = "import { LI } from '@comp/List'"
 template = "<LI {...attrs}>{children}</LI>"
 ```
 

@@ -4,24 +4,22 @@ use pendon_renderer_solid::{ComponentSet, ImportEntry};
 use serde::{Deserialize, Serialize};
 
 mod attrs;
-mod custom;
+mod emit;
 mod grid;
 mod parser;
-mod render;
 
-pub use custom::solid_hints;
+pub use emit::{layers, primary_layer, solid_hints};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TableOptions {
     pub custom_node: Option<TableCustomNode>,
 }
 
+/// One `type` selector set per §11 layer (§8 layer mapping), resolved
+/// document-wide by the renderer (`D-3a`) — the plugin itself never picks a
+/// component.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TableCustomNode {
-    /// Imports applied to every configured component below. Each component's
-    /// own `imports` list is added on top; the renderer deduplicates.
-    #[serde(default)]
-    pub imports: Vec<ImportEntry>,
     /// §11 component sets, one per layer (`§8` layer mapping).
     #[serde(default)]
     pub table: ComponentSet<CustomComponent>,
@@ -70,11 +68,7 @@ pub fn process(events: &[Event], options: &TableOptions, inline_pipeline: &Pipel
 
     while i < events.len() {
         if let Some(table_block) = parser::try_parse_table_block(events, i) {
-            if options.custom_node.is_some() {
-                custom::emit_custom_table(&table_block, options, inline_pipeline, &mut out);
-            } else {
-                render::emit_table_elements(&table_block, inline_pipeline, &mut (), &mut out);
-            }
+            emit::emit_table(&table_block, options, inline_pipeline, &mut out);
             i = table_block.end_index + 1;
             continue;
         }
@@ -100,18 +94,13 @@ where
 
     while i < events.len() {
         if let Some(table_block) = parser::try_parse_table_block(events, i) {
-            if options.custom_node.is_some() {
-                custom::emit_custom_table_with_context(
-                    &table_block,
-                    options,
-                    inline_pipeline,
-                    context,
-                    &mut out,
-                );
-                i = table_block.end_index + 1;
-                continue;
-            }
-            render::emit_table_elements(&table_block, inline_pipeline, context, &mut out);
+            emit::emit_table_with_context(
+                &table_block,
+                options,
+                inline_pipeline,
+                context,
+                &mut out,
+            );
             i = table_block.end_index + 1;
             continue;
         }
@@ -402,7 +391,9 @@ mod tests {
         assert!(!text_of(&cells[0]).contains("\\n"));
     }
 
-    // --- custom node: layers, fallbacks and imports ---
+    // --- §11 layers (ADR-0008 `D-3a`) ---
+
+    use crate::emit::{CELL_LAYER, LAYER_ATTR, TABLE_LAYER, THEAD_LAYER};
 
     /// A component template that only wraps its children.
     fn component(name: &str) -> CustomComponent {
@@ -418,11 +409,10 @@ mod tests {
         ComponentSet::from_entries([TypedComponent::default_component(component(name))])
     }
 
-    /// Every layer of the table is customised.
+    /// Every layer of the table is answered by a component.
     fn fully_custom_options() -> TableOptions {
         TableOptions {
             custom_node: Some(TableCustomNode {
-                imports: Vec::new(),
                 table: layer("CustomTable"),
                 caption: layer("TableCaption"),
                 thead: layer("TableHead"),
@@ -434,104 +424,100 @@ mod tests {
         }
     }
 
-    /// Caption, header, body and footer all present, so every configured layer
-    /// is exercised by a single input.
+    /// Caption, header, body and footer all present, so every layer occurs.
     const CUSTOM_TABLE_INPUT: &str =
         "|| Judul Tabel ||\n| Produk | Stok |\n| --- | --- |\n| Laptop | 15 |\n|===|\n| Total | 15 |\n";
 
+    /// `D-3a`: the plugin emits its own elements, tags each with the layer that
+    /// owns it and leaves the choice to the renderer — it never emits a
+    /// component node of its own.
     #[test]
-    fn custom_node_replaces_every_table_layer() {
+    fn every_table_element_is_tagged_with_its_layer() {
         let pipeline = Pipeline::default();
         let events = paragraph_events(CUSTOM_TABLE_INPUT);
         let out = process(&events, &fully_custom_options(), &pipeline);
 
-        for name in [
-            "CustomTable",
-            "TableCaption",
-            "TableHead",
-            "TableBody",
-            "TableFoot",
-            "TableRow",
-            "TableCell",
-        ] {
-            assert!(has_custom_component(&out, name), "missing <{name}>");
+        for layer in layers() {
+            assert!(
+                has_attribute(&out, LAYER_ATTR, layer),
+                "missing `{LAYER_ATTR}=\"{layer}\"`"
+            );
         }
 
         for tag in [
             "table", "caption", "thead", "tbody", "tfoot", "tr", "th", "td",
         ] {
             assert!(
-                !out.iter().any(
-                    |event| matches!(event, Event::StartNode(NodeKind::Element(name)) if name == tag)
-                ),
-                "plain <{tag}> must not be emitted when a component is configured"
-            );
-        }
-    }
-
-    /// Configuring a single layer must not disable the rest: every remaining
-    /// layer falls back to its plain element.
-    #[test]
-    fn partially_configured_custom_node_falls_back_to_plain_elements() {
-        let pipeline = Pipeline::default();
-        let events = paragraph_events("| A | B |\n| --- | --- |\n| 1 | 2 |\n");
-        let options = TableOptions {
-            custom_node: Some(TableCustomNode {
-                table: layer("CustomTable"),
-                ..Default::default()
-            }),
-        };
-        let out = process(&events, &options, &pipeline);
-
-        assert!(has_custom_component(&out, "CustomTable"));
-        for tag in ["thead", "tbody", "tr", "th", "td"] {
-            assert!(
                 out.iter().any(
                     |event| matches!(event, Event::StartNode(NodeKind::Element(name)) if name == tag)
                 ),
-                "missing fallback <{tag}>"
+                "missing <{tag}>"
             );
         }
-        assert!(!has_custom_component(&out, "TableRow"));
+
+        // The component is chosen at resolve time, so the plugin's stream still
+        // holds elements only.
+        assert!(!out
+            .iter()
+            .any(|event| matches!(event, Event::StartNode(NodeKind::Custom(_)))));
     }
 
-    /// Section components cover `<thead>`/`<tbody>`/`<tfoot>` as well.
+    /// §11 rule 3: the instance marker stays on the node, so the renderer can
+    /// route it to the entry that declared that `type`.
     #[test]
-    fn custom_sections_replace_thead_tbody_tfoot() {
+    fn type_markers_stay_on_their_layer_nodes() {
         let pipeline = Pipeline::default();
-        let events = paragraph_events("| A |\n| --- |\n| 1 |\n|===|\n| 2 |\n");
-        let out = process(&events, &fully_custom_options(), &pipeline);
+        let events = paragraph_events(
+            "|-[sales](\"Laporan\")@@tableX{.striped}-|\n\
+             | A |\n\
+             | :---@@cellA{.v-top} |\n\
+             | 1 |\n",
+        );
+        let out = process(&events, &TableOptions::default(), &pipeline);
 
-        // `<TableBody>`/`<TableFoot>` only appear when those rows exist.
-        for name in ["TableHead", "TableBody", "TableFoot"] {
-            assert!(has_custom_component(&out, name), "missing <{name}>");
+        assert!(has_attribute(&out, "type", "tableX"));
+        assert!(has_attribute(&out, LAYER_ATTR, TABLE_LAYER));
+        assert!(has_attribute(&out, "type", "cellA"));
+        assert!(has_attribute(&out, LAYER_ATTR, CELL_LAYER));
+    }
+
+    /// One layer-qualified template per configured entry: the renderer decides
+    /// which of them renders, per document.
+    #[test]
+    fn hints_carry_one_layer_qualified_template_per_entry() {
+        let options = fully_custom_options();
+        let hints = solid_hints(&options).expect("hints");
+        assert_eq!(hints.templates.len(), 7);
+
+        let mut tagged: Vec<&str> = hints
+            .templates
+            .iter()
+            .filter_map(|template| template.layer.as_deref())
+            .collect();
+        tagged.sort_unstable();
+        let mut expected = layers().to_vec();
+        expected.sort_unstable();
+        assert_eq!(tagged, expected);
+
+        // A layer template is not an identity match: `node_name` mirrors the
+        // layer and is never consulted.
+        for template in &hints.templates {
+            assert_eq!(template.node_name.as_deref(), template.layer.as_deref());
         }
-        assert!(!has_custom_component(&out, "thead"));
     }
 
-    /// Cells are pre-rendered by this plugin, so the Markdown pass has to know
-    /// they must pass through verbatim — a re-lex dropped the whitespace-only
-    /// chunks and glued the words of every multi-word cell together.
+    /// No component: no hints at all, so the renderer keeps the plain elements.
     #[test]
-    fn custom_components_are_marked_as_pre_rendered_elements() {
-        let pipeline = Pipeline::default();
-        let events = paragraph_events("| Laptop Pro |\n| --- |\n| Mouse Wireless |\n");
-        let out = process(&events, &fully_custom_options(), &pipeline);
-
-        assert!(has_attribute(&out, "__plugin_kind", "element"));
-        assert!(text_of(&out).contains("Laptop Pro"));
-        assert!(text_of(&out).contains("Mouse Wireless"));
+    fn an_unconfigured_table_has_no_hints() {
+        assert!(solid_hints(&TableOptions::default()).is_none());
     }
 
-    /// Imports declared once under `custom_node` reach every component; a
-    /// component's own list is appended on top of them.
+    /// §11 rule 3: an entry's `imports` travel with its own template only, so a
+    /// losing component never contributes an import line.
     #[test]
-    fn shared_imports_apply_to_every_component() {
+    fn entry_imports_travel_with_their_layer_template() {
         let mut options = fully_custom_options();
         let node = options.custom_node.as_mut().expect("custom node");
-        node.imports = vec![ImportEntry::Raw(
-            "import { TableCaption } from '@comp/table';".to_string(),
-        )];
         let thead = node.thead.entries_mut().first_mut().expect("thead entry");
         thead.component.imports = vec![ImportEntry::Structured {
             module: "@comp/table".to_string(),
@@ -540,21 +526,74 @@ mod tests {
         }];
 
         let hints = solid_hints(&options).expect("hints");
-        assert_eq!(hints.templates.len(), 7);
+        let find = |wanted: &str| {
+            hints
+                .templates
+                .iter()
+                .find(|template| template.layer.as_deref() == Some(wanted))
+                .unwrap_or_else(|| panic!("missing `{wanted}` template"))
+        };
 
-        let key = ("TableHead".to_string(), Some("TableHead".to_string()));
-        let imports = hints.template_imports.get(&key).expect("thead imports");
-        assert_eq!(imports.len(), 2, "shared + own imports: {imports:?}");
-        assert!(matches!(&imports[0], ImportEntry::Raw(line) if line.contains("TableCaption")));
+        let thead = find(THEAD_LAYER);
+        assert_eq!(thead.imports.len(), 1, "{:?}", thead.imports);
         assert!(matches!(
-            &imports[1],
+            &thead.imports[0],
             ImportEntry::Structured { module, names, .. }
                 if module == "@comp/table" && names == &vec!["TableHead".to_string()]
         ));
+        assert!(find(CELL_LAYER).imports.is_empty());
+    }
 
-        let cell_key = ("TableCell".to_string(), Some("TableCell".to_string()));
-        let cell_imports = hints.template_imports.get(&cell_key).expect("cell imports");
-        assert_eq!(cell_imports.len(), 1, "shared import only");
-        assert!(matches!(&cell_imports[0], ImportEntry::Raw(_)));
+    /// The attribute shape follows the layer that owns the node: a `cell`
+    /// component keeps alignment typed, and a composed table is never
+    /// pretty-printed.
+    #[test]
+    fn shapes_follow_the_layer_that_owns_the_node() {
+        let pipeline = Pipeline::default();
+        let events = paragraph_events("| A | B |\n| :--- | :--- |\n| 1 | 2 |\n");
+
+        // No component anywhere: CSS alignment plus the pretty layout.
+        let out = process(&events, &TableOptions::default(), &pipeline);
+        assert!(has_attribute(&out, "style", "text-align: left;"));
+        assert!(!has_attribute(&out, "align", "left"));
+        assert!(text_of(&out).contains('\n'));
+
+        let options = TableOptions {
+            custom_node: Some(TableCustomNode {
+                cell: layer("TableCell"),
+                ..Default::default()
+            }),
+        };
+        let out = process(&events, &options, &pipeline);
+
+        // `<td>`/`<th>` answer a component → typed `align`, no CSS rewrite …
+        assert!(has_attribute(&out, "align", "left"));
+        assert!(!out
+            .iter()
+            .any(|event| matches!(event, Event::Attribute { name, value }
+                if name == "style" && value.contains("text-align"))));
+        // … and a composed table carries no layout whitespace, which would
+        // otherwise become a component's text child.
+        assert!(!text_of(&out).contains('\n'));
+        // The layers without a component still emit their plain elements.
+        assert!(has_attribute(&out, LAYER_ATTR, TABLE_LAYER));
+    }
+
+    /// Cells are pre-rendered by this plugin, so the Markdown pass has to know
+    /// they must pass through verbatim — a re-lex dropped the whitespace-only
+    /// chunks and glued the words of every multi-word cell together.
+    #[test]
+    fn composed_tables_are_marked_as_pre_rendered_elements() {
+        let pipeline = Pipeline::default();
+        let events = paragraph_events("| Laptop Pro |\n| --- |\n| Mouse Wireless |\n");
+        let out = process(&events, &fully_custom_options(), &pipeline);
+
+        assert!(has_attribute(&out, "__plugin_kind", "element"));
+        assert!(text_of(&out).contains("Laptop Pro"));
+        assert!(text_of(&out).contains("Mouse Wireless"));
+
+        // A plain table needs no marker: it is element-shaped already.
+        let out = process(&events, &TableOptions::default(), &pipeline);
+        assert!(!has_attribute(&out, "__plugin_kind", "element"));
     }
 }

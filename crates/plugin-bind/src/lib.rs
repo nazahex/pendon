@@ -615,19 +615,54 @@ fn read_external(file: &str, base: Option<&Path>) -> Result<(PathBuf, String), E
     }
 }
 
+/// Parses a data **file** into the same normalized `serde_json::Value` the
+/// `{{{lang[var] … }}}` blocks produce.
+///
+/// `[[task.bind.inject]]` publishes a whole file without mentioning it in the
+/// Markdown (§6.1 of `workflows/numbering-extract-type-export.md`), so it needs
+/// the payload converter without the block scanner. The language comes from the
+/// extension — there is no `lang` token to override it.
+pub fn parse_data_file(path: &Path) -> Result<Value, String> {
+    let lang = lang_for_path(path).ok_or_else(|| {
+        format!(
+            "`{}` has no known data extension; expected .json, .jsonc, .yaml, .yml, .toml or .csv",
+            path.display()
+        )
+    })?;
+    let contents = fs::read_to_string(path)
+        .map_err(|cause| format!("cannot read `{}`: {cause}", path.display()))?;
+    parse_body(lang, &contents).map_err(|cause| format!("`{}`: {cause}", path.display()))
+}
+
+/// The language a data file's extension declares (§4's table).
+///
+/// An unknown extension is `None`, matching `extension_warning`'s silence: the
+/// caller reports the offending path rather than guessing a format.
+fn lang_for_path(path: &Path) -> Option<Lang> {
+    let extension = path.extension()?.to_str()?.to_ascii_lowercase();
+    match extension.as_str() {
+        "json" => Some(Lang::Json),
+        "jsonc" => Some(Lang::Jsonc),
+        "yaml" | "yml" => Some(Lang::Yaml),
+        "toml" => Some(Lang::Toml),
+        "csv" => Some(Lang::Csv),
+        _ => None,
+    }
+}
+
 /// Warns when a known data extension disagrees with the declared `lang` (§2.7).
 ///
 /// `lang` is authoritative — the payload may live in a `.txt` file — so this is a
 /// typo guard, not a rule, and an unknown extension is silent.
 fn extension_warning(lang: Lang, path: &Path) -> Option<Event> {
-    let extension = path.extension()?.to_str()?.to_ascii_lowercase();
-    let agrees = match extension.as_str() {
-        "json" | "jsonc" => matches!(lang, Lang::Json | Lang::Jsonc),
-        "yaml" | "yml" => matches!(lang, Lang::Yaml),
-        "toml" => matches!(lang, Lang::Toml),
-        "csv" => matches!(lang, Lang::Csv),
-        _ => return None,
+    // One table only: the same `extension → lang` map `parse_data_file` uses.
+    // `.json` and `.jsonc` are interchangeable (JSONC parses plain JSON too).
+    let declared = lang_for_path(path)?;
+    let agrees = match declared {
+        Lang::Json | Lang::Jsonc => matches!(lang, Lang::Json | Lang::Jsonc),
+        other => other == lang,
     };
+    let extension = path.extension()?.to_str()?.to_ascii_lowercase();
     (!agrees).then(|| {
         warning(format!(
             "[bind] `{}` does not match the `.{}` extension of `{}`; `{}` was used",
@@ -1893,6 +1928,43 @@ mod tests {
         // Fixing the file must re-render the page, so it stays a dependency even
         // though this build dropped the block.
         assert_eq!(result.external_files.len(), 1);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// `parse_data_file` is the block converter without the scanner, so a data
+    /// file published by `[[task.bind.inject]]` has the same shape a block would
+    /// bind: the payload is a value, never markup.
+    #[test]
+    fn parse_data_file_uses_the_block_converter() {
+        let root = temp_dir("parse");
+        std::fs::write(root.join("rows.yaml"), "- name: Alpha\n  score: 1\n").expect("yaml");
+        std::fs::write(root.join("settings.toml"), "count = 2\n").expect("toml");
+        std::fs::write(root.join("rows.csv"), "name,score\nAlpha,1\n").expect("csv");
+        std::fs::write(root.join("conf.JSON"), "{ \"a\": 1 }").expect("json");
+
+        assert_eq!(
+            parse_data_file(&root.join("rows.yaml")),
+            Ok(json!([{ "name": "Alpha", "score": 1 }]))
+        );
+        assert_eq!(
+            parse_data_file(&root.join("settings.toml")),
+            Ok(json!({ "count": 2 }))
+        );
+        // CSV keeps the header row as keys and parses cells as JSON when it can.
+        assert_eq!(
+            parse_data_file(&root.join("rows.csv")),
+            Ok(json!([{ "name": "Alpha", "score": 1 }]))
+        );
+        // The extension is matched case-insensitively.
+        assert_eq!(
+            parse_data_file(&root.join("conf.JSON")),
+            Ok(json!({ "a": 1 }))
+        );
+
+        let err = parse_data_file(&root.join("notes.txt")).expect_err("unknown extension");
+        assert!(err.contains("has no known data extension"), "{err}");
+        let err = parse_data_file(&root.join("missing.yaml")).expect_err("missing file");
+        assert!(err.contains("cannot read"), "{err}");
         let _ = std::fs::remove_dir_all(&root);
     }
 }

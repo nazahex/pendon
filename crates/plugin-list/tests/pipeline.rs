@@ -108,10 +108,17 @@ fn the_list_is_built_inside_the_wrapper() {
         "the list opened a container of its own: {events:?}"
     );
     assert!(has_node(&events, NodeKind::ListItem), "{events:?}");
+    // D-3a: the wrapper is the built-in element, tagged with its layer.
     assert!(
-        events
-            .iter()
-            .any(|event| matches!(event, Event::StartNode(NodeKind::Custom(name)) if name == "UL")),
+        events.iter().any(
+            |event| matches!(event, Event::StartNode(NodeKind::Element(name)) if name == "ul")
+        ),
+        "{events:?}"
+    );
+    assert!(
+        events.iter().any(
+            |event| matches!(event, Event::Attribute { name, value } if name == "__layer" && value == "unordered")
+        ),
         "{events:?}"
     );
     assert!(validate_events(&events).is_empty(), "{events:?}");

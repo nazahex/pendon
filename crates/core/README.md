@@ -24,8 +24,11 @@ input ─▶ pendon_core::parse ─▶ Event stream ─▶ plugins (transform) �
 - **`NodeKind`** — `Document`, `Paragraph`, `Heading`, `CodeFence`, `ThematicBreak`,
   `Blockquote`, `BulletList`, `OrderedList`, `ListItem`, `Table`, `TableHead`,
   `TableBody`, `TableRow`, `Cell`, `HtmlBlock`, `HtmlInline`, `Custom(name)`,
-  `Element(name)`, and more. `Custom(name)` is a configured component; `Element(name)`
-  is a built-in HTML element.
+  `Element(name)`, and more. `Element(name)` is a built-in HTML element; a §11
+  layer's node keeps a built-in kind and is tagged `__layer` (ADR-0008 `D-3a`), so
+  `Custom(name)` is now only for a component that is not a layer (a `plugin-custom`
+  `toml:` spec, a `plugin-quiz` / `plugin-vicado` node) or a hand-built event
+  stream that still swaps the node.
 - **`Pipeline` / `InlinePipeline` / `ContextPipeline<C>`** — small combinators
   plugins use to run nested transforms (e.g. an image caption re-running the
   inline plugins).

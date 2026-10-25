@@ -283,14 +283,13 @@ entry with no overrides behaves exactly as before.
 
 ## Behavioral Notes
 
-- A paragraph whose entire (trimmed) content is a single advanced image is transformed as a block and emitted as an `HtmlBlock` (or a `Custom(name)` node when a custom component is configured)
-- Advanced images embedded inline inside paragraph text are transformed in place and emitted as `HtmlInline` (or a `Custom(name)` node)
+- A paragraph whose entire (trimmed) content is a single advanced image is transformed as a block and emitted as an `HtmlBlock` tagged `__layer = "figure"` / `"img"` (§11 rule 3, ADR-0008 `D-3a`)
+- Advanced images embedded inline inside paragraph text are transformed in place and emitted as `HtmlInline`, tagged the same way
 - Only **plain-text** paragraph content is scanned; paragraphs that already contain inline nodes are left untouched
 - Multi-line paragraphs are scanned line by line for inline images
 - Figure captions support full inline markdown; single-image mode does not accept trailing caption text
 - The marker parser is intentionally strict: invalid markers or malformed dimensions cause the line to be skipped (no transform, no error)
-- When no custom node is configured, output is emitted as raw HTML strings (`HtmlBlock`/`HtmlInline` events)
-- When a custom node is configured, output is emitted as `Custom(name)` nodes with structured attributes and inline children
+- The emitted shape never depends on which component answers: a layer with a component carries structured attributes (`data-`-prefixed props) and inline children, a layer without one emits the plain HTML string — that choice is made once per document and per layer, so a `_` / `*` selector always sees one shape
 
 ## Scope and Limitations
 

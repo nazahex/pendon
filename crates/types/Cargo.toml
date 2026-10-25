@@ -1,0 +1,12 @@
+[package]
+name = "pendon-types"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "Type selectors and document-scoped type resolution for Pendon"
+
+[dependencies]
+# `Selector` rides on `renderer-solid`'s `TypedComponent`, which derives
+# `Serialize`/`Deserialize`; the rest of the workspace declares serde the same
+# way (no feature gate), so this crate matches it.
+serde = { version = "1", features = ["derive"] }

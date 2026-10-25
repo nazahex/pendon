@@ -608,7 +608,10 @@ decorator_line   = "@@" type positional* extras?
 - The inner head takes precedence when both forms are present for the same blockquote.
 - Whitespace between the `>` marker, the head, and the content is explicitly allowed as an adjacency exception (§4.1).
 - Decorator lines inside code fences or raw HTML blocks are treated as literal text and do not bind.
-- The paragraph wrapping the quote is replaced with `NodeKind::Custom(name)` if claimed by `[[task.blockquote.custom]]`, otherwise `NodeKind::Element("blockquote")`.
+- The paragraph wrapping the quote becomes a built-in `NodeKind::Element("blockquote")` tagged
+  `__layer = "blockquote"` (§11 rule 3, ADR-0008 `D-3a`): the plugin never swaps in a
+  component — the renderer resolves the layer, and a quote no component answers renders as
+  the built-in element.
 - Nodes are marked `__plugin_kind = "block"` so stripped body content is re-lexed as block-level Markdown (headings, lists, nested quotes).
 - Nesting is preserved one level at a time; `>> inner` leaves `> inner` for the subsequent Markdown pass.
 
@@ -622,7 +625,9 @@ marker         = "-" | "*" | "+" | DIGIT+ "."
 - This plugin binds extras to list containers **before** `plugin-markdown` parses content; markers remain plain Markdown.
 - A decorator line directly above a list targets the container layer: `unordered` for `-`/`*`/`+`, `ordered` for `1.`.
 - The layer is determined strictly by the **marker**, never by the decorator's own type name.
-- Container nodes emit `NodeKind::Custom(name)` when claimed by config, otherwise `NodeKind::Element("ul"|"ol")` with `__plugin_kind`.
+- Container nodes stay `NodeKind::Element("ul"|"ol")` (with `__plugin_kind`) tagged
+  `__layer = "unordered"|"ordered"` (§11 rule 3, ADR-0008 `D-3a`): the plugin never emits
+  `NodeKind::Custom`, the renderer resolves the layer.
 - Extras land on the wrapper element or component, ensuring attributes apply to the list itself rather than surrounding it.
 - Ordered list start offsets follow CommonMark behavior (first item number); extras cannot currently override this value.
 - Decorator lines that fail to bind to a valid list trigger a `Severity::Warning` diagnostic.
@@ -790,7 +795,7 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
 [task.image.custom.img] # <img>
 [task.image.custom.figure] # <figure>
 [task.wiki.custom.anchor] # <a> produced by plugin-wiki
-[task.wiki.custom.infobox] # infobox
+[task.wiki.custom.infobox] # infobox (deleted in the next workflow)
 ```
 
 A plugin that declares **one** layer may address that layer directly, using the
@@ -809,13 +814,40 @@ Rules:
 2. `type` accepts a single string or an array; `[]` is equivalent to an absent
    `type`. At most one default per layer; two defaults is a **hard error** at
    config load.
+
+   Each entry is a **selector**: a literal marker name, `?` (the untyped
+   element, i.e. one with no marker), `_` (every occurring type that no entry in
+   the layer names) or `*` (every occurring type).
+   Specificity is per selector — literal / `?` = 2, `_` / `*` = 1 — and an equal
+   specificity is resolved by **later registration**. A selector list is never a
+   glob: `??` / `**` are rejected at load. A literal may appear once per layer
+   (twice is a hard error); `?` / `_` / `*` may repeat and stay ordered.
 3. Unmatched type selection order: exact `type` match → layer default → built-in
    fallback node (which MUST still carry all extras as attributes).
 
-   > Until a plugin's §11 cutover lands (OPEN-C3) the CLI requires a layer to be
-   > **routable**: exactly one component, or a layer default that no `type` entry
-   > competes with. A layer with several `type` entries is a config error rather
-   > than a silent fall back to the default.
+   Wildcards need the **document's** occurring types, so they are resolved once
+   per document by the renderer rather than per element: `_` expands to the
+   occurring types that **no entry in the layer names** (naming is computed for
+   the whole layer before any resolution, so registration order cannot change
+   what `_` means), `*` expands to all of them, and `?` to the untyped element.
+   The untyped element counts as an occurring type and only `?` **defines** it,
+   so `_` answers it whenever the layer configures no `?` entry
+   ([ADR-0008](decisions/0008-type-selectors.md) §3).
+   Only the **winning** entry's `imports` are emitted. Positional keys (rule 5)
+   stay literal-only: a `_` / `*` entry contributes no `slug` / `title`
+   override.
+
+   > **Cutover (OPEN-C3, `D-3a`).** Every element plugin emits its own built-in
+   > node, keeps the `type` marker it already emits and tags the node with the
+   > layer that owns it (the internal `__layer` attribute, which every renderer
+   > strips before rendering — `__`-prefixed keys are internal markers). The
+   > renderer then answers the whole document at once: one `pendon_types::Group`
+   > per layer, so `_` / `*` see the document rather than a single element, and
+   > the plugin never picks a component itself. Components that are **not** §11
+   > layers (`plugin-custom`'s `toml:` specs, `plugin-quiz`, `plugin-vicado`)
+   > keep the older node identity instead. `quiz`, `vicado` and the wiki
+   > infobox are scheduled for deletion, so they are deliberately **not**
+   > migrated to `__layer` / `layer_templates` — ignore them when changing §11.
 4. `imports` is canonical. The legacy singular `import` is accepted with a
    deprecation `Severity::Warning` (see §14 OPEN-C2).
 5. Positional naming (per component, all layers): `backtick_key`, `quote_key`
@@ -987,9 +1019,11 @@ Rationale lives in [`decisions/`](../decisions/).
   the loader in `apps/cli/src/components.rs`.
 - **OPEN-C2 (`import` alias) — resolved (warn).** The loader accepts the
   singular `import` and emits a Warning, then hard-errors one release later.
-- **OPEN-C3 (layer routing) — resolved.** Each plugin selects a layer component
-  per instance with §11 rule 3 (exact `type` match → layer default → built-in
-  element); the earlier "routable layer" restriction in `apps/cli` is gone
+- **OPEN-C3 (layer routing) — resolved (`D-3a`).** A plugin no longer selects a
+  layer component per instance: it emits its built-in node, keeps the `type`
+  marker and tags the node with the §11 layer that owns it (`__layer`), and
+  `pendon-renderer-solid` resolves every layer of the document at once
+  (`resolve.rs`). The earlier "routable layer" restriction in `apps/cli` is gone
   (`apps/cli/src/plugins.rs::layer_set`).
 - **OPEN-S1 (`[task.cite.section]` removal order) — resolved (done).**
   `plugin-section` is heading/icon based and never references `cite.section`, so
@@ -1116,6 +1150,10 @@ path       = any non-empty text up to the closing ")"
 - **Non-goals.** No free-text interpolation (`Total: $sum` stays literal); no
   `\$` escape; no frontmatter/micromatter payload source; resolution is a
   **build-time** transform with no reactive/runtime binding.
+- A whole file may also be published at module scope, without naming it in the
+  Markdown: `[[task.bind.inject]]` with `source` (project-root-relative, may use
+  the task's captures) and an optional `export` name (default: the file stem).
+  The binding itself — order, duplicates, "Solid only" — is §20.
 - Values are parsed to JSON: `jsonc` strips `//` and `/* … */` comments outside
   strings; `yaml` expands merge keys (`<<`) and maps non-finite floats to `null`;
   `toml` datetimes become RFC 3339 strings; `csv` uses the header row as keys and
@@ -1151,3 +1189,42 @@ the `ast`/`json` outputs keep the re-hydrated value. Executable contracts: golde
 through `../data/`) and [`27-bind-mdp`](golden/README.md) (`mdp` as a
 sub-document: the payload runs the page's chain and reaches the prop as a
 fragment).
+
+## 20. Module-level data exports (`export const`)
+
+A rendered **`solid`** page is a JavaScript module, and some of its data lives at
+module scope as `export const <name> = <json>;`. Emission is owned by
+`crates/renderer-solid`; producers only _register_ a name and a value
+([ADR-0009](../decisions/0009-generic-data-exports.md)).
+
+```text
+data_export = "export const " name " = " json ";"
+name        = ( ALPHA | "_" | "$" ) { ALPHA | DIGIT | "_" | "$" }
+```
+
+1. **Registrations, in order.** The renderer registers `frontmatter` then
+   `headings` from the AST, automatically; producers may register more. Every
+   registration is emitted in insertion order, immediately before
+   `export default function`.
+2. **Last wins.** Two registrations of one name emit **one** line: the value
+   _and_ the position of the last registration. There is no merge and no warning
+   — a later `frontmatter` registration simply replaces the automatic one.
+3. **`solid` only.** `json`, `events`, `ast` and `html` have no module scope, so
+   they drop the list silently instead of leaking a key nothing reads. A `mdp`
+   payload registers nothing of its own (§19).
+4. **`name` is a JavaScript identifier**: ASCII, `[A-Za-z_$][A-Za-z0-9_$]*`, and
+   not a reserved word (the ES reserved set, plus `await`, the strict-mode
+   keywords and `eval`/`arguments`; `of` is contextual and allowed). A bad name
+   is a **task error** before rendering, naming the key and the value:
+   `cite.citations_export 'data-x' is not a valid JavaScript identifier`.
+5. **The value is compact JSON** of the same normalized shape every payload
+   produces (§19), so a consumer may `import` it and use it as data.
+
+Current producers:
+
+| Name                              | Producer                     | Notes                                   |
+| --------------------------------- | ---------------------------- | --------------------------------------- |
+| `frontmatter`                     | `renderer-solid` (automatic) | only when the document has frontmatter  |
+| `headings`                        | `renderer-solid` (automatic) | only when it has headings; nested shape |
+| `references`, `citations`         | `plugin-cite` (§7.3)         | names configurable; references first    |
+| `[[task.bind.inject]]`'s `export` | `plugin-bind` (§19)          | whole file payloads; Solid tasks only   |

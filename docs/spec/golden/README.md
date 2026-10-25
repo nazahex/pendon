@@ -29,7 +29,7 @@ explaining the rule the fixture exercises (e.g. `01-extras-head.mdp` explains th
 cover config loading and the full CLI path, not just the parsers.
 
 ```bash
-cargo test -p pendon --test syntax_spec      # 22 fixtures, none #[ignore]d
+cargo test -p pendon --test syntax_spec      # 23 fixtures, none #[ignore]d
 ```
 
 ## Re-freezing (when output intentionally changes)
@@ -73,6 +73,7 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | 25 | `extras-nested`    | nested objects/arrays + JSX brackets (`{valueA}` → `name={valueA}`), bind + non-bind   |
 | 26 | `cite-scope`       | `references_scope`: frontmatter defaults to `all`, uncited entry still exported (§2.6) |
 | 27 | `bind-mdp`         | `mdp` is a sub-document: the payload runs the page's chain (heading, wiki, cite, math, figure, table) and reaches the prop as a fragment |
+| 28 | `type-selectors`   | `type` as selectors — `*` / literal / `_` / `?` against one document (§11, ADR-0008 `D-3a`) |
 
 Fixtures 17–20 are covered by unit tests in the renderer/CLI crates rather than as
 golden files.

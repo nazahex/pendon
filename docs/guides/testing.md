@@ -33,7 +33,6 @@ project, rendered with the real CLI, and compared byte-for-byte.
 
 ```bash
 cargo test -p pendon --test syntax_spec          # 19 fixtures
-cargo test -p pendon --test ultimate_freeze_spec # sandbox/ultimate baseline
 ```
 
 When output changes **intentionally**, re-freeze (do not hand-edit `.jsx`):

@@ -21,12 +21,15 @@ Builds a nested outline of document headings and injects it as a `Custom("Headin
 
 ## Custom heading components
 
-`plugin-heading` swaps `NodeKind::Heading` for `NodeKind::Custom(name)` when a
-`[task.heading.custom]` template is configured (§11 rule 3), so those components
-are recognised as headings too — identified by their `level` attribute, which
-heading emits and no other `Custom` node does. §13 `Diagnostic` warnings are
-skipped while looking ahead for it. Without this, a configured custom template
-(e.g. `sandbox/heading`'s `<DocHeading>`) produced no `Headings` node at all.
+`plugin-heading` emits `NodeKind::Heading` whether or not a
+`[task.heading.custom]` template is configured — it tags the node
+`__layer = "heading"` and the renderer picks the component (§11 rule 3,
+ADR-0008 `D-3a`) — so the outline is built from the built-in node.
+
+A `Custom(name)` node carrying a numeric `level` and no `__plugin_kind` marker is
+still recognised as a heading: that is the identity fallback for a component
+the heading plugin itself used to emit (e.g. `sandbox/heading`'s `<DocHeading>`),
+and §13 `Diagnostic` warnings are skipped while looking ahead for it.
 
 ## Placement
 

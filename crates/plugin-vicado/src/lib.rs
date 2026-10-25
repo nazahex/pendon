@@ -39,21 +39,16 @@ pub fn process(events: &[Event]) -> Vec<Event> {
 
 pub fn solid_hints() -> SolidRenderHints {
     let mut hints = SolidRenderHints::default();
-    let key = ("Vicado".to_string(), Some("Vicado".to_string()));
-    hints.templates.push(ComponentTemplate {
-        node_type: "Vicado".to_string(),
-        node_name: Some("Vicado".to_string()),
-        template: "<Vicado {attrs.jsx_props} />".to_string(),
-    });
-    hints
-        .template_imports
-        .entry(key)
-        .or_default()
-        .push(ImportEntry::Structured {
+    hints.templates.push(ComponentTemplate::new_identity(
+        "Vicado".to_string(),
+        Some("Vicado".to_string()),
+        "<Vicado {attrs.jsx_props} />".to_string(),
+        vec![ImportEntry::Structured {
             module: "vicado".to_string(),
             default: None,
             names: vec!["Vicado".to_string()],
-        });
+        }],
+    ));
     hints
 }
 

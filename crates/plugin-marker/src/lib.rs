@@ -24,8 +24,11 @@ use pendon_extra::{
     read_positional_groups, scan_extras_chars, to_attributes, warning_message, ExtrasAttr,
     ExtrasHead, ExtrasWarning,
 };
-use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
+use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
+
+/// §11: the layer `[[task.marker.custom]]` declares.
+const MARKER_LAYER: &str = "marker";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct MarkerCustomNode {
@@ -64,7 +67,7 @@ pub fn process(events: &[Event], options: &MarkerOptions) -> Vec<Event> {
                 if let Some(end) = matching_paragraph_end(&events, index) {
                     if let Some((marker, children)) = block_marker(&events[index + 1..end], options)
                     {
-                        emit_marker(&marker, true, options, children.as_deref(), &mut out);
+                        emit_marker(&marker, true, children.as_deref(), &mut out);
                         index = end + 1;
                         continue;
                     }
@@ -104,22 +107,19 @@ pub fn solid_hints(options: &MarkerOptions) -> Option<SolidRenderHints> {
     if options.custom.is_empty() {
         return None;
     }
-    let mut hints = SolidRenderHints::default();
-    // §11 rule 3: every entry answers the marker types it declares.
-    for custom in options.custom.components() {
-        hints.templates.push(ComponentTemplate {
-            node_type: custom.name.clone(),
-            node_name: Some(custom.name.clone()),
-            template: custom.template.clone(),
-        });
-        if !custom.imports.is_empty() {
-            hints.template_imports.insert(
-                (custom.name.clone(), Some(custom.name.clone())),
-                custom.imports.clone(),
-            );
-        }
-    }
-    Some(hints)
+    // §11 rule 3 / D-3a: every entry answers the marker types it declares; the
+    // renderer resolves them document-wide.
+    Some(SolidRenderHints {
+        templates: layer_templates(MARKER_LAYER, &options.custom, |custom| {
+            (custom.template.clone(), custom.imports.clone())
+        }),
+        ..SolidRenderHints::default()
+    })
+}
+
+/// The layer key `[[task.marker.custom]]` addresses (always the primary).
+pub fn primary_layer() -> &'static str {
+    MARKER_LAYER
 }
 
 /// Nodes whose text is copied verbatim (code, raw HTML): `{{…}}` inside them is
@@ -286,7 +286,7 @@ fn emit_inline_text(text: &str, options: &MarkerOptions, out: &mut Vec<Event>) {
         if chars[cursor] == '{' && chars.get(cursor + 1) == Some(&'{') {
             if let Some((marker, next)) = scan_marker(&chars, cursor, options) {
                 flush(&mut plain, out);
-                emit_marker(&marker, false, options, None, out);
+                emit_marker(&marker, false, None, out);
                 cursor = next;
                 continue;
             }
@@ -298,13 +298,7 @@ fn emit_inline_text(text: &str, options: &MarkerOptions, out: &mut Vec<Event>) {
     flush(&mut plain, out);
 }
 
-fn emit_marker(
-    marker: &ParsedMarker,
-    block: bool,
-    options: &MarkerOptions,
-    children: Option<&str>,
-    out: &mut Vec<Event>,
-) {
+fn emit_marker(marker: &ParsedMarker, block: bool, children: Option<&str>, out: &mut Vec<Event>) {
     for message in &marker.warnings {
         out.push(Event::Diagnostic {
             severity: Severity::Warning,
@@ -313,30 +307,20 @@ fn emit_marker(
         });
     }
 
-    match options.custom.select(Some(&marker.type_name)) {
-        Some(custom) => {
-            let node = NodeKind::Custom(custom.name.clone());
-            out.push(Event::StartNode(node.clone()));
-            out.push(Event::Attribute {
-                name: "name".to_string(),
-                value: custom.name.clone(),
-            });
-            push_attrs(marker, out);
-            if let Some(children) = children {
-                out.push(Event::Text(children.to_string()));
-            }
-            out.push(Event::EndNode(node));
-        }
-        None => {
-            let tag = if block { "div" } else { "span" };
-            out.extend(element_open(tag));
-            push_attrs(marker, out);
-            if let Some(children) = children {
-                out.push(Event::Text(children.to_string()));
-            }
-            out.push(element_close(tag));
-        }
+    // D-3a: the marker node always keeps the built-in element and its `type`;
+    // which entry answers that type is the renderer's decision, taken once for
+    // the whole document (so `*` / `_` can see every marker in it).
+    let tag = if block { "div" } else { "span" };
+    out.extend(element_open(tag));
+    out.push(Event::Attribute {
+        name: "__layer".to_string(),
+        value: MARKER_LAYER.to_string(),
+    });
+    push_attrs(marker, out);
+    if let Some(children) = children {
+        out.push(Event::Text(children.to_string()));
     }
+    out.push(element_close(tag));
 }
 
 /// The node's attributes: its `type` (the routing key, §11 rule 3) followed by
@@ -611,10 +595,10 @@ mod tests {
         assert!(text_of(&out).contains("[unclosed"), "{}", text_of(&out));
     }
 
-    /// §11 rule 3: the marker type routes to its own entry, an unclaimed type to
-    /// the layer default, and a layer without a default to the fallback element.
+    /// §11 rule 3 / D-3a: the plugin only tags the node with its layer and its
+    /// `type`; picking the entry (typed, default or none) is the renderer's job.
     #[test]
-    fn the_marker_type_routes_the_component_set() {
+    fn the_marker_type_is_kept_for_the_renderer() {
         let options = MarkerOptions {
             custom: ComponentSet::from_entries([
                 typed(&["note", "aside"], "NoteAside"),
@@ -623,13 +607,16 @@ mod tests {
         };
 
         let out = run(&paragraph("{{note}} inline"), &options);
-        assert_eq!(customs(&out), vec!["NoteAside".to_string()]);
+        assert_eq!(attr(&out, "type").as_deref(), Some("note"));
+        assert_eq!(attr(&out, "__layer").as_deref(), Some("marker"));
+        assert!(customs(&out).is_empty(), "{out:?}");
 
+        // A type nobody claims is still a marker of the layer: the renderer
+        // decides between the default entry and the built-in element.
         let out = run(&paragraph("{{unknown}}"), &options);
-        assert_eq!(customs(&out), vec!["MarkerDefault".to_string()]);
+        assert_eq!(attr(&out, "type").as_deref(), Some("unknown"));
+        assert_eq!(elements(&out), vec!["div".to_string()]);
 
-        // Without a layer default the built-in element renders; the paragraph
-        // holds only the marker, so this is the block form (`<div>`).
         let typed_only = MarkerOptions {
             custom: ComponentSet::from_entries([typed(&["note"], "Note")]),
         };

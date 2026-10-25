@@ -43,7 +43,7 @@ pub fn process(events: &[Event], options: &DirectiveOptions) -> Vec<Event> {
                 let trimmed = line.trim();
                 if is_bare_fence(trimmed) {
                     if let Some(open) = stack.pop() {
-                        close(open, options, &mut stack, &mut out);
+                        close(open, &mut stack, &mut out);
                         index = skip_closing_line(events, index);
                         continue;
                     }
@@ -78,7 +78,7 @@ pub fn process(events: &[Event], options: &DirectiveOptions) -> Vec<Event> {
                 .to_string(),
         );
         let mut events = Vec::new();
-        emit_directive(&open.parsed, true, options, &open.inner, &mut events);
+        emit_directive(&open.parsed, true, &open.inner, &mut events);
         match stack.last_mut() {
             Some(parent) => parent.inner.extend(events),
             None => out.extend(events),
@@ -115,10 +115,10 @@ fn open(
 }
 
 /// Closes the innermost directive into its parent buffer (or the output).
-fn close(mut open: Open, options: &DirectiveOptions, stack: &mut [Open], out: &mut Vec<Event>) {
+fn close(mut open: Open, stack: &mut [Open], out: &mut Vec<Event>) {
     pop_trailing_paragraph(&mut open.inner);
     let mut events = Vec::new();
-    emit_directive(&open.parsed, true, options, &open.inner, &mut events);
+    emit_directive(&open.parsed, true, &open.inner, &mut events);
     match stack.last_mut() {
         Some(parent) => parent.inner.extend(events),
         None => out.extend(events),

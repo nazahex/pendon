@@ -42,10 +42,8 @@ export default function PendonView() { return (<>
 <section>
 </section>
 <section id="s-top">
-<HeadingDefault level={1} number={1} raw_title="Unified Demo">Unified Demo
-</HeadingDefault><section id="s-anchor">
-<HeadingDefault level={2} number="1.1." raw_title="Anchor">Anchor
-</HeadingDefault><p>A01 <AnchorDefault href="/a">plain</AnchorDefault>
+<HeadingDefault level={1} number={1} raw_title="Unified Demo">Unified Demo</HeadingDefault><section id="s-anchor">
+<HeadingDefault level={2} number="1.1." raw_title="Anchor">Anchor</HeadingDefault><p>A01 <AnchorDefault href="/a">plain</AnchorDefault>
 </p>
 <p>A02 <AnchorDefault href="/a" title="T">title</AnchorDefault>
 </p>
@@ -161,121 +159,105 @@ export default function PendonView() { return (<>
 </p>
 </section>
 <section id="s-heading">
-<HeadingDefault level={2} number="1.2." raw_title="Heading">Heading
-</HeadingDefault><section id="h01">
-<HeadingDefault level={3} number="1.2.1." raw_title="H01 slug">H01 slug
-</HeadingDefault></section>
+<HeadingDefault level={2} number="1.2." raw_title="Heading">Heading</HeadingDefault><section id="h01">
+<HeadingDefault level={3} number="1.2.1." raw_title="H01 slug">H01 slug</HeadingDefault></section>
 <section id="h02-title">
-<HeadingDefault level={3} number="1.2.2." raw_title="H02 title" title="T02">H02 title
-</HeadingDefault></section>
+<HeadingDefault level={3} number="1.2.2." raw_title="H02 title" title="T02">H02 title</HeadingDefault></section>
 <section id="h03-typex">
-<HeadingXY level={"3"} type={"headingX"} number={"1.2.3."} class="x" raw_title="H03 type+X">H03 type+X
-</HeadingXY></section>
+<HeadingXY level={"3"} type={"headingX"} number={"1.2.3."} class="x" raw_title="H03 type+X">H03 type+X</HeadingXY></section>
 <section id="h04-plain">
-<HeadingDefault level={3} number="1.2.4." raw_title="H04 plain">H04 plain
-</HeadingDefault></section>
+<HeadingDefault level={3} number="1.2.4." raw_title="H04 plain">H04 plain</HeadingDefault></section>
 <section id="h05">
-<HeadingDefault level={3} number="1.2.5." raw_title="H05 slug+title" title="T05">H05 slug+title
-</HeadingDefault></section>
+<HeadingDefault level={3} number="1.2.5." raw_title="H05 slug+title" title="T05">H05 slug+title</HeadingDefault></section>
 <section id="h06">
-<HeadingXY level={"3"} type={"headingX"} number={"1.2.6."} class="x" raw_title="H06 slug+X">H06 slug+X
-</HeadingXY></section>
+<HeadingXY level={"3"} type={"headingX"} number={"1.2.6."} class="x" raw_title="H06 slug+X">H06 slug+X</HeadingXY></section>
 <section id="h07-titlexy">
-<HeadingXY level={"3"} type={"headingY"} number={"1.2.7."} class="x" raw_title="H07 title+XY" title="T07">H07 title+XY
-</HeadingXY></section>
+<HeadingXY level={"3"} type={"headingY"} number={"1.2.7."} class="x" raw_title="H07 title+XY" title="T07">H07 title+XY</HeadingXY></section>
 <section id="h08">
-<HeadingXY level={"3"} type={"headingX"} number={"1.2.8."} class="a b" k="v" n={2} raw_title="H08 XXYZZ" title="T08">H08 XXYZZ
-</HeadingXY></section>
+<HeadingXY level={"3"} type={"headingX"} number={"1.2.8."} class="a b" k="v" n={2} raw_title="H08 XXYZZ" title="T08">H08 XXYZZ</HeadingXY></section>
 <section id="h09">
-<HeadingXY level={"3"} type={"headingX"} number={"1.2.9."} bar={12} class="extra class" foo="bar" isBar={true} isFoo={true} raw_title="H09 all" style="--style-var: 2rem" title="T09">H09 all
-</HeadingXY></section>
+<HeadingXY level={"3"} type={"headingX"} number={"1.2.9."} bar={12} class="extra class" foo="bar" isBar={true} isFoo={true} raw_title="H09 all" style="--style-var: 2rem" title="T09">H09 all</HeadingXY></section>
 <section id="h10-untyped">
-<HeadingDefault class="x" level={3} number="1.2.10." raw_title="H10 untyped">H10 untyped
-</HeadingDefault></section>
+<HeadingDefault class="x" level={3} number="1.2.10." raw_title="H10 untyped">H10 untyped</HeadingDefault></section>
 <section id="h10n-untyped-non-canonical">
-<HeadingDefault class="x" level={3} number="1.2.11." raw_title="H10n untyped non-canonical">H10n untyped non-canonical
-</HeadingDefault></section>
+<HeadingDefault class="x" level={3} number="1.2.11." raw_title="H10n untyped non-canonical">H10n untyped non-canonical</HeadingDefault></section>
 <section id="h11-empty">
-<HeadingDefault level={3} number="1.2.12." raw_title="H11 empty">H11 empty
-</HeadingDefault></section>
+<HeadingDefault level={3} number="1.2.12." raw_title="H11 empty">H11 empty</HeadingDefault></section>
 <section id="h11n-empty-non-canonical">
-<HeadingDefault level={3} number="1.2.13." raw_title="H11n empty non-canonical">H11n empty non-canonical
-</HeadingDefault></section>
+<HeadingDefault level={3} number="1.2.13." raw_title="H11n empty non-canonical">H11n empty non-canonical</HeadingDefault></section>
 <section id="h12-unclaimed">
-<HeadingDefault class="x" level={3} number="1.2.14." raw_title="H12 unclaimed" type="headingZ">H12 unclaimed
-</HeadingDefault></section>
+<HeadingDefault class="x" level={3} number="1.2.14." raw_title="H12 unclaimed" type="headingZ">H12 unclaimed</HeadingDefault></section>
 <section id="h13-type-only">
-<HeadingXY level={"3"} type={"headingX"} number={"1.2.15."} raw_title="H13 type only">H13 type only
-</HeadingXY></section>
+<HeadingXY level={"3"} type={"headingX"} number={"1.2.15."} raw_title="H13 type only">H13 type only</HeadingXY></section>
 <section id="h14">
-<HeadingDefault class="x" level={3} number="1.2.16." raw_title="H14 precedence" title="T14">H14 precedence
-</HeadingDefault></section>
+<HeadingDefault class="x" level={3} number="1.2.16." raw_title="H14 precedence" title="T14">H14 precedence</HeadingDefault></section>
 <section id="h14n">
-<HeadingDefault class="x" level={3} number="1.2.17." raw_title="H14n precedence non-canonical" title="T14n">H14n precedence non-canonical
-</HeadingDefault></section>
+<HeadingDefault class="x" level={3} number="1.2.17." raw_title="H14n precedence non-canonical" title="T14n">H14n precedence non-canonical</HeadingDefault></section>
 </section>
 </section>
 <section id="h15">
-<HeadingXY level={"1"} type={"headingX"} number={"2."} class="l1" raw_title="H15 level 1">H15 level 1
-</HeadingXY><section id="h16-level-2">
-<HeadingDefault class="l2" level={2} number="2.1." raw_title="H16 level 2">H16 level 2
-</HeadingDefault></section>
+<HeadingXY level={"1"} type={"headingX"} number={"2."} class="l1" raw_title="H15 level 1">H15 level 1</HeadingXY><section id="h16-level-2">
+<HeadingDefault class="l2" level={2} number="2.1." raw_title="H16 level 2">H16 level 2</HeadingDefault></section>
 <section id="h16n-level-2-non-canonical">
-<HeadingDefault class="l2n" level={2} number="2.2." raw_title="H16n level 2 non-canonical">H16n level 2 non-canonical
-</HeadingDefault><section id="h17">
-<HeadingXY level={"4"} type={"headingY"} number={"2.2.0.1."} class="l4" raw_title="H17 level 4">H17 level 4
-</HeadingXY><section id="h18-level-6-skips-5">
-<HeadingDefault class="l6" level={6} number="2.2.0.1.0.1." raw_title="H18 level 6 (skips 5)" title="T18">H18 level 6 (skips 5)
-</HeadingDefault></section>
+<HeadingDefault class="l2n" level={2} number="2.2." raw_title="H16n level 2 non-canonical">H16n level 2 non-canonical</HeadingDefault><section id="h17">
+<HeadingXY level={"4"} type={"headingY"} number={"2.2.0.1."} class="l4" raw_title="H17 level 4">H17 level 4</HeadingXY><section id="h18-level-6-skips-5">
+<HeadingDefault class="l6" level={6} number="2.2.0.1.0.1." raw_title="H18 level 6 (skips 5)" title="T18">H18 level 6 (skips 5)</HeadingDefault></section>
 <section id="h18n-level-6-non-canonical">
-<HeadingDefault class="l6n" level={6} number="2.2.0.1.0.2." raw_title="H18n level 6 non-canonical" title="T18n">H18n level 6 non-canonical
-</HeadingDefault></section>
+<HeadingDefault class="l6n" level={6} number="2.2.0.1.0.2." raw_title="H18n level 6 non-canonical" title="T18n">H18n level 6 non-canonical</HeadingDefault></section>
 </section>
 <section id="h19">
-<HeadingXY level={"3"} type={"headingX"} number={"2.2.1."} class="k" raw_title="H19 KS [a](/x \"T\")@@anchorA{.k} **b** _i_ `c` [[W]]@@wikiX{.k} [^^](paper-smith)@@citeX{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$" title="T19">H19 KS <p><AnchorAB type={"anchorA"} class="k" href="/x" title="T">a</AnchorAB> <strong>b</strong> <i>i</i> <code>c</code> <a class="k" href="/wiki/W" title="W" type="wikiX">W</a><CiteX reference={references["paper-smith"]} citation_number={1} class="k" instance_index={10} type="citeX" /><MarkerA type={"footnote"} class="k"></MarkerA><AsideAB type={"asideA"} class="k"> d</AsideAB> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span>
-</p>
-</HeadingXY></section>
+<HeadingXY level={"3"} type={"headingX"} number={"2.2.1."} class="k" raw_title="H19 KS [a](/x \"T\")@@anchorA{.k} **b** _i_ `c` [[W]]@@wikiX{.k} [^^](paper-smith)@@citeX{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$" title="T19">H19 KS <AnchorAB type={"anchorA"} class="k" href="/x" title="T">a</AnchorAB> <strong>b</strong> <i>i</i> <code>c</code> <a class="k" href="/wiki/W" title="W" type="wikiX">W</a><CiteX reference={references["paper-smith"]} citation_number={1} class="k" instance_index={10} type="citeX" /><MarkerA type={"footnote"} class="k"></MarkerA><AsideAB type={"asideA"} class="k"> d</AsideAB> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span></HeadingXY></section>
 <section id="section">
-<HeadingXY level={"3"} type={"headingX"} number={"2.2.2."} class="x">
-</HeadingXY></section>
+<HeadingXY level={"3"} type={"headingX"} number={"2.2.2."} class="x"></HeadingXY></section>
 <section id="h21">
-<HeadingDefault level={3} number="2.2.3." raw_title="H21 closing hashes ###">H21 closing hashes ###
-</HeadingDefault></section>
+<HeadingDefault level={3} number="2.2.3." raw_title="H21 closing hashes ###">H21 closing hashes ###</HeadingDefault></section>
 <section id="section-2">
-<HeadingDefault class="x" level={3} number="2.2.4.">
-</HeadingDefault></section>
+<HeadingDefault class="x" level={3} number="2.2.4."></HeadingDefault></section>
 <section id="h24">
-<HeadingDefault class="k" level={3} number="2.2.5." raw_title="H24 KSu [a](/x \"T\"){.k} **b** _i_ `c` [[W]]{.k} [^^](paper-smith){.k} {{footnote}}{.k} ::asideA{.k} d:: $x$">H24 KSu <p><AnchorDefault class="k" href="/x" title="T">a</AnchorDefault> <strong>b</strong> <i>i</i> <code>c</code> <a class="k" href="/wiki/W" title="W">W</a><Cite reference={references["paper-smith"]} citation_number={1} class="k" instance_index={11} /><MarkerA type={"footnote"} class="k"></MarkerA><AsideAB type={"asideA"} class="k"> d</AsideAB> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span>
-</p>
-</HeadingDefault></section>
+<HeadingDefault class="k" level={3} number="2.2.5." raw_title="H24 KSu [a](/x \"T\"){.k} **b** _i_ `c` [[W]]{.k} [^^](paper-smith){.k} {{footnote}}{.k} ::asideA{.k} d:: $x$">H24 KSu <AnchorDefault class="k" href="/x" title="T">a</AnchorDefault> <strong>b</strong> <i>i</i> <code>c</code> <a class="k" href="/wiki/W" title="W">W</a><Cite reference={references["paper-smith"]} citation_number={1} class="k" instance_index={11} /><MarkerA type={"footnote"} class="k"></MarkerA><AsideAB type={"asideA"} class="k"> d</AsideAB> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span></HeadingDefault></section>
 <section id="h25">
-<HeadingDefault class="a" k="v" level={3} number="2.2.6." raw_title="H25 slug+title+XXYZ untyped" title="T25">H25 slug+title+XXYZ untyped
-</HeadingDefault></section>
+<HeadingDefault class="a" k="v" level={3} number="2.2.6." raw_title="H25 slug+title+XXYZ untyped" title="T25">H25 slug+title+XXYZ untyped</HeadingDefault></section>
 <section id="h26-titlex-untyped">
-<HeadingDefault class="a" level={3} number="2.2.7." raw_title="H26 title+X untyped" title="T26">H26 title+X untyped
-</HeadingDefault></section>
+<HeadingDefault class="a" level={3} number="2.2.7." raw_title="H26 title+X untyped" title="T26">H26 title+X untyped</HeadingDefault></section>
 <section id="h27">
-<HeadingDefault class="a" level={3} number="2.2.8." raw_title="H27 slug+X untyped, slug precedence">H27 slug+X untyped, slug precedence
-</HeadingDefault></section>
+<HeadingDefault class="a" level={3} number="2.2.8." raw_title="H27 slug+X untyped, slug precedence">H27 slug+X untyped, slug precedence</HeadingDefault></section>
 </section>
 <section id="s-image">
-<HeadingDefault level={2} number="2.3." raw_title="Image and figure">Image and figure
-</HeadingDefault><AdvancedImage alt="I01" async_decoding={1} src="/i.png" width={800}></AdvancedImage><p><AdvancedImage alt="I02" async_decoding={1} src="/i.png" width={800}></AdvancedImage> Caption only
+<HeadingDefault level={2} number="2.3." raw_title="Image and figure">Image and figure</HeadingDefault><AdvancedImage alt="I01" async_decoding={1} src="/i.png" width={800}></AdvancedImage>
+<p><AdvancedImage alt="I02" async_decoding={1} src="/i.png" width={800}></AdvancedImage> Caption only
 </p>
-<AdvancedImage alt="I03" async_decoding={1} height={300} src="/i.png"></AdvancedImage><AdvancedImage alt="I03n" async_decoding={1} height={300} src="/i.png"></AdvancedImage><ImageThumb type={"imageX"} alt="I04" async_decoding={1} class="thumb" height={300} src="/i.png" width={800}></ImageThumb><p><ImageThumb type={"imageX"} alt="I05" async_decoding={1} class="x" id="i" lazy={1} src="/i.png" width={800}></ImageThumb> Caption <strong>b</strong>
+<AdvancedImage alt="I03" async_decoding={1} height={300} src="/i.png"></AdvancedImage>
+<AdvancedImage alt="I03n" async_decoding={1} height={300} src="/i.png"></AdvancedImage>
+<ImageThumb type={"imageX"} alt="I04" async_decoding={1} class="thumb" height={300} src="/i.png" width={800}></ImageThumb>
+<p><ImageThumb type={"imageX"} alt="I05" async_decoding={1} class="x" id="i" lazy={1} src="/i.png" width={800}></ImageThumb> Caption <strong>b</strong>
 </p>
 <p><ImageThumb type={"thumb"} alt="I06" async_decoding={1} bar={12} class="extra class" foo="bar" height={300} id="id" isBar={true} isFoo={true} lazy={1} src="/i.png" style="--style-var: 2rem;" title="Title Foo" width={800}></ImageThumb> Caption all
 </p>
-<Figure container="figure"><AdvancedImage alt="I07" async_decoding={1} lazy={1} src="/i.png" width={800}></AdvancedImage></Figure><Figure container="figure"><AdvancedImage alt="I08" async_decoding={1} height={300} lazy={1} src="/i.png" width={800}></AdvancedImage>Figure caption only</Figure><FigureX class="wide" container="figure" id="fig-1" isLazy={true} style="--rotate: 5deg;" type="figureX"><AdvancedImage alt="I09" async_decoding={1} height={300} lazy={1} src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" width={800}></AdvancedImage>Caption <strong>b</strong></FigureX><Figure container="figure" id="s-i10"><AdvancedImage alt="I10" async_decoding={1} lazy={1} src="/i.png" width={800}></AdvancedImage></Figure><Figure container="figure" id="s-i10n"><AdvancedImage alt="I10n" async_decoding={1} lazy={1} src="/i.png" width={800}></AdvancedImage></Figure><FigureX container="figure" type="figureX"><AdvancedImage alt="I11" async_decoding={1} lazy={1} src="/i.png"></AdvancedImage></FigureX><Figure class="empty-alt" container="figure"><AdvancedImage alt="" async_decoding={1} lazy={1} src="/i.png" width={800}></AdvancedImage></Figure><Figure class="x" container="figure" type="figureZ"><AdvancedImage alt="I13" async_decoding={1} height={300} lazy={1} src="/i.png"></AdvancedImage>unclaimed</Figure><ImageThumb type={"imageX"} alt="I14" async_decoding={1} class="a b" id="i" k="v" n={2} src="/i.png \"Head T\"" title="Extras T" width={100}></ImageThumb><FigureX container="figure" isA={true} type="figureX"><AdvancedImage alt="I15" async_decoding={1} lazy={1} src="/i.png" width={100}></AdvancedImage>Caption KS <AnchorAB type={"anchorA"} class="k" href="/x">a</AnchorAB><CiteX reference={references["paper-smith"]} citation_number={1} class="k" instance_index={6} type="citeX" /><a class="k" href="/wiki/W" title="W" type="wikiX">W</a> <MarkerA type={"footnote"} class="k"></MarkerA> <AsideAB type={"asideA"} class="k"> d</AsideAB> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span> <strong>b</strong></FigureX><p><img alt="I16 plain markdown image" src="/i.png" />
+<Figure container="figure"><AdvancedImage alt="I07" async_decoding={1} lazy={1} src="/i.png" width={800}></AdvancedImage></Figure>
+<Figure container="figure"><AdvancedImage alt="I08" async_decoding={1} height={300} lazy={1} src="/i.png" width={800}></AdvancedImage>Figure caption only</Figure>
+<FigureX class="wide" container="figure" id="fig-1" isLazy={true} style="--rotate: 5deg;" type="figureX"><AdvancedImage alt="I09" async_decoding={1} height={300} lazy={1} src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" width={800}></AdvancedImage>Caption <strong>b</strong></FigureX>
+<Figure container="figure" id="s-i10"><AdvancedImage alt="I10" async_decoding={1} lazy={1} src="/i.png" width={800}></AdvancedImage></Figure>
+<Figure container="figure" id="s-i10n"><AdvancedImage alt="I10n" async_decoding={1} lazy={1} src="/i.png" width={800}></AdvancedImage></Figure>
+<FigureX container="figure" type="figureX"><AdvancedImage alt="I11" async_decoding={1} lazy={1} src="/i.png"></AdvancedImage></FigureX>
+<Figure class="empty-alt" container="figure"><AdvancedImage alt="" async_decoding={1} lazy={1} src="/i.png" width={800}></AdvancedImage></Figure>
+<Figure class="x" container="figure" type="figureZ"><AdvancedImage alt="I13" async_decoding={1} height={300} lazy={1} src="/i.png"></AdvancedImage>unclaimed</Figure>
+<ImageThumb type={"imageX"} alt="I14" async_decoding={1} class="a b" id="i" k="v" n={2} src="/i.png \"Head T\"" title="Extras T" width={100}></ImageThumb>
+<FigureX container="figure" isA={true} type="figureX"><AdvancedImage alt="I15" async_decoding={1} lazy={1} src="/i.png" width={100}></AdvancedImage>Caption KS <AnchorAB type={"anchorA"} class="k" href="/x">a</AnchorAB><CiteX reference={references["paper-smith"]} citation_number={1} class="k" instance_index={6} type="citeX" /><a class="k" href="/wiki/W" title="W" type="wikiX">W</a> <MarkerA type={"footnote"} class="k"></MarkerA> <AsideAB type={"asideA"} class="k"> d</AsideAB> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span> <strong>b</strong></FigureX>
+<p><img alt="I16 plain markdown image" src="/i.png" />
 </p>
-<AdvancedImage alt="I17" async_decoding={1} class="thumb" height={300} src="/i.png" width={800}></AdvancedImage><p><AdvancedImage alt="I18" async_decoding={1} bar={12} class="extra class" foo="bar" height={300} id="id" isBar={true} isFoo={true} lazy={1} src="/i.png" style="--style-var: 2rem;" title="Title Foo" width={800}></AdvancedImage> Caption all
+<AdvancedImage alt="I17" async_decoding={1} class="thumb" height={300} src="/i.png" width={800}></AdvancedImage>
+<p><AdvancedImage alt="I18" async_decoding={1} bar={12} class="extra class" foo="bar" height={300} id="id" isBar={true} isFoo={true} lazy={1} src="/i.png" style="--style-var: 2rem;" title="Title Foo" width={800}></AdvancedImage> Caption all
 </p>
 <p><AdvancedImage alt="I18n" async_decoding={1} bar={12} class="extra class" foo="bar" height={300} id="id" isBar={true} isFoo={true} lazy={1} src="/i.png" style="--style-var: 2rem;" title="Title Foo" width={800}></AdvancedImage> Caption all
 </p>
-<Figure class="wide" container="figure" id="fig-2" isLazy={true} style="--rotate: 5deg;"><AdvancedImage alt="I19" async_decoding={1} height={300} lazy={1} src="/i.png" width={800}></AdvancedImage>Caption</Figure><Figure container="figure"><AdvancedImage alt="I20" async_decoding={1} lazy={1} src="/i.png"></AdvancedImage></Figure><FigureX container="figure" type="figureX"><AdvancedImage alt="I21" async_decoding={1} lazy={1} src="/i.png"></AdvancedImage></FigureX><AdvancedImage alt="I22" async_decoding={1} class="a" src="/i.png \"Head T\"" title="Extras T" width={100}></AdvancedImage><Figure class="f" container="figure"><AdvancedImage alt="I23" async_decoding={1} lazy={1} src="/i.png" width={100}></AdvancedImage>Caption KSu <AnchorDefault class="k" href="/x">a</AnchorDefault><Cite reference={references["paper-smith"]} citation_number={1} class="k" instance_index={7} /><a class="k" href="/wiki/W" title="W">W</a> <MarkerA type={"footnote"} class="k"></MarkerA> <AsideAB type={"asideA"} class="k"> d</AsideAB> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span> <strong>b</strong></Figure></section>
+<Figure class="wide" container="figure" id="fig-2" isLazy={true} style="--rotate: 5deg;"><AdvancedImage alt="I19" async_decoding={1} height={300} lazy={1} src="/i.png" width={800}></AdvancedImage>Caption</Figure>
+<Figure container="figure"><AdvancedImage alt="I20" async_decoding={1} lazy={1} src="/i.png"></AdvancedImage></Figure>
+<FigureX container="figure" type="figureX"><AdvancedImage alt="I21" async_decoding={1} lazy={1} src="/i.png"></AdvancedImage></FigureX>
+<AdvancedImage alt="I22" async_decoding={1} class="a" src="/i.png \"Head T\"" title="Extras T" width={100}></AdvancedImage>
+<Figure class="f" container="figure"><AdvancedImage alt="I23" async_decoding={1} lazy={1} src="/i.png" width={100}></AdvancedImage>Caption KSu <AnchorDefault class="k" href="/x">a</AnchorDefault><Cite reference={references["paper-smith"]} citation_number={1} class="k" instance_index={7} /><a class="k" href="/wiki/W" title="W">W</a> <MarkerA type={"footnote"} class="k"></MarkerA> <AsideAB type={"asideA"} class="k"> d</AsideAB> <span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>`}></span> <strong>b</strong></Figure>
+</section>
 <section id="s-cite">
-<HeadingDefault level={2} number="2.4." raw_title="Cite">Cite
-</HeadingDefault><p><AnchorDefault href="id" title="loc"></AnchorDefault><AnchorDefault title="id\", \"loc"></AnchorDefault>
+<HeadingDefault level={2} number="2.4." raw_title="Cite">Cite</HeadingDefault><p><AnchorDefault href="id" title="loc"></AnchorDefault><AnchorDefault title="id\", \"loc"></AnchorDefault>
 </p>
 <p>C01 Minim <Cite reference={references["paper-smith"]} citation_number={1} instance_index={12} /> esse.
 </p>
@@ -329,8 +311,7 @@ export default function PendonView() { return (<>
 </p>
 </section>
 <section id="s-wiki">
-<HeadingDefault level={2} number="2.5." raw_title="Wiki">Wiki
-</HeadingDefault><p>W01 <a href="/wiki/Wireless" title="Wireless">Wireless</a>
+<HeadingDefault level={2} number="2.5." raw_title="Wiki">Wiki</HeadingDefault><p>W01 <a href="/wiki/Wireless" title="Wireless">Wireless</a>
 </p>
 <p>W02 <a href="/wiki/Anim_Esta_(Officia)" title="Anim Esta (Officia)">Anim</a>
 </p>
@@ -380,8 +361,7 @@ export default function PendonView() { return (<>
 </p>
 </section>
 <section id="s-marker">
-<HeadingDefault level={2} number="2.6." raw_title="Marker">Marker
-</HeadingDefault><p>M01 inline <MarkerA type={"footnote"}></MarkerA> ipsum.
+<HeadingDefault level={2} number="2.6." raw_title="Marker">Marker</HeadingDefault><p>M01 inline <MarkerA type={"footnote"}></MarkerA> ipsum.
 </p>
 <p>M02 inline <MarkerA type={"footnote"} class="x"></MarkerA> ipsum.
 </p>
@@ -417,8 +397,7 @@ export default function PendonView() { return (<>
 </p>
 </section>
 <section id="s-table">
-<HeadingDefault level={2} number="2.7." raw_title="Table">Table
-</HeadingDefault><TableX class="striped wide" cols={4} id="tbl" isDense={true} sortable={true} style="--gap: 2rem" title="Title Foo" type="tableX"><TableCaption class="note" id="cap" type="captionX">T01 caption <strong>b</strong></TableCaption><TableHead><TableRowDefault><TableCellAB type={"cellA"} align="left" class="v-top" width="200px">&#123;.h1&#125; H1</TableCellAB><TableCellDefault align="center" class="c">@@cellA&#123;.h2&#125; H2</TableCellDefault><TableCellDefault align="right" width="30%">H3</TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}>H4</TableCellAB></TableRowDefault></TableHead><TableBodyX class="tb" type="tbodyX"><TableRowDefault><TableCellAB type={"cellB"} align="left" class="v-top lead" width="200px">X</TableCellAB><TableCellDefault align="center" class="c">15</TableCellDefault><TableCellDefault align="right" width="30%"><AnchorAB type={"anchorA"} class="u" href="/docs">Ada</AnchorAB></TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}><a class="w" href="/wiki/W" title="W" type="wikiX">W</a></TableCellAB></TableRowDefault><TableRowAB type={"rowB"} class="row-info"><TableCellAB type={"cellA"} align="left" class="v-top" colspan={2} width="200px">plain</TableCellAB><TableCellDefault align="right" width="30%"><CiteX reference={references["paper-smith"]} citation_number={1} class="c" instance_index={1} type="citeX" /></TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}><MarkerA type={"footnote"} class="m"></MarkerA></TableCellAB></TableRowAB><TableRowAB type={"rowA"}><TableCellAB type={"cellA"} align="left" class="v-top" width="200px">empty-extras</TableCellAB><TableCellDefault align="center" class="c"><AsideAB type={"asideA"} class="k"> d</AsideAB></TableCellDefault><TableCellDefault align="right" width="30%"><span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>x</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span>`}></span></TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}><code>c</code></TableCellAB></TableRowAB><TableRowDefault class="untyped-row"><TableCellAB type={"cellA"} align="left" class="v-top" width="200px">a</TableCellAB><TableCellDefault align="center" class="c">b</TableCellDefault><TableCellDefault align="right" width="30%">c</TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}>d</TableCellAB></TableRowDefault><TableRowAB type={"rowB"} class="a" id="r" k="v" n={2}><TableCellAB type={"cellA"} align="left" class="v-top" width="200px">\</TableCellAB><TableCellDefault align="center" class="c">escaped</TableCellDefault><TableCellDefault align="right" width="30%"></TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}></TableCellAB></TableRowAB><TableRowAB type={"rowB"} bar={12} class="extra class" foo="bar" id="id" isBar={true} isFoo={true} style="--style-var: 2rem" title="Title Foo"><TableCellAB type={"cellA"} align="left" class="v-top" width="200px">all-row</TableCellAB><TableCellDefault align="center" class="c">x</TableCellDefault><TableCellDefault align="right" width="30%">y</TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}>z</TableCellAB></TableRowAB><TableRowDefault><TableCellAB type={"cellA"} align="left" class="v-top only-extras" width="200px"></TableCellAB><TableCellDefault align="center" class="c"><strong>b</strong> <i>i</i></TableCellDefault><TableCellDefault align="right" width="30%"><AnchorAB type={"anchorA"} class="k" href="/x" title="T">a</AnchorAB><CiteX reference={references["paper-smith"]} citation_number={1} class="k" instance_index={2} type="citeX" /></TableCellDefault><TableCellAB type={"cellB"} align="left" b={true} class="a a" flag={true} id="i" k="v" n={1} style="--v: 1" title="T">KS</TableCellAB></TableRowDefault></TableBodyX><TableFootX class="total" type="tfootX"><TableRowAB type={"rowA"} class="f"><TableCellAB type={"cellA"} align="left" class="v-top" colspan={2} width="200px">Total</TableCellAB><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}>1</TableCellAB></TableRowAB><TableRowDefault><TableCellAB type={"cellA"} align="left" class="v-top t" width="200px">F2</TableCellAB><TableCellDefault align="center" class="c">x</TableCellDefault><TableCellDefault align="right" width="30%">y</TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}>z</TableCellAB></TableRowDefault></TableFootX></TableX><p>T01n non-canonical @@&#123;...&#125; on every table slot:
+<HeadingDefault level={2} number="2.7." raw_title="Table">Table</HeadingDefault><TableX class="striped wide" cols={4} id="tbl" isDense={true} sortable={true} style="--gap: 2rem" title="Title Foo" type="tableX"><TableCaption class="note" id="cap" type="captionX">T01 caption <strong>b</strong></TableCaption><TableHead><TableRowDefault><TableCellAB type={"cellA"} align="left" class="v-top" width="200px">&#123;.h1&#125; H1</TableCellAB><TableCellDefault align="center" class="c">@@cellA&#123;.h2&#125; H2</TableCellDefault><TableCellDefault align="right" width="30%">H3</TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}>H4</TableCellAB></TableRowDefault></TableHead><TableBodyX class="tb" type="tbodyX"><TableRowDefault><TableCellAB type={"cellB"} align="left" class="v-top lead" width="200px">X</TableCellAB><TableCellDefault align="center" class="c">15</TableCellDefault><TableCellDefault align="right" width="30%"><AnchorAB type={"anchorA"} class="u" href="/docs">Ada</AnchorAB></TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}><a class="w" href="/wiki/W" title="W" type="wikiX">W</a></TableCellAB></TableRowDefault><TableRowAB type={"rowB"} class="row-info"><TableCellAB type={"cellA"} align="left" class="v-top" colspan={2} width="200px">plain</TableCellAB><TableCellDefault align="right" width="30%"><CiteX reference={references["paper-smith"]} citation_number={1} class="c" instance_index={1} type="citeX" /></TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}><MarkerA type={"footnote"} class="m"></MarkerA></TableCellAB></TableRowAB><TableRowAB type={"rowA"}><TableCellAB type={"cellA"} align="left" class="v-top" width="200px">empty-extras</TableCellAB><TableCellDefault align="center" class="c"><AsideAB type={"asideA"} class="k"> d</AsideAB></TableCellDefault><TableCellDefault align="right" width="30%"><span class="latex latex-inline" innerHTML={`<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>x</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span>`}></span></TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}><code>c</code></TableCellAB></TableRowAB><TableRowDefault class="untyped-row"><TableCellAB type={"cellA"} align="left" class="v-top" width="200px">a</TableCellAB><TableCellDefault align="center" class="c">b</TableCellDefault><TableCellDefault align="right" width="30%">c</TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}>d</TableCellAB></TableRowDefault><TableRowAB type={"rowB"} class="a" id="r" k="v" n={2}><TableCellAB type={"cellA"} align="left" class="v-top" width="200px">\</TableCellAB><TableCellDefault align="center" class="c">escaped</TableCellDefault><TableCellDefault align="right" width="30%"></TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}></TableCellAB></TableRowAB><TableRowAB type={"rowB"} bar={12} class="extra class" foo="bar" id="id" isBar={true} isFoo={true} style="--style-var: 2rem" title="Title Foo"><TableCellAB type={"cellA"} align="left" class="v-top" width="200px">all-row</TableCellAB><TableCellDefault align="center" class="c">x</TableCellDefault><TableCellDefault align="right" width="30%">y</TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}>z</TableCellAB></TableRowAB><TableRowDefault><TableCellAB type={"cellA"} align="left" class="v-top only-extras" width="200px"></TableCellAB><TableCellDefault align="center" class="c"><strong>b</strong> <i>i</i></TableCellDefault><TableCellDefault align="right" width="30%"><AnchorAB type={"anchorA"} class="k" href="/x" title="T">a</AnchorAB><CiteX reference={references["paper-smith"]} citation_number={1} class="k" instance_index={2} type="citeX" /></TableCellDefault><TableCellAB type={"cellB"} align="left" b={true} class="a a" flag={true} id="i" k="v" n={1} style="--v: 1" title="T">KS</TableCellAB></TableRowDefault></TableBodyX><TableFootX class="total" type="tfootX"><TableRowAB type={"rowA"} class="f"><TableCellAB type={"cellA"} align="left" class="v-top" colspan={2} width="200px">Total</TableCellAB><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}>1</TableCellAB></TableRowAB><TableRowDefault><TableCellAB type={"cellA"} align="left" class="v-top t" width="200px">F2</TableCellAB><TableCellDefault align="center" class="c">x</TableCellDefault><TableCellDefault align="right" width="30%">y</TableCellDefault><TableCellAB type={"cellB"} align="left" class="a" id="i" k="v" n={2}>z</TableCellAB></TableRowDefault></TableFootX></TableX><p>T01n non-canonical @@&#123;...&#125; on every table slot:
 </p>
 <Table class="x" id="t01n"><TableCaption class="c">T01n caption</TableCaption><TableHead><TableRowDefault><TableCellDefault align="left" class="v">A</TableCellDefault><TableCellDefault>B</TableCellDefault></TableRowDefault></TableHead><TableBody class="tb"><TableRowDefault class="r"><TableCellDefault align="left" class="v l">x</TableCellDefault><TableCellDefault>y</TableCellDefault></TableRowDefault></TableBody><TableFoot class="f"><TableRowDefault><TableCellDefault align="left" class="v">t</TableCellDefault><TableCellDefault>u</TableCellDefault></TableRowDefault></TableFoot></Table><p>T02 plain, no declaration, no caption, no extras:
 </p>
@@ -493,8 +472,7 @@ x</blockquote>
 </p>
 <Table><TableHead><TableRowDefault><TableCellDefault>A</TableCellDefault><TableCellDefault>B</TableCellDefault><TableCellDefault>C</TableCellDefault></TableRowDefault></TableHead><TableBody><TableRowDefault><TableCellDefault><MarkerA type={"footnote"} class="m"></MarkerA> x</TableCellDefault><TableCellDefault><MarkerA type={"markerA"}></MarkerA> y</TableCellDefault><TableCellDefault>z</TableCellDefault></TableRowDefault><TableRowDefault><TableCellDefault><MarkerA type={"footnote"}></MarkerA></TableCellDefault><TableCellDefault>w</TableCellDefault><TableCellDefault>v</TableCellDefault></TableRowDefault></TableBody></Table></section>
 <section id="s-quote">
-<HeadingDefault level={2} number="2.8." raw_title="Blockquote">Blockquote
-</HeadingDefault><BlockquoteDefault>Q01 plain<p>continues
+<HeadingDefault level={2} number="2.8." raw_title="Blockquote">Blockquote</HeadingDefault><BlockquoteDefault>Q01 plain<p>continues
 </p>
 </BlockquoteDefault><BlockquoteDefault class="x"><p>Q02 untyped X
 </p>
@@ -579,10 +557,8 @@ lazy continuation without marker
 </p>
 </BlockquoteDefault></section>
 <section id="s-list">
-<HeadingDefault level={2} number="2.9." raw_title="List">List
-</HeadingDefault><section id="l01">
-<HeadingDefault level={3} number="2.9.1." raw_title="L01">L01
-</HeadingDefault><ul>
+<HeadingDefault level={2} number="2.9." raw_title="List">List</HeadingDefault><section id="l01">
+<HeadingDefault level={3} number="2.9.1." raw_title="L01">L01</HeadingDefault><ul>
 <li>L01 plain<ul>
 <li>L01a</li>
 </ul>
@@ -591,49 +567,39 @@ lazy continuation without marker
 </ul>
 </section>
 <section id="l02">
-<HeadingDefault level={3} number="2.9.2." raw_title="L02">L02
-</HeadingDefault><UnorderedDefault class="u"><li>L02 decorator untyped X</li>
+<HeadingDefault level={3} number="2.9.2." raw_title="L02">L02</HeadingDefault><UnorderedDefault class="u"><li>L02 decorator untyped X</li>
 <li>L02b</li>
 </UnorderedDefault></section>
 <section id="l02n">
-<HeadingDefault level={3} number="2.9.3." raw_title="L02n">L02n
-</HeadingDefault><UnorderedDefault class="u"><li>L02n decorator non-canonical</li>
+<HeadingDefault level={3} number="2.9.3." raw_title="L02n">L02n</HeadingDefault><UnorderedDefault class="u"><li>L02n decorator non-canonical</li>
 <li>L02nb</li>
 </UnorderedDefault></section>
 <section id="l03">
-<HeadingDefault level={3} number="2.9.4." raw_title="L03">L03
-</HeadingDefault><UnorderedACompact type={"unorderedA"} class="u" id="l03"><li>L03 star, XY</li>
+<HeadingDefault level={3} number="2.9.4." raw_title="L03">L03</HeadingDefault><UnorderedACompact type={"unorderedA"} class="u" id="l03"><li>L03 star, XY</li>
 <li>L03b</li>
 </UnorderedACompact></section>
 <section id="l04">
-<HeadingDefault level={3} number="2.9.5." raw_title="L04">L04
-</HeadingDefault><UnorderedACompact type={"compact"} class="a b" id="l04" k="v" n={2}><li>L04 plus, XXYZZ</li>
+<HeadingDefault level={3} number="2.9.5." raw_title="L04">L04</HeadingDefault><UnorderedACompact type={"compact"} class="a b" id="l04" k="v" n={2}><li>L04 plus, XXYZZ</li>
 <li>L04b</li>
 </UnorderedACompact></section>
 <section id="l05">
-<HeadingDefault level={3} number="2.9.6." raw_title="L05">L05
-</HeadingDefault><UnorderedACompact type={"unorderedA"} bar={12} class="extra class" foo="bar" id="id" isBar={true} isFoo={true} slug="slug-foo" style="--style-var: 2rem" title="Title Foo"><li>L05 all</li>
+<HeadingDefault level={3} number="2.9.6." raw_title="L05">L05</HeadingDefault><UnorderedACompact type={"unorderedA"} bar={12} class="extra class" foo="bar" id="id" isBar={true} isFoo={true} slug="slug-foo" style="--style-var: 2rem" title="Title Foo"><li>L05 all</li>
 <li>L05b</li>
 </UnorderedACompact></section>
 <section id="l06">
-<HeadingDefault level={3} number="2.9.7." raw_title="L06">L06
-</HeadingDefault><UnorderedDefault class="u" type="unorderedZ"><li>L06 unclaimed</li>
+<HeadingDefault level={3} number="2.9.7." raw_title="L06">L06</HeadingDefault><UnorderedDefault class="u" type="unorderedZ"><li>L06 unclaimed</li>
 </UnorderedDefault></section>
 <section id="l07">
-<HeadingDefault level={3} number="2.9.8." raw_title="L07">L07
-</HeadingDefault><UnorderedDefault><li>L07 empty</li>
+<HeadingDefault level={3} number="2.9.8." raw_title="L07">L07</HeadingDefault><UnorderedDefault><li>L07 empty</li>
 </UnorderedDefault></section>
 <section id="l07n">
-<HeadingDefault level={3} number="2.9.9." raw_title="L07n">L07n
-</HeadingDefault><UnorderedDefault><li>L07n empty non-canonical</li>
+<HeadingDefault level={3} number="2.9.9." raw_title="L07n">L07n</HeadingDefault><UnorderedDefault><li>L07n empty non-canonical</li>
 </UnorderedDefault></section>
 <section id="l08">
-<HeadingDefault level={3} number="2.9.10." raw_title="L08">L08
-</HeadingDefault><UnorderedACompact type={"unorderedA"}><li>L08 type only</li>
+<HeadingDefault level={3} number="2.9.10." raw_title="L08">L08</HeadingDefault><UnorderedACompact type={"unorderedA"}><li>L08 type only</li>
 </UnorderedACompact></section>
 <section id="l10">
-<HeadingDefault level={3} number="2.9.11." raw_title="L10">L10
-</HeadingDefault><ul>
+<HeadingDefault level={3} number="2.9.11." raw_title="L10">L10</HeadingDefault><ul>
 <li>@@liItem&#123;<code>alpha</code>&#125; L10 typed item<ul>
 <li>&#123;<code>beta</code>&#125; L10a nested untyped</li>
 <li>@@liItem&#123;.a, #i&#125; L10b XY</li>
@@ -653,54 +619,44 @@ lazy continuation without marker
 </ul>
 </section>
 <section id="l20">
-<HeadingDefault level={3} number="2.9.12." raw_title="L20">L20
-</HeadingDefault><OrderedDefault slug="my-list" start={6}><li>L20 start at 6</li>
+<HeadingDefault level={3} number="2.9.12." raw_title="L20">L20</HeadingDefault><OrderedDefault slug="my-list" start={6}><li>L20 start at 6</li>
 <li>L20b</li>
 </OrderedDefault></section>
 <section id="l20n">
-<HeadingDefault level={3} number="2.9.13." raw_title="L20n">L20n
-</HeadingDefault><OrderedDefault slug="my-list-n" start={6}><li>L20n start at 6 non-canonical</li>
+<HeadingDefault level={3} number="2.9.13." raw_title="L20n">L20n</HeadingDefault><OrderedDefault slug="my-list-n" start={6}><li>L20n start at 6 non-canonical</li>
 <li>L20nb</li>
 </OrderedDefault></section>
 <section id="l21">
-<HeadingDefault level={3} number="2.9.14." raw_title="L21">L21
-</HeadingDefault><ol start={1}>
+<HeadingDefault level={3} number="2.9.14." raw_title="L21">L21</HeadingDefault><ol start={1}>
 <li>L21 plain ol</li>
 <li>L21b</li>
 </ol>
 </section>
 <section id="l22">
-<HeadingDefault level={3} number="2.9.15." raw_title="L22">L22
-</HeadingDefault><OrderedA type={"orderedA"} class="o" id="l22" start={1}><li>&#123;.i&#125; L22 container+item</li>
+<HeadingDefault level={3} number="2.9.15." raw_title="L22">L22</HeadingDefault><OrderedA type={"orderedA"} class="o" id="l22" start={1}><li>&#123;.i&#125; L22 container+item</li>
 <li>@@liItem&#123;.a, .b, #i2, k: &quot;v&quot;, n: 2&#125; L22b</li>
 </OrderedA></section>
 <section id="l22n">
-<HeadingDefault level={3} number="2.9.16." raw_title="L22n">L22n
-</HeadingDefault><OrderedDefault class="o" start={1}><li>@@&#123;.i&#125; L22n non-canonical container+item</li>
+<HeadingDefault level={3} number="2.9.16." raw_title="L22n">L22n</HeadingDefault><OrderedDefault class="o" start={1}><li>@@&#123;.i&#125; L22n non-canonical container+item</li>
 </OrderedDefault></section>
 <section id="l24">
-<HeadingDefault level={3} number="2.9.17." raw_title="L24">L24
-</HeadingDefault><ol start={0}>
+<HeadingDefault level={3} number="2.9.17." raw_title="L24">L24</HeadingDefault><ol start={0}>
 <li>L24 start 0</li>
 <li>L24b</li>
 </ol>
 </section>
 <section id="l25">
-<HeadingDefault level={3} number="2.9.18." raw_title="L25">L25
-</HeadingDefault><OrderedDefault start={1}><li>L25 start via extras (expect Warning)</li>
+<HeadingDefault level={3} number="2.9.18." raw_title="L25">L25</HeadingDefault><OrderedDefault start={1}><li>L25 start via extras (expect Warning)</li>
 </OrderedDefault></section>
 <section id="l25n">
-<HeadingDefault level={3} number="2.9.19." raw_title="L25n">L25n
-</HeadingDefault><OrderedDefault start={1}><li>L25n start via non-canonical extras (expect Warning)</li>
+<HeadingDefault level={3} number="2.9.19." raw_title="L25n">L25n</HeadingDefault><OrderedDefault start={1}><li>L25n start via non-canonical extras (expect Warning)</li>
 </OrderedDefault></section>
 <section id="l26">
-<HeadingDefault level={3} number="2.9.20." raw_title="L26">L26
-</HeadingDefault><p>o. L26 retired o. syntax (expect plain paragraph)
+<HeadingDefault level={3} number="2.9.20." raw_title="L26">L26</HeadingDefault><p>o. L26 retired o. syntax (expect plain paragraph)
 </p>
 </section>
 <section id="l30">
-<HeadingDefault level={3} number="2.9.21." raw_title="L30">L30
-</HeadingDefault><UnorderedACompact type={"unorderedA"} class="l1"><li>L30 level 1<p>@@orderedA&#123;.l2&#125;
+<HeadingDefault level={3} number="2.9.21." raw_title="L30">L30</HeadingDefault><UnorderedACompact type={"unorderedA"} class="l1"><li>L30 level 1<p>@@orderedA&#123;.l2&#125;
 </p>
 <ol start={1}>
 <li>L30a decorator right under item text (edge)<ul>
@@ -719,8 +675,7 @@ lazy continuation without marker
 </li>
 </UnorderedACompact></section>
 <section id="l34">
-<HeadingDefault level={3} number="2.9.22." raw_title="L34">L34
-</HeadingDefault><ul>
+<HeadingDefault level={3} number="2.9.22." raw_title="L34">L34</HeadingDefault><ul>
 <li>L34 multi-paragraph<p>second paragraph KS <AnchorAB type={"anchorA"} class="k" href="/x">a</AnchorAB> <strong>b</strong> <a class="k" href="/wiki/W" title="W" type="wikiX">W</a><CiteX reference={references["paper-smith"]} citation_number={1} class="k" instance_index={37} type="citeX" /><MarkerA type={"footnote"} class="k"></MarkerA><AsideAB type={"asideA"} class="k"> d</AsideAB>
 </p>
 <pre lang="ts"><code innerHTML={"<p>const l <b>=</b> <i><i>&quot;</i>@@{.literal}<i>&quot;</i></i>;</p>"} /></pre>

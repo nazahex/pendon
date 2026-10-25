@@ -6,7 +6,7 @@ export default function PendonView() { return (<>
 </p>
 <p>Officia et consectetur ea officia.
 </p>
-<Quiz choices={[{"content":"right answer","correct":true},{"content":"wrong answer","correct":false},{"content":"another <code>right</code> answer","correct":true},{"content":"another <strong>wrong</strong> answer","correct":false}]} feedback={{"correct":"This is correct feedback","wrong":"This is wrong feedback"}}><p>Exercitation Lorem consectetur ullamco irure. Lorem reprehenderit nulla enim cupidatat.
+<Quiz><p>Exercitation Lorem consectetur ullamco irure. Lorem reprehenderit nulla enim cupidatat.
 </p>
 <blockquote>
 <p>Ipsum ex deserunt laborum adipisicing velit Lorem et in

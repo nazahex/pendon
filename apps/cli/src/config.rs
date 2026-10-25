@@ -16,6 +16,7 @@ pub struct ConfigTask {
     pub max_line_len: Option<usize>,
     pub max_blank_run: Option<usize>,
     pub cite: Option<CiteTaskConfig>,
+    pub bind: Option<BindTaskConfig>,
     pub anchor: Option<AnchorTaskConfig>,
     pub heading: Option<HeadingTaskConfig>,
     pub image: Option<ImageTaskConfig>,
@@ -214,6 +215,30 @@ pub struct SectionTaskConfig {
     pub custom_node: Option<toml::Value>,
 }
 
+/// `[task.bind]`: the export side of `plugin-bind` (§6.1 of
+/// `workflows/numbering-extract-type-export.md`).
+///
+/// The `{{{lang[var] … }}}` blocks carry their export names in the head; an
+/// inject entry names a **file** instead, so a page can publish a payload it
+/// never mentions in its Markdown.
+#[derive(Debug, Deserialize, Default)]
+pub struct BindTaskConfig {
+    #[serde(default)]
+    pub inject: Vec<BindInject>,
+}
+
+/// `[[task.bind.inject]]`: one data file published as `export const <name>`.
+#[derive(Debug, Deserialize, Default)]
+pub struct BindInject {
+    /// The file, resolved like `input`/`output`: relative to `pendon.toml` and
+    /// with the task's dynamic `[foo]`/`[bar]` segments substituted per page.
+    pub source: String,
+    /// The binding name; when absent the file's stem is used, so
+    /// `./src/[foo]/rows.yaml` exports `rows` and `./data/settings.toml` exports
+    /// `settings`.
+    pub export: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -259,5 +284,26 @@ mod tests {
             "unexpected unknown keys: {:?}",
             task.unknown.keys().collect::<Vec<_>>()
         );
+    }
+
+    /// §6.1: `[[task.bind.inject]]` is a known section, so a typo inside it is
+    /// reported as an unknown key while the entries themselves parse.
+    #[test]
+    fn bind_inject_entries_are_known_keys() {
+        let task = parse_task(
+            "[[bind.inject]]\nsource = \"./src/[foo]/[bar].yaml\"\nexport = \"fooData\"\n\n\
+             [[bind.inject]]\nsource = \"../../dataX.toml\"\n",
+        );
+        assert!(
+            task.unknown.is_empty(),
+            "unexpected unknown keys: {:?}",
+            task.unknown.keys().collect::<Vec<_>>()
+        );
+        let bind = task.bind.expect("bind section parsed");
+        assert_eq!(bind.inject.len(), 2);
+        assert_eq!(bind.inject[0].source, "./src/[foo]/[bar].yaml");
+        assert_eq!(bind.inject[0].export.as_deref(), Some("fooData"));
+        assert_eq!(bind.inject[1].source, "../../dataX.toml");
+        assert!(bind.inject[1].export.is_none());
     }
 }

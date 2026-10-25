@@ -31,7 +31,7 @@ use pendon_extra::{
     bind_decorators, emit_attrs, parse_extras, to_attributes, warning_message, Attrs,
     BoundDecorator, ExtrasMatch,
 };
-use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
+use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
 
 /// §11 primary layer of `plugin-blockquote`: the node a quote renders.
@@ -101,21 +101,12 @@ pub fn solid_hints(options: &BlockquoteOptions) -> Option<SolidRenderHints> {
     if options.custom.is_empty() {
         return None;
     }
-    let mut hints = SolidRenderHints::default();
-    for custom in options.custom.components() {
-        hints.templates.push(ComponentTemplate {
-            node_type: custom.name.clone(),
-            node_name: Some(custom.name.clone()),
-            template: custom.template.clone(),
-        });
-        if !custom.imports.is_empty() {
-            hints.template_imports.insert(
-                (custom.name.clone(), Some(custom.name.clone())),
-                custom.imports.clone(),
-            );
-        }
-    }
-    Some(hints)
+    Some(SolidRenderHints {
+        templates: layer_templates(BLOCKQUOTE_LAYER, &options.custom, |custom| {
+            (custom.template.clone(), custom.imports.clone())
+        }),
+        ..SolidRenderHints::default()
+    })
 }
 
 /// The layer key `[[task.blockquote.custom]]` addresses (always the primary).
@@ -242,11 +233,9 @@ fn emit_quote(
     let marker = type_marker.or_else(|| decorator.and_then(|d| d.type_marker.clone()));
     let attrs = inner.merge_with(decorator_attrs, &[]);
 
-    let custom = options.custom.select(marker.as_deref());
-    let node = match custom {
-        Some(custom) => NodeKind::Custom(custom.name.clone()),
-        None => NodeKind::Element(FALLBACK_ELEMENT.to_string()),
-    };
+    // §11 rule 3 / D-3a: the plugin does not pick the component; it tags the
+    // node with its layer and the renderer decides once per document.
+    let node = NodeKind::Element(FALLBACK_ELEMENT.to_string());
 
     out.push(Event::StartNode(node.clone()));
     // First attribute, so `plugin-markdown`'s placement look-ahead sees it.
@@ -255,11 +244,12 @@ fn emit_quote(
         value: "block".to_string(),
     });
     out.push(Event::Attribute {
+        name: "__layer".to_string(),
+        value: BLOCKQUOTE_LAYER.to_string(),
+    });
+    out.push(Event::Attribute {
         name: "name".to_string(),
-        value: match custom {
-            Some(custom) => custom.name.clone(),
-            None => FALLBACK_ELEMENT.to_string(),
-        },
+        value: FALLBACK_ELEMENT.to_string(),
     });
     if let Some(marker) = &marker {
         out.push(Event::Attribute {
@@ -353,7 +343,8 @@ mod tests {
     #[test]
     fn the_inner_head_decorates_the_quote() {
         let out = run("> @@bqA{.x} body\n");
-        assert_eq!(custom(&out).as_deref(), Some("QuoteA"), "{out:?}");
+        assert_eq!(element(&out).as_deref(), Some("blockquote"), "{out:?}");
+        assert_eq!(attr(&out, "__layer").as_deref(), Some("blockquote"));
         assert_eq!(attr(&out, "type").as_deref(), Some("bqA"));
         assert_eq!(attr(&out, "class").as_deref(), Some("x"));
         assert!(text(&out).contains("body"));
@@ -370,14 +361,18 @@ mod tests {
     #[test]
     fn a_space_after_the_marker_is_allowed() {
         let out = run(">@@bqA{.x} body\n");
-        assert_eq!(custom(&out).as_deref(), Some("QuoteA"), "{out:?}");
+        assert_eq!(attr(&out, "type").as_deref(), Some("bqA"), "{out:?}");
+        assert_eq!(attr(&out, "__layer").as_deref(), Some("blockquote"));
     }
 
     /// §9.1/§9.2: a decorator line directly above the quote decorates it too.
     #[test]
     fn a_decorator_line_above_the_quote_decorates_it() {
         let out = run("@@{.u}\n\n> quoted\n");
-        assert_eq!(custom(&out).as_deref(), Some("QuoteDefault"), "{out:?}");
+        // D-3a: the quote stays one layer-tagged node; the default entry is the
+        // renderer's to apply (it answers every instance of the layer).
+        assert_eq!(element(&out).as_deref(), Some("blockquote"), "{out:?}");
+        assert_eq!(attr(&out, "__layer").as_deref(), Some("blockquote"));
         assert_eq!(attr(&out, "class").as_deref(), Some("u"));
         assert!(!text(&out).contains("@@"));
         assert!(text(&out).contains("quoted"));
@@ -387,7 +382,7 @@ mod tests {
     #[test]
     fn the_inner_head_wins_over_the_decorator() {
         let out = run("@@bqB{.outer}\n\n> @@bqA{.inner} body\n");
-        assert_eq!(custom(&out).as_deref(), Some("QuoteA"), "{out:?}");
+        assert_eq!(attr(&out, "type").as_deref(), Some("bqA"), "{out:?}");
         assert_eq!(attr(&out, "type").as_deref(), Some("bqA"));
         assert_eq!(attr(&out, "class").as_deref(), Some("inner"));
     }

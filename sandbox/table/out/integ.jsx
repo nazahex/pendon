@@ -1,4 +1,5 @@
-export const frontmatter = {"cites":[]};
+export const references = {};
+export const citations = [];
 export default function PendonView() { return (<>
 <h2>Custom Table Demo</h2>
 <p>Adipisicing mollit dolore aute consequat culpa nisi consectetur.

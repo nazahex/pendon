@@ -204,9 +204,11 @@ fn collect_headings(events: &[Event]) -> Vec<PendonHeading> {
                 section_stack.pop();
                 idx += 1;
             }
-            // §9.5/§11 rule 3: plugin-heading swaps `Heading` for
-            // `Custom(name)` when a custom template is configured, so those
-            // components are headings too (see `is_heading_component`).
+            // §9.5/§11 rule 3: a heading is a `Heading` node (the plugin
+            // tags it `__layer = "heading"` and lets the renderer pick the
+            // component, ADR-0008 `D-3a`); a `Custom(name)` that looks like a
+            // heading (see `is_heading_component`) is one too, from an emitter
+            // that predates the layer tag.
             Event::StartNode(kind)
                 if matches!(kind, NodeKind::Heading)
                     || (matches!(kind, NodeKind::Custom(_))
@@ -238,9 +240,10 @@ fn collect_headings(events: &[Event]) -> Vec<PendonHeading> {
 
 /// Returns true when the node opening at `start_idx` is a heading component.
 ///
-/// `plugin-heading` replaces `NodeKind::Heading` with `NodeKind::Custom(name)`
-/// when a custom template is configured (§11 rule 3), so the metadata pass has
-/// to recognise those components as headings as well.
+/// A configured heading component is a plain `Heading` node tagged
+/// `__layer = "heading"` (§11 rule 3, ADR-0008 `D-3a`), so it is already a
+/// heading here. This fallback keeps a `Custom(name)` heading — one emitted by a
+/// pipeline that still swaps the node — in the outline.
 ///
 /// `level` marks the component as a heading *unless* the node also carries the
 /// internal `__plugin_kind` marker. §11 rule 5 lets any layer rename a positional
@@ -536,10 +539,34 @@ mod tests {
         }
     }
 
-    /// §11 rule 3/§9.5: `plugin-heading` swaps `NodeKind::Heading` for
-    /// `NodeKind::Custom(name)` when a custom template is configured (the
-    /// heading demo renders `<DocHeading>`), so the metadata pass must still
-    /// extract it — otherwise `export const headings` disappears entirely.
+    /// §11 rule 3/§9.5 (`D-3a`): the plugin keeps `NodeKind::Heading` and tags it
+    /// with its layer; the component is chosen later by the renderer, so the
+    /// outline is built from the built-in node and its `level`.
+    #[test]
+    fn extracts_a_layer_tagged_heading() {
+        let events = vec![
+            Event::StartNode(NodeKind::Section),
+            attr("id", "tagged-head"),
+            Event::StartNode(NodeKind::Heading),
+            attr("__layer", "heading"),
+            attr("level", "2"),
+            attr("type", "TypeA"),
+            Event::Text("Tagged Head".to_string()),
+            Event::EndNode(NodeKind::Heading),
+            Event::EndNode(NodeKind::Section),
+        ];
+
+        let headings = collect_headings(&events);
+        assert_eq!(headings.len(), 1);
+        assert_eq!(headings[0].id, "tagged-head");
+        assert_eq!(headings[0].text, "Tagged Head");
+        assert_eq!(headings[0].level, 2);
+    }
+
+    /// §11 rule 3/§9.5, identity fallback: a `Custom(name)` node carrying a
+    /// `level` is a heading component (the heading demo used to emit
+    /// `<DocHeading>` this way), so the metadata pass must still extract it —
+    /// otherwise `export const headings` disappears entirely.
     #[test]
     fn extracts_a_custom_heading_component() {
         let events = vec![

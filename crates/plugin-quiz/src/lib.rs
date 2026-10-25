@@ -335,22 +335,16 @@ fn render_fragment(events: &[Event]) -> String {
 
 pub fn solid_hints() -> SolidRenderHints {
     let mut hints = SolidRenderHints::default();
-    let key = ("Quiz".to_string(), Some("Quiz".to_string()));
-    hints.templates.push(ComponentTemplate {
-        node_type: "Quiz".to_string(),
-        node_name: Some("Quiz".to_string()),
-        template: "<Quiz choices={{attrs.choices}} feedback={{attrs.feedback}}>{children}</Quiz>"
-            .to_string(),
-    });
-    hints
-        .template_imports
-        .entry(key)
-        .or_default()
-        .push(ImportEntry::Structured {
+    hints.templates.push(ComponentTemplate::new_identity(
+        "Quiz".to_string(),
+        Some("Quiz".to_string()),
+        "<Quiz choices={{attrs.choices}} feedback={{attrs.feedback}}>{children}</Quiz>".to_string(),
+        vec![ImportEntry::Structured {
             module: "./Quiz".to_string(),
             default: Some("Quiz".to_string()),
             names: Vec::new(),
-        });
+        }],
+    ));
     hints
 }
 

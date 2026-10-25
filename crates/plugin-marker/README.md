@@ -17,7 +17,7 @@ When both a marker block and an inline marker of the same type appear, they are 
 - Finds every marker (block or inline) that matches a known type.
 - Parses the marker, including its positional groups (`[…]` / `(…)`) and its extras head (`{…}`).
 - Binds the marker's extras through [`pendon_extra::bind_extras`](../extra/src/lib.rs) (§6) and reports any binding warnings.
-- Replaces the marker with a custom node: `NodeKind::Custom(name)` when `[[task.marker.custom]]` claims the `type` (§11 rule 3), otherwise the marker is dropped and its extras are lost (a warning is emitted).
+- Replaces the marker with a built-in element (`<span>` inline, `<div>` block) carrying its `type` and tagged `__layer = "marker"`; the renderer answers the layer with `[[task.marker.custom]]` (§11 rule 3, ADR-0008 `D-3a`), and with no component configured the element itself is the output.
 - Marks the node `__plugin_kind = "inline"` for inline markers and `__plugin_kind = "block"` for block markers, so `plugin-markdown` re-lexes the stripped body appropriately (inline markers as inline content, block markers as block content).
 
 ## Options
@@ -26,12 +26,12 @@ When both a marker block and an inline marker of the same type appear, they are 
 [[task.marker.custom]]
 type = ["sectionA"]
 name = "SectionA"
-imports = "import { SectionA } from '@comp/content/SectionA'"
+imports = "import { SectionA } from '@comp/SectionA'"
 template = "<SectionA {...attrs}>{children}</SectionA>"
 
 [[task.marker.custom]] # answers every unclaimed type (§11 rule 3)
 name = "MarkerDefault"
-imports = "import { MarkerDefault } from '@comp/content/MarkerDefault'"
+imports = "import { MarkerDefault } from '@comp/MarkerDefault'"
 template = "<MarkerDefault {...attrs}>{children}</MarkerDefault>"
 ```
 

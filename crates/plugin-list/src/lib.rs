@@ -25,10 +25,12 @@
 //! # Scope
 //!
 //! Implemented: **L1, the container decorator** — a decorator line directly above
-//! a list (`@@type{…}` / `@@{…}`, §9.1) decorates the container. The node is
-//! `NodeKind::Custom(name)` when the `type` is claimed (§11 rule 3),
-//! `NodeKind::Element("ul"|"ol")` otherwise (D8); the layer `unordered` or
-//! `ordered` follows the **marker** (§9.4), never the decorator's own type.
+//! a list (`@@type{…}` / `@@{…}`, §9.1) decorates the container. The wrapper keeps
+//! its built-in kind (`NodeKind::Element("ul"|"ol")`, D8) and tags itself with the
+//! layer it belongs to (`__layer`, §11 rule 3 / ADR-0008 `D-3a`); the layer
+//! `unordered` or `ordered` follows the **marker** (§9.4), never the decorator's
+//! own type, and the renderer decides once per document which entry answers the
+//! claimed `type`.
 //!
 //! Not implemented yet, and therefore documented rather than half-done:
 //!
@@ -43,7 +45,7 @@ use std::collections::HashMap;
 
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{bind_decorators, emit_attrs, warning_message, BoundDecorator};
-use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
+use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
 
 /// §9.4: the layer named after the plugin owns the **item** element.
@@ -122,7 +124,9 @@ pub fn process(events: &[Event], options: &ListOptions) -> Vec<Event> {
         };
 
         let end = paragraph_end(&bindings.events, i);
-        let node = container_node(&kind, decorator, options);
+        // §11 rule 3 / D-3a: the wrapper keeps its built-in kind and names the
+        // layer; the renderer, not the plugin, picks the component.
+        let node = NodeKind::Element(fallback_element(&kind).to_string());
         out.push(Event::StartNode(node.clone()));
         // First attribute: the layer tells `plugin-markdown` which element the
         // wrapper stands for (§9.4).
@@ -131,8 +135,12 @@ pub fn process(events: &[Event], options: &ListOptions) -> Vec<Event> {
             value: layer_of(&kind).to_string(),
         });
         out.push(Event::Attribute {
+            name: "__layer".to_string(),
+            value: layer_of(&kind).to_string(),
+        });
+        out.push(Event::Attribute {
             name: "name".to_string(),
-            value: node_name(&node, &kind),
+            value: fallback_element(&kind).to_string(),
         });
         if let Some(marker) = &decorator.type_marker {
             out.push(Event::Attribute {
@@ -159,21 +167,16 @@ pub fn solid_hints(options: &ListOptions) -> Option<SolidRenderHints> {
     if sets.iter().all(|set| set.is_empty()) {
         return None;
     }
+    // §11 rule 3 / D-3a: one template per entry, tagged with its own layer; the
+    // renderer decides per document which entry answers which `type`.
+    let payload = |custom: &ListCustomNode| (custom.template.clone(), custom.imports.clone());
     let mut hints = SolidRenderHints::default();
-    for set in sets {
-        for custom in set.components() {
-            hints.templates.push(ComponentTemplate {
-                node_type: custom.name.clone(),
-                node_name: Some(custom.name.clone()),
-                template: custom.template.clone(),
-            });
-            if !custom.imports.is_empty() {
-                hints.template_imports.insert(
-                    (custom.name.clone(), Some(custom.name.clone())),
-                    custom.imports.clone(),
-                );
-            }
-        }
+    for (layer, set) in [
+        (LIST_LAYER, &options.list),
+        (UNORDERED_LAYER, &options.unordered),
+        (ORDERED_LAYER, &options.ordered),
+    ] {
+        hints.templates.extend(layer_templates(layer, set, payload));
     }
     Some(hints)
 }
@@ -244,38 +247,11 @@ fn layer_of(kind: &NodeKind) -> &'static str {
     }
 }
 
-/// The component set of the container layer for `kind` (§9.4).
-fn container_set<'a>(
-    options: &'a ListOptions,
-    kind: &NodeKind,
-) -> &'a ComponentSet<ListCustomNode> {
-    match kind {
-        NodeKind::OrderedList => &options.ordered,
-        _ => &options.unordered,
-    }
-}
-
-/// §11 rule 3 + D8: the wrapper node of a decorated container.
-fn container_node(kind: &NodeKind, decorator: &BoundDecorator, options: &ListOptions) -> NodeKind {
-    match container_set(options, kind).select(decorator.type_marker.as_deref()) {
-        Some(custom) => NodeKind::Custom(custom.name.clone()),
-        None => NodeKind::Element(fallback_element(kind).to_string()),
-    }
-}
-
 /// The built-in element of an unclaimed container `type` (§9.4, D8).
 fn fallback_element(kind: &NodeKind) -> &'static str {
     match kind {
         NodeKind::OrderedList => "ol",
         _ => "ul",
-    }
-}
-
-/// The `name` attribute: the component name, or the fallback element.
-fn node_name(node: &NodeKind, kind: &NodeKind) -> String {
-    match node {
-        NodeKind::Custom(name) => name.clone(),
-        _ => fallback_element(kind).to_string(),
     }
 }
 
@@ -325,13 +301,6 @@ mod tests {
         process(&events, options)
     }
 
-    fn custom(events: &[Event]) -> Option<String> {
-        events.iter().find_map(|event| match event {
-            Event::StartNode(NodeKind::Custom(name)) => Some(name.clone()),
-            _ => None,
-        })
-    }
-
     fn element(events: &[Event]) -> Option<String> {
         events.iter().find_map(|event| match event {
             Event::StartNode(NodeKind::Element(name)) => Some(name.clone()),
@@ -359,9 +328,12 @@ mod tests {
     /// §9.3 L1: the decorator line above the list decorates the container.
     #[test]
     fn a_container_decorator_binds_to_the_list() {
+        // D-3a: the wrapper keeps the built-in `<ul>` kind and names its layer;
+        // the renderer resolves the claimed `type` against the whole document.
         let out = run("@@unorderedA{.u, #l03}\n\n- one\n- two\n");
-        assert_eq!(custom(&out).as_deref(), Some("UL"), "{out:?}");
+        assert_eq!(element(&out).as_deref(), Some("ul"), "{out:?}");
         assert_eq!(attr(&out, "__plugin_kind").as_deref(), Some("unordered"));
+        assert_eq!(attr(&out, "__layer").as_deref(), Some("unordered"));
         assert_eq!(attr(&out, "type").as_deref(), Some("unorderedA"));
         assert_eq!(attr(&out, "class").as_deref(), Some("u"));
         assert_eq!(attr(&out, "id").as_deref(), Some("l03"));
@@ -374,7 +346,8 @@ mod tests {
     #[test]
     fn an_untyped_container_decorator_uses_the_layer_default() {
         let out = run("@@{.u}\n\n- one\n");
-        assert_eq!(custom(&out).as_deref(), Some("ULDefault"), "{out:?}");
+        assert_eq!(element(&out).as_deref(), Some("ul"), "{out:?}");
+        assert_eq!(attr(&out, "__layer").as_deref(), Some("unordered"));
         assert_eq!(attr(&out, "type"), None);
         assert_eq!(attr(&out, "class").as_deref(), Some("u"));
     }
@@ -383,8 +356,9 @@ mod tests {
     #[test]
     fn an_ordered_list_uses_the_ordered_layer() {
         let out = run("@@orderedA{.o}\n\n1. one\n");
-        assert_eq!(custom(&out).as_deref(), Some("OL"), "{out:?}");
+        assert_eq!(element(&out).as_deref(), Some("ol"), "{out:?}");
         assert_eq!(attr(&out, "__plugin_kind").as_deref(), Some("ordered"));
+        assert_eq!(attr(&out, "__layer").as_deref(), Some("ordered"));
     }
 
     /// §11 rule 3 + D8: without a component the container is the built-in
@@ -403,8 +377,8 @@ mod tests {
     #[test]
     fn an_undecorated_list_is_left_alone() {
         let out = run("- one\n- two\n");
-        assert!(custom(&out).is_none(), "{out:?}");
         assert!(element(&out).is_none(), "{out:?}");
+        assert_eq!(attr(&out, "__layer"), None, "{out:?}");
         assert!(text(&out).contains("- one"));
     }
 

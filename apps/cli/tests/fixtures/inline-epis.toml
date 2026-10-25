@@ -20,6 +20,6 @@ node = "Component"
 node_name = "Epis"
 
 [renderer.solid]
-imports = ["import Epis from '@comp/content/Epis'"]
+imports = ["import Epis from '@comp/Epis'"]
 # Use single braces for template variables
 component_template = "<Epis {...attrs}>{children}</Epis>"

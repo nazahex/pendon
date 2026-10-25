@@ -4,7 +4,9 @@ use std::path::Path;
 
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead};
-use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
+use pendon_renderer_solid::{
+    layer_templates, ComponentSet, DataExport, ImportEntry, SolidRenderHints,
+};
 use serde_json::{Map, Value};
 
 // --- Public Types ---
@@ -14,6 +16,14 @@ pub struct CiteCustomNode {
     pub name: String,
     pub template: String,
     pub imports: Vec<ImportEntry>,
+}
+
+/// §11: the layer `[task.cite.custom]` declares.
+const CITE_LAYER: &str = "cite";
+
+/// The layer key `[task.cite.custom.<layer>]` addresses.
+pub fn primary_layer() -> &'static str {
+    CITE_LAYER
 }
 
 #[derive(Clone, Debug)]
@@ -30,7 +40,8 @@ pub struct CiteOptions {
     /// ([`ReferencesScope::default_for_source`]).
     pub references_scope: Option<ReferencesScope>,
     /// §11 component set of the `cite` layer: typed entries plus at most one
-    /// default, selected per instance by the `@@type{…}` marker (rule 3).
+    /// default, resolved for the whole document by the renderer against the
+    /// `@@type{…}` markers it occurs (rule 3, ADR-0008 `D-3a`).
     pub custom: ComponentSet<CiteCustomNode>,
     pub external_references: Option<Value>,
 }
@@ -338,35 +349,32 @@ pub fn process(events: &[Event], options: &CiteOptions) -> Vec<Event> {
 
 /// Builds the Solid render hints for a document that ran the `cite` layer.
 ///
-/// Besides the §11 component templates this carries the two data exports the
+/// Besides the §11 component templates this registers the two data exports the
 /// RFC-0002 upgrade introduced (§2.3): every physical citation occurrence and
-/// the references they point at. They are emitted as plain `export const …`
-/// bindings by the Solid renderer, not merged into frontmatter.
+/// the references they point at. They are pushed as `DataExport`s in
+/// **reference-then-citations** order — a citation names a reference, so a
+/// reader must be able to resolve one without a forward reference (ADR-0009).
 pub fn solid_hints(
     options: &CiteOptions,
     citations: &Value,
     references: &Value,
 ) -> SolidRenderHints {
-    let mut hints = SolidRenderHints::default();
-    let mut add_node = |name: &str, template: &str, imports: &[ImportEntry]| {
-        let key = (name.to_string(), Some(name.to_string()));
-        hints.templates.push(ComponentTemplate {
-            node_type: name.to_string(),
-            node_name: Some(name.to_string()),
-            template: template.to_string(),
-        });
-        hints.template_imports.insert(key, imports.to_vec());
+    let mut hints = SolidRenderHints {
+        templates: layer_templates(CITE_LAYER, &options.custom, |custom| {
+            (custom.template.clone(), custom.imports.clone())
+        }),
+        ..SolidRenderHints::default()
     };
-    if !options.custom.is_empty() {
-        // §11 rule 3: every entry of the set answers instances of its own.
-        for custom in options.custom.components() {
-            add_node(&custom.name, &custom.template, &custom.imports);
-        }
-    }
-    hints.citations_export = Some(citations.clone());
-    hints.citations_export_name = Some(options.citations_export.clone());
-    hints.references_export = Some(references.clone());
-    hints.references_export_name = Some(options.references_export.clone());
+    hints.exports.push(DataExport::plugin(
+        "cite",
+        options.references_export.clone(),
+        references.clone(),
+    ));
+    hints.exports.push(DataExport::plugin(
+        "cite",
+        options.citations_export.clone(),
+        citations.clone(),
+    ));
     hints
 }
 
@@ -501,14 +509,27 @@ fn emit_citation(
     instance_index: usize,
     extra: &CiteExtraAttrs,
 ) {
-    // §11 rule 3: the marker picks the component, an unmatched marker falls
-    // back to the layer default, no default to the built-in `<sup>` markup.
-    if let Some(custom) = options.custom.select(extra.type_marker.as_deref()) {
-        out.push(Event::StartNode(NodeKind::Custom(custom.name.clone())));
+    // §11 rule 3 / D-3a: with a configured `cite` layer every citation becomes a
+    // structured, layer-tagged node and the renderer picks the entry; with none
+    // configured no template can ever apply, so the built-in `<sup>` markup is
+    // emitted directly, exactly as before.
+    if !options.custom.is_empty() {
+        let node = NodeKind::Element("sup".to_string());
+        out.push(Event::StartNode(node.clone()));
         out.push(Event::Attribute {
             name: "name".to_string(),
-            value: custom.name.clone(),
+            value: "sup".to_string(),
         });
+        out.push(Event::Attribute {
+            name: "__layer".to_string(),
+            value: CITE_LAYER.to_string(),
+        });
+        if let Some(marker) = &extra.type_marker {
+            out.push(Event::Attribute {
+                name: "type".to_string(),
+                value: marker.clone(),
+            });
+        }
         // Emit core citation attributes
         for (key, value) in citation {
             out.push(Event::Attribute {
@@ -518,7 +539,7 @@ fn emit_citation(
         }
         // Emit extra attributes (class, id, props, style)
         emit_extra_attrs(out, extra);
-        out.push(Event::EndNode(NodeKind::Custom(custom.name.clone())));
+        out.push(Event::EndNode(node));
         return;
     }
 
@@ -1096,7 +1117,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_custom_node() {
+    fn renders_layer_tagged_node() {
         let mut options = CiteOptions::default();
         options.custom =
             ComponentSet::from_entries([TypedComponent::default_component(CiteCustomNode {
@@ -1105,10 +1126,15 @@ mod tests {
                 imports: Vec::new(),
             })]);
         let result = process(&events_with_refs(), &options);
+        // §11 rule 3 / D-3a: the node stays an element tagged with the layer; the
+        // renderer decides which entry answers it.
         assert!(result.iter().any(|event| matches!(
             event,
-            Event::StartNode(NodeKind::Custom(name)) if name == "Citation"
+            Event::Attribute { name, value } if name == "__layer" && value == "cite"
         )));
+        assert!(!result
+            .iter()
+            .any(|event| matches!(event, Event::StartNode(NodeKind::Custom(_)))));
     }
 
     #[test]

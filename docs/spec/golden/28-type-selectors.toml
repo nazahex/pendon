@@ -1,0 +1,37 @@
+[[task]]
+name = "Golden 28"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,heading,markdown"
+format = "solid"
+
+[task.heading]
+auto_number = false
+
+# R.1: Global default fallback for all types, using a generic component
+[[task.heading.custom]]
+type = ["*"]
+name = "HeadingDefault"
+imports = "import { HeadingDefault } from '@comp/Base'"
+template = '<HeadingDefault level="{attrs.level}" {...attrs}>{children}</HeadingDefault>'
+
+# R.2: Special handling for components of type 'TypeA'
+[[task.heading.custom]]
+type = ["TypeA"]
+name = "HeadingTypeA"
+imports = "import { HeadingTypeA } from '@comp/SpecialA'"
+template = '<HeadingTypeA data="{attrs.meta}" modern variant {...attrs}>{children}</HeadingTypeA>'
+
+# R.3: Handling for the remaining types that have not been defined (TypeB and TypeC; untyped is excluded because R.4 defines it)
+[[task.heading.custom]]
+type = ["_"]
+name = "HeadingFallback"
+imports = "import { HeadingFallback } from '@comp/Fallback'"
+template = '<HeadingFallback dark theme {...attrs}>{children}</HeadingFallback>'
+
+# R.4: Specific override for untyped (because ? has a specificity of 2, higher than the _ in R.3)
+[[task.heading.custom]]
+type = "?"
+name = "HeadingUntyped"
+imports = "import { HeadingUntyped } from '@comp/Untyped'"
+template = '<HeadingUntyped strictMode="{true}" {...attrs}>{children}</HeadingUntyped>'

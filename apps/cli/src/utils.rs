@@ -140,3 +140,169 @@ pub fn maybe_pretty(s: &str, pretty: bool) -> String {
         Err(_) => s.to_string(),
     }
 }
+
+/// Words a `export const <name>` may not use, because the emitted module would
+/// not parse (ADR-0009, §20 of `spec/SYNTAX.md`).
+///
+/// A Solid module is strict-mode code, so this is the ES2015+ reserved set plus
+/// `await` (module goal), the strict-mode reserved words (`let`, `static`, …) and
+/// the two bindings strict mode forbids (`eval`, `arguments`). `of` is **not**
+/// here: it is contextual, only special inside `for (… of …)`.
+const RESERVED_IDENTIFIERS: [&str; 48] = [
+    "arguments",
+    "await",
+    "break",
+    "case",
+    "catch",
+    "class",
+    "const",
+    "continue",
+    "debugger",
+    "default",
+    "delete",
+    "do",
+    "else",
+    "enum",
+    "eval",
+    "export",
+    "extends",
+    "false",
+    "finally",
+    "for",
+    "function",
+    "if",
+    "implements",
+    "import",
+    "in",
+    "instanceof",
+    "interface",
+    "let",
+    "new",
+    "null",
+    "package",
+    "private",
+    "protected",
+    "public",
+    "return",
+    "static",
+    "super",
+    "switch",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typeof",
+    "var",
+    "void",
+    "while",
+    "with",
+    "yield",
+];
+
+/// Validates a name that becomes `export const <name> = …` in the Solid output.
+///
+/// One site for every producer (`cite`, `bind`'s `[[task.bind.inject]]`,
+/// Phase 4's `extract.export`): the message names the config key **and** the
+/// offending value, so a typo never renders with a broken module behind it.
+pub fn validate_export_identifier(task: &str, key: &str, value: &str) -> Result<String, String> {
+    let mut chars = value.chars();
+    let starts_ok = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_' || c == '$');
+    let rest_ok = chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$');
+    let reserved = RESERVED_IDENTIFIERS.contains(&value);
+    if starts_ok && rest_ok && !reserved {
+        return Ok(value.to_string());
+    }
+    let mut message = format!("{task}.{key} '{value}' is not a valid JavaScript identifier");
+    if reserved {
+        message.push_str(" (reserved word)");
+    }
+    Err(message)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// §20: `[A-Za-z_$][A-Za-z0-9_$]*` is accepted unchanged.
+    #[test]
+    fn export_identifier_accepts_valid_names() {
+        for name in [
+            "citations",
+            "bibliographyData",
+            "_private",
+            "$dollar",
+            "a1",
+            "dataX",
+        ] {
+            assert_eq!(
+                validate_export_identifier("cite", "citations_export", name),
+                Ok(name.to_string()),
+                "{name}"
+            );
+        }
+    }
+
+    /// A leading digit, a dash or an empty name is rejected, naming the key and
+    /// the value (T2.4).
+    #[test]
+    fn export_identifier_rejects_malformed_names() {
+        for name in ["1data", "citations-list", "", "with space", "ünicode"] {
+            let err = validate_export_identifier("cite", "citations_export", name)
+                .expect_err("malformed identifier");
+            assert!(err.contains("not a valid JavaScript identifier"), "{err}");
+            assert!(err.contains(&format!("'{name}'")), "{err}");
+            assert!(!err.contains("reserved word"), "{err}");
+        }
+    }
+
+    /// §20: a reserved word is syntactically fine but cannot be an exported
+    /// binding, so it is rejected as well.
+    #[test]
+    fn export_identifier_rejects_reserved_words() {
+        for name in [
+            "export",
+            "default",
+            "class",
+            "await",
+            "null",
+            "true",
+            "in",
+            "yield",
+            "static",
+            "arguments",
+            "eval",
+        ] {
+            let err =
+                validate_export_identifier("bind", "inject", name).expect_err("reserved word");
+            assert!(err.starts_with(&format!("bind.inject '{name}'")), "{err}");
+            assert!(
+                err.contains("is not a valid JavaScript identifier"),
+                "{err}"
+            );
+            assert!(err.contains("reserved word"), "{err}");
+        }
+    }
+
+    /// `of` is contextual, not reserved: `const of = 1` parses, so a data file
+    /// named `of.toml` must not be rejected.
+    #[test]
+    fn export_identifier_accepts_contextual_keywords() {
+        assert_eq!(
+            validate_export_identifier("bind", "inject", "of"),
+            Ok("of".to_string())
+        );
+    }
+
+    /// The message carries the producing task's own name, so `bind` never
+    /// reports a `cite.` prefix.
+    #[test]
+    fn export_identifier_prefixes_the_producing_task() {
+        let err = validate_export_identifier("bind", "inject", "data-x").expect_err("bad name");
+        assert_eq!(
+            err,
+            "bind.inject 'data-x' is not a valid JavaScript identifier"
+        );
+    }
+}

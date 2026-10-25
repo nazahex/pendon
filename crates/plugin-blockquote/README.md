@@ -24,9 +24,10 @@ When both are present the **inner** head wins (§9.2).
   [`pendon_extra::bind_decorators`](../extra/src/decorator.rs) (§9.1) and reports
   the decorators that bind to nothing as `Severity::Warning`.
 - Replaces the paragraph the core parser wrapped the quote in with the quote
-  node: `NodeKind::Custom(name)` when `[[task.blockquote.custom]]` claims the
-  `type` (§11 rule 3), `NodeKind::Element("blockquote")` otherwise (D8 — the
-  built-in element still carries every extra).
+  node: always the built-in `NodeKind::Element("blockquote")` (D8 — it carries
+  every extra), tagged `__layer = "blockquote"` so the renderer can answer that
+  layer with `[[task.blockquote.custom]]` (§11 rule 3, ADR-0008 `D-3a`). The
+  plugin never swaps the node for a component itself.
 - Marks the node `__plugin_kind = "block"`, so `plugin-markdown` re-lexes the
   stripped body as block content: headings, lists, tables, fences and nested
   quotes inside the quote follow the normal rules.
@@ -37,12 +38,12 @@ When both are present the **inner** head wins (§9.2).
 [[task.blockquote.custom]]
 type = ["quoteA"]
 name = "QuoteA"
-imports = "import { QuoteA } from '@comp/content/Quote'"
+imports = "import { QuoteA } from '@comp/Quote'"
 template = "<QuoteA {...attrs}>{children}</QuoteA>"
 
 [[task.blockquote.custom]] # answers every unclaimed type (§11 rule 3)
 name = "QuoteDefault"
-imports = "import { QuoteDefault } from '@comp/content/Quote'"
+imports = "import { QuoteDefault } from '@comp/Quote'"
 template = "<QuoteDefault {...attrs}>{children}</QuoteDefault>"
 ```
 

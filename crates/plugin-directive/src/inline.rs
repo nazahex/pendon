@@ -68,7 +68,7 @@ fn process_line(text: &str, options: &DirectiveOptions, out: &mut Vec<Event>) {
                     // Nested inline directives inside the content bind as well.
                     process_line(&found.content, options, &mut children);
                 }
-                emit_directive(&found.parsed, false, options, &children, out);
+                emit_directive(&found.parsed, false, &children, out);
                 cursor = found.end;
                 plain_start = cursor;
                 continue;

@@ -1,8 +1,9 @@
 import Hint from "@comp/shared/Hint";
 import Parego from "@comp/shared/Parego";
 
-export const frontmatter = {"cites":[]};
 export const headings = [{"id":"advanced-commonmark-list-demonstration","text":"Advanced CommonMark List Demonstration","level":1,"subheadings":[{"id":"multi-paragraph-nested-lists","text":"Multi-Paragraph & Nested Lists","level":2},{"id":"lists-containing-code-blocks-complex-elements","text":"Lists containing Code Blocks & Complex Elements","level":2},{"id":"mixed-ordering-complex-indentation","text":"Mixed Ordering & Complex Indentation","level":2}]}];
+export const references = {};
+export const citations = [];
 export default function PendonView() { return (<>
 <section id="advanced-commonmark-list-demonstration">
 <h1>1. Advanced CommonMark List Demonstration</h1>

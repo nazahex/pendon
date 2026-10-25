@@ -29,7 +29,7 @@ use pendon_extra::{
     parse_extras, to_attributes, warning_message, AttrValue, Attrs, DirectiveHead, ExtrasAttr,
     ExtrasMatch,
 };
-use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
+use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
 
 mod block;
@@ -75,22 +75,14 @@ pub fn solid_hints(options: &DirectiveOptions) -> Option<SolidRenderHints> {
     if options.custom.is_empty() {
         return None;
     }
-    let mut hints = SolidRenderHints::default();
-    // §11 rule 3: every entry answers the directive types it declares.
-    for custom in options.custom.components() {
-        hints.templates.push(ComponentTemplate {
-            node_type: custom.name.clone(),
-            node_name: Some(custom.name.clone()),
-            template: custom.template.clone(),
-        });
-        if !custom.imports.is_empty() {
-            hints.template_imports.insert(
-                (custom.name.clone(), Some(custom.name.clone())),
-                custom.imports.clone(),
-            );
-        }
-    }
-    Some(hints)
+    // §11 rule 3 / D-3a: every entry answers the directive types it declares;
+    // the renderer resolves them document-wide.
+    Some(SolidRenderHints {
+        templates: layer_templates(DIRECTIVE_LAYER, &options.custom, |custom| {
+            (custom.template.clone(), custom.imports.clone())
+        }),
+        ..SolidRenderHints::default()
+    })
 }
 
 /// The layer key `[[task.directive.custom]]` addresses (always the primary).
@@ -170,7 +162,6 @@ pub(crate) fn resolve_head(
 pub(crate) fn emit_directive(
     parsed: &ParsedDirective,
     is_block: bool,
-    options: &DirectiveOptions,
     children: &[Event],
     out: &mut Vec<Event>,
 ) {
@@ -182,14 +173,11 @@ pub(crate) fn emit_directive(
         });
     }
 
-    let custom = options.custom.select(Some(&parsed.type_name));
+    // §10.2/§10.3 + D8: the node keeps the built-in element and its `type`; the
+    // entry that answers that type is chosen by the renderer (D-3a), so the
+    // component can differ per document without touching the event stream.
     let fallback = if is_block { "div" } else { "span" };
-    let node = match &custom {
-        Some(custom) => NodeKind::Custom(custom.name.clone()),
-        // §10.2/§10.3 + D8: an unclaimed/default-less type renders the built-in
-        // element, exactly like a marker, so no extras are dropped (§6).
-        None => NodeKind::Element(fallback.to_string()),
-    };
+    let node = NodeKind::Element(fallback.to_string());
 
     out.push(Event::StartNode(node.clone()));
     // First attribute so `plugin-markdown`'s placement look-ahead sees it.
@@ -198,11 +186,12 @@ pub(crate) fn emit_directive(
         value: if is_block { "block" } else { "inline" }.to_string(),
     });
     out.push(Event::Attribute {
+        name: "__layer".to_string(),
+        value: DIRECTIVE_LAYER.to_string(),
+    });
+    out.push(Event::Attribute {
         name: "name".to_string(),
-        value: match &custom {
-            Some(custom) => custom.name.clone(),
-            None => fallback.to_string(),
-        },
+        value: fallback.to_string(),
     });
     out.push(Event::Attribute {
         name: "type".to_string(),
@@ -289,6 +278,10 @@ mod tests {
             .collect()
     }
 
+    pub(crate) fn layers(events: &[Event]) -> Vec<String> {
+        all_attrs(events, "__layer")
+    }
+
     pub(crate) fn kinds(events: &[Event]) -> Vec<String> {
         all_attrs(events, "__plugin_kind")
     }
@@ -313,12 +306,13 @@ mod tests {
             .collect()
     }
 
-    /// §10.2: an inline directive becomes a `Custom` node of its `type` with the
-    /// surrounding text kept inline.
+    /// §10.2 / D-3a: an inline directive becomes a `directive`-layer node that
+    /// keeps its `type`; the renderer picks the component, the text stays inline.
     #[test]
-    fn inline_directive_becomes_a_custom_node() {
+    fn inline_directive_is_tagged_with_its_layer() {
         let out = run("Before ::note some text:: after\n");
-        assert_eq!(customs(&out), vec!["Note".to_string()]);
+        assert_eq!(layers(&out), vec![DIRECTIVE_LAYER.to_string()]);
+        assert!(customs(&out).is_empty(), "{out:?}");
         assert_eq!(kinds(&out), vec!["inline".to_string()]);
         assert_eq!(attr(&out, "type").as_deref(), Some("note"));
         let text = text_of(&out);
@@ -347,7 +341,7 @@ mod tests {
     #[test]
     fn block_directive_collects_its_body() {
         let out = run("==note\nfirst para\n\nsecond para\n==\n");
-        assert_eq!(customs(&out), vec!["Note".to_string()]);
+        assert_eq!(layers(&out), vec![DIRECTIVE_LAYER.to_string()]);
         assert_eq!(kinds(&out), vec!["block".to_string()]);
         assert_eq!(attr(&out, "type").as_deref(), Some("note"));
         let text = text_of(&out);
@@ -373,7 +367,8 @@ mod tests {
     #[test]
     fn unclosed_block_warns_and_still_binds() {
         let out = run("==note\nbody\n");
-        assert_eq!(customs(&out), vec!["Note".to_string()]);
+        assert_eq!(attr(&out, "type").as_deref(), Some("note"));
+        assert_eq!(layers(&out), vec![DIRECTIVE_LAYER.to_string()]);
         assert!(warnings(&out)
             .iter()
             .any(|message| message.contains("unclosed block directive")));
@@ -385,8 +380,8 @@ mod tests {
         let out = run("==outer\n==note\nbody\n==\ntail\n==\n");
         // The outer node opens first; the inner one nests inside it.
         assert_eq!(
-            customs(&out),
-            vec!["DirectiveDefault".to_string(), "Note".to_string()],
+            all_attrs(&out, "type"),
+            vec!["outer".to_string(), "note".to_string()],
             "{out:?}"
         );
         assert_eq!(kinds(&out), vec!["block".to_string(), "block".to_string()]);
@@ -401,8 +396,8 @@ mod tests {
     fn inline_directives_nest() {
         let out = run("::outer a ::note b:: c::\n");
         assert_eq!(
-            customs(&out),
-            vec!["DirectiveDefault".to_string(), "Note".to_string()]
+            all_attrs(&out, "type"),
+            vec!["outer".to_string(), "note".to_string()]
         );
         let text = text_of(&out);
         assert!(text.contains('a') && text.contains('c'));
@@ -416,12 +411,14 @@ mod tests {
         assert!(text_of(&out).contains("::note"));
     }
 
-    /// A default component answers every unclaimed type (§11 rule 3).
+    /// §11 rule 3 / D-3a: the plugin keeps the marker even when the set has a
+    /// default — the renderer, not the plugin, decides which entry answers it.
     #[test]
-    fn the_type_routes_the_component_set() {
+    fn an_unclaimed_type_keeps_its_marker_for_the_renderer() {
         let out = run("==unknown\nbody\n==\n");
-        assert_eq!(customs(&out), vec!["DirectiveDefault".to_string()]);
         assert_eq!(attr(&out, "type").as_deref(), Some("unknown"));
+        assert_eq!(layers(&out), vec![DIRECTIVE_LAYER.to_string()]);
+        assert!(customs(&out).is_empty(), "{out:?}");
     }
 
     /// A layer without a default falls back to the built-in element with its

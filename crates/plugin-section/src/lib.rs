@@ -50,7 +50,7 @@ use pendon_extra::{
     bind_decorators, scan_extras_chars, to_attributes, warning_message, Attrs, BoundDecorator,
     ExtrasAttr,
 };
-use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
+use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
 
 /// §9.5: the single layer of `plugin-section`, the `<section>` element it emits.
@@ -72,8 +72,8 @@ pub struct SectionCustomNode {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SectionOptions {
-    /// §11: the `section` layer, selected per instance by the decorator's
-    /// `@@type{…}` marker.
+    /// §11: the `section` layer, resolved for the whole document by the
+    /// renderer against the decorators' `@@type{…}` markers (ADR-0008 `D-3a`).
     pub section: ComponentSet<SectionCustomNode>,
 }
 
@@ -92,21 +92,12 @@ pub fn solid_hints(options: &SectionOptions) -> Option<SolidRenderHints> {
     if options.section.is_empty() {
         return None;
     }
-    let mut hints = SolidRenderHints::default();
-    for custom in options.section.components() {
-        hints.templates.push(ComponentTemplate {
-            node_type: custom.name.clone(),
-            node_name: Some(custom.name.clone()),
-            template: custom.template.clone(),
-        });
-        if !custom.imports.is_empty() {
-            hints.template_imports.insert(
-                (custom.name.clone(), Some(custom.name.clone())),
-                custom.imports.clone(),
-            );
-        }
-    }
-    Some(hints)
+    Some(SolidRenderHints {
+        templates: layer_templates(SECTION_LAYER, &options.section, |custom| {
+            (custom.template.clone(), custom.imports.clone())
+        }),
+        ..SolidRenderHints::default()
+    })
 }
 
 // --- Main processor ---
@@ -271,7 +262,7 @@ fn open_heading(
         ));
     }
     close_sections(stack, out, level);
-    open_section(stack, out, used_ids, level, decorator, &chain, options);
+    open_section(stack, out, used_ids, level, decorator, &chain);
 }
 
 /// Closes every open section that cannot contain a heading of `level`: the
@@ -342,26 +333,17 @@ fn open_section(
     level: usize,
     decorator: Option<&BoundDecorator>,
     chain: &HeadInfo,
-    options: &SectionOptions,
 ) {
-    let custom = decorator.and_then(|d| options.section.select(d.type_marker.as_deref()));
-    let node = custom
-        .map(|custom| NodeKind::Custom(custom.name.clone()))
-        .unwrap_or(NodeKind::Section);
+    // §9.5 / D-3a: the section keeps its own kind and names its layer; the entry
+    // that answers the decorator's `type` is chosen by the renderer, once per
+    // document, so one plugin run can still serve differently configured docs.
+    let node = NodeKind::Section;
 
     out.push(Event::StartNode(node.clone()));
-    // §11 rule 3: a `Custom` node is inline by default; `block` makes
-    // `plugin-markdown` re-lex the section body as blocks.
-    if let NodeKind::Custom(name) = &node {
-        out.push(Event::Attribute {
-            name: "__plugin_kind".to_string(),
-            value: "block".to_string(),
-        });
-        out.push(Event::Attribute {
-            name: "name".to_string(),
-            value: name.clone(),
-        });
-    }
+    out.push(Event::Attribute {
+        name: "__layer".to_string(),
+        value: SECTION_LAYER.to_string(),
+    });
     if let Some(marker) = decorator.and_then(|d| d.type_marker.clone()) {
         out.push(Event::Attribute {
             name: "type".to_string(),
@@ -673,10 +655,10 @@ mod tests {
         assert_eq!(section_starts(&out).len(), 5, "{out:?}");
     }
 
-    /// §9.5/§11: a configured component replaces the built-in `Section` node and
-    /// keeps the decorator's class.
+    /// §9.5 / D-3a: the section keeps its kind and its layer tag plus the
+    /// decorator's marker and class; the renderer picks the component.
     #[test]
-    fn configured_component_replaces_the_builtin() {
+    fn a_typed_section_is_tagged_with_its_layer() {
         let options = SectionOptions {
             section: ComponentSet::from_entries([TypedComponent::typed(
                 vec!["secA"],
@@ -691,10 +673,15 @@ mod tests {
         let out = process(&events, &options);
         assert!(out
             .iter()
-            .any(|e| matches!(e, Event::StartNode(NodeKind::Custom(name)) if name == "SectionA")));
-        assert_eq!(attr(&out, "__plugin_kind").as_deref(), Some("block"));
+            .any(|e| matches!(e, Event::StartNode(NodeKind::Section))));
+        assert_eq!(attr(&out, "__layer").as_deref(), Some("section"));
+        assert_eq!(attr(&out, "type").as_deref(), Some("secA"));
         assert_eq!(attr(&out, "class").as_deref(), Some("lead"));
-        assert_eq!(solid_hints(&options).expect("hints").templates.len(), 1);
+        // The layer's one entry is registered with its own selectors.
+        let hints = solid_hints(&options).expect("hints");
+        assert_eq!(hints.templates.len(), 1);
+        assert_eq!(hints.templates[0].layer.as_deref(), Some("section"));
+        assert_eq!(hints.templates[0].selectors.len(), 1);
         assert!(solid_hints(&SectionOptions::default()).is_none());
     }
 }

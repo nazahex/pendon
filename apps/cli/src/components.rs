@@ -24,7 +24,8 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use pendon_renderer_solid::{ComponentTemplate, ImportEntry};
+use pendon_renderer_solid::ImportEntry;
+use pendon_types::Selector;
 
 use crate::plugins::parse_import_entries;
 
@@ -47,11 +48,14 @@ impl std::error::Error for ConfigError {}
 /// plugins and the CLI share one shape and one `resolve`.
 pub use pendon_extra::PositionalKeys;
 
-/// One `custom` entry: the types it answers, its imports and its template.
+/// One `custom` entry: the `type` selectors it answers, its imports and its
+/// template.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComponentEntry {
-    /// `type` markers. Empty means "this is the layer default" (rule 2).
-    pub types: Vec<String>,
+    /// §11 selectors: literals plus `?` / `_` / `*`. Empty means "this is the
+    /// layer default" (rule 2) — an explicit wildcard is a rule, not the
+    /// default slot.
+    pub selectors: Vec<Selector>,
     pub name: Option<String>,
     pub imports: Vec<ImportEntry>,
     pub template: Option<String>,
@@ -61,26 +65,24 @@ pub struct ComponentEntry {
 impl ComponentEntry {
     /// `true` for the single default entry of a layer.
     pub fn is_default(&self) -> bool {
-        self.types.is_empty()
+        self.selectors.is_empty()
     }
 
-    /// Answers `type_marker`, or `None` when it is not this entry's type.
+    /// Answers `type_marker` through a **literal** selector, or `None` when it
+    /// is not this entry's type.
+    ///
+    /// Wildcards are resolved per document by the renderer (decision D-3a), so
+    /// they never match here — `keys_for` and the duplicate check are
+    /// literal-only by design (see `pendon-types`).
     pub fn matches_type(&self, type_marker: &str) -> bool {
-        self.types.iter().any(|known| known == type_marker)
+        self.selectors
+            .iter()
+            .any(|selector| selector.literal() == Some(type_marker))
     }
 
-    /// Renders this entry as a renderer hint for `node_type` (§11 rule 3).
-    #[allow(dead_code)] // §11 rule-3 API: the Phase-1 binder builds hints from it.
-    pub fn to_template(
-        &self,
-        node_type: &str,
-        node_name: Option<&str>,
-    ) -> Option<ComponentTemplate> {
-        Some(ComponentTemplate {
-            node_type: node_type.to_string(),
-            node_name: node_name.map(str::to_string),
-            template: self.template.clone()?,
-        })
+    /// The literal marker names this entry answers (wildcards excluded).
+    pub fn literal_types(&self) -> impl Iterator<Item = &str> {
+        self.selectors.iter().filter_map(Selector::literal)
     }
 }
 
@@ -99,11 +101,6 @@ impl ComponentSet {
             typed: Vec::new(),
             default: None,
         }
-    }
-
-    #[allow(dead_code)] // §11 rule-3 API: the Phase-1 binder routes by `type`.
-    pub fn layer(&self) -> &str {
-        &self.layer
     }
 
     pub fn typed(&self) -> &[ComponentEntry] {
@@ -134,29 +131,6 @@ impl ComponentSet {
         self.typed.push(entry);
         Ok(())
     }
-
-    /// §11 rule 3: exact `type` match → layer default → `None` (built-in
-    /// fallback, which must still carry every extra as an attribute).
-    #[allow(dead_code)] // §11 rule-3 API: the Phase-1 binder selects per node.
-    pub fn select(&self, type_marker: Option<&str>) -> Option<&ComponentEntry> {
-        if let Some(marker) = type_marker {
-            if let Some(entry) = self.typed.iter().find(|entry| entry.matches_type(marker)) {
-                return Some(entry);
-            }
-        }
-        self.default.as_ref()
-    }
-
-    /// Convenience for hint construction: a template per entry, tagged with the
-    /// node kind the layer emits.
-    #[allow(dead_code)] // §11 rule-3 API: kept as the config-side mirror of the plugin sets.
-    pub fn templates(&self, node_type: &str, node_name: Option<&str>) -> Vec<ComponentTemplate> {
-        self.typed
-            .iter()
-            .chain(self.default.iter())
-            .filter_map(|entry| entry.to_template(node_type, node_name))
-            .collect()
-    }
 }
 
 /// Every layer's component set for one task-level plugin.
@@ -172,19 +146,6 @@ impl PluginComponents {
 
     pub fn layer(&self, layer: &str) -> Option<&ComponentSet> {
         self.layers.get(layer)
-    }
-
-    #[allow(dead_code)] // §11 rule-3 API: the Phase-1 binder skips empty sets.
-    pub fn is_empty(&self) -> bool {
-        self.layers.is_empty()
-    }
-
-    /// §11 rule 3, per layer.
-    #[allow(dead_code)] // §11 rule-3 API: the Phase-1 binder selects per node.
-    pub fn select(&self, layer: &str, type_marker: Option<&str>) -> Option<&ComponentEntry> {
-        self.layers
-            .get(layer)
-            .and_then(|set| set.select(type_marker))
     }
 
     fn entry(&mut self, layer: &str) -> &mut ComponentSet {
@@ -334,12 +295,15 @@ fn parse_set(
     Ok(set)
 }
 
+/// Decision D-4: an exact literal may appear once per layer, wildcards may
+/// repeat and are ordered (later wins). Two entries with no `type` at all are
+/// still the "two defaults" hard error, handled by [`ComponentSet::insert`].
 fn check_duplicate_type(
     set: &ComponentSet,
     entry: &ComponentEntry,
     label: &str,
 ) -> Result<(), ConfigError> {
-    for known in &entry.types {
+    for known in entry.literal_types() {
         if set.typed().iter().any(|other| other.matches_type(known)) {
             return Err(ConfigError(format!(
                 "{label}: duplicate `type` marker `{known}`"
@@ -354,7 +318,7 @@ fn parse_entry(
     table: &toml::Table,
     warnings: &mut Vec<String>,
 ) -> Result<ComponentEntry, ConfigError> {
-    let types = match table.get("type") {
+    let tokens: Vec<String> = match table.get("type") {
         None => Vec::new(),
         Some(toml::Value::String(marker)) => vec![marker.clone()],
         Some(toml::Value::Array(items)) => items
@@ -372,12 +336,10 @@ fn parse_entry(
             )))
         }
     };
-    // `[]` is equivalent to an absent `type` (§11 rule 2).
-    let types: Vec<String> = types
-        .into_iter()
-        .map(|marker| marker.trim().to_string())
-        .filter(|marker| !marker.is_empty())
-        .collect();
+    // `[]` is equivalent to an absent `type` (§11 rule 2); every other entry
+    // must be a selector, so a typo is a load-time error, never a wildcard.
+    let selectors = Selector::parse_all(&tokens)
+        .map_err(|error| ConfigError(format!("{label}: `type` entry {error}")))?;
 
     let name = optional_string(table, "name", label)?;
     let template = optional_string(table, "template", label)?;
@@ -396,7 +358,7 @@ fn parse_entry(
     }
 
     Ok(ComponentEntry {
-        types,
+        selectors,
         name,
         imports,
         template,
@@ -594,13 +556,13 @@ mod tests {
         let thead = loaded.components.layer("thead").unwrap();
         assert_eq!(thead.typed().len(), 1);
         assert!(thead.default_entry().is_none());
-        assert_eq!(
-            thead.select(Some("theadB")).unwrap().name.as_deref(),
-            Some("HeadAB")
-        );
-        assert_eq!(thead.select(Some("theadA")).unwrap().imports.len(), 1);
-        // rule 3: no match and no default -> built-in fallback node.
-        assert!(thead.select(Some("nope")).is_none());
+        let entry = &thead.typed()[0];
+        assert!(entry.matches_type("theadA"));
+        assert!(entry.matches_type("theadB"));
+        assert_eq!(entry.name.as_deref(), Some("HeadAB"));
+        assert_eq!(entry.imports.len(), 1);
+        // rule 3: no literal match and no default -> built-in fallback node.
+        assert!(!entry.matches_type("nope"));
 
         let caption = loaded.components.layer("caption").unwrap();
         assert_eq!(
@@ -623,23 +585,11 @@ mod tests {
         let loaded = load("anchor", "anchor", Some(&custom)).unwrap();
         let anchor = loaded.components.layer("anchor").unwrap();
         assert_eq!(anchor.typed().len(), 1);
+        assert!(anchor.typed()[0].matches_type("anchorA"));
+        assert_eq!(anchor.typed()[0].name.as_deref(), Some("AnchorAB"));
+        // An unmatched type is answered by the layer default.
         assert_eq!(
-            loaded
-                .components
-                .select("anchor", Some("anchorA"))
-                .unwrap()
-                .name
-                .as_deref(),
-            Some("AnchorAB")
-        );
-        // Unmatched type falls back to the layer default.
-        assert_eq!(
-            loaded
-                .components
-                .select("anchor", Some("other"))
-                .unwrap()
-                .name
-                .as_deref(),
+            anchor.default_entry().unwrap().name.as_deref(),
             Some("AnchorDefault")
         );
     }
@@ -692,16 +642,18 @@ mod tests {
         );
         let loaded = load("anchor", "anchor", Some(&single)).unwrap();
         assert_eq!(loaded.warnings.len(), 1);
-        let entry = loaded.components.select("anchor", Some("anchorA")).unwrap();
-        assert_eq!(entry.types, vec!["anchorA".to_string()]);
+        let set = loaded.components.layer("anchor").expect("anchor layer");
+        let entry = &set.typed()[0];
+        assert_eq!(entry.literal_types().collect::<Vec<_>>(), vec!["anchorA"]);
         assert_eq!(entry.imports.len(), 1);
     }
 
-    /// §11 rule 3, at the config level: exact `type` match → layer default →
-    /// `None` (the plugin then falls back to its built-in element), and every
-    /// entry of a layer gets a template for the renderer hints.
+    /// §11 rule 3: a literal entry and the layer default are two distinct
+    /// entries of one layer. Which one answers a node is decided once per
+    /// document by the renderer (ADR-0008 `D-3a`), so the loader only records
+    /// them — with the selectors the user wrote and the default kept apart.
     #[test]
-    fn select_routes_type_then_default_then_fallback() {
+    fn literal_entries_and_the_layer_default_load_side_by_side() {
         let custom = custom_of(
             r#"
             [[custom.thead]]
@@ -716,19 +668,18 @@ mod tests {
         );
         let loaded = load("table", "table", Some(&custom)).unwrap();
 
-        let entry = loaded.components.select("thead", Some("theadA"));
+        let set = loaded.components.layer("thead").expect("thead layer");
+        assert_eq!(set.typed().len(), 1);
+        assert!(set.typed()[0].matches_type("theadA"));
+        assert!(set.typed()[0].matches_type("theadB"));
+        assert_eq!(set.typed()[0].name.as_deref(), Some("HeadAB"));
         assert_eq!(
-            entry.and_then(|entry| entry.name.as_deref()),
-            Some("HeadAB")
-        );
-
-        let entry = loaded.components.select("thead", Some("theadZ"));
-        assert_eq!(
-            entry.and_then(|entry| entry.name.as_deref()),
+            set.default_entry().and_then(|entry| entry.name.as_deref()),
             Some("HeadDefault")
         );
 
-        // A layer without a default falls back to the built-in element.
+        // A layer without a default leaves an unclaimed type to the built-in
+        // element (§11 rule 3).
         let typed_only = custom_of(
             r#"
             [[custom.thead]]
@@ -738,16 +689,94 @@ mod tests {
             "#,
         );
         let loaded = load("table", "table", Some(&typed_only)).unwrap();
-        assert!(loaded.components.select("thead", Some("theadZ")).is_none());
-
-        // §11 rule 3 hints: one template per entry, both entries covered.
         let set = loaded.components.layer("thead").expect("thead layer");
-        assert_eq!(set.templates("thead", None).len(), 1);
+        assert!(set.default_entry().is_none());
         assert!(loaded.components.layer("tfoot").is_none());
     }
 
     /// §11 rule 1: layer names are the elements a plugin emits, so an unknown
     /// layer is a typo or an unwired cutover, never a silent no-op.
+    /// §11 + D-4: `type` entries are selectors, not marker strings. A typo is a
+    /// load-time error naming the key and the layer, never a wildcard.
+    #[test]
+    fn type_entries_are_parsed_as_selectors() {
+        let custom = custom_of(
+            r#"
+            [[custom.thead]]
+            type = ["theadA", "_"]
+            name = "HeadRest"
+            template = "<HeadRest {...attrs}>{children}</HeadRest>"
+            "#,
+        );
+        let loaded = load("table", "table", Some(&custom)).unwrap();
+        let entry = &loaded.components.layer("thead").unwrap().typed()[0];
+        assert_eq!(entry.selectors.len(), 2);
+        assert_eq!(entry.literal_types().collect::<Vec<_>>(), vec!["theadA"]);
+
+        for (source, expected) in [
+            (r#"type = ["??"]"#, "`??` is not a selector"),
+            (r#"type = [""]"#, "is not a selector"),
+        ] {
+            let broken = custom_of(&format!(
+                r#"[[custom.thead]]
+{source}
+name = "H"
+template = "<H>{{children}}</H>"
+"#
+            ));
+            let error = load("table", "table", Some(&broken)).unwrap_err();
+            assert!(
+                error.to_string().contains("task.table.custom.thead")
+                    && error.to_string().contains(expected),
+                "{error}"
+            );
+        }
+    }
+
+    /// D-4: a literal `type` may appear once per layer; wildcards may repeat.
+    #[test]
+    fn duplicate_literals_stay_an_error_but_wildcards_may_repeat() {
+        let duplicated = custom_of(
+            r#"
+            [[custom.thead]]
+            type = "theadA"
+            name = "A"
+            template = "<A>{children}</A>"
+
+            [[custom.thead]]
+            type = "theadA"
+            name = "B"
+            template = "<B>{children}</B>"
+            "#,
+        );
+        let error = load("table", "table", Some(&duplicated)).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("duplicate `type` marker `theadA`"),
+            "{error}"
+        );
+
+        let wildcards = custom_of(
+            r#"
+            [[custom.thead]]
+            type = "_"
+            name = "First"
+            template = "<First>{children}</First>"
+
+            [[custom.thead]]
+            type = "*"
+            name = "Second"
+            template = "<Second>{children}</Second>"
+            "#,
+        );
+        let loaded = load("table", "table", Some(&wildcards)).unwrap();
+        let thead = loaded.components.layer("thead").unwrap();
+        // A wildcard entry is a *rule*, never the default slot.
+        assert!(thead.default_entry().is_none());
+        assert_eq!(thead.typed().len(), 2);
+    }
+
     #[test]
     fn unwired_layers_are_rejected() {
         let custom = custom_of(

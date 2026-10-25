@@ -1,5 +1,11 @@
 # pendon-plugin-vicado
 
+> **Deletion note (out of bounds).** `vicado` is **deleted entirely in the next
+> workflow**, together with `quiz` and the wiki infobox. Do not migrate it to
+> `__layer` / `layer_templates`, do not add types/selectors, do not freeze a
+> golden for it, and do not debug its output. It is listed here only so the
+> workspace keeps compiling until it is removed.
+
 `pendon-plugin-vicado` is a Pendon plugin that converts specific code fences into a Solid component call for `Vicado`.
 
 It keeps the standard fenced-code syntax, so editors still treat the block as normal code and preserve syntax highlighting assistance while you write.

@@ -1,5 +1,11 @@
 # pendon-plugin-wiki
 
+> **Deletion note (out of bounds).** The **infobox** half of this plugin is
+> **deleted entirely in the next workflow**, together with `quiz` and `vicado`.
+> Do not migrate infobox nodes to `__layer` / `layer_templates`, do not add
+> types/selectors for them, and do not debug their output. Wikilinks stay in
+> scope.
+
 Wiki-style links and infoboxes ([`docs/spec/SYNTAX.md`](../../docs/spec/SYNTAX.md)
 §7.5). It owns its own `[.class]`-shaped spellings (infobox markers, div blocks,
 the `Term =[.cill,.elit] Value` class prefix), parsed by its own code — these are

@@ -7,10 +7,11 @@ mod components;
 mod imports;
 mod metadata;
 mod node;
+mod resolve;
 mod template;
 
-pub use components::{ComponentSet, TypedComponent};
-pub use imports::{ComponentTemplate, ImportEntry, SolidRenderHints};
+pub use components::{layer_templates, ComponentSet, TypedComponent};
+pub use imports::{ComponentTemplate, DataExport, ExportSource, ImportEntry, SolidRenderHints};
 
 pub fn render_solid(events: &[Event]) -> String {
     render_solid_with_hints(events, None)
@@ -19,45 +20,34 @@ pub fn render_solid(events: &[Event]) -> String {
 pub fn render_solid_with_hints(events: &[Event], hints: Option<&SolidRenderHints>) -> String {
     let ast_json = render_ast_to_string(events).expect("AST serialization failed");
     let v: Value = serde_json::from_str(&ast_json).expect("Invalid AST JSON");
-    let frontmatter = metadata::extract_frontmatter(&v);
-    let headings = metadata::extract_headings(&v);
-    let mut used_nodes: BTreeSet<(String, Option<String>)> = BTreeSet::new();
+    // §11 / ADR-0008 (`D-3a`): which entry of each layer answers each occurring
+    // type is decided **once per document**, before a single node is rendered.
+    // The plugins only tag their nodes (`__layer` + `type`); `?` / `_` / `*`
+    // therefore expand against the document's real type set, and the imports of
+    // an entry that lost — or whose layer never occurs — are never emitted.
+    let resolution = resolve::Resolution::build(hints, &v);
+    let ctx = resolve::Ctx {
+        hints,
+        resolution: &resolution,
+    };
     let mut used_markers: BTreeSet<String> = BTreeSet::new();
-    collect_used_nodes(&v, &mut used_nodes);
     collect_used_markers(&v, &mut used_markers, hints);
     let mut body = String::new();
-    node::render_node(&v, &mut body, hints);
+    node::render_node(&v, &mut body, &ctx);
 
     let mut out = String::new();
-    for line in imports::normalize_imports(hints, &used_nodes, &used_markers) {
+    for line in imports::normalize_imports(hints, resolution.used(), &used_markers) {
         out.push_str(&line);
         out.push('\n');
     }
     if !out.is_empty() {
         out.push('\n');
     }
-    if let Some(fm) = frontmatter {
-        out.push_str("export const frontmatter = ");
-        out.push_str(&fm);
-        out.push_str(";\n");
-    }
-    if let Some(h) = headings {
-        out.push_str("export const headings = ");
-        out.push_str(&h);
-        out.push_str(";\n");
-    }
-    // RFC-0002 §2.3: reference/citation payloads ride as module-level exports,
-    // never through frontmatter. References come first so a reader can resolve
-    // a citation's `reference` prop without forward references.
-    if let Some(h) = hints {
-        if let Some(v) = &h.references_export {
-            let name = h.references_export_name.as_deref().unwrap_or("references");
-            push_data_export(&mut out, name, v);
-        }
-        if let Some(v) = &h.citations_export {
-            let name = h.citations_export_name.as_deref().unwrap_or("citations");
-            push_data_export(&mut out, name, v);
-        }
+    // ADR-0009 / §20: one writer, one ordered list. `frontmatter` and
+    // `headings` are ordinary `Automatic` registrations and come first, so a
+    // plugin registering the same name later overrides them (last wins).
+    for export in &collect_exports(&v, hints) {
+        push_data_export(&mut out, export);
     }
     out.push_str("export default function PendonView() { return (<>");
     out.push('\n');
@@ -66,66 +56,48 @@ pub fn render_solid_with_hints(events: &[Event], hints: Option<&SolidRenderHints
     out
 }
 
-/// Emit `export const <name> = <json>;` — one module-level data binding.
+/// The document's `export const` registrations, in emission order (ADR-0009).
+///
+/// `frontmatter` and `headings` are derived from the AST here — first, as
+/// `Automatic` — and every plugin registration follows in the order the CLI
+/// pushed it. Two registrations of one name collapse to the **last** one,
+/// value and position alike, so only one line is ever emitted.
+fn collect_exports(v: &Value, hints: Option<&SolidRenderHints>) -> Vec<DataExport> {
+    let mut registrations: Vec<DataExport> = Vec::new();
+    if let Some(data) = metadata::extract_frontmatter(v) {
+        registrations.push(DataExport::automatic("frontmatter", export_value(&data)));
+    }
+    if let Some(data) = metadata::extract_headings(v) {
+        registrations.push(DataExport::automatic("headings", export_value(&data)));
+    }
+    if let Some(hints) = hints {
+        registrations.extend(hints.exports.iter().cloned());
+    }
+
+    let mut out: Vec<DataExport> = Vec::with_capacity(registrations.len());
+    for export in registrations {
+        out.retain(|existing| existing.name != export.name);
+        out.push(export);
+    }
+    out
+}
+
+/// A metadata `data` attribute is JSON text (§20); a value that is not valid
+/// JSON is exported as a string so nothing is silently lost.
+fn export_value(data: &str) -> Value {
+    serde_json::from_str(data).unwrap_or_else(|_| Value::String(data.to_string()))
+}
+
+/// Emit `export const <name> = <json>;` — the only writer of a module-level
+/// data binding.
 ///
 /// `Value` always serialises, so the fallback is only a defensive guard.
-fn push_data_export(out: &mut String, name: &str, value: &Value) {
+fn push_data_export(out: &mut String, export: &DataExport) {
     out.push_str("export const ");
-    out.push_str(name);
+    out.push_str(&export.name);
     out.push_str(" = ");
-    out.push_str(&serde_json::to_string(value).unwrap_or_else(|_| "null".to_string()));
+    out.push_str(&serde_json::to_string(&export.value).unwrap_or_else(|_| "null".to_string()));
     out.push_str(";\n");
-}
-
-fn collect_used_nodes(v: &Value, out: &mut BTreeSet<(String, Option<String>)>) {
-    if let Some(kind) = v.get("type").and_then(|t| t.as_str()) {
-        let name = v
-            .get("attrs")
-            .and_then(|a| a.get("name"))
-            .and_then(|n| n.as_str())
-            .map(|s| s.to_string());
-        out.insert((kind.to_string(), name.clone()));
-        if name.is_some() {
-            out.insert((kind.to_string(), None));
-        }
-    }
-
-    if let Some(children) = v.get("children").and_then(|c| c.as_array()) {
-        for ch in children {
-            collect_used_nodes(ch, out);
-        }
-    }
-
-    // A fragment (`$fragment`, a nested `mdp` payload) is a node list stored in
-    // an attribute value. Its components need their imports just like the
-    // document's own children.
-    if let Some(attrs) = v.get("attrs").and_then(|a| a.as_object()) {
-        for value in attrs.values() {
-            collect_fragment_nodes(value, out);
-        }
-    }
-}
-
-fn collect_fragment_nodes(v: &Value, out: &mut BTreeSet<(String, Option<String>)>) {
-    if let Some(nodes) = pendon_renderer_ast::fragment_nodes(v) {
-        for node in nodes {
-            collect_used_nodes(node, out);
-        }
-        return;
-    }
-    match v {
-        Value::Array(items) => {
-            for item in items {
-                collect_fragment_nodes(item, out);
-            }
-        }
-        Value::Object(map) => {
-            for item in map.values() {
-                collect_fragment_nodes(item, out);
-            }
-        }
-        _ => {}
-    }
 }
 
 fn collect_used_markers(
@@ -283,8 +255,9 @@ mod tests {
         );
     }
 
-    /// §2.3 of RFC-0002: reference and citation payloads ride as module-level
-    /// `export const` bindings, and both names are configurable.
+    /// §2.3 of RFC-0002 + ADR-0009: reference and citation payloads ride as
+    /// module-level `export const` bindings, both names are configurable, and
+    /// references come first because a citation names one.
     #[test]
     fn citation_data_is_exported_as_js_bindings() {
         let events = vec![
@@ -295,12 +268,20 @@ mod tests {
             Event::EndNode(NodeKind::Document),
         ];
         let hints = SolidRenderHints {
-            references_export: Some(serde_json::json!({"book": {"title": "Book"}})),
-            citations_export: Some(serde_json::json!([
-                {"ref_id": "book", "citation_number": 1, "instance_index": 1}
-            ])),
-            references_export_name: Some("bibliographyData".to_string()),
-            citations_export_name: Some("citationList".to_string()),
+            exports: vec![
+                DataExport::plugin(
+                    "cite",
+                    "bibliographyData",
+                    serde_json::json!({"book": {"title": "Book"}}),
+                ),
+                DataExport::plugin(
+                    "cite",
+                    "citationList",
+                    serde_json::json!([
+                        {"ref_id": "book", "citation_number": 1, "instance_index": 1}
+                    ]),
+                ),
+            ],
             ..Default::default()
         };
         let output = render_solid_with_hints(&events, Some(&hints));
@@ -321,5 +302,81 @@ mod tests {
             .find("export const citationList")
             .expect("citation export");
         assert!(refs_at < citations_at, "output = {output}");
+    }
+
+    /// A document with a `Frontmatter` node, so the automatic registrations run.
+    fn document_with_frontmatter(data: &str) -> Vec<Event> {
+        vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Frontmatter),
+            Event::Attribute {
+                name: "data".to_string(),
+                value: data.to_string(),
+            },
+            Event::EndNode(NodeKind::Frontmatter),
+            Event::EndNode(NodeKind::Document),
+        ]
+    }
+
+    /// ADR-0009 rule 3: `frontmatter`/`headings` are ordinary `Automatic`
+    /// registrations, so they precede every plugin registration.
+    #[test]
+    fn automatic_exports_come_before_plugin_registrations() {
+        let events = document_with_frontmatter(r#"{"title":"Demo"}"#);
+        let hints = SolidRenderHints {
+            exports: vec![DataExport::plugin(
+                "bind",
+                "rows",
+                serde_json::json!([1, 2]),
+            )],
+            ..Default::default()
+        };
+        let output = render_solid_with_hints(&events, Some(&hints));
+        let frontmatter_at = output
+            .find("export const frontmatter")
+            .expect("frontmatter export");
+        let rows_at = output.find("export const rows").expect("rows export");
+        assert!(frontmatter_at < rows_at, "output = {output}");
+        assert!(
+            output.contains(r#"export const frontmatter = {"title":"Demo"};"#),
+            "output = {output}"
+        );
+    }
+
+    /// ADR-0009 rule 4: the last registration of a name wins entirely — value
+    /// and position — and only one line is emitted.
+    #[test]
+    fn the_last_registration_of_a_name_wins() {
+        let events = document_with_frontmatter(r#"{"title":"Automatic"}"#);
+        let hints = SolidRenderHints {
+            exports: vec![
+                DataExport::plugin("custom", "frontmatter", serde_json::json!({"a": 1})),
+                DataExport::plugin("bind", "other", serde_json::json!(true)),
+                DataExport::plugin("custom", "frontmatter", serde_json::json!({"b": 2})),
+            ],
+            ..Default::default()
+        };
+        let output = render_solid_with_hints(&events, Some(&hints));
+        assert_eq!(
+            output.matches("export const frontmatter").count(),
+            1,
+            "output = {output}"
+        );
+        assert!(
+            output.contains(r#"export const frontmatter = {"b":2};"#),
+            "output = {output}"
+        );
+        let other_at = output.find("export const other").expect("other export");
+        let frontmatter_at = output
+            .find("export const frontmatter")
+            .expect("frontmatter export");
+        assert!(
+            other_at < frontmatter_at,
+            "the last registration keeps its own position: {output}"
+        );
+        assert!(
+            frontmatter_at < output.find("export default function").expect("body"),
+            "output = {output}"
+        );
     }
 }

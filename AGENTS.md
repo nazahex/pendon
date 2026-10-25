@@ -6,37 +6,39 @@ after**, so no single giant file has to be loaded. Pendon's old `TODO.md` /
 
 ## Read before acting (task → context)
 
-| Task                                                   | Read first (in order)                                                                                           |
-| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| Any task at all                                        | [`STATUS.md`](STATUS.md) (what's live), then this table                                                         |
-| Touch markup grammar / a `@@`-head rule                | [`docs/spec/SYNTAX.md`](docs/spec/SYNTAX.md)                                                                    |
-| Understand _why_ a grammar rule exists                 | [`docs/decisions/0001-typed-extras-reconciliation.md`](docs/decisions/0001-typed-extras-reconciliation.md)      |
-| Change or add a fixture / golden                       | [`docs/spec/golden/README.md`](docs/spec/golden/README.md) + [`docs/guides/testing.md`](docs/guides/testing.md) |
-| Work on a specific plugin                              | `crates/<plugin>/README.md` **and** its §N in `docs/spec/SYNTAX.md`                                             |
-| Touch `plugin-bind` data blocks (`{{{lang[var] … }}}`) | `crates/plugin-bind/README.md`, §19 in `docs/spec/SYNTAX.md`, ADR-0004 + ADR-0005, the RFC's §2.5–§2.8          |
-| Add a new plugin / syntax                              | [`docs/guides/plugin-authoring.md`](docs/guides/plugin-authoring.md) + `CONTRIBUTORS.md`                        |
-| Run / change the CLI                                   | [`docs/guides/cli.md`](docs/guides/cli.md)                                                                      |
-| Touch CLI report output / styling                      | [`docs/spec/CLI-REPORT.md`](docs/spec/CLI-REPORT.md)                                                            |
-| Touch `crates/tui` / how the report is drawn           | [`docs/rfc/tui-overhaul.md`](docs/rfc/tui-overhaul.md) + [`docs/spec/CLI-REPORT.md`](docs/spec/CLI-REPORT.md)   |
-| Run tests / validate output                            | [`CONTRIBUTORS.md`](CONTRIBUTORS.md) + [`docs/guides/testing.md`](docs/guides/testing.md)                       |
-| Touch the editor grammar (`editors/vscode/`)           | [`editors/vscode/README.md`](editors/vscode/README.md) + the §N it names in `docs/spec/SYNTAX.md`               |
-| Renderer output contract (Solid/HTML/JSON/AST)         | `crates/renderer-*/README.md` if present, else `docs/spec/SYNTAX.md` §6.3                                       |
+| Task                                                   | Read first (in order)                                                                                                                |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Any task at all                                        | [`STATUS.md`](STATUS.md) (what's live), then this table                                                                              |
+| Touch markup grammar / a `@@`-head rule                | [`docs/spec/SYNTAX.md`](docs/spec/SYNTAX.md)                                                                                         |
+| Understand _why_ a grammar rule exists                 | [`docs/decisions/0001-typed-extras-reconciliation.md`](docs/decisions/0001-typed-extras-reconciliation.md)                           |
+| Touch `type = …` / custom component selection          | §11 of [`docs/spec/SYNTAX.md`](docs/spec/SYNTAX.md) + [`ADR-0008`](docs/decisions/0008-type-selectors.md) + `crates/types/README.md` |
+| Change or add a fixture / golden                       | [`docs/spec/golden/README.md`](docs/spec/golden/README.md) + [`docs/guides/testing.md`](docs/guides/testing.md)                      |
+| Work on a specific plugin                              | `crates/<plugin>/README.md` **and** its §N in `docs/spec/SYNTAX.md`                                                                  |
+| Touch `plugin-bind` data blocks (`{{{lang[var] … }}}`) | `crates/plugin-bind/README.md`, §19 in `docs/spec/SYNTAX.md`, ADR-0004 + ADR-0005, the RFC's §2.5–§2.8                               |
+| Add a new plugin / syntax                              | [`docs/guides/plugin-authoring.md`](docs/guides/plugin-authoring.md) + `CONTRIBUTORS.md`                                             |
+| Run / change the CLI                                   | [`docs/guides/cli.md`](docs/guides/cli.md)                                                                                           |
+| Touch CLI report output / styling                      | [`docs/spec/CLI-REPORT.md`](docs/spec/CLI-REPORT.md)                                                                                 |
+| Touch `crates/tui` / how the report is drawn           | [`docs/rfc/tui-overhaul.md`](docs/rfc/tui-overhaul.md) + [`docs/spec/CLI-REPORT.md`](docs/spec/CLI-REPORT.md)                        |
+| Run tests / validate output                            | [`CONTRIBUTORS.md`](CONTRIBUTORS.md) + [`docs/guides/testing.md`](docs/guides/testing.md)                                            |
+| Touch the editor grammar (`editors/vscode/`)           | [`editors/vscode/README.md`](editors/vscode/README.md) + the §N it names in `docs/spec/SYNTAX.md`                                    |
+| Renderer output contract (Solid/HTML/JSON/AST)         | `crates/renderer-*/README.md` if present, else `docs/spec/SYNTAX.md` §20 (module-level exports) / §6.3 (values)                      |
 
 Do **not** read `docs/archive/**` unless asked — it is historical and frozen.
 
 ## Update after acting (change → file to touch)
 
-| You changed…                           | Update                                                                                  |
-| -------------------------------------- | --------------------------------------------------------------------------------------- |
-| Behaviour verified by a golden         | Re-freeze the `.jsx` (see golden/README); the test is the record — don't hand-edit docs |
-| The normative grammar                  | `docs/spec/SYNTAX.md` (+ a new ADR in `docs/decisions/` if it is a _decision_)          |
-| Started / blocked / finished work      | `STATUS.md` (one or two lines; delete done lines)                                       |
-| A plugin's public behaviour            | that `crates/<plugin>/README.md` (reference the §N; never restate the grammar)          |
-| CLI flags                              | `docs/guides/cli.md` (and `README.md` only if it is a headline flag)                    |
-| The CLI report format / styling        | `docs/spec/CLI-REPORT.md`                                                               |
-| `crates/tui`'s API / drawing behaviour | `crates/tui/README.md` (and, until the overhaul lands, `docs/rfc/tui-overhaul.md`)      |
-| The editor grammars / scope harness    | `editors/vscode/README.md` (link the §N; never restate the grammar)                     |
-| The repo's architecture / conventions  | `CONTRIBUTORS.md` (principles) — not SYNTAX.md                                          |
+| You changed…                            | Update                                                                                  |
+| --------------------------------------- | --------------------------------------------------------------------------------------- |
+| Behaviour verified by a golden          | Re-freeze the `.jsx` (see golden/README); the test is the record — don't hand-edit docs |
+| The normative grammar                   | `docs/spec/SYNTAX.md` (+ a new ADR in `docs/decisions/` if it is a _decision_)          |
+| Started / blocked / finished work       | `STATUS.md` (one or two lines; delete done lines)                                       |
+| A plugin's public behaviour             | that `crates/<plugin>/README.md` (reference the §N; never restate the grammar)          |
+| The type resolver (`Selector`, `Group`) | `crates/types/README.md` + ADR-0008 (grammar stays in §11)                              |
+| CLI flags                               | `docs/guides/cli.md` (and `README.md` only if it is a headline flag)                    |
+| The CLI report format / styling         | `docs/spec/CLI-REPORT.md`                                                               |
+| `crates/tui`'s API / drawing behaviour  | `crates/tui/README.md` (and, until the overhaul lands, `docs/rfc/tui-overhaul.md`)      |
+| The editor grammars / scope harness     | `editors/vscode/README.md` (link the §N; never restate the grammar)                     |
+| The repo's architecture / conventions   | `CONTRIBUTORS.md` (principles) — not SYNTAX.md                                          |
 
 ## Hard rules
 

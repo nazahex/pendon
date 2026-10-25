@@ -74,7 +74,47 @@ The CLI enables both whenever `bind` appears in `task.plugin` (or `--plugin`);
 
 ## Options
 
-None. `[task.bind]` is reserved; the plugin needs no configuration.
+`[[task.bind.inject]]` publishes a whole **file** as a module-level export, so a
+Solid page can `import { fooData }` instead of naming the data in the Markdown:
+
+```toml
+[[task]]
+input = "./src/[foo]/[bar].mdp"
+output = "./out/[bar].jsx"
+plugin = "bind,markdown"
+format = "solid"
+
+[[task.bind.inject]]
+source = "./src/[foo]/[bar].yaml" # project-root-relative, same captures as `input`
+export = "fooData"
+
+[[task.bind.inject]]
+source = "./data/settings.toml" # no `export`: the file stem names the binding
+```
+
+```jsx
+export const fooData = [{"name":"Alpha"}];
+export const settings = {"count":2};
+export default function PendonView() { … }
+```
+
+- `source` is resolved against the **project root** (the directory `pendon run`
+  walks), never the document's directory, and may use any capture of the task's
+  `input` glob (`[foo]`, `[bar]`, `[...rest]`) — so one task can publish a
+  different file per page.
+- `export` is optional; without it the file's stem is used (`settings.toml` →
+  `settings`). It must be a JavaScript identifier and not a reserved word; a bad
+  name is a task error before anything renders (§20 of SYNTAX).
+- The payload is parsed by the block converter (`json`/`jsonc`/`yaml`/`yml`/
+  `toml`/`csv`; anything else is an error), so the value has the same shape a
+  `{{{lang[var] … }}}` block would produce.
+- Emission, ordering, duplicate names and the "Solid only" rule belong to
+  `renderer-solid` (SYNTAX §20, ADR-0009); this plugin only registers `(name,
+  value)`.
+- The injected file is a cache **dependency**, so editing it re-renders the page.
+- The section applies only when `bind` is in `task.plugin`, like every other
+  config-driven plugin. Exports exist only for `format = "solid"`; other formats
+  drop them silently.
 
 ## Decided against
 

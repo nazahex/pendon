@@ -3,12 +3,14 @@ import Hint from "@comp/shared/Hint";
 import Parego from "@comp/shared/Parego";
 import Epis from '@comp/Epis'
 
-export const frontmatter = {"cites":[{"id":"suryana-2026","index":1,"loc":"hlm. 45"}],"references":{"suryana-2026":{"authors":[{"firstName":"Eko","lastName":"Suryana"}],"id":"suryana-2026","isbn":"978-602-0000-00-0","issuedDate":{"year":2026},"language":"id","publisher":"TechPress Indonesia","publisherLocation":"Jakarta","title":"Masa Depan Rekayasa Perangkat Lunak","type":"book"}},"title":"Universal Custom Syntax"};
+export const frontmatter = {"references":{"suryana-2026":{"authors":[{"firstName":"Eko","lastName":"Suryana"}],"id":"suryana-2026","isbn":"978-602-0000-00-0","issuedDate":{"year":2026},"language":"id","publisher":"TechPress Indonesia","publisherLocation":"Jakarta","title":"Masa Depan Rekayasa Perangkat Lunak","type":"book"}},"title":"Universal Custom Syntax"};
 export const headings = [{"id":"custom-plugins","text":"Custom Plugins","level":2},{"id":"joo","text":"Foo","level":2}];
+export const references = {"suryana-2026":{"authors":[{"firstName":"Eko","lastName":"Suryana"}],"id":"suryana-2026","isbn":"978-602-0000-00-0","issuedDate":{"year":2026},"language":"id","publisher":"TechPress Indonesia","publisherLocation":"Jakarta","title":"Masa Depan Rekayasa Perangkat Lunak","type":"book"}};
+export const citations = [{"citation_number":1,"instance_index":1,"loc":"hlm. 45","ref_id":"suryana-2026"}];
 export default function PendonView() { return (<>
 <section id="custom-plugins">
 <h2>1. Custom Plugins</h2>
-<Parego type="note" title="Foo Bar" tag={"Bax Xo"}><p>Ullamco excepteur adipisicing quis ullamco ea mollit et nulla sint non et id commodo commodo <Cite reference={frontmatter.references["suryana-2026"]} cite-id={"surya"} class={"suyn"} index={1} loc={"hlm. 45"} rox={"hen"} /><Epis doo={"bax"} level={3}>Aliquip commodo commodo et ut reprehenderit qui magna laboris et.</Epis>.
+<Parego type="note" title="Foo Bar" tag="Bax Xo"><p>Ullamco excepteur adipisicing quis ullamco ea mollit et nulla sint non et id commodo commodo <Cite reference={references["suryana-2026"]} citation_number={1} cite-id="surya" class="suyn" instance_index={1} loc="hlm. 45" rox="hen" /><Epis doo="bax" level={3}>Aliquip commodo commodo et ut reprehenderit qui magna laboris et.</Epis>.
 </p>
 <Hint type="!"><p>In amet deserunt consequat cupidatat laboris cupidatat.
 </p>

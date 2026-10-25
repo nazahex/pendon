@@ -1,3 +1,4 @@
+use pendon_types::Selector;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -20,29 +21,133 @@ pub enum ImportEntry {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ComponentTemplate {
+    /// The §11 layer this entry answers (`heading`, `row`, `figure`, …), as the
+    /// element plugin tags its nodes with `__layer`.
+    ///
+    /// `None` for components that are not §11 layers (`plugin-custom`'s `toml:`
+    /// specs, `plugin-vicado`): those match on the node identity below.
+    pub layer: Option<String>,
     pub node_type: String,
     pub node_name: Option<String>,
+    /// §11 rule 2: the `type` selectors the entry answers. An empty list marks
+    /// the **layer default**; `?`, `_` and `*` are rules like any other.
+    pub selectors: Vec<Selector>,
     pub template: String,
+    /// §11 rule 3: the imports this entry needs. They are emitted only when the
+    /// entry wins at least one occurring type, so a losing component's import
+    /// line never appears.
+    pub imports: Vec<ImportEntry>,
+}
+
+impl ComponentTemplate {
+    /// A §11 layer entry: the layer it answers, the type selectors, its
+    /// template and the imports it needs.
+    ///
+    /// Resolution keys on `layer` (the `__layer` tag the plugin emits); the
+    /// node identity fields mirror it and are not consulted.
+    pub fn new_layer(
+        layer: impl Into<String>,
+        selectors: Vec<Selector>,
+        template: impl Into<String>,
+        imports: Vec<ImportEntry>,
+    ) -> Self {
+        let layer = layer.into();
+        Self {
+            node_type: layer.clone(),
+            node_name: Some(layer.clone()),
+            layer: Some(layer),
+            selectors,
+            template: template.into(),
+            imports,
+        }
+    }
+
+    /// A component that is **not** a §11 layer: it answers the AST node
+    /// identity — the node type plus, when the node carries one, its `name`
+    /// attribute.
+    ///
+    /// `plugin-custom`'s `toml:` specs and `plugin-vicado` are registered this
+    /// way, as is the CLI's `[<plugin>.renderer.solid]` template.
+    pub fn new_identity(
+        node_type: impl Into<String>,
+        node_name: Option<String>,
+        template: impl Into<String>,
+        imports: Vec<ImportEntry>,
+    ) -> Self {
+        Self {
+            layer: None,
+            node_type: node_type.into(),
+            node_name,
+            selectors: Vec::new(),
+            template: template.into(),
+            imports,
+        }
+    }
+}
+
+/// Where a module-level `export const` came from — **reporting only**
+/// (ADR-0009). Emission treats every registration the same.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ExportSource {
+    /// `renderer-solid` registered it from the AST (`frontmatter`,
+    /// `headings`).
+    Automatic,
+    /// A plugin registered it (`cite`, `bind`, …).
+    Plugin(String),
+}
+
+/// One module-level data binding: `export const <name> = <value>;`.
+///
+/// Producers push these instead of filling per-payload hint fields
+/// (ADR-0009); `renderer-solid` owns the emission, the order and the
+/// "same name → last wins" rule.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DataExport {
+    pub name: String,
+    pub value: Value,
+    pub source: ExportSource,
+}
+
+impl DataExport {
+    /// An export `renderer-solid` derives from the AST itself.
+    pub fn automatic(name: impl Into<String>, value: Value) -> Self {
+        Self {
+            name: name.into(),
+            value,
+            source: ExportSource::Automatic,
+        }
+    }
+
+    /// An export a plugin registered.
+    pub fn plugin(plugin: impl Into<String>, name: impl Into<String>, value: Value) -> Self {
+        Self {
+            name: name.into(),
+            value,
+            source: ExportSource::Plugin(plugin.into()),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct SolidRenderHints {
     pub global_imports: Vec<ImportEntry>,
-    pub template_imports: BTreeMap<(String, Option<String>), Vec<ImportEntry>>,
     pub text_imports: Vec<(String, Vec<ImportEntry>)>,
     pub templates: Vec<ComponentTemplate>,
-    /// Export data for citations (to be rendered as `export const citations = ...`)
-    pub citations_export: Option<Value>,
-    /// Export data for references (to be rendered as `export const references = ...`)
-    pub references_export: Option<Value>,
-    /// Custom export variable names
-    pub citations_export_name: Option<String>,
-    pub references_export_name: Option<String>,
+    /// Module-level `export const` registrations, in insertion order (§20 of
+    /// SYNTAX, ADR-0009). `frontmatter`/`headings` are not listed here: the
+    /// renderer registers them itself, before these.
+    pub exports: Vec<DataExport>,
 }
 
+/// The import lines a render needs (§11 rule 3).
+///
+/// `used_templates` holds the winning entries (indexes into
+/// [`SolidRenderHints::templates`]); `used_markers` the text markers a rendered
+/// text node contained. Everything else is gated out: an entry that lost — or
+/// whose layer never occurs — contributes nothing.
 pub fn normalize_imports(
     hints: Option<&SolidRenderHints>,
-    used_nodes: &BTreeSet<(String, Option<String>)>,
+    used_templates: &BTreeSet<usize>,
     used_markers: &BTreeSet<String>,
 ) -> Vec<String> {
     let mut raw: BTreeSet<String> = BTreeSet::new();
@@ -51,13 +156,10 @@ pub fn normalize_imports(
     if let Some(h) = hints {
         ingest_imports(&mut raw, &mut structured, &h.global_imports);
 
-        for ((node_type, node_name), imports) in &h.template_imports {
-            let used = used_nodes.contains(&(node_type.clone(), node_name.clone()))
-                || (node_name.is_none() && used_nodes.iter().any(|(t, _)| t == node_type));
-            if !used {
-                continue;
+        for index in used_templates {
+            if let Some(template) = h.templates.get(*index) {
+                ingest_imports(&mut raw, &mut structured, &template.imports);
             }
-            ingest_imports(&mut raw, &mut structured, imports);
         }
 
         for (marker, imports) in &h.text_imports {

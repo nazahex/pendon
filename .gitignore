@@ -2,6 +2,7 @@ demo/
 # sandbox/
 # docs/
 bug/
+memory-bank/
 
 # Pendon incremental build cache
 .pendon/

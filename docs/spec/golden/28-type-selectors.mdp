@@ -1,0 +1,29 @@
+`type` in a `[task.<layer>.custom]` entry is a **selector**, and the renderer
+resolves every layer **once per document** against the types the document
+actually occurs (`SYNTAX.md` §11, ADR-0008 `D-3a`). This fixture reproduces
+`docs/issues/type-upgrade.md` R.1–R.4 verbatim:
+
+- R.1 `type = ["*"]` — every occurring type, specificity 1;
+- R.2 `type = ["TypeA"]` — an exact literal, specificity 2;
+- R.3 `type = ["_"]` — *the remainder*: every occurring type that no literal or `?` entry of the layer defines, specificity 1;
+- R.4 `type = "?"` — the untyped nodes, specificity 2;
+- `defined` is computed from **all** entries of the layer up front, so R.4's `?` removes untyped from R.3 even though R.4 is written after it, and R.1's `*` defines nothing.
+
+###@@TypeA{`heading-a`} `TypeA` — the literal (R.2) beats `*` (R.1)
+
+###@@TypeB{`heading-b`} `TypeB` — no entry names it, so it lands in `_` (R.3)
+
+###@@TypeC{`heading-c`} `TypeC` — also `_`; R.3 is later than R.1 at equal specificity
+
+###@@TypeD{`heading-d`} `TypeD` — a type nobody wrote down still occurs, so it is `_` too
+
+## A heading with no `@@` head is untyped
+
+It is the `?` of R.4 — and because `?` **defines** untyped, the `_` of R.3 never
+sees it.
+
+## `*` (R.1) never wins here
+
+Every occurring type is claimed by R.2, R.3 or R.4, so `HeadingDefault` is never
+used and its import never appears in the output — that is the point of the
+fixture.

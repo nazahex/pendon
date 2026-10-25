@@ -15,18 +15,22 @@
 //! component contract the plugins hand to the renderer.
 
 use pendon_extra::{ExtrasOptions, PositionalKeys};
+use pendon_types::Selector;
 use serde::{Deserialize, Serialize};
 
-/// One entry of a §11 component set: the `type` markers it answers, the §6.1
+use crate::imports::{ComponentTemplate, ImportEntry};
+
+/// One entry of a §11 component set: the `type` selectors it answers, the §6.1
 /// positional keys it names (its own `backtick_key` / `quote_key`, plus
 /// `bracket_key` / `parentheses_key` for a directive head) and the component it
 /// renders with.
 ///
-/// An empty `types` list marks the **layer default** (§11 rule 2).
+/// An empty `selectors` list marks the **layer default** (§11 rule 2). A
+/// wildcard (`?`, `_`, `*`) is still a *rule*, never the default slot.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TypedComponent<C> {
     #[serde(default)]
-    pub types: Vec<String>,
+    pub selectors: Vec<Selector>,
     pub component: C,
     /// §6.1 / §11 rule 5: the positional overrides this entry contributes when
     /// it answers a `@@type{…}` marker. All-`Option`, so leaving every key unset
@@ -37,13 +41,27 @@ pub struct TypedComponent<C> {
 
 impl<C> TypedComponent<C> {
     /// A typed entry: it answers exactly the listed `@@type{…}` markers.
+    ///
+    /// The strings are literal marker names; use
+    /// [`typed_selectors`](Self::typed_selectors) for `?` / `_` / `*`.
     pub fn typed<I, S>(types: I, component: C) -> Self
     where
         I: IntoIterator<Item = S>,
         S: Into<String>,
     {
+        Self::typed_selectors(
+            types.into_iter().map(|name| Selector::Exact(name.into())),
+            component,
+        )
+    }
+
+    /// A typed entry from already-parsed selectors (wildcards included).
+    pub fn typed_selectors<I>(selectors: I, component: C) -> Self
+    where
+        I: IntoIterator<Item = Selector>,
+    {
         Self {
-            types: types.into_iter().map(Into::into).collect(),
+            selectors: selectors.into_iter().collect(),
             component,
             positional: PositionalKeys::default(),
         }
@@ -52,7 +70,7 @@ impl<C> TypedComponent<C> {
     /// The layer default: it answers every instance no typed entry claims.
     pub fn default_component(component: C) -> Self {
         Self {
-            types: Vec::new(),
+            selectors: Vec::new(),
             component,
             positional: PositionalKeys::default(),
         }
@@ -66,12 +84,18 @@ impl<C> TypedComponent<C> {
 
     /// `true` for the single default entry of a layer.
     pub fn is_default(&self) -> bool {
-        self.types.is_empty()
+        self.selectors.is_empty()
     }
 
-    /// Answers `type_marker` (§11 rule 2).
+    /// Answers `type_marker` through a **literal** selector (§11 rule 2).
+    ///
+    /// Wildcards need the document's occurring types, so they are resolved by
+    /// the renderer (decision D-3a); this literal check stays for the paths that
+    /// only have one node at hand (`keys_for`, the CLI's duplicate check).
     pub fn matches_type(&self, type_marker: &str) -> bool {
-        self.types.iter().any(|known| known == type_marker)
+        self.selectors
+            .iter()
+            .any(|selector| selector.literal() == Some(type_marker))
     }
 }
 
@@ -99,13 +123,9 @@ impl<C> ComponentSet<C> {
         }
     }
 
-    /// Appends one entry, optionally typed.
+    /// Appends one entry, optionally typed (literal marker names).
     pub fn push(&mut self, types: Vec<String>, component: C) {
-        self.entries.push(TypedComponent {
-            types,
-            component,
-            positional: PositionalKeys::default(),
-        });
+        self.entries.push(TypedComponent::typed(types, component));
     }
 
     pub fn is_empty(&self) -> bool {
@@ -137,17 +157,6 @@ impl<C> ComponentSet<C> {
         self.default_entry().map(|entry| &entry.component)
     }
 
-    /// §11 rule 3: exact `type` match → layer default → `None` (built-in
-    /// fallback element).
-    pub fn select(&self, type_marker: Option<&str>) -> Option<&C> {
-        if let Some(marker) = type_marker {
-            if let Some(entry) = self.entries.iter().find(|entry| entry.matches_type(marker)) {
-                return Some(&entry.component);
-            }
-        }
-        self.default_component()
-    }
-
     /// §6.1 / §11 rules 3 and 5: the positional keys named by the entry that
     /// answers `type_marker`. An exact `type` match wins, then the layer default,
     /// then the built-in `slug` / `title`. The construct plugins pass the result
@@ -168,24 +177,36 @@ impl<C> ComponentSet<C> {
         }
         self.default_entry().map(|entry| entry.positional.resolve())
     }
-
-    /// The one component that applies to every instance: the layer default, or
-    /// the layer's only entry.
-    pub fn single(&self) -> Option<&C> {
-        if let Some(default) = self.default_component() {
-            return Some(default);
-        }
-        match self.entries.as_slice() {
-            [only] => Some(&only.component),
-            _ => None,
-        }
-    }
 }
 
 impl<C> FromIterator<TypedComponent<C>> for ComponentSet<C> {
     fn from_iter<I: IntoIterator<Item = TypedComponent<C>>>(iter: I) -> Self {
         Self::from_entries(iter)
     }
+}
+
+/// One renderer template per entry of `set`, tagged with the §11 `layer` it
+/// belongs to (ADR-0008 `D-3a`).
+///
+/// A plugin registers **what each entry answers** — the selectors the user
+/// declared, wildcards included — and the renderer decides once per document
+/// which entry actually renders, so `_` / `*` see the whole document.
+/// `payload` extracts the `(template, imports)` pair from an entry's component.
+pub fn layer_templates<C, F>(
+    layer: &str,
+    set: &ComponentSet<C>,
+    mut payload: F,
+) -> Vec<ComponentTemplate>
+where
+    F: FnMut(&C) -> (String, Vec<ImportEntry>),
+{
+    set.entries()
+        .iter()
+        .map(|entry| {
+            let (template, imports) = payload(&entry.component);
+            ComponentTemplate::new_layer(layer, entry.selectors.clone(), template, imports)
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -200,41 +221,28 @@ mod tests {
         ])
     }
 
-    /// §11 rule 3: exact match first, then the default, then the fallback.
+    /// §11 rule 3 / decision D-3a: positional keys are literal-only. A `_` or
+    /// `*` entry has no single component to read keys from, so it contributes
+    /// nothing — a wildcard never silently overrides `slug`/`title`.
     #[test]
-    fn selects_type_then_default_then_fallback() {
-        let set = set();
-        assert_eq!(set.select(Some("a")), Some(&"AB"));
-        assert_eq!(set.select(Some("c")), Some(&"C"));
-        assert_eq!(set.select(Some("unknown")), Some(&"Default"));
-        assert_eq!(set.select(None), Some(&"Default"));
-    }
+    fn keys_for_ignores_wildcard_entries() {
+        let mut wildcard: ComponentSet<&str> =
+            ComponentSet::from_entries([TypedComponent::typed_selectors(
+                [Selector::Underscore],
+                "Rest",
+            )]);
+        wildcard.entries_mut()[0].positional = PositionalKeys {
+            backtick_key: Some("slug".to_string()),
+            ..PositionalKeys::default()
+        };
+        assert_eq!(wildcard.keys_for_opt(Some("TypeA")), None);
+        assert_eq!(wildcard.keys_for(Some("TypeA")), ExtrasOptions::default());
+        assert!(!wildcard.entries()[0].matches_type("TypeA"));
 
-    /// A set without a default falls back to the built-in element for every
-    /// unclaimed marker (§11 rule 3) — it never guesses an entry.
-    #[test]
-    fn without_a_default_unclaimed_markers_fall_back() {
-        let set = ComponentSet::from_entries([TypedComponent::typed(["a"], "A")]);
-        assert_eq!(set.select(Some("a")), Some(&"A"));
-        assert_eq!(set.select(Some("b")), None);
-        assert_eq!(set.select(None), None);
-    }
-
-    /// The CLI's routable-layer check maps onto `single`.
-    #[test]
-    fn single_reports_the_unambiguous_component() {
-        let only = ComponentSet::from_entries([TypedComponent::typed(["a"], "A")]);
-        assert_eq!(only.single(), Some(&"A"));
-
-        let with_default = set();
-        assert_eq!(with_default.single(), Some(&"Default"));
-
-        let ambiguous = ComponentSet::from_entries([
-            TypedComponent::typed(["a"], "A"),
-            TypedComponent::typed(["b"], "B"),
-        ]);
-        assert_eq!(ambiguous.single(), None);
-        assert!(ComponentSet::<&str>::new().is_empty());
+        let star: ComponentSet<&str> =
+            ComponentSet::from_entries([TypedComponent::typed_selectors([Selector::Star], "All")]);
+        assert_eq!(star.keys_for_opt(None), None);
+        assert_eq!(star.keys_for(Some("TypeA")), ExtrasOptions::default());
     }
 
     #[test]

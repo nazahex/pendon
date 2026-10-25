@@ -1,4 +1,5 @@
-export const frontmatter = {"cites":[]};
+export const references = {};
+export const citations = [];
 export default function PendonView() { return (<>
 <section>
 <div bar="12" class="extra class" foo="bar" id="id" isBar isFoo="true" slug="foo-bar" style="--style-var: 2rem" title="Foo Bar" type="dire"><p>Lorem ipsum dolor sit amor.

@@ -52,10 +52,20 @@ fn pipeline(src: &str) -> Vec<Event> {
 #[test]
 fn the_quote_body_is_relexed_as_blocks() {
     let out = pipeline("> @@quoteA{.x}\n>\n> - one\n> - two\n");
+    // D-3a: the quote names its layer and keeps the marker; the component is
+    // chosen by the renderer, not here.
     assert!(
-        out.iter().any(
-            |event| matches!(event, Event::StartNode(NodeKind::Custom(name)) if name == "QuoteA")
-        ),
+        out.iter().any(|event| matches!(
+            event,
+            Event::Attribute { name, value } if name == "__layer" && value == "blockquote"
+        )),
+        "{out:?}"
+    );
+    assert!(
+        out.iter().any(|event| matches!(
+            event,
+            Event::Attribute { name, value } if name == "type" && value == "quoteA"
+        )),
         "{out:?}"
     );
     assert!(

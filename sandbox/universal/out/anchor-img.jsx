@@ -1,4 +1,5 @@
-export const frontmatter = {"cites":[]};
+export const references = {};
+export const citations = [];
 export default function PendonView() { return (<>
 <section>
 <img alt="lorem ipsum" class="foo" data-con="jux" decoding="async" loading="lazy" src="https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp" />

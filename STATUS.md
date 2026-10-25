@@ -20,6 +20,57 @@ Phase 4 wiring of `plugin-list` L2/L3 (the `<li>` item layer) and the docs
 restructure. The container layers (`list`/`unordered`/`ordered`, blockquote)
 landed; the item layer is next.
 
+**In flight — Phase 1 (Type Upgrade):** four proposals are one sequenced plan
+([`docs/workflows/`](docs/workflows/), 40 tasks in
+[`TASKS.md`](docs/workflows/TASKS.md)). Phase 0 is signed off: D-1…D-5 accepted,
+**D-3a** chosen (renderer resolves, plugins stop choosing), ADR-0008…0011 created
+and [`spec/EXTRAS-INVENTORY.md`](docs/spec/EXTRAS-INVENTORY.md) seeded.
+`crates/types` (`pendon-types`) is done and green (T1.1–T1.6: `Selector`,
+`TypeSet`, `Rule`, `Group`, `winner`, `matching`); the CLI parses `type` into
+selectors and rejects typos (T1.7); positional keys are literal-only (T1.9).
+**Phase 1 is complete.** The gate (T1.12) is green: `cargo test --workspace
+--no-fail-fast` — 75 test binaries, 0 failures; `cargo test -p pendon --test
+syntax_spec` — 23/23 fixtures, none `#[ignore]`d; `cargo fmt --all --check`
+clean; `cargo clippy --workspace --all-targets` exits 0 (pre-existing style
+lints only). Every golden that configures `[task.*.custom]` is **byte-identical**
+to its pre-cutover text, so the document-wide resolution is behaviour-preserving.
+
+**Phase 2 (Export Const Upgrade) has landed.** `SolidRenderHints` carries one
+ordered `exports: Vec<DataExport>` and `renderer-solid` is the only writer;
+`frontmatter`/`headings` are automatic registrations, `plugin-cite` pushes
+`references` then `citations`, and `[[task.bind.inject]]` publishes a whole file
+(SYNTAX §20, ADR-0009). Goldens `25`/`26`/`27` stayed byte-identical;
+`apps/cli/tests/bind_inject_spec.rs` covers the new producer.
+**Next:** Phase 3 — `plugin-number` (T3.1).
+
+**Just landed:** T1.10 — the `28-type-selectors` golden. One document occurs
+`TypeA…TypeD` **and** untyped, configured with `docs/issues/type-upgrade.md`
+R.1–R.4 verbatim (`*` / `TypeA` / `_` / `?`): the literal wins for `TypeA`,
+`TypeB`/`TypeC`/`TypeD` fall to `_`, both untyped headings to `?`, and
+`HeadingDefault` (R.1) loses every type so its import line never appears. In the
+same pass the last per-node selection plumbing went: `ComponentSet::select` and
+`single()` are gone (a plugin cannot ask "which component is mine?" any more),
+the CLI keeps its config-side entries for `layer_templates`, and
+`plugin-extract-heading` extracts the `__layer`-tagged `Heading` natively while
+keeping the identity fallback.
+
+**Just landed:** T1.8 — the last ten plugins stopped choosing. `anchor`,
+`blockquote`, `cite`, `directive`, `heading`, `image`, `list`, `marker`,
+`section` and `table` now emit their **own** built-in nodes, keep the `type`
+marker and tag each node with the layer that owns it; `renderer-solid`'s
+`resolve.rs` answers every layer once for the whole document
+([§11](docs/spec/SYNTAX.md), ADR-0008 `D-3a`), so `_` / `*` finally see the
+document and only the winning entry's imports are emitted. `NodeKind::Custom`
+now belongs to `plugin-custom` / `plugin-quiz` / `plugin-vicado` alone — and
+those last two are **deleted in the next workflow**, together with the wiki
+infobox, so they are ignored from here on (no migration, no golden, no triage).
+The table
+was the largest cutover: `attrs.rs` builds typed attrs per layer, `emit.rs` emits
+them, `custom.rs`/`render.rs` are gone, and its pre-rendered cells carry
+`__plugin_kind = "element"`. Goldens `08-table-decl` and `09-table-layers`
+re-rendered **byte-identical**, which is the proof the move is
+behaviour-preserving.
+
 **Just landed:** caption whitespace. A custom image component is pre-rendered by
 `plugin-image` (inner component + caption), so it now carries
 `__plugin_kind = "element"` (§11 rule 3) and the Markdown pass passes it through

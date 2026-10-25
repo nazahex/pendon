@@ -93,7 +93,9 @@ fn each_type_resolves_its_own_positional_keys() {
 
     // The overridden entry: every slot lands on its configured key…
     let out = run("::note[A](\"B\"){`C`, \"D\"}Body::");
-    assert!(has(&out, NodeKind::Custom("Note".to_string())), "{out:?}");
+    // D-3a: the node is the built-in element, tagged with the `directive` layer.
+    assert_eq!(attr(&out, "__layer"), Some("directive".to_string()));
+    assert_eq!(attr(&out, "type"), Some("note".to_string()));
     assert_eq!(attr(&out, "label"), Some("A".to_string()));
     assert_eq!(attr(&out, "kind"), Some("B".to_string()));
     assert_eq!(attr(&out, "author"), Some("C".to_string()));
@@ -114,7 +116,7 @@ fn each_type_resolves_its_own_positional_keys() {
 #[test]
 fn block_body_is_relexed_as_blocks() {
     let out = pipeline("==note\n# Heading\n\n- one\n- two\n==\n");
-    assert!(has(&out, NodeKind::Custom("Note".to_string())), "{out:?}");
+    assert_eq!(attr(&out, "__layer"), Some("directive".to_string()));
     assert!(has(&out, NodeKind::Heading), "heading missing: {out:?}");
     assert!(has(&out, NodeKind::BulletList), "list missing: {out:?}");
     assert!(
@@ -128,7 +130,7 @@ fn block_body_is_relexed_as_blocks() {
 #[test]
 fn inline_body_is_relexed_inline() {
     let out = pipeline("::note *em* and `code`::\n");
-    assert!(has(&out, NodeKind::Custom("Note".to_string())), "{out:?}");
+    assert_eq!(attr(&out, "__layer"), Some("directive".to_string()));
     assert!(has(&out, NodeKind::Emphasis), "emphasis missing: {out:?}");
     assert!(has(&out, NodeKind::InlineCode), "code missing: {out:?}");
 }
@@ -160,7 +162,7 @@ fn solid_rendering_of_an_inline_directive() {
 #[test]
 fn inline_empty_content_still_directive() {
     let out = pipeline("::note::\n");
-    assert!(has(&out, NodeKind::Custom("Note".to_string())), "{out:?}");
+    assert_eq!(attr(&out, "type"), Some("note".to_string()));
     assert!(
         !text_content(&out).contains("::"),
         "fence leaked: {:?}",
@@ -172,7 +174,7 @@ fn inline_empty_content_still_directive() {
 #[test]
 fn block_empty_content_still_directive() {
     let out = pipeline("==note\n==\n");
-    assert!(has(&out, NodeKind::Custom("Note".to_string())), "{out:?}");
+    assert_eq!(attr(&out, "type"), Some("note".to_string()));
     assert!(
         !text_content(&out).contains("=="),
         "fence leaked: {:?}",

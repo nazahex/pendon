@@ -47,12 +47,12 @@ addresses it:
 [[task.directive.custom]]
 type = ["note"]
 name = "Note"
-imports = "import { Note } from '@comp/content/Note'"
+imports = "import { Note } from '@comp/Note'"
 template = "<Note {...attrs}>{children}</Note>"
 
 [[task.directive.custom]] # answers every unclaimed type (§11 rule 3)
 name = "DirectiveDefault"
-imports = "import { DirectiveDefault } from '@comp/content/Directive'"
+imports = "import { DirectiveDefault } from '@comp/Directive'"
 template = "<DirectiveDefault {...attrs}>{children}</DirectiveDefault>"
 ```
 

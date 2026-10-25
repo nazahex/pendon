@@ -2,7 +2,15 @@ use std::collections::BTreeMap;
 
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead, KeyResolver};
-use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
+use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
+
+/// §11: the layer `[[task.anchor.custom]]` declares.
+const ANCHOR_LAYER: &str = "anchor";
+
+/// The layer key `[[task.anchor.custom]]` addresses.
+pub fn primary_layer() -> &'static str {
+    ANCHOR_LAYER
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct AnchorCustomNode {
@@ -14,7 +22,8 @@ pub struct AnchorCustomNode {
 #[derive(Clone, Debug, Default)]
 pub struct AnchorOptions {
     /// §11 component set of the `anchor` layer: typed entries plus at most one
-    /// default, selected per instance by the `@@type{…}` marker (rule 3).
+    /// default, resolved for the whole document by the renderer against the
+    /// `@@type{…}` markers it occurs (rule 3, ADR-0008 `D-3a`).
     pub custom: ComponentSet<AnchorCustomNode>,
 }
 
@@ -58,23 +67,14 @@ pub fn solid_hints(options: &AnchorOptions) -> Option<SolidRenderHints> {
     if options.custom.is_empty() {
         return None;
     }
-    let mut hints = SolidRenderHints::default();
-    // §11 rule 3: every entry of the set answers instances of its own, so every
-    // entry needs a template (typed entries are not shadowed by the default).
-    for custom in options.custom.components() {
-        hints.templates.push(ComponentTemplate {
-            node_type: custom.name.clone(),
-            node_name: Some(custom.name.clone()),
-            template: custom.template.clone(),
-        });
-        if !custom.imports.is_empty() {
-            hints.template_imports.insert(
-                (custom.name.clone(), Some(custom.name.clone())),
-                custom.imports.clone(),
-            );
-        }
-    }
-    Some(hints)
+    // §11 rule 3 / D-3a: one template per entry, tagged with its layer; the
+    // renderer decides per document which entry answers which `type`.
+    Some(SolidRenderHints {
+        templates: layer_templates(ANCHOR_LAYER, &options.custom, |custom| {
+            (custom.template.clone(), custom.imports.clone())
+        }),
+        ..SolidRenderHints::default()
+    })
 }
 
 fn emit_text(text: &str, options: &AnchorOptions, out: &mut Vec<Event>) {
@@ -106,7 +106,7 @@ fn emit_text(text: &str, options: &AnchorOptions, out: &mut Vec<Event>) {
                     });
                 }
 
-                emit_anchor(&link.label, built, options, out);
+                emit_anchor(&link.label, built, out);
                 cursor = link.end;
                 continue;
             }
@@ -171,9 +171,6 @@ fn parse_link(chars: &[char], start: usize) -> Option<ParsedLink> {
 struct AnchorAttrs {
     values: BTreeMap<String, String>,
     flags: Vec<String>,
-    /// The `@@type{…}` marker of the extras head, when present: the §11 routing
-    /// key of the instance (§11 rule 3).
-    type_marker: Option<String>,
     conflict: Option<String>,
     warnings: Vec<String>,
 }
@@ -352,7 +349,6 @@ fn build_attributes(
     AnchorAttrs {
         values: attrs,
         flags,
-        type_marker,
         conflict,
         warnings,
     }
@@ -386,20 +382,16 @@ fn strip_url_modifiers(url: &str) -> (String, String) {
     (base, modifiers)
 }
 
-fn emit_anchor(label: &str, attrs: AnchorAttrs, options: &AnchorOptions, out: &mut Vec<Event>) {
-    // §11 rule 3: the marker picks the component; an unmatched marker falls back
-    // to the layer default, and a layer without a default to the `<a>` element.
-    let custom = options.custom.select(attrs.type_marker.as_deref());
-    let node = custom
-        .map(|custom| NodeKind::Custom(custom.name.clone()))
-        .unwrap_or(NodeKind::Link);
+fn emit_anchor(label: &str, attrs: AnchorAttrs, out: &mut Vec<Event>) {
+    // §11 rule 3 / D-3a: the plugin no longer picks the component — it tags the
+    // node with its layer and keeps the `type` marker, and the renderer decides
+    // once per document which entry answers it.
+    let node = NodeKind::Link;
     out.push(Event::StartNode(node.clone()));
-    if let Some(custom) = custom {
-        out.push(Event::Attribute {
-            name: "name".to_string(),
-            value: custom.name.clone(),
-        });
-    }
+    out.push(Event::Attribute {
+        name: "__layer".to_string(),
+        value: ANCHOR_LAYER.to_string(),
+    });
     for (name, value) in attrs.values {
         out.push(Event::Attribute { name, value });
     }
@@ -543,8 +535,13 @@ mod tests {
         };
         let mut out = Vec::new();
         emit_text("[foo](/docs)", &options, &mut out);
+        // D-3a: the node keeps the built-in kind and names its layer; the
+        // renderer, not the plugin, picks the component.
+        assert!(out
+            .iter()
+            .any(|event| matches!(event, Event::StartNode(NodeKind::Link))));
         assert!(out.iter().any(
-            |event| matches!(event, Event::StartNode(NodeKind::Custom(name)) if name == "Anchor")
+            |event| matches!(event, Event::Attribute { name, value } if name == "__layer" && value == "anchor")
         ));
     }
 
@@ -574,16 +571,19 @@ mod tests {
         let mut out = Vec::new();
         emit_text("[a](/a)@@anchorA{.hero}", &options, &mut out);
         assert!(out.iter().any(
-            |event| matches!(event, Event::StartNode(NodeKind::Custom(name)) if name == "AnchorAB")
-        ));
-        assert!(out.iter().any(
             |event| matches!(event, Event::Attribute { name, value } if name == "type" && value == "anchorA")
         ));
+        assert!(out.iter().any(
+            |event| matches!(event, Event::Attribute { name, value } if name == "__layer" && value == "anchor")
+        ));
 
+        // An undeclared marker is still just a marker on the same layer: which
+        // entry answers it (the default here, `None` with no default) is the
+        // renderer's decision, taken once per document.
         let mut out = Vec::new();
         emit_text("[a](/a)@@undeclared{}", &options, &mut out);
         assert!(out.iter().any(
-            |event| matches!(event, Event::StartNode(NodeKind::Custom(name)) if name == "AnchorDefault")
+            |event| matches!(event, Event::Attribute { name, value } if name == "type" && value == "undeclared")
         ));
     }
 
@@ -633,10 +633,17 @@ mod tests {
         };
         let hints = solid_hints(&options).expect("hints");
         assert_eq!(hints.templates.len(), 2);
+        // Every template belongs to the `anchor` layer and keeps the selectors
+        // its entry was declared with (empty = the layer default).
         assert!(hints
             .templates
             .iter()
-            .any(|template| template.node_type == "AnchorA"));
+            .all(|template| template.layer.as_deref() == Some("anchor")));
+        assert!(hints.templates[0]
+            .selectors
+            .iter()
+            .any(|selector| selector.literal() == Some("anchorA")));
+        assert!(hints.templates[1].selectors.is_empty());
     }
 
     // --- §7.2 extras head -------------------------------------------------

@@ -1,6 +1,6 @@
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr};
-use pendon_renderer_solid::{ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints};
+use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -26,7 +26,8 @@ pub struct HeadingOptions {
     #[serde(default)]
     pub number_style: NumberStyle,
     /// §11 component set of the `heading` layer: typed entries plus at most one
-    /// default, selected per instance by the `@@type{…}` marker (rule 3).
+    /// default, resolved for the whole document by the renderer against the
+    /// `@@type{…}` markers it occurs (rule 3, ADR-0008 `D-3a`).
     pub custom: ComponentSet<HeadingCustomNode>,
     /// §9.5: when `plugin-section` owns the outline the heading must not emit an
     /// `id` — or its fallback `slug` — because the id transfers to the section.
@@ -354,14 +355,14 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
                 String::new()
             };
 
-            // 5. Determine node type: Custom component or standard Heading
-            // §11 rule 3: the marker picks the component, an unmatched marker
-            // falls back to the layer default, no default to `<h*>`.
-            let custom = options.custom.select(head.type_marker.as_deref());
-            let use_custom = custom.is_some();
-            let node_kind = custom
-                .map(|custom| NodeKind::Custom(custom.name.clone()))
-                .unwrap_or(NodeKind::Heading);
+            // 5. §11 rule 3 / D-3a: the node always stays a `Heading` — which
+            // entry answers it is decided by the renderer from the whole
+            // document. A configured `heading` layer therefore puts *every*
+            // heading in component mode: the template attributes (`number`,
+            // `raw_title`, the marker) are emitted and the number is not
+            // injected into the children (§11 rule 5).
+            let component_mode = !options.custom.is_empty();
+            let node_kind = NodeKind::Heading;
 
             // 6. Emit StartNode and the §13 warnings the head resolved.
             out.push(Event::StartNode(node_kind.clone()));
@@ -374,13 +375,19 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
             }
 
             // 7. Emit attributes based on rendering mode
-            if use_custom {
-                // Custom node mode: emit all attributes needed by the Solid template
-                let custom = custom.expect("custom component");
+            if component_mode {
+                // Component mode: everything a Solid template may read, plus the
+                // layer and the `type` the renderer routes on.
                 out.push(Event::Attribute {
-                    name: "name".to_string(),
-                    value: custom.name.clone(),
+                    name: "__layer".to_string(),
+                    value: HEADING_LAYER.to_string(),
                 });
+                if let Some(marker) = &head.type_marker {
+                    out.push(Event::Attribute {
+                        name: "type".to_string(),
+                        value: marker.clone(),
+                    });
+                }
                 out.push(Event::Attribute {
                     name: "level".to_string(),
                     value: heading_level.to_string(),
@@ -460,7 +467,7 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
             // 8. Prepend number to first text child (standard mode only).
             // In custom node mode, the number is available via {attrs.number}
             // and should NOT be injected into children.
-            if !use_custom && !num_str.is_empty() {
+            if !component_mode && !num_str.is_empty() {
                 let mut prefixed = false;
                 for ev in inner_events.iter_mut() {
                     if let Event::Text(t) = ev {
@@ -502,23 +509,20 @@ pub fn solid_hints(options: &HeadingOptions) -> Option<SolidRenderHints> {
         return None;
     }
 
-    let mut hints = SolidRenderHints::default();
-    for custom in options.custom.components() {
-        hints.templates.push(ComponentTemplate {
-            node_type: custom.name.clone(),
-            node_name: Some(custom.name.clone()),
-            template: custom.template.clone(),
-        });
+    Some(SolidRenderHints {
+        templates: layer_templates(HEADING_LAYER, &options.custom, |custom| {
+            (custom.template.clone(), custom.imports.clone())
+        }),
+        ..SolidRenderHints::default()
+    })
+}
 
-        if !custom.imports.is_empty() {
-            hints.template_imports.insert(
-                (custom.name.clone(), Some(custom.name.clone())),
-                custom.imports.clone(),
-            );
-        }
-    }
+/// §11: the layer `[[task.heading.custom]]` declares.
+const HEADING_LAYER: &str = "heading";
 
-    Some(hints)
+/// The layer key `[[task.heading.custom]]` addresses (always the primary).
+pub fn primary_layer() -> &'static str {
+    HEADING_LAYER
 }
 
 #[cfg(test)]

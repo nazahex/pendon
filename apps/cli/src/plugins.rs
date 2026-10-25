@@ -10,17 +10,18 @@ use pendon_plugin_list::{ListCustomNode, ListOptions};
 use pendon_plugin_marker::{MarkerCustomNode, MarkerOptions};
 use pendon_plugin_section::{SectionCustomNode, SectionOptions};
 use pendon_renderer_solid::{
-    ComponentSet, ComponentTemplate, ImportEntry, SolidRenderHints, TypedComponent,
+    ComponentSet, ComponentTemplate, DataExport, ImportEntry, SolidRenderHints, TypedComponent,
 };
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::config::{
-    AnchorTaskConfig, BlockquoteTaskConfig, CiteTaskConfig, HeadingTaskConfig, ImageTaskConfig,
-    ListTaskConfig, PluginCustomSection, PluginVicadoSection, SectionTaskConfig, TableTaskConfig,
+    AnchorTaskConfig, BindTaskConfig, BlockquoteTaskConfig, CiteTaskConfig, HeadingTaskConfig,
+    ImageTaskConfig, ListTaskConfig, PluginCustomSection, PluginVicadoSection, SectionTaskConfig,
+    TableTaskConfig,
 };
-use crate::utils::substitute_output;
+use crate::utils::{substitute_output, validate_export_identifier};
 
 #[derive(Clone)]
 pub struct DocumentContext {
@@ -155,7 +156,7 @@ pub fn latex_target_for_format(format: &str) -> pendon_plugin_latex::LatexTarget
     }
 }
 
-pub fn plugin_names<'a>(plugins: Option<&'a str>) -> Vec<&'a str> {
+pub fn plugin_names(plugins: Option<&str>) -> Vec<&str> {
     plugins
         .unwrap_or_default()
         .split(',')
@@ -182,11 +183,8 @@ pub fn load_custom_spec(
 }
 
 /// §11 primary layer of `plugin-image`: the `<img>` element. A bare
-/// `[task.image.custom]` table addresses this layer.
+/// §11 primary layer of `plugin-image` (§7.1): the `<img>` element.
 const IMG_LAYER: &str = "img";
-/// §11 layers of `plugin-image` (§7.1): the `<img>` element and its `<figure>`
-/// container.
-const IMG_LAYERS: [&str; 2] = ["img", "figure"];
 /// §11 primary layer of `plugin-heading`: the `<h*>` element.
 const HEADING_LAYER: &str = "heading";
 /// §11 primary layer of `plugin-cite`: the citation leaf.
@@ -202,8 +200,6 @@ fn cite_default_template(references_export: &str) -> String {
 }
 /// §11 primary layer of `plugin-marker`: the node `{{type}}` renders.
 const MARKER_LAYER: &str = "marker";
-/// §11 layers of `plugin-table`, one per element it emits.
-const TABLE_LAYERS: [&str; 7] = ["table", "caption", "thead", "tbody", "tfoot", "row", "cell"];
 
 /// Loads `task.<plugin>.custom` (§11) once per task, printing the loader's
 /// non-fatal deprecation warnings (§11 rule 4, §13).
@@ -256,11 +252,11 @@ fn layer_set<C>(
     for entry in set
         .typed()
         .iter()
-        .chain(set.default_entry().into_iter())
+        .chain(set.default_entry())
         .filter(|entry| entry_is_configured(entry))
     {
         entries.push(TypedComponent {
-            types: entry.types.clone(),
+            selectors: entry.selectors.clone(),
             component: make(entry)?,
             positional: entry.positional.clone(),
         });
@@ -337,14 +333,16 @@ pub fn build_cite_options(
     // citation template binds its `reference` prop to the reference export, so
     // it has to know the final name (§2.3 of RFC-0002).
     let defaults = CiteOptions::default();
-    let references_export = validate_js_identifier(
+    let references_export = validate_export_identifier(
+        "cite",
         "references_export",
         config
             .references_export
             .as_deref()
             .unwrap_or(&defaults.references_export),
     )?;
-    let citations_export = validate_js_identifier(
+    let citations_export = validate_export_identifier(
+        "cite",
         "citations_export",
         config
             .citations_export
@@ -403,22 +401,50 @@ fn check_legacy_cite_keys(config: &CiteTaskConfig) -> Result<(), String> {
     Ok(())
 }
 
-/// §2.3 of RFC-0002: export names become `export const <name> = …` in the
-/// Solid output, so they have to be plain JavaScript identifiers.
-fn validate_js_identifier(key: &str, value: &str) -> Result<String, String> {
-    let mut chars = value.chars();
-    let starts_ok = chars
-        .next()
-        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_' || c == '$');
-    let rest_ok = chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$');
-    if starts_ok && rest_ok {
-        Ok(value.to_string())
-    } else {
-        Err(format!(
-            "cite.{key} '{}' is not a valid JavaScript identifier",
-            value
-        ))
+/// `[[task.bind.inject]]` (§6.1): every entry becomes one module-level
+/// `export const`.
+///
+/// The source is resolved like `input`/`output` — relative to `pendon.toml`,
+/// with the task's dynamic segments (`[foo]`, `[bar]`, …) substituted per page —
+/// and its parsed value reuses the `{{{lang[var](path)}}}` converter, so an
+/// injected `.yaml` and a `.yaml` block carry the same JSON shape. Every
+/// resolved path is pushed onto `deps`, so editing a source re-renders the page
+/// (the same rule a `(path)` block follows).
+pub fn build_bind_injects(
+    config: Option<&BindTaskConfig>,
+    vars: &HashMap<String, String>,
+    deps: &mut Vec<String>,
+) -> Result<Vec<DataExport>, String> {
+    let Some(config) = config else {
+        return Ok(Vec::new());
+    };
+    let mut exports = Vec::with_capacity(config.inject.len());
+    for entry in &config.inject {
+        let source = substitute_output(&entry.source, vars)
+            .map_err(|cause| format!("task.bind.inject source '{}': {cause}", entry.source))?;
+        let name = entry
+            .export
+            .clone()
+            .unwrap_or_else(|| default_export_name(&source));
+        let name = validate_export_identifier("bind", "inject", &name)?;
+        let value = pendon_plugin_bind::parse_data_file(Path::new(&source))
+            .map_err(|cause| format!("task.bind.inject '{source}': {cause}"))?;
+        deps.push(source);
+        exports.push(DataExport::plugin("bind", name, value));
     }
+    Ok(exports)
+}
+
+/// The name an inject entry falls back to when `export` is absent: its resolved
+/// file's stem — so `./data/settings.toml` exports `settings` and
+/// `../../dataX.toml` exports `dataX`. A stem that is not a valid identifier
+/// (`2024.toml`) is reported by `validate_export_identifier`, which names the
+/// value, rather than being silently rewritten.
+fn default_export_name(source: &str) -> String {
+    Path::new(source)
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_else(|| source.to_string())
 }
 
 pub fn build_anchor_options(config: Option<&AnchorTaskConfig>) -> Result<AnchorOptions, String> {
@@ -449,8 +475,15 @@ pub fn build_table_options(
     };
 
     check_custom_node_removed("table", config.custom_node.is_some())?;
-    let loaded = load_custom("table", TABLE_LAYERS[0], config.custom.as_ref())?;
-    check_layers("table", loaded.as_ref(), &TABLE_LAYERS)?;
+    // §11: the plugin owns the list of layers it emits, so the CLI never keeps a
+    // second copy of it (and a new layer cannot be silently dropped here).
+    let wired = pendon_plugin_table::layers();
+    let loaded = load_custom(
+        "table",
+        pendon_plugin_table::primary_layer(),
+        config.custom.as_ref(),
+    )?;
+    check_layers("table", loaded.as_ref(), &wired)?;
 
     let pick = |layer: &str| {
         layer_set(loaded.as_ref(), layer, |entry| {
@@ -482,7 +515,6 @@ pub fn build_table_options(
         custom_node: Some(pendon_plugin_table::TableCustomNode {
             // §11 moves imports onto each entry, so there is no layer-wide
             // list to inherit any more.
-            imports: Vec::new(),
             table,
             caption,
             thead,
@@ -499,8 +531,9 @@ pub fn build_image_options(config: Option<&ImageTaskConfig>) -> Result<ImageOpti
         return Ok(ImageOptions::default());
     };
     check_custom_node_removed("image", config.custom_node.is_some())?;
+    let wired = pendon_plugin_image::layers();
     let loaded = load_custom("image", IMG_LAYER, config.custom.as_ref())?;
-    check_layers("image", loaded.as_ref(), &IMG_LAYERS)?;
+    check_layers("image", loaded.as_ref(), &wired)?;
     let make = |layer: &'static str| {
         move |entry: &crate::components::ComponentEntry| {
             Ok::<_, String>(ImageCustomNode {
@@ -683,7 +716,7 @@ pub fn track_used_spec(list: &mut Vec<PluginSpec>, spec: PluginSpec) {
 
 pub fn build_solid_hints(specs: &[PluginSpec]) -> SolidRenderHints {
     let mut hints = SolidRenderHints::default();
-    let mut seen_templates: HashSet<(String, Option<String>)> = HashSet::new();
+    let mut seen_templates: HashMap<(String, Option<String>), usize> = HashMap::new();
 
     for spec in specs {
         if let Some(renderer) = spec.renderer.as_ref().and_then(|r| r.solid.as_ref()) {
@@ -705,18 +738,22 @@ pub fn build_solid_hints(specs: &[PluginSpec]) -> SolidRenderHints {
 
             if let Some(tpl) = &renderer.component_template {
                 for key in &keys {
-                    if seen_templates.insert(key.clone()) {
-                        hints.templates.push(ComponentTemplate {
-                            node_type: key.0.clone(),
-                            node_name: key.1.clone(),
-                            template: tpl.clone(),
-                        });
+                    match seen_templates.get(key) {
+                        Some(&index) => {
+                            hints.templates[index]
+                                .imports
+                                .extend(parsed_imports.clone());
+                        }
+                        None => {
+                            seen_templates.insert(key.clone(), hints.templates.len());
+                            hints.templates.push(ComponentTemplate::new_identity(
+                                key.0.clone(),
+                                key.1.clone(),
+                                tpl.clone(),
+                                parsed_imports.clone(),
+                            ));
+                        }
                     }
-                    hints
-                        .template_imports
-                        .entry(key.clone())
-                        .or_default()
-                        .extend(parsed_imports.clone());
                 }
             } else if spec.matcher.start.is_some() {
                 if !parsed_imports.is_empty() {
@@ -784,9 +821,11 @@ pub fn build_vicado_hints_override(cfg: Option<&PluginVicadoSection>) -> Option<
     }
 
     let mut hints = pendon_plugin_vicado::solid_hints();
-    hints
-        .template_imports
-        .insert(("Vicado".to_string(), Some("Vicado".to_string())), imports);
+    // A configured `[plugin-vicado.renderer.solid]` block *replaces* the
+    // plugin's default `vicado` import rather than adding to it.
+    for tpl in &mut hints.templates {
+        tpl.imports = imports.clone();
+    }
     Some(hints)
 }
 
@@ -795,19 +834,33 @@ pub fn merge_solid_hints(
     builtin_hints: &[SolidRenderHints],
 ) -> Option<SolidRenderHints> {
     let mut merged = SolidRenderHints::default();
-    for hint in builtin_hints {
-        extend_hints(&mut merged, hint);
+    // A `[[plugin]]` spec overrides the built-in component of the same node
+    // identity: its template *and* its imports win wholesale, so the built-in
+    // one is dropped before merging (imports now live on the template).
+    let custom = if custom_specs.is_empty() {
+        None
+    } else {
+        Some(build_solid_hints(custom_specs))
+    };
+    let overridden: HashSet<(String, Option<String>)> = custom
+        .as_ref()
+        .map(|custom| {
+            custom
+                .templates
+                .iter()
+                .map(|tpl| (tpl.node_type.clone(), tpl.node_name.clone()))
+                .collect()
+        })
+        .unwrap_or_default();
+    if let Some(custom) = &custom {
+        extend_hints(&mut merged, custom);
     }
-    if !custom_specs.is_empty() {
-        let custom = build_solid_hints(custom_specs);
-        if !custom.template_imports.is_empty() {
-            let custom_import_keys: HashSet<(String, Option<String>)> =
-                custom.template_imports.keys().cloned().collect();
-            merged
-                .template_imports
-                .retain(|k, _| !custom_import_keys.contains(k));
-        }
-        extend_hints(&mut merged, &custom);
+    for hint in builtin_hints {
+        let mut filtered = hint.clone();
+        filtered
+            .templates
+            .retain(|tpl| !overridden.contains(&(tpl.node_type.clone(), tpl.node_name.clone())));
+        extend_hints(&mut merged, &filtered);
     }
     if hints_empty(&merged) {
         None
@@ -818,45 +871,32 @@ pub fn merge_solid_hints(
 
 fn extend_hints(target: &mut SolidRenderHints, extra: &SolidRenderHints) {
     target.global_imports.extend(extra.global_imports.clone());
-    for (key, imports) in &extra.template_imports {
-        target
-            .template_imports
-            .entry(key.clone())
-            .or_default()
-            .extend(imports.clone());
-    }
     target.text_imports.extend(extra.text_imports.clone());
 
     for tpl in &extra.templates {
-        let key = (&tpl.node_type, &tpl.node_name, &tpl.template);
-        if !target
-            .templates
-            .iter()
-            .any(|t| (&t.node_type, &t.node_name, &t.template) == key)
-        {
+        let same = |t: &ComponentTemplate| {
+            t.node_type == tpl.node_type
+                && t.node_name == tpl.node_name
+                && t.template == tpl.template
+        };
+        if let Some(existing) = target.templates.iter_mut().find(|t| same(t)) {
+            existing.imports.extend(tpl.imports.iter().cloned());
+        } else {
             target.templates.push(tpl.clone());
         }
     }
 
-    // Data exports (§2.3) are whole-document payloads: there is at most one
-    // producer (the cite layer), so the last one wins.
-    if extra.citations_export.is_some() {
-        target.citations_export = extra.citations_export.clone();
-        target.citations_export_name = extra.citations_export_name.clone();
-    }
-    if extra.references_export.is_some() {
-        target.references_export = extra.references_export.clone();
-        target.references_export_name = extra.references_export_name.clone();
-    }
+    // Data exports (§2.3 of RFC-0002, ADR-0009) are ordinary registrations:
+    // they keep the producer's order and the renderer applies "last wins" for a
+    // repeated name.
+    target.exports.extend(extra.exports.iter().cloned());
 }
 
 fn hints_empty(hints: &SolidRenderHints) -> bool {
     hints.global_imports.is_empty()
-        && hints.template_imports.is_empty()
         && hints.text_imports.is_empty()
         && hints.templates.is_empty()
-        && hints.citations_export.is_none()
-        && hints.references_export.is_none()
+        && hints.exports.is_empty()
 }
 
 pub fn load_custom_registry(
@@ -881,6 +921,21 @@ pub fn load_custom_registry(
 mod tests {
     use super::*;
     use pendon_plugin_heading::NumberStyle;
+
+    /// The component a task config wires into one layer for a `type` marker: a
+    /// literal entry beats the layer default (§11 rule 3). The real decision is
+    /// taken once per document by the renderer (ADR-0008 `D-3a`); this helper
+    /// only asserts what the config put into the plugin's layer set.
+    fn component_for<'a, C>(
+        set: &'a pendon_renderer_solid::ComponentSet<C>,
+        marker: &str,
+    ) -> Option<&'a C> {
+        set.entries()
+            .iter()
+            .find(|entry| entry.matches_type(marker))
+            .or_else(|| set.default_entry())
+            .map(|entry| &entry.component)
+    }
 
     fn table_options(toml_src: &str) -> pendon_plugin_table::TableOptions {
         let cfg: TableTaskConfig = toml::from_str(toml_src).expect("valid table config");
@@ -909,9 +964,8 @@ names = ["TableHead"]
         );
 
         let node = options.custom_node.expect("custom node");
-        // §11 rule 4: imports moved onto the entries, there is no layer-wide
+        // §11 rule 4: imports live on the entries, so there is no layer-wide
         // list to inherit any more.
-        assert!(node.imports.is_empty());
 
         let table = node.table.default_component().expect("table component");
         assert_eq!(table.name, "CustomTable");
@@ -1033,10 +1087,17 @@ names = ["AnchorAB"]
         .expect("valid anchor config");
 
         let options = build_anchor_options(Some(&cfg)).expect("valid anchor options");
-        // §11 rule 2: the `type` markers travel with the entry, so the plugin can
-        // route per instance (§11 rule 3, OPEN-C3).
+        // §11 rule 2: the `type` selectors travel with the entry, so the renderer
+        // can resolve the layer once per document (rule 3, ADR-0008 `D-3a`).
         let entry = options.custom.entries().first().expect("anchor entry");
-        assert_eq!(entry.types, vec!["anchorA", "anchorB"]);
+        assert_eq!(
+            entry
+                .selectors
+                .iter()
+                .map(|selector| selector.to_string())
+                .collect::<Vec<_>>(),
+            vec!["anchorA", "anchorB"]
+        );
         let node = &entry.component;
         assert_eq!(node.name, "AnchorAB");
         assert_eq!(node.template, "<AnchorAB {...attrs}>{children}</AnchorAB>");
@@ -1078,7 +1139,6 @@ names = ["TableHead"]
             ImportEntry::Structured { module, names, .. }
                 if module == "@comp/table" && names == &vec!["TableHead".to_string()]
         ));
-        assert!(node.imports.is_empty());
         assert!(node.caption.is_empty());
         assert!(node.cell.is_empty());
     }
@@ -1096,7 +1156,8 @@ names = ["TableHead"]
     }
 
     /// §11 rules 2/3: typed entries and the layer default all reach the plugin,
-    /// which routes per instance (OPEN-C3) instead of the CLI refusing them.
+    /// so the renderer can resolve them per document (`D-3a`) instead of the CLI
+    /// refusing a layer with several entries.
     #[test]
     fn typed_entries_and_the_default_build_a_routable_set() {
         let cfg: AnchorTaskConfig = toml::from_str(
@@ -1115,12 +1176,9 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
         let options = build_anchor_options(Some(&cfg)).expect("routable layer");
 
         assert_eq!(options.custom.entries().len(), 2);
-        let typed = options.custom.select(Some("anchorA")).expect("typed entry");
+        let typed = component_for(&options.custom, "anchorA").expect("typed entry");
         assert_eq!(typed.name, "AnchorAB");
-        let unclaimed = options
-            .custom
-            .select(Some("anchorZ"))
-            .expect("default entry");
+        let unclaimed = component_for(&options.custom, "anchorZ").expect("default entry");
         assert_eq!(unclaimed.name, "AnchorDefault");
     }
 
@@ -1359,9 +1417,7 @@ template = "<OrderedA {...attrs}>{children}</OrderedA>"
             "UnorderedBox"
         );
         assert_eq!(
-            options
-                .ordered
-                .select(Some("orderedA"))
+            component_for(&options.ordered, "orderedA")
                 .expect("typed ordered component")
                 .name,
             "OrderedA"
@@ -1383,9 +1439,7 @@ template = "<QuoteA {...attrs}>{children}</QuoteA>"
         .expect("valid blockquote config");
         let options = build_blockquote_options(Some(&cfg)).expect("valid blockquote options");
         assert_eq!(
-            options
-                .custom
-                .select(Some("bqA"))
+            component_for(&options.custom, "bqA")
                 .expect("typed quote component")
                 .name,
             "QuoteA"
@@ -1395,5 +1449,95 @@ template = "<QuoteA {...attrs}>{children}</QuoteA>"
             toml::from_str("[custom.figure]\nname = \"X\"\n").expect("toml");
         let err = build_blockquote_options(Some(&cfg)).expect_err("unsupported layer");
         assert!(err.contains("unsupported layer for `blockquote`"), "{err}");
+    }
+
+    /// §6.1: an inject entry names its binding explicitly, or the file stem names
+    /// it, and the payload is parsed by the same converter a `{{{lang[var] …}}}`
+    /// block uses. The resolved path is a cache dependency.
+    #[test]
+    fn bind_injects_register_named_and_stem_exports() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        std::fs::create_dir_all(dir.path().join("alpha")).expect("dir");
+        std::fs::write(dir.path().join("alpha/rows.json"), r#"[{"name":"Alpha"}]"#).expect("rows");
+        std::fs::write(dir.path().join("settings.toml"), "count = 2\n").expect("settings");
+
+        // `source` is CWD-relative, so the test uses absolute paths; TOML literal
+        // strings keep them out of the escape rules.
+        let rows = dir.path().join("alpha/rows.json");
+        let settings = dir.path().join("settings.toml");
+        let config: BindTaskConfig = toml::from_str(&format!(
+            "inject = [\n  {{ source = '{}', export = \"fooData\" }},\n  {{ source = '{}' }},\n]\n",
+            rows.display(),
+            settings.display()
+        ))
+        .expect("valid bind config");
+        let vars = HashMap::from([("foo".to_string(), "alpha".to_string())]);
+        let mut deps = Vec::new();
+        let exports =
+            build_bind_injects(Some(&config), &vars, &mut deps).expect("valid inject entries");
+
+        assert_eq!(exports.len(), 2);
+        assert_eq!(exports[0].name, "fooData");
+        assert_eq!(exports[0].value, serde_json::json!([{"name": "Alpha"}]));
+        // No `export`: the file stem names the binding.
+        assert_eq!(exports[1].name, "settings");
+        assert_eq!(exports[1].value, serde_json::json!({ "count": 2 }));
+        assert_eq!(
+            deps,
+            vec![rows.display().to_string(), settings.display().to_string()]
+        );
+
+        // A dynamic segment is substituted before the stem is taken.
+        let config: BindTaskConfig = toml::from_str(&format!(
+            "inject = [{{ source = '{}' }}]\n",
+            dir.path().join("[foo]/rows.json").display()
+        ))
+        .expect("valid bind config");
+        let mut deps = Vec::new();
+        let exports =
+            build_bind_injects(Some(&config), &vars, &mut deps).expect("valid inject entries");
+        assert_eq!(exports[0].name, "rows");
+        assert_eq!(deps, vec![rows.display().to_string()]);
+    }
+
+    /// A missing source, an unknown segment and a bad identifier are task
+    /// errors that name the entry — never a silently skipped export.
+    #[test]
+    fn bind_injects_report_the_offending_entry() {
+        let mut deps = Vec::new();
+        let config: BindTaskConfig =
+            toml::from_str("inject = [{ source = \"./nope.toml\", export = \"data-x\" }]\n")
+                .expect("valid bind config");
+        let err = build_bind_injects(Some(&config), &HashMap::new(), &mut deps)
+            .expect_err("bad identifier");
+        assert_eq!(
+            err,
+            "bind.inject 'data-x' is not a valid JavaScript identifier"
+        );
+
+        let config: BindTaskConfig =
+            toml::from_str("inject = [{ source = \"./[foo].toml\" }]\n").expect("valid config");
+        let err =
+            build_bind_injects(Some(&config), &HashMap::new(), &mut deps).expect_err("missing var");
+        assert!(
+            err.starts_with("task.bind.inject source './[foo].toml'"),
+            "{err}"
+        );
+
+        let config: BindTaskConfig =
+            toml::from_str("inject = [{ source = \"./nope.toml\" }]\n").expect("valid config");
+        let err = build_bind_injects(Some(&config), &HashMap::new(), &mut deps)
+            .expect_err("unreadable source");
+        assert!(err.starts_with("task.bind.inject './nope.toml'"), "{err}");
+        assert!(deps.is_empty(), "a failed entry records no dependency");
+    }
+
+    /// No `[task.bind]` section is not an error: the task simply has no injects.
+    #[test]
+    fn bind_injects_are_empty_without_a_section() {
+        let mut deps = Vec::new();
+        let exports = build_bind_injects(None, &HashMap::new(), &mut deps).expect("no section");
+        assert!(exports.is_empty());
+        assert!(deps.is_empty());
     }
 }

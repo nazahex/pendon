@@ -11,9 +11,10 @@ use crate::cache::{create_entry, CacheEntry};
 use crate::chain::{self, ChainConfig, ChainState};
 use crate::config::ConfigTask;
 use crate::plugins::{
-    build_anchor_options, build_blockquote_options, build_cite_options, build_directive_options,
-    build_heading_options, build_image_options, build_list_options, build_marker_options,
-    build_section_options, build_table_options, has_plugin, merge_solid_hints, DocumentContext,
+    build_anchor_options, build_bind_injects, build_blockquote_options, build_cite_options,
+    build_directive_options, build_heading_options, build_image_options, build_list_options,
+    build_marker_options, build_section_options, build_table_options, has_plugin,
+    merge_solid_hints, DocumentContext,
 };
 use crate::utils::{extract_frontmatter_for_cite, maybe_pretty, merge_refs_for_context};
 
@@ -93,6 +94,18 @@ pub fn process_single_file(
         Some(extracted)
     } else {
         None
+    };
+
+    // §6.1 of `workflows/numbering-extract-type-export.md`:
+    // `[[task.bind.inject]]` publishes whole files as module-level exports. They
+    // are resolved per page (dynamic segments substituted, source relative to
+    // the project root) and recorded as dependencies exactly like a `(path)`
+    // block's file, so editing one re-renders the page. Like every other
+    // config-driven plugin, the section only applies when `bind` is enabled.
+    let bind_injects = if has_plugin(task.plugin.as_deref(), "bind") {
+        plugin_options!(build_bind_injects(task.bind.as_ref(), map, &mut deps))
+    } else {
+        Vec::new()
     };
 
     let opts = Options {
@@ -213,6 +226,14 @@ pub fn process_single_file(
             pendon_renderer_html::render_html(&events)
         }),
         "solid" => {
+            // ADR-0009 rule 5: only the `solid` format emits `export const`, so
+            // the injected payloads join the hints here and nowhere else.
+            if !bind_injects.is_empty() {
+                state.hints.push(SolidRenderHints {
+                    exports: bind_injects,
+                    ..SolidRenderHints::default()
+                });
+            }
             let hints = merge_solid_hints(&state.used_specs, &state.hints);
             Ok(match hints.as_ref() {
                 Some(h) => render_solid_with_hints(&events, Some(h)),

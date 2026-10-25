@@ -1,5 +1,11 @@
 # pendon-plugin-quiz
 
+> **Deletion note (out of bounds).** `quiz` is **deleted entirely in the next
+> workflow**, together with `vicado` and the wiki infobox. Do not migrate it to
+> `__layer` / `layer_templates`, do not add types/selectors, do not freeze a
+> golden for it, and do not debug its output. It is listed here only so the
+> workspace keeps compiling until it is removed.
+
 Transforms quiz blocks into a serialized `Quiz` custom node for a downstream
 Solid component.
 
