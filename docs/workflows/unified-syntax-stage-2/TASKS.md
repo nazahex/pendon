@@ -249,11 +249,30 @@ is an identity at this point).
       `parse_slots` replaces the private head parsers. This task's proof is
       therefore the absence of a diff: workspace 716 pass, 0 fail, **zero** golden
       output changed.
-- [ ] **S2-2.6 — Preset voiding (D-7).** Dep: S2-2.4, S2-2.5.
+- [x] **S2-2.6 — Preset voiding (D-7).** Dep: S2-2.4, S2-2.5.
       Do: any `field.*` in the matched entry disables all preset assignments for
       that element/entry; unassigned slot values fall back to slot-qualified bare
       names (`bracket.quote`, `paren.tick`, …).
       Exit: the D-7 example asserted exactly (no `inner_text`/`href`/`title`).
+      **Done 2026-10-28** — `ElementHead::assign(pair, Option<&FieldConfig>)`
+      (`crates/extra/src/preset.rs`) walks the contract's positions in head order
+      and lands each content present: preset alive (`config` absent or
+      `FieldConfig::is_empty`) → the preset name, else the bare name; voided →
+      the entry's `field.<slot>.<kind>` assignment, else the bare name. `""`
+      (`Some(None)`) is an _unassign_, so it falls back like any other unassigned
+      position (OBJ-10) instead of voiding the rest — the whole table is already
+      void. Values are `AttrValue::Str`; `field.override` is deliberately not
+      applied (that is `project`, S2-2.7). 5 tests, all parsed by the real
+      grammar (`parse_slots`): D-7's example asserted row by row — and it
+      **disagrees with the doc's spelling**: without a space before each tick,
+      §5.2 reads the quote as swallowing it, so the six values come from
+      ``@[foo "Bar" `baz`](soo "Sar" `zaz`)``. Footnote added to D-7. Also covered:
+      empty entry = preset alive, `""` unassign, a position moved to another
+      content (cite's "simpler version"), and a content the contract refuses is
+      not read. Duplicate assignment targets are _not_ an error here (last
+      position wins in the map) — a load-time check would belong to
+      `components.rs`. Nothing calls `assign` yet (Phase 4 wires it), so
+      workspace 721 pass, 0 fail, **zero** golden output changed.
 - [ ] **S2-2.7 — `project(node) -> FieldMap` identity pass.** Dep: S2-2.5.
       Files: `crates/extra/src/field.rs`, `crates/renderer-solid/src/resolve.rs`,
       the HTML/JSON/AST renderers' entry points.

@@ -224,6 +224,12 @@ Consequences to encode as tests. For `@[foo "Bar"`baz`](soo "Sar"`zaz`)` with
 
 That is the proposal's own example, so there is no half-preset mode.
 
+> **Spelling note (S2-2.6).** The example above is written without a space before
+> either tick, and §5.2 makes a space the thing that ends a content — so read
+> literally, the quote swallows the tick. The six values listed are the ones the
+> spaced head ``@[foo "Bar" `baz`](soo "Sar" `zaz`)`` produces, and that is what
+> `preset::tests::one_field_key_voids_the_whole_preset` asserts.
+
 **Rejected.** Per-slot voiding (`field.bracket.*` voids only `bracket.*`). It is
 friendlier but contradicts the proposal, and the proposal's own example proves
 the all-or-nothing reading.

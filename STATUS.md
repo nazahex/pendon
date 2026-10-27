@@ -118,7 +118,12 @@ exactly one `export const headings` line each (no bytes removed), and
       exactly (anchor `inner_text`/`href`/`title`, cite
       `reference_id`/`locator`, heading `slug`/`title`, image `alt`/`src`).
       Data only — the private `insert("href", …)` calls stay until each element's
-      Phase 4 step. Next: `S2-2.6` (D-7 preset voiding + bare fallbacks).
+      Phase 4 step. `S2-2.6` done: `ElementHead::assign(pair, config)` lands every
+      content the contract accepts — preset name while the preset is alive, the
+      entry's `field.<slot>.<kind>` name once it is void, and the slot-qualified
+      bare name (`bracket.quote`, `paren.tick`) for anything unassigned, so D-7's
+      example is asserted row by row. Next: `S2-2.7` (`project(node) -> FieldMap`
+      identity pass; zero golden changes is the proof).
       No `MIGRATION.md` by policy.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to

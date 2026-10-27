@@ -21,8 +21,9 @@
 //! itself is the assignment step's job (S2-2.6); this module only holds the data
 //! and the lookups.
 
-use crate::field::{FieldName, Path};
-use crate::slot::{Slot, SlotContract, SlotKind};
+use crate::field::{FieldConfig, FieldMap, FieldMapError, FieldName, Path};
+use crate::slot::{Slot, SlotContract, SlotKind, SlotPair};
+use crate::value::AttrValue;
 
 /// One preset assignment: the content at `slot`.`kind` lands in field `name`.
 ///
@@ -112,6 +113,54 @@ impl ElementHead {
             .iter()
             .all(|preset| self.contract.accepts(preset.slot, preset.kind))
     }
+
+    /// The head's contents as fields, honoring the entry's `field.*` (D-7, D-8).
+    ///
+    /// Every position the contract accepts is taken in head order, and each
+    /// content present lands where:
+    ///
+    /// | the entry configures…              | a position lands in                  |
+    /// | ---------------------------------- | ------------------------------------ |
+    /// | nothing (or no entry matched)      | its preset name, else its bare name  |
+    /// | **any** `field.*` key (D-7 void)   | the assigned name, else its bare name |
+    ///
+    /// `config` is the **matched** entry's [`FieldConfig`], never the task's: D-7
+    /// voids the preset per `custom` entry, and there is no half-preset mode — one
+    /// `field.*` key kills every preset row at once. `""` (`Some(None)`) is an
+    /// *unassign*, so that position falls back to its bare name like any other
+    /// unassigned one (OBJ-10), and the order of `fallback_path` values is the
+    /// head's own (bracket bare → quote → tick, then paren).
+    ///
+    /// Values are [`AttrValue::Str`]: slot content is text (§6.3). Nothing here
+    /// applies `field.override` — that is `project`'s job (ADR-0014 rules 3–4).
+    ///
+    /// Two positions assigned to one name are **not** an error here: the later
+    /// position in head order replaces the earlier one in place (that is
+    /// [`FieldMap::insert`]'s duplicate policy). A load-time error would have to
+    /// live in the config layer, where the whole entry is visible.
+    pub fn assign(
+        &self,
+        pair: &SlotPair,
+        config: Option<&FieldConfig>,
+    ) -> Result<FieldMap, FieldMapError> {
+        let preset_alive = config.is_none_or(FieldConfig::is_empty);
+        let mut fields = FieldMap::new();
+        for &(slot, kind) in self.contract.accepted {
+            let Some(value) = pair.get(slot, kind) else {
+                continue;
+            };
+            let path = if preset_alive {
+                self.preset_for(slot, kind).map(FieldName::path)
+            } else {
+                config
+                    .and_then(|config| config.assignment(slot, kind))
+                    .and_then(|assigned| assigned.clone())
+            };
+            let path = path.unwrap_or_else(|| fallback_path(slot, kind));
+            fields.insert(path, AttrValue::Str(value.to_string()))?;
+        }
+        Ok(fields)
+    }
 }
 
 #[cfg(test)]
@@ -123,8 +172,10 @@ mod tests {
         accepted: &[
             (Slot::Bracket, SlotKind::Bare),
             (Slot::Bracket, SlotKind::Quote),
+            (Slot::Bracket, SlotKind::Tick),
             (Slot::Paren, SlotKind::Bare),
             (Slot::Paren, SlotKind::Quote),
+            (Slot::Paren, SlotKind::Tick),
         ],
         tag: SlotTag::Anchor,
     };
@@ -156,13 +207,13 @@ mod tests {
     fn a_preset_position_is_always_a_position_the_element_accepts() {
         assert!(ElementHead::new(CONTRACT, PRESET).is_consistent());
 
-        // The checker is not vacuous.
-        const OFF_CONTRACT: &[Preset] = &[Preset::new(
-            Slot::Bracket,
-            SlotKind::Tick,
-            FieldName::new("inner_text"),
-        )];
-        assert!(!ElementHead::new(CONTRACT, OFF_CONTRACT).is_consistent());
+        // The checker is not vacuous: an element that claims only `[bare]` may
+        // not preset a paren position.
+        const BARE_ONLY: SlotContract = SlotContract {
+            accepted: &[(Slot::Bracket, SlotKind::Bare)],
+            tag: SlotTag::Anchor,
+        };
+        assert!(!ElementHead::new(BARE_ONLY, PRESET).is_consistent());
 
         // An element with no preset at all is consistent, not broken: blockquote
         // and list contract nothing and name nothing (§9.2, §9.3).
@@ -197,5 +248,170 @@ mod tests {
     fn a_preset_knows_the_position_it_fills() {
         assert_eq!(PRESET[1].position().dotted(), "paren.bare");
         assert_eq!(PRESET[1].name.as_str(), "href");
+    }
+
+    // ---- S2-2.6: what a parsed head lands in (D-7) ----
+
+    use crate::slot::parse_slots;
+
+    /// The head D-7 is written about, parsed by the real grammar so the test
+    /// cannot drift from it: `@[foo "Bar" `baz`](soo "Sar" `zaz`)`.
+    ///
+    /// The decision doc spells the same head without the spaces before each tick,
+    /// which §5.2 reads as **one** quote content (a space is what ends a
+    /// content), so the spaced spelling is the one that carries the six values
+    /// D-7 lists.
+    fn d7_pair() -> SlotPair {
+        match parse_slots(r#"@[foo "Bar" `baz`](soo "Sar" `zaz`)"#) {
+            crate::slot::SlotMatch::Slots { pair, .. } => pair,
+            other => panic!("the D-7 head must parse, got {other:?}"),
+        }
+    }
+
+    /// Every field as `path = value`, in projection order — the shape a user (and
+    /// the spec) reads.
+    fn rows(fields: &FieldMap) -> Vec<String> {
+        fields
+            .iter()
+            .map(|(path, value)| format!("{} = {}", path.dotted(), literal(value)))
+            .collect()
+    }
+
+    fn literal(value: &AttrValue) -> String {
+        match value {
+            AttrValue::Str(text) => text.clone(),
+            other => panic!("a slot value is text, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn one_field_key_voids_the_whole_preset() {
+        // D-7's example, asserted exactly.
+        let mut config = FieldConfig::new();
+        config.assign_slot(
+            Slot::Bracket,
+            SlotKind::Bare,
+            Some(Path::from_dotted("something").unwrap()),
+        );
+
+        let fields = ElementHead::new(CONTRACT, PRESET)
+            .assign(&d7_pair(), Some(&config))
+            .unwrap();
+        assert_eq!(
+            rows(&fields),
+            [
+                "something = foo",
+                "bracket.quote = Bar",
+                "bracket.tick = baz",
+                "paren.bare = soo",
+                "paren.quote = Sar",
+                "paren.tick = zaz",
+            ]
+        );
+        // Not a half-preset: the three preset names are gone for this entry.
+        for gone in ["inner_text", "href", "title"] {
+            assert!(
+                !fields.contains(&Path::from_dotted(gone).unwrap()),
+                "{gone}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_entry_that_configures_no_field_keeps_the_preset() {
+        let pair = d7_pair();
+        let head = ElementHead::new(CONTRACT, PRESET);
+        let kept = rows(&head.assign(&pair, Some(&FieldConfig::new())).unwrap());
+        // No matched entry at all is the same as an empty one.
+        assert_eq!(kept, rows(&head.assign(&pair, None).unwrap()));
+        assert_eq!(
+            kept,
+            [
+                "inner_text = foo",
+                "bracket.quote = Bar",
+                "bracket.tick = baz",
+                "href = soo",
+                "title = Sar",
+                "paren.tick = zaz",
+            ]
+        );
+    }
+
+    #[test]
+    fn an_unassign_empties_one_position_instead_of_voicing_the_rest() {
+        // OBJ-10: `field.bracket.bare = ""` — the position falls back to its bare
+        // name; the preset is void either way, so nothing is `inner_text`.
+        let mut config = FieldConfig::new();
+        config.assign_slot(Slot::Bracket, SlotKind::Bare, None);
+
+        let fields = ElementHead::new(CONTRACT, PRESET)
+            .assign(&d7_pair(), Some(&config))
+            .unwrap();
+        assert_eq!(
+            rows(&fields),
+            [
+                "bracket.bare = foo",
+                "bracket.quote = Bar",
+                "bracket.tick = baz",
+                "paren.bare = soo",
+                "paren.quote = Sar",
+                "paren.tick = zaz",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_position_may_move_to_another_slot_content() {
+        // §7.3's "simpler version": `reference_id` moves from bare to tick, and
+        // `locator` has to be redefined because the preset is void.
+        const CITE_PRESET: &[Preset] = &[
+            Preset::new(
+                Slot::Bracket,
+                SlotKind::Bare,
+                FieldName::new("reference_id"),
+            ),
+            Preset::new(Slot::Bracket, SlotKind::Quote, FieldName::new("locator")),
+        ];
+        let cite = ElementHead::new(CONTRACT, CITE_PRESET);
+        let pair = match parse_slots(r#"[^book "p. 1" `extra`]"#) {
+            crate::slot::SlotMatch::Slots { pair, .. } => pair,
+            other => panic!("the cite head must parse, got {other:?}"),
+        };
+
+        let mut config = FieldConfig::new();
+        config.assign_slot(
+            Slot::Bracket,
+            SlotKind::Tick,
+            Some(Path::from_dotted("reference_id").unwrap()),
+        );
+        config.assign_slot(
+            Slot::Bracket,
+            SlotKind::Quote,
+            Some(Path::from_dotted("locator").unwrap()),
+        );
+
+        let fields = cite.assign(&pair, Some(&config)).unwrap();
+        assert_eq!(
+            rows(&fields),
+            [
+                "bracket.bare = book",
+                "locator = p. 1",
+                "reference_id = extra",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_position_the_contract_refuses_is_not_read() {
+        // `CONTRACT` claims no tick, so a tick content is not a field here — the
+        // element's contract is what decides, not the text that happens to parse.
+        const NO_TICK: SlotContract = SlotContract {
+            accepted: &[(Slot::Bracket, SlotKind::Bare)],
+            tag: SlotTag::Anchor,
+        };
+        let fields = ElementHead::new(NO_TICK, PRESET)
+            .assign(&d7_pair(), None)
+            .unwrap();
+        assert_eq!(rows(&fields), ["inner_text = foo"]);
     }
 }
