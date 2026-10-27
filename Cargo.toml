@@ -11,7 +11,7 @@ members = [
   "crates/plugin-custom",
   "crates/plugin-dialog",
   "crates/plugin-directive",
-  "crates/plugin-extract-heading",
+  "crates/plugin-extract",
   "crates/plugin-heading",
   "crates/plugin-image",
   "crates/plugin-latex",

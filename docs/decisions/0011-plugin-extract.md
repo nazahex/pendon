@@ -1,7 +1,8 @@
 # ADR-0011 — `plugin-extract`: field-level extraction per element
 
-- Status: **Proposed** (Phase 4 of
-  [`workflows/numbering-extract-type-export.md`](../workflows/numbering-extract-type-export.md))
+- Status: **Accepted / implemented** (Phase 4 of
+  [`workflows/numbering-extract-type-export.md`](../workflows/numbering-extract-type-export.md);
+  outcome below)
 - Depends on: [`0008`](0008-type-selectors.md) (type scoping),
   [`0009`](0009-generic-data-exports.md) (exports), [`0010`](0010-plugin-number.md)
   (`attrs.number` as an extractable field)
@@ -73,3 +74,44 @@ reach document-level outputs at all (`chain.rs` hard-codes `extract-heading`).
   tmp+rename in `cache.rs` is lifted to a shared `write_atomically`.
 - `EXTRAS-INVENTORY.md` is the gate: Phase 4 cannot ship a field the inventory
   has not reviewed.
+
+## Outcome (2026-10-25)
+
+- `pendon-plugin-extract` is wired into the CLI: the blocks are validated for
+  every task (`build_extract_options`), the pass runs as a chain stage named
+  `extract`, side files are written **after** a successful render through the
+  shared `cache::write_atomically`, and `export` registers through
+  `SolidRenderHints.exports` (ADR-0009).
+- **`plugin-extract-heading` is deleted** — the crate, both `chain.rs` arms, the
+  workspace/CLI manifests, its README, and the name in the four sandbox plugin
+  lists. The `headings` export did **not** disappear with it: `renderer-solid`
+  builds the nested outline from the `Heading` nodes themselves
+  (`metadata::extract_headings`), with the legacy id chain
+  (section → `id` → `slug` → slugified text) and the same alphabetical keys, so
+  `sandbox/heading` renders byte-identically (verified with the real CLI, then
+  frozen as golden `32-extract-heading`).
+  - Consequence worth knowing: the export used to appear **only** when
+    `extract-heading` ran. It is now what §20 always said — automatic — so every
+    `solid` document with headings gains one line. Eight goldens were re-frozen
+    with exactly that line and nothing else (`06`, `16`, `21`, `22`, `25`, `28`,
+    `30`, `31`).
+- The payload rule is general now: `run_chain` skips **`extract`** for a
+  `Document::Payload` because it is the only stage left that writes
+  document-level outputs; every other plugin still runs for its in-document
+  effects (ADR-0007's citations-in-a-payload case).
+- **Side files are outputs**: `CacheEntry.side_outputs: Vec<OutputInfo>` records
+  `{ path, hash }` for every file the render actually wrote, `CACHE_VERSION` is
+  `2`, and `is_fresh` requires each of them to still exist with that hash. A
+  path that was _not_ written (a block that matched nothing) is not recorded, so
+  it cannot make a page permanently stale. The private tmp+rename in `cache.rs`
+  became `write_atomically`, used by both the record writer and the side files.
+- Goldens `32-extract-heading` (file **and** `export const outline`, next to the
+  automatic nested `headings`) and `33-extract-scopes` (P.1.a/b/c) are frozen;
+  the harness compares a fixture's side files against `NN-name.out/`.
+- `sandbox/extract` runs: it gained `src/reference.yaml`, the `heading`/`extract`
+  plugins and two citations, so all four outputs (`.cite.json`, `.heading.yaml`,
+  `.heading.json`, the page) are produced.
+- Put `extract` **last** in `plugin`. `markdown` is what turns the source lines
+  into the nodes `extract` reads; the validator only rejects an element plugin or
+  `number` placed after it, so a chain with `extract` before `markdown` is
+  accepted and yields half-parsed rows (found while writing golden `32`).

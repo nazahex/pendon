@@ -99,6 +99,33 @@ impl OneOrMany {
     }
 }
 
+/// One `[[task.<element>.extract]]` block (P.1 of
+/// `docs/issues/plugin-extract.md`).
+///
+/// Every value is still raw: `build_extract_options` turns the rule into a
+/// validated `ExtractBlock`, so an unknown format or a non-extractable element is
+/// reported against the key the user wrote.
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct ExtractRule {
+    /// `type = "CiteA"` / `type = ["CiteA", "CiteB"]` / `_` / `*` — §11
+    /// selectors; absent means `_` (every type the element has).
+    #[serde(rename = "type")]
+    pub types: Option<OneOrMany>,
+    /// One path or an array; `format` must have the same length.
+    pub output: Option<OneOrMany>,
+    /// `json`, `yaml` or `toml` — one per output.
+    pub format: Option<OneOrMany>,
+    /// Allowlist: keep only these fields.
+    pub only: Option<OneOrMany>,
+    /// Denylist: drop these fields. Always wins over `only`/`recommended`.
+    pub omit: Option<OneOrMany>,
+    /// Narrow the fields to the element's `recommended` preset first.
+    #[serde(default)]
+    pub recommended: bool,
+    /// `export const <name>` (solid only); never an array.
+    pub export: Option<String>,
+}
+
 /// `[task.number]`: the task-level numbering group.
 #[derive(Debug, Deserialize, Default)]
 pub struct NumberTaskConfig {
@@ -117,6 +144,9 @@ pub struct ImageTaskConfig {
     /// parsed so a stale config fails with a migration message instead of
     /// silently dropping the custom component.
     pub custom_node: Option<toml::Value>,
+    /// `[[task.image.extract]]` — data extraction blocks (plugin-extract).
+    #[serde(default)]
+    pub extract: Vec<ExtractRule>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -134,6 +164,9 @@ pub struct HeadingTaskConfig {
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.heading.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,
+    /// `[[task.heading.extract]]` — data extraction blocks (plugin-extract).
+    #[serde(default)]
+    pub extract: Vec<ExtractRule>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -145,6 +178,9 @@ pub struct AnchorTaskConfig {
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.anchor.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,
+    /// `[[task.anchor.extract]]` — data extraction blocks (plugin-extract).
+    #[serde(default)]
+    pub extract: Vec<ExtractRule>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -179,6 +215,9 @@ pub struct CiteTaskConfig {
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.cite.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,
+    /// `[[task.cite.extract]]` — data extraction blocks (plugin-extract).
+    #[serde(default)]
+    pub extract: Vec<ExtractRule>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -190,6 +229,9 @@ pub struct TableTaskConfig {
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.table.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,
+    /// `[[task.table.extract]]` — data extraction blocks (plugin-extract).
+    #[serde(default)]
+    pub extract: Vec<ExtractRule>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -238,6 +280,9 @@ pub struct MarkerTaskConfig {
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.marker.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,
+    /// `[[task.marker.extract]]` — data extraction blocks (plugin-extract).
+    #[serde(default)]
+    pub extract: Vec<ExtractRule>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -250,6 +295,9 @@ pub struct DirectiveTaskConfig {
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.directive.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,
+    /// `[[task.directive.extract]]` — data extraction blocks (plugin-extract).
+    #[serde(default)]
+    pub extract: Vec<ExtractRule>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -264,6 +312,9 @@ pub struct ListTaskConfig {
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.list.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,
+    /// `[[task.list.extract]]` — data extraction blocks (plugin-extract).
+    #[serde(default)]
+    pub extract: Vec<ExtractRule>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -276,6 +327,9 @@ pub struct BlockquoteTaskConfig {
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.blockquote.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,
+    /// `[[task.blockquote.extract]]` — data extraction blocks (plugin-extract).
+    #[serde(default)]
+    pub extract: Vec<ExtractRule>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -288,6 +342,9 @@ pub struct SectionTaskConfig {
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.section.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,
+    /// `[[task.section.extract]]` — data extraction blocks (plugin-extract).
+    #[serde(default)]
+    pub extract: Vec<ExtractRule>,
 }
 
 /// `[task.bind]`: the export side of `plugin-bind` (§6.1 of

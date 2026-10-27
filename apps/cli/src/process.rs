@@ -1,22 +1,25 @@
 use pendon_core::{Event, Options};
 use pendon_plugin_custom::PluginSpec;
+use pendon_plugin_extract::ExtractOutput;
 use pendon_plugin_markdown::MarkdownOptions;
 use pendon_plugin_wiki::WikiOptions;
-use pendon_renderer_solid::{render_solid_with_hints, SolidRenderHints};
+use pendon_renderer_solid::{render_solid_with_hints, DataExport, SolidRenderHints};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use crate::cache::{create_entry, CacheEntry};
+use crate::cache::{create_entry, write_atomically, CacheEntry};
 use crate::chain::{self, ChainConfig, ChainState};
 use crate::config::ConfigTask;
 use crate::plugins::{
     build_anchor_options, build_bind_injects, build_blockquote_options, build_cite_options,
-    build_directive_options, build_heading_options, build_image_options, build_list_options,
-    build_marker_options, build_number_options, build_section_options, build_table_options,
-    has_plugin, merge_solid_hints, DocumentContext,
+    build_directive_options, build_extract_options, build_heading_options, build_image_options,
+    build_list_options, build_marker_options, build_number_options, build_section_options,
+    build_table_options, has_plugin, merge_solid_hints, DocumentContext,
 };
-use crate::utils::{extract_frontmatter_for_cite, maybe_pretty, merge_refs_for_context};
+use crate::utils::{
+    extract_frontmatter_for_cite, maybe_pretty, merge_refs_for_context, substitute_output,
+};
 
 pub struct ProcessResult {
     pub success: bool,
@@ -149,6 +152,9 @@ pub fn process_single_file(
     // a `type` selector fails even before the plugin is enabled; the pass itself
     // only runs when `number` is in `task.plugin`.
     config.number = plugin_options!(build_number_options(task));
+    // Same rule for extraction: the blocks are validated for every task, and the
+    // pass itself only runs when `extract` is in `task.plugin`.
+    config.extract = plugin_options!(build_extract_options(task));
 
     // Text stages first: a leading `---` block only becomes a node here, and the
     // citation context is built from the references it holds.
@@ -238,6 +244,23 @@ pub fn process_single_file(
                     ..SolidRenderHints::default()
                 });
             }
+            // P.1.b: a block's `export` is the same `export const` mechanism, and
+            // it is registered after the bind payloads so a `micromatter.extract`
+            // payload wins over the automatic `frontmatter` export it duplicates.
+            // Every other task format ignores `export` (docs/issues/plugin-extract.md).
+            if !state.extract.exports.is_empty() {
+                state.hints.push(SolidRenderHints {
+                    exports: state
+                        .extract
+                        .exports
+                        .iter()
+                        .map(|(name, value)| {
+                            DataExport::plugin("extract", name.clone(), value.clone())
+                        })
+                        .collect(),
+                    ..SolidRenderHints::default()
+                });
+            }
             let hints = merge_solid_hints(&state.used_specs, &state.hints);
             Ok(match hints.as_ref() {
                 Some(h) => render_solid_with_hints(&events, Some(h)),
@@ -284,8 +307,29 @@ pub fn process_single_file(
 
             let bytes_written = out_str.len();
 
+            // P.1.a: the extraction side files are written only after the page
+            // itself rendered, so a failed page leaves no half-written data
+            // behind. A path two pages resolve to is overwritten (last page wins).
+            // They are outputs, so the cache record remembers them (T4.6): a
+            // deleted side file makes the next run rewrite it.
+            let side_outputs = match write_extract_files(&state.extract, map) {
+                Ok(paths) => paths,
+                Err(message) => {
+                    eprintln!("Error: {message}");
+                    return failure();
+                }
+            };
+
             // Keep updating the cache entry even if the file was not written to disk
-            let cache_entry = create_entry(task_name, config_hash, path_str, out_path, deps).ok();
+            let cache_entry = create_entry(
+                task_name,
+                config_hash,
+                path_str,
+                out_path,
+                deps,
+                side_outputs,
+            )
+            .ok();
 
             return ProcessResult {
                 success: true,
@@ -304,4 +348,32 @@ pub fn process_single_file(
             };
         }
     }
+}
+
+/// Writes every side file one document extracted (P.1.a of
+/// `docs/issues/plugin-extract.md`), returning the paths it wrote.
+///
+/// A block's `output` is a config path like `output`: relative to the project
+/// root, with the page's dynamic segments substituted per document. Two pages
+/// that resolve to the same file overwrite it — the format is the block's, never
+/// the extension's, so `format = "json"` writes JSON to a `.yaml` path.
+///
+/// Writing is atomic ([`cache::write_atomically`]): a reader never sees half a
+/// JSON document, and a failed write is a task error instead of a truncated file.
+fn write_extract_files(
+    output: &ExtractOutput,
+    vars: &HashMap<String, String>,
+) -> Result<Vec<String>, String> {
+    let mut written: Vec<String> = Vec::with_capacity(output.files.len());
+    for file in &output.files {
+        let path = substitute_output(&file.path, vars)
+            .map_err(|cause| format!("task extract output '{}': {cause}", file.path))?;
+        let rendered = file
+            .render()
+            .map_err(|cause| format!("task extract output '{path}': {cause}"))?;
+        write_atomically(Path::new(&path), &rendered)
+            .map_err(|e| format!("task extract output: {e}"))?;
+        written.push(path);
+    }
+    Ok(written)
 }

@@ -20,6 +20,7 @@ use pendon_plugin_bind::{Fragment, MdpMode};
 use pendon_plugin_blockquote::BlockquoteOptions;
 use pendon_plugin_custom::PluginSpec;
 use pendon_plugin_directive::DirectiveOptions;
+use pendon_plugin_extract::{ExtractOptions, ExtractOutput};
 use pendon_plugin_heading::HeadingOptions;
 use pendon_plugin_image::ImageOptions;
 use pendon_plugin_latex::LatexOptions;
@@ -64,6 +65,9 @@ pub struct ChainConfig {
     pub heading: HeadingOptions,
     /// `[[task.<element>.number]]` + `[[task.number.custom]]` (ADR-0010).
     pub number: NumberOptions,
+    /// `[[task.<element>.extract]]` — the per-element extraction blocks
+    /// (`docs/issues/plugin-extract.md`).
+    pub extract: ExtractOptions,
     /// A `[task.plugin.vicado.renderer.solid]` override (§11), when configured.
     pub vicado_hints: Option<SolidRenderHints>,
 }
@@ -87,6 +91,10 @@ impl ChainConfig {
         // numbering nothing (or only half the elements).
         let ordered = plugin_names(plugin_list);
         validate_number_order(task_name, &ordered)?;
+        // plugin-extract reads the attributes every element plugin (and
+        // `number`) has emitted, so it must be the last of them: a block that
+        // ran early would extract a node without its `__layer` or its number.
+        validate_extract_order(task_name, &ordered)?;
         let latex = if enabled.contains("latex") {
             Some(LatexOptions {
                 target: latex_target_for_format(format),
@@ -116,6 +124,7 @@ impl ChainConfig {
             table: build_table_options(None)?,
             heading,
             number: NumberOptions::default(),
+            extract: ExtractOptions::default(),
             vicado_hints: None,
         })
     }
@@ -167,6 +176,28 @@ pub fn validate_number_order(task_name: &str, names: &[&str]) -> Result<(), Stri
     Ok(())
 }
 
+/// `plugin-extract` reads the `__layer` tag and the extras every element plugin
+/// emitted, so it must come **after** them (and after `number`, whose
+/// `citation_number`/`--number` fields a block can select).
+///
+/// A misordered chain is rejected before a document is parsed: extraction that
+/// runs early writes rows missing the very fields the block asked for, which is
+/// invisible in the output file.
+pub fn validate_extract_order(task_name: &str, names: &[&str]) -> Result<(), String> {
+    let Some(position) = names.iter().position(|name| *name == "extract") else {
+        return Ok(());
+    };
+    for (index, name) in names.iter().enumerate() {
+        if index > position && (crate::plugins::NUMBER_ELEMENTS.contains(name) || *name == "number")
+        {
+            return Err(format!(
+                "[{task_name}] plugin `extract` comes before `{name}`; `extract` must follow every plugin whose attributes it reads (docs/issues/plugin-extract.md)"
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// The chain's accumulated state: one document context (citations are shared by
 /// the whole page, including bound payloads), the custom-plugin cache, and the
 /// render hints the plugins produced.
@@ -180,6 +211,10 @@ pub struct ChainState {
     pub used_vicado: bool,
     pub anchor_ran: bool,
     pub cite_ran: bool,
+    /// What this document's `[[task.<element>.extract]]` blocks produced: the
+    /// side files to write and the exports the solid renderer registers. Filled
+    /// by the `extract` stage, consumed once the page has rendered.
+    pub extract: ExtractOutput,
     /// §13: report each unknown plugin name once per task.
     reported: HashSet<String>,
     pipeline: ContextPipeline<DocumentContext>,
@@ -201,6 +236,7 @@ impl ChainState {
             used_vicado: false,
             anchor_ran: false,
             cite_ran: false,
+            extract: ExtractOutput::default(),
             reported: HashSet::new(),
             pipeline,
         }
@@ -240,9 +276,11 @@ pub fn run(events: Vec<Event>, config: &ChainConfig, state: &mut ChainState) -> 
 
 /// Runs the chain over `events`.
 ///
-/// A [`Document::Payload`] is a sub-document, so the stages that export
-/// document-level data (`extract-heading`'s `headings`) are skipped. Every other
-/// plugin runs exactly as it does for the page.
+/// A [`Document::Payload`] is a sub-document: it runs every plugin for its
+/// **in-document** effects (so a citation inside a payload joins the page's list,
+/// ADR-0007), but only a [`Document::Page`] writes **document-level outputs** —
+/// side files and `export const` registrations. `extract` is the one remaining
+/// stage that produces those, so it is the one stage a payload skips.
 fn run_chain(
     mut events: Vec<Event>,
     config: &ChainConfig,
@@ -265,9 +303,11 @@ fn run_chain(
         if name == "micromatter" || name == "bind" {
             continue;
         }
-        // `extract-heading` exports `headings` for the *document*; a payload has
-        // no such export to contribute to.
-        if fragment && name == "extract-heading" {
+        // Only a `Page` writes document-level outputs: `extract`'s blocks describe
+        // the page (they write side files and register `export const`), so a
+        // payload does not run them. Every other plugin keeps its in-document
+        // effect inside a payload.
+        if fragment && name == "extract" {
             continue;
         }
 
@@ -342,6 +382,16 @@ fn run_chain(
                 // position is validated up front (`validate_number_order`), so a
                 // misordered chain is a config error, not a silent difference.
                 pendon_plugin_number::process(&events, &config.number)
+            }
+            "extract" => {
+                // P.2 of `docs/issues/plugin-extract.md`: extraction only *reads*
+                // the stream the chain has built so far, so it returns the events
+                // untouched and leaves the rows for `process` to write once the
+                // page itself rendered. The position is validated up front
+                // (`validate_extract_order`): a block that ran before its
+                // element plugin would extract a node without its attributes.
+                state.extract = pendon_plugin_extract::run(&events, &config.extract);
+                events
             }
             "heading" => {
                 let result = pendon_plugin_heading::process(&events, &config.heading);
@@ -550,7 +600,10 @@ fn single_top_level(events: &[Event]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_number_order;
+    use super::{
+        run_chain, validate_extract_order, validate_number_order, ChainConfig, ChainState, Document,
+    };
+    use pendon_plugin_extract::{BlockSpec, ExtractBlock, ExtractOptions};
 
     /// ADR-0010: the only accepted shape is "every element plugin, then
     /// `number`, then `markdown`".
@@ -595,5 +648,95 @@ mod tests {
             err.contains("[T] plugin `number` comes before `heading`"),
             "{err}"
         );
+    }
+
+    /// plugin-extract reads the attributes the element plugins (and `number`)
+    /// emitted, so it must be the last of them.
+    #[test]
+    fn extract_after_every_attribute_plugin_is_accepted() {
+        assert!(
+            validate_extract_order("T", &["heading", "cite", "number", "extract", "markdown"])
+                .is_ok()
+        );
+        // A chain without `extract` extracts nothing but stays valid.
+        assert!(validate_extract_order("T", &["heading", "markdown"]).is_ok());
+        assert!(validate_extract_order("T", &[]).is_ok());
+    }
+
+    /// A block that ran before its element plugin would write rows missing the
+    /// very attributes it asked for — invisible in the output file.
+    #[test]
+    fn extract_before_an_element_plugin_is_rejected() {
+        let err = validate_extract_order("T", &["extract", "cite", "number"])
+            .expect_err("misordered chain");
+        assert!(
+            err.contains("[T] plugin `extract` comes before `cite`"),
+            "{err}"
+        );
+    }
+
+    /// `--number` is a field a block may select, so `number` must run first too.
+    #[test]
+    fn extract_before_number_is_rejected() {
+        let err = validate_extract_order("T", &["heading", "extract", "number"])
+            .expect_err("misordered chain");
+        assert!(
+            err.contains("[T] plugin `extract` comes before `number`"),
+            "{err}"
+        );
+    }
+
+    fn extract_heading_chain() -> (ChainConfig, ChainState) {
+        let mut config = ChainConfig::new(
+            "T",
+            Some("heading,extract"),
+            "solid",
+            Default::default(),
+            Default::default(),
+        )
+        .expect("valid chain");
+        let block = ExtractBlock::build(
+            BlockSpec {
+                element: "heading".to_string(),
+                output: vec!["out/h.json".to_string()],
+                format: vec!["json".to_string()],
+                ..BlockSpec::default()
+            },
+            0,
+        )
+        .expect("valid block");
+        config.extract = ExtractOptions {
+            blocks: vec![block],
+        };
+        let context =
+            crate::plugins::DocumentContext::new(pendon_plugin_cite::CitationContext::new(
+                serde_json::Value::Object(serde_json::Map::new()),
+                Default::default(),
+            ));
+        let state = ChainState::new(context, std::collections::HashMap::new(), config.pipeline());
+        (config, state)
+    }
+
+    /// T4.4: extraction writes nothing for a `Payload` document — the blocks
+    /// describe the page, not a bound payload (only a `Page` writes
+    /// document-level output).
+    #[test]
+    fn a_payload_document_extracts_nothing() {
+        let (config, mut state) = extract_heading_chain();
+        let events = pendon_core::parse(
+            "## Intro
+",
+            &pendon_core::Options::default(),
+        );
+
+        let _ = run_chain(events.clone(), &config, &mut state, Document::Payload);
+        assert!(
+            state.extract.is_empty(),
+            "a payload wrote {:?}",
+            state.extract
+        );
+
+        let _ = run_chain(events, &config, &mut state, Document::Page);
+        assert_eq!(state.extract.files.len(), 1, "the page still extracts");
     }
 }

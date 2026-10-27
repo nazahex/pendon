@@ -68,7 +68,7 @@ fn collect_exports(v: &Value, hints: Option<&SolidRenderHints>) -> Vec<DataExpor
         registrations.push(DataExport::automatic("frontmatter", export_value(&data)));
     }
     if let Some(data) = metadata::extract_headings(v) {
-        registrations.push(DataExport::automatic("headings", export_value(&data)));
+        registrations.push(DataExport::automatic("headings", data));
     }
     if let Some(hints) = hints {
         registrations.extend(hints.exports.iter().cloned());

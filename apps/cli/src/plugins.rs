@@ -4,6 +4,7 @@ use pendon_plugin_blockquote::{BlockquoteCustomNode, BlockquoteOptions};
 use pendon_plugin_cite::{CitationContext, CiteCustomNode, CiteOptions, ReferencesScope};
 use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
 use pendon_plugin_directive::{DirectiveCustomNode, DirectiveOptions};
+use pendon_plugin_extract::{BlockSpec, ExtractBlock, ExtractOptions};
 use pendon_plugin_heading::{HeadingCustomNode, HeadingOptions};
 use pendon_plugin_image::{ImageCustomNode, ImageOptions};
 use pendon_plugin_list::{ListCustomNode, ListOptions};
@@ -19,8 +20,8 @@ use std::path::Path;
 
 use crate::config::{
     AnchorTaskConfig, BindTaskConfig, BlockquoteTaskConfig, CiteTaskConfig, ConfigTask,
-    HeadingTaskConfig, ImageTaskConfig, ListTaskConfig, NumberRule, OneOrMany, PluginCustomSection,
-    PluginVicadoSection, SectionTaskConfig, TableTaskConfig,
+    ExtractRule, HeadingTaskConfig, ImageTaskConfig, ListTaskConfig, NumberRule, OneOrMany,
+    PluginCustomSection, PluginVicadoSection, SectionTaskConfig, TableTaskConfig,
 };
 use crate::utils::{substitute_output, validate_export_identifier};
 use pendon_types::Selector;
@@ -142,7 +143,6 @@ pub fn process_stateless_plugin(
             None => events.to_vec(),
         },
         "wiki" => pendon_plugin_wiki::process_with_options(events, wiki_options.clone()),
-        "extract-heading" => pendon_plugin_extract_heading::process(events),
         "syntect" => pendon_plugin_codeblock_syntect::process(events),
         _ => return None,
     })
@@ -792,6 +792,118 @@ fn number_block(
         None => NumberStyles::default(),
     };
     Ok(NumberBlock::new(element, selectors, styles))
+}
+/// Every element a `[[task.<element>.extract]]` section can name
+/// (`docs/spec/EXTRAS-INVENTORY.md`).
+///
+/// The five elements §1 lists as in scope but without a layer tag (`wiki`,
+/// `codeblock`, `latex`, `bind`, `micromatter`) are absent on purpose: naming one
+/// is a config error (`build_extract_options`) instead of a block that silently
+/// matches nothing.
+pub const EXTRACT_ELEMENTS: [&str; 10] = [
+    "anchor",
+    "blockquote",
+    "cite",
+    "directive",
+    "heading",
+    "image",
+    "list",
+    "marker",
+    "section",
+    "table",
+];
+
+/// §1 of `docs/spec/EXTRAS-INVENTORY.md`: in scope, but nothing can be extracted
+/// from them yet (no `__layer`, no attributes, or the data already has an
+/// export). A block under one of these names is a config *error*, not a silent
+/// no-op — the section is unknown to the schema, so it has to be caught here
+/// before §13's generic unknown-key warning.
+pub const UNEXTRACTABLE_ELEMENTS: [&str; 5] = ["wiki", "codeblock", "latex", "bind", "micromatter"];
+
+/// Every extraction block of a task, in the order the sections are read.
+///
+/// Like `build_number_options`, the blocks are validated for *every* task: a
+/// typo in `format`, `output` or `type` fails even before `extract` is added to
+/// `task.plugin`, so the config error does not depend on the plugin list. The
+/// pass itself only runs when `extract` is enabled (`chain.rs`).
+pub fn build_extract_options(task: &ConfigTask) -> Result<ExtractOptions, String> {
+    // §1 of the inventory: an element that is in scope but cannot be extracted
+    // fails loudly, so a block never looks accepted while extracting nothing.
+    for element in UNEXTRACTABLE_ELEMENTS {
+        let Some(toml::Value::Table(section)) = task.unknown.get(element) else {
+            continue;
+        };
+        if section.contains_key("extract") {
+            return Err(format!(
+                "task.{element}.extract: `{element}` cannot be extracted yet (§1 of docs/spec/EXTRAS-INVENTORY.md)"
+            ));
+        }
+    }
+    let mut blocks = Vec::new();
+    for element in EXTRACT_ELEMENTS {
+        let rules: Option<&Vec<ExtractRule>> = match element {
+            "anchor" => task.anchor.as_ref().map(|config| &config.extract),
+            "blockquote" => task.blockquote.as_ref().map(|config| &config.extract),
+            "cite" => task.cite.as_ref().map(|config| &config.extract),
+            "directive" => task.directive.as_ref().map(|config| &config.extract),
+            "heading" => task.heading.as_ref().map(|config| &config.extract),
+            "image" => task.image.as_ref().map(|config| &config.extract),
+            "list" => task.list.as_ref().map(|config| &config.extract),
+            "marker" => task.marker.as_ref().map(|config| &config.extract),
+            "section" => task.section.as_ref().map(|config| &config.extract),
+            "table" => task.table.as_ref().map(|config| &config.extract),
+            _ => None,
+        };
+        let Some(rules) = rules else {
+            continue;
+        };
+        for (index, rule) in rules.iter().enumerate() {
+            blocks.push(extract_block(element, rule, index)?);
+        }
+    }
+    Ok(ExtractOptions { blocks })
+}
+
+/// One `[[task.<element>.extract]]` entry as a validated [`ExtractBlock`].
+///
+/// The block owns the `task.<element>.extract[i].<key>` prefix in its errors, so
+/// this only validates the one value the crate does not know about: the export
+/// name, which has to be a JavaScript identifier (§20).
+fn extract_block(element: &str, rule: &ExtractRule, index: usize) -> Result<ExtractBlock, String> {
+    let tokens = |value: &Option<OneOrMany>| -> Vec<String> {
+        value
+            .as_ref()
+            .map(|tokens| {
+                tokens
+                    .tokens()
+                    .iter()
+                    .map(|token| token.to_string())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let export = match &rule.export {
+        Some(name) => Some(validate_export_identifier(
+            &format!("task.{element}.extract[{index}]"),
+            "export",
+            name,
+        )?),
+        None => None,
+    };
+    ExtractBlock::build(
+        BlockSpec {
+            element: element.to_string(),
+            types: tokens(&rule.types),
+            output: tokens(&rule.output),
+            format: tokens(&rule.format),
+            only: tokens(&rule.only),
+            omit: tokens(&rule.omit),
+            recommended: rule.recommended,
+            export,
+        },
+        index,
+    )
+    .map_err(|error| error.to_string())
 }
 
 pub fn track_used_spec(list: &mut Vec<PluginSpec>, spec: PluginSpec) {
@@ -1636,5 +1748,146 @@ template = "<QuoteA {...attrs}>{children}</QuoteA>"
         let exports = build_bind_injects(None, &HashMap::new(), &mut deps).expect("no section");
         assert!(exports.is_empty());
         assert!(deps.is_empty());
+    }
+
+    /// P.1.a/b/c: the three shapes a `[[task.<element>.extract]]` block uses —
+    /// arrays for several destinations, a bare string for one, and `export`
+    /// without an `output`.
+    fn extract_task(toml_src: &str) -> ConfigTask {
+        toml::from_str(&format!(
+            "input = \"./src/[slug].mdp\"\noutput = \"./out/[slug].jsx\"\nformat = \"solid\"\n{toml_src}"
+        ))
+        .expect("valid task config")
+    }
+
+    #[test]
+    fn extract_blocks_keep_the_authored_order_and_values() {
+        let task = extract_task(
+            r#"
+[[cite.extract]]
+type = ["CiteA", "CiteB"]
+output = ["./out/[slug].cite.json", "../../project-2/[category].yaml"]
+format = ["json", "yaml"]
+only = ["citation_number", "instance_id"]
+
+[[cite.extract]]
+export = "citationsC"
+omit = ["instance_id"]
+
+[[cite.extract]]
+output = "./out/[category]-cite-c.yaml"
+format = "yaml"
+export = "citationsC"
+omit = ["instance_id", "extraAttr1"]
+"#,
+        );
+        let options = build_extract_options(&task).expect("valid blocks");
+        assert_eq!(options.blocks.len(), 3);
+
+        let first = &options.blocks[0];
+        assert_eq!(first.element, "cite");
+        assert_eq!(first.selectors.len(), 2);
+        assert_eq!(first.outputs.len(), 2);
+        assert_eq!(first.outputs[0].0, "./out/[slug].cite.json");
+        assert_eq!(first.outputs[1].1, pendon_plugin_extract::Format::Yaml);
+        assert_eq!(first.only, ["citation_number", "instance_id"]);
+        assert!(first.export.is_none());
+
+        // A block with no `type` covers the whole element and writes no file.
+        let second = &options.blocks[1];
+        assert!(second.selectors.is_empty());
+        assert!(second.outputs.is_empty());
+        assert_eq!(second.export.as_deref(), Some("citationsC"));
+
+        // A single `output`/`format` string is one pair, not an error.
+        let third = &options.blocks[2];
+        assert_eq!(third.outputs.len(), 1);
+        assert_eq!(third.destination_count(), 2);
+    }
+
+    #[test]
+    fn extract_blocks_are_grouped_by_their_element_section() {
+        let task = extract_task(
+            r#"
+[[heading.extract]]
+output = "./out/h.json"
+format = "json"
+
+[[table.extract]]
+output = "./out/t.toml"
+format = "toml"
+"#,
+        );
+        let options = build_extract_options(&task).expect("valid blocks");
+        let elements: Vec<&str> = options.blocks.iter().map(|block| block.element).collect();
+        // The order is the element list's, not the config's.
+        assert_eq!(elements, ["heading", "table"]);
+    }
+
+    /// The crate owns the `task.<element>.extract[i].<key>` prefix; a bad format
+    /// is reported against the key the user wrote, with the block's index.
+    #[test]
+    fn extract_errors_name_the_key() {
+        let task = extract_task(
+            r#"
+[[cite.extract]]
+output = ["./a.json", "./b.json"]
+format = "json"
+"#,
+        );
+        let err = build_extract_options(&task).expect_err("mismatched counts");
+        assert!(err.starts_with("task.cite.extract[0].format: "), "{err}");
+        assert!(err.contains("1 format(s) for 2 output(s)"), "{err}");
+    }
+
+    /// `export` goes through the same identifier validator as `bind.inject`
+    /// (§20), so an unexportable name fails at config time.
+    #[test]
+    fn extract_export_names_are_validated() {
+        let task = extract_task(
+            r#"
+[[cite.extract]]
+export = "not a name"
+"#,
+        );
+        let err = build_extract_options(&task).expect_err("invalid identifier");
+        assert!(
+            err.starts_with("task.cite.extract[0].export 'not a name'"),
+            "{err}"
+        );
+    }
+
+    /// No section is not an error: the task simply extracts nothing.
+    #[test]
+    fn extract_is_empty_without_a_section() {
+        let task = extract_task("");
+        assert!(build_extract_options(&task).expect("no section").is_empty());
+    }
+
+    /// §1 of `docs/spec/EXTRAS-INVENTORY.md`: an in-scope element with no
+    /// extractable fields fails by name instead of being silently ignored — the
+    /// section is unknown to the schema, so it lands in `task.unknown`.
+    #[test]
+    fn an_unextractable_element_is_rejected_by_name() {
+        let task = extract_task(
+            r#"
+[[wiki.extract]]
+output = "./out/[slug].wiki.json"
+format = "json"
+"#,
+        );
+        let err = build_extract_options(&task).expect_err("wiki is not extractable");
+        assert!(err.starts_with("task.wiki.extract: "), "{err}");
+        assert!(err.contains("cannot be extracted yet"), "{err}");
+    }
+
+    /// A known-but-empty `[task.wiki]` table is *not* an extraction error: only
+    /// an `extract` block under it is.
+    #[test]
+    fn other_unknown_sections_are_not_extraction_errors() {
+        let task = extract_task("[wiki]\nlink_prefix = \"/wiki/\"\n");
+        assert!(build_extract_options(&task)
+            .expect("not an extract block")
+            .is_empty());
     }
 }

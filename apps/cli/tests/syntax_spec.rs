@@ -66,7 +66,7 @@ fn copy_data_dir(stem: &str, dir: &Path) {
     }
 }
 
-fn render(stem: &str) -> String {
+fn render(stem: &str) -> (PathBuf, String) {
     let dir = write_project(stem);
     let mut cmd = cargo_bin_cmd!("pendon");
     cmd.current_dir(&dir)
@@ -76,17 +76,55 @@ fn render(stem: &str) -> String {
         .arg("-F")
         .assert()
         .success();
-    fs::read_to_string(dir.join("out").join(format!("{stem}.jsx"))).expect("rendered output")
+    let out =
+        fs::read_to_string(dir.join("out").join(format!("{stem}.jsx"))).expect("rendered output");
+    (dir, out)
 }
 
-/// Renders the fixture and compares it with the checked-in golden.
+/// Compares a fixture's side files with what the render wrote beside the page.
+///
+/// An `[[task.<element>.extract]]` block writes files, not markup, so the golden
+/// for one is the file itself: `NN-name.out/` mirrors the project's `out/`
+/// directory (the page's own `.jsx` is compared separately). A fixture without
+/// that directory promises no side file.
+fn assert_side_outputs(stem: &str, dir: &Path) {
+    let from = golden_dir().join(format!("{stem}.out"));
+    if !from.is_dir() {
+        return;
+    }
+
+    let mut entries: Vec<PathBuf> = fs::read_dir(&from)
+        .expect("read golden side dir")
+        .map(|entry| entry.expect("side entry").path())
+        .collect();
+    entries.sort();
+
+    for expected_path in entries {
+        let name = expected_path
+            .file_name()
+            .expect("a file name")
+            .to_string_lossy()
+            .into_owned();
+        let expected = fs::read_to_string(&expected_path)
+            .unwrap_or_else(|error| panic!("{stem}.out/{name}: {error}"));
+        let actual_path = dir.join("out").join(&name);
+        let actual = fs::read_to_string(&actual_path).unwrap_or_else(|error| {
+            panic!("{stem}.out/{name}: {error} (the render wrote no such side file)")
+        });
+        assert_eq!(actual, expected, "{stem}.out/{name} does not match");
+    }
+}
+
+/// Renders the fixture and compares it — page and side files — with the
+/// checked-in golden.
 fn assert_fixture(stem: &str) {
     let golden_path = golden_dir().join(format!("{stem}.jsx"));
     let expected =
         fs::read_to_string(&golden_path).unwrap_or_else(|error| panic!("{stem}.jsx: {error}"));
-    let actual = render(stem);
+    let (dir, actual) = render(stem);
 
     if actual == expected {
+        assert_side_outputs(stem, &dir);
         return;
     }
 
@@ -299,4 +337,23 @@ fn golden_30_number_heading() {
 #[test]
 fn golden_31_number_custom() {
     assert_fixture("31-number-custom");
+}
+
+/// §16.3 fixture 32: the `headings` export without `plugin-extract-heading`
+/// (T4.5/T4.7). `renderer-solid` builds the **nested** outline from the AST, so
+/// the data the deleted plugin injected is unchanged, while
+/// `[[task.heading.extract]]` writes the same headings as a **flat** array with
+/// `depth` — to a side file and to `export const outline`.
+#[test]
+fn golden_32_extract_heading() {
+    assert_fixture("32-extract-heading");
+}
+
+/// §16.3 fixture 33: P.1.a/b/c of `plugin-extract` (T4.7) — two `type`-scoped
+/// blocks writing two files in two formats, a `_` block for the untyped
+/// remainder, and one `export` name registered twice where the later block wins
+/// entirely (D-6).
+#[test]
+fn golden_33_extract_scopes() {
+    assert_fixture("33-extract-scopes");
 }

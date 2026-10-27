@@ -25,7 +25,10 @@ use std::time::SystemTime;
 
 /// Record schema. A record written by another version is ignored (and replaced),
 /// so a layout change costs one cold run, never a manual `--clean-cache`.
-pub const CACHE_VERSION: u32 = 1;
+///
+/// `2`: `side_outputs` joins the record (T4.6) — a page whose extraction wrote a
+/// side file is stale once that file is deleted or edited.
+pub const CACHE_VERSION: u32 = 2;
 
 const CACHE_ROOT: &str = "./.pendon/cache";
 
@@ -37,6 +40,17 @@ const LEGACY_MANIFEST: &str = "./.pendon/cache.toml";
 /// A file the render depended on, with the content hash it had at the time.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DepInfo {
+    pub path: String,
+    pub hash: String,
+}
+
+/// A file the render **wrote beside** its output — an `[[task.<element>.extract]]`
+/// side file — with the content hash it wrote (P.1.a, T4.6).
+///
+/// Same shape as [`DepInfo`], different question: a dependency must not change, a
+/// side output must still exist *and* still hold what the render produced.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OutputInfo {
     pub path: String,
     pub hash: String,
 }
@@ -61,6 +75,12 @@ pub struct CacheEntry {
     pub output_hash: String,
     pub mtime: u64,
     pub deps: Vec<DepInfo>,
+    /// Files this render wrote besides its output (extraction side files), with
+    /// the hash each one had right after it was written. A record that predates
+    /// the field deserialises to an empty list — and its `version` gate replaces
+    /// it anyway.
+    #[serde(default)]
+    pub side_outputs: Vec<OutputInfo>,
 }
 
 /// Handle on `.pendon/cache`. Cheap to create; every operation is a single file
@@ -119,21 +139,15 @@ impl CacheStore {
     /// leaves either the old record or the new one.
     pub fn put(&self, entry: &CacheEntry) -> Result<(), String> {
         let path = self.record_path(&entry.task, &entry.input);
-        let dir = path
-            .parent()
-            .ok_or_else(|| format!("cache path {} has no parent", path.display()))?;
-        fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {}", dir.display(), e))?;
-
         let text = toml::to_string_pretty(entry)
             .map_err(|e| format!("cannot serialize cache record: {}", e))?;
-        let tmp = path.with_extension("toml.tmp");
-        fs::write(&tmp, text).map_err(|e| format!("cannot write {}: {}", tmp.display(), e))?;
-        fs::rename(&tmp, &path).map_err(|e| format!("cannot replace {}: {}", path.display(), e))
+        write_atomically(&path, &text)
     }
 
     /// True when `input` would still render `output` byte-identically for this
-    /// task: same task config, same input bytes, every dependency unchanged, and
-    /// the output still on disk.
+    /// task: same task config, same input bytes, every dependency unchanged, the
+    /// output still on disk, and every side file the render wrote still there
+    /// with the content it wrote (T4.6).
     pub fn is_fresh(&self, task: &str, input: &str, output: &str, config_hash: &str) -> bool {
         let Some(entry) = self.get(task, input) else {
             return false;
@@ -163,6 +177,12 @@ impl CacheStore {
             .deps
             .iter()
             .all(|dep| hash_file(Path::new(&dep.path)).is_ok_and(|hash| hash == dep.hash))
+            // A side file is output, not a log: deleting or editing it means the
+            // page's data is no longer on disk, so the page is stale.
+            && entry
+                .side_outputs
+                .iter()
+                .all(|side| hash_file(Path::new(&side.path)).is_ok_and(|hash| hash == side.hash))
     }
 
     /// `--clean-cache`: forget every record, and a legacy manifest with them.
@@ -187,6 +207,29 @@ impl CacheStore {
 /// for any number of tasks without collisions.
 fn record_key(task: &str, input: &str) -> String {
     hash_content(&format!("{}\u{1f}{}", task, input))
+}
+
+/// Write `text` to `path` through a sibling `<name>.tmp` and a rename.
+///
+/// The one atomic write in the CLI: a cache record and an extraction side file
+/// both go through it, so a crash leaves the old file or the new one, never a
+/// half-written one (a reader of a side file would otherwise parse truncated
+/// JSON). The parent directory is created first, so callers need not.
+pub fn write_atomically(path: &Path, text: &str) -> Result<(), String> {
+    if let Some(parent) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("cannot create {}: {}", parent.display(), e))?;
+    }
+
+    let mut tmp = path.as_os_str().to_os_string();
+    tmp.push(".tmp");
+    let tmp = PathBuf::from(tmp);
+
+    fs::write(&tmp, text).map_err(|e| format!("cannot write {}: {}", tmp.display(), e))?;
+    fs::rename(&tmp, path).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        format!("cannot replace {}: {}", path.display(), e)
+    })
 }
 
 pub fn hash_content(content: &str) -> String {
@@ -215,18 +258,24 @@ pub fn get_file_mtime(path: &Path) -> Result<u64, String> {
 }
 
 /// Build the record for a render that succeeded: the state of the input, the
-/// output and every dependency, stamped with the task configuration that
-/// produced it.
+/// output, every dependency and every side file it wrote, stamped with the task
+/// configuration that produced it.
 ///
 /// `output` may be missing (a task whose output a hook moved, for instance); the
 /// record then stores an empty `output_hash`, and [`CacheStore::is_fresh`] keeps
 /// reporting the file as stale until the output exists again.
+///
+/// A side path that does not exist is **not recorded**: extraction writes a file
+/// only when a block matched something (P.1.a), so a missing one is a decision of
+/// the render, not a lost output. One that exists is recorded with its hash, and
+/// [`CacheStore::is_fresh`] then requires it to stay.
 pub fn create_entry(
     task: &str,
     config_hash: &str,
     input: &str,
     output: &str,
     deps: Vec<String>,
+    side_outputs: Vec<String>,
 ) -> Result<CacheEntry, String> {
     let input_path = Path::new(input);
     let output_path = Path::new(output);
@@ -249,6 +298,14 @@ pub fn create_entry(
         })
         .collect();
 
+    let side_infos = side_outputs
+        .into_iter()
+        .filter_map(|path| {
+            let hash = hash_file(Path::new(&path)).ok()?;
+            Some(OutputInfo { path, hash })
+        })
+        .collect();
+
     Ok(CacheEntry {
         version: CACHE_VERSION,
         task: task.to_string(),
@@ -259,6 +316,7 @@ pub fn create_entry(
         output_hash,
         mtime,
         deps: dep_infos,
+        side_outputs: side_infos,
     })
 }
 
@@ -310,6 +368,7 @@ mod tests {
                 &self.input,
                 &self.output,
                 vec![self.config.clone()],
+                Vec::new(),
             )
             .expect("build entry")
         }
@@ -426,13 +485,79 @@ mod tests {
         let path = store.record_path("Site", &project.input);
         let text = fs::read_to_string(&path)
             .expect("read record")
-            .replace("version = 1", "version = 0");
+            .replace("version = 2", "version = 0");
         fs::write(&path, text).expect("downgrade record");
 
         assert_eq!(store.get("Site", &project.input), None);
         assert!(
             !path.exists(),
             "an unreadable record must be removed, not kept to rot"
+        );
+    }
+
+    /// T4.6: a side file the render wrote is part of what it produced, so
+    /// deleting it (or editing it) makes the page stale and the next run rewrites
+    /// it. A side file the render did **not** write is not recorded, so a block
+    /// that matched nothing never keeps a page permanently stale.
+    #[test]
+    fn a_side_output_must_still_exist_with_its_content() {
+        let project = project();
+        let store = project.store();
+        let side = project.dir.path().join("out").join("doc.cite.json");
+        fs::write(&side, "[\n]\n").expect("write side file");
+        let side = side.to_string_lossy().into_owned();
+        let absent = project.dir.path().join("out").join("doc.cite.yaml");
+        let absent = absent.to_string_lossy().into_owned();
+
+        let entry = create_entry(
+            "Site",
+            "cfg",
+            &project.input,
+            &project.output,
+            vec![project.config.clone()],
+            vec![side.clone(), absent.clone()],
+        )
+        .expect("build entry");
+        assert_eq!(
+            entry
+                .side_outputs
+                .iter()
+                .map(|info| info.path.as_str())
+                .collect::<Vec<_>>(),
+            vec![side.as_str()],
+            "only the file the render wrote is recorded"
+        );
+        store.put(&entry).expect("put");
+
+        assert!(store.is_fresh("Site", &project.input, &project.output, "cfg"));
+
+        fs::write(&side, "[\n {\"ref_id\": \"alpha\"}\n]\n").expect("edit side file");
+        assert!(
+            !store.is_fresh("Site", &project.input, &project.output, "cfg"),
+            "an edited side file must be rebuilt"
+        );
+
+        fs::remove_file(&side).expect("remove side file");
+        assert!(
+            !store.is_fresh("Site", &project.input, &project.output, "cfg"),
+            "a deleted side file must be rewritten"
+        );
+    }
+
+    /// The lift in T4.6: one atomic write for records and side files, with no
+    /// `.tmp` left behind.
+    #[test]
+    fn write_atomically_replaces_the_file_and_leaves_no_temp() {
+        let dir = tempdir().expect("temp dir");
+        let path = dir.path().join("nested").join("side.json");
+
+        write_atomically(&path, "first\n").expect("write");
+        write_atomically(&path, "second\n").expect("replace");
+
+        assert_eq!(fs::read_to_string(&path).expect("read"), "second\n");
+        assert!(
+            !Path::new(&format!("{}.tmp", path.display())).exists(),
+            "the temp file must be renamed, not left behind"
         );
     }
 }

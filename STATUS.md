@@ -17,8 +17,8 @@ line is done, delete it (the git history is the record) — keep this file short
 ## Current focus
 
 Four proposals, one sequenced plan ([`docs/workflows/`](docs/workflows/), 40 tasks
-in [`TASKS.md`](docs/workflows/TASKS.md)). **Phases 0–3 are landed**; Phase 4
-(`plugin-extract`) is next.
+in [`TASKS.md`](docs/workflows/TASKS.md)). **Phases 0–4 are landed**; the gates and
+the L37 blocker are what is left.
 
 - **Phase 0/1 — shared types.** `pendon-types` (`Selector`, `TypeSet`, `Rule`,
   `Group`, `winner`, `matching`) answers `type = …` selectors; `D-3a`: the
@@ -38,8 +38,28 @@ in [`TASKS.md`](docs/workflows/TASKS.md)). **Phases 0–3 are landed**; Phase 4
   re-rendering: `renderer-html` leaked `__layer` on a `Link` (it writes
   `href`/`title` itself, bypassing the `__` skip) — fixed + tested.
 
-**Next:** Phase 4 — `plugin-extract` (T4.1). The only open blockers are the
-`plugin-list` item layer (L37) and the sandbox/docs cleanup listed below.
+**Phase 4 — `plugin-extract` (landed).** `[[task.<element>.extract]]` collects the
+ten extractable elements' fields into flat rows (`type` selectors, `recommended` /
+`only` / `omit` with omit always winning), writes them to side files (`json` /
+`yaml` / `toml`, `[slug]`-dynamic paths, one path = one array) and registers
+`export const` on Solid tasks (SYNTAX §21, ADR-0011). `extract` runs as a chain
+stage that only _reads_ the stream, so it must come **last**. Only a `Page`
+writes document-level outputs — a `mdp` payload skips `extract`. Side files are
+`CacheEntry.side_outputs` (`CACHE_VERSION = 2`), so deleting one makes the next
+run rewrite it, through the shared `write_atomically`.
+`plugin-extract-heading` is **deleted**; the automatic nested `headings` export is
+now built by `renderer-solid` from the AST (byte-identical for `sandbox/heading`,
+but since it no longer depends on a plugin it appears on every Solid document
+with headings — eight goldens re-frozen with that one line). Goldens
+`32-extract-heading` and `33-extract-scopes` (`NN-name.out/` freezes side files
+too); `sandbox/extract` runs and writes all four of its outputs.
+
+**Next:** the L37 blocker below (it also unblocks Step 3 and Step 6b), then the
+deferred replay of the stale sandbox baselines. The Phase-4 gates are closed:
+`cargo test --workspace`, `cargo clippy --workspace --all-targets` and
+`cargo fmt --all -- --check` are green, the eight re-frozen goldens moved by
+exactly one `export const headings` line each (no bytes removed), and
+`sandbox/{unified,universal,multi}` re-render byte-identically.
 
 ## Open blockers
 
@@ -116,8 +136,12 @@ in [`TASKS.md`](docs/workflows/TASKS.md)). **Phases 0–3 are landed**; Phase 4
 - [ ] **Step 6b — ultimate sandbox (list container).** L53/L54/L55 container
       decorator + bracket group, unclaimed container type, pair lost to the anchor
       layer. (blocked by L37)
-- [ ] **Step 7 — full gates.** `cargo test --workspace`, `cargo build --workspace`,
-      `cargo fmt --check`, `git diff` review of every golden / baseline move.
+- [x] **Step 7 — full gates.** `cargo test --workspace`, `cargo clippy
+      --workspace --all-targets`, `cargo fmt --all -- --check` green; golden diff
+      reviewed (one added `headings` line per fixture, nothing removed);
+      `sandbox/{unified,universal,multi}` re-render identically. `sandbox/ultimate`
+      still moves (`headings` ids only) — it is L37's baseline, not a Phase-4
+      regression.
 
 ## Deferred
 
@@ -128,15 +152,18 @@ in [`TASKS.md`](docs/workflows/TASKS.md)). **Phases 0–3 are landed**; Phase 4
   `class="q"`, `cra-1` where the cite id is `cite-1` (and
   `img/image/out/extra.html` drifts near L37). Re-rendering them is a reviewable
   separate pass — do not cite them as truth until then. `sandbox/number/` is a
-  pre-implementation sketch (no source, non-runnable `pendon.toml`).
+  pre-implementation sketch (no source, non-runnable `pendon.toml`). Measured for
+  `sandbox/ultimate`: a fresh render differs from its baseline in the
+  `export const headings` line only — 3 headings in `default`/`full` plus
+  `subset`, whose baseline predates any `headings` export. Two of the three are
+  L37's swallowed body text; the third is a heading inside a blockquote, which now
+  takes its enclosing section's id (§6.2/§9.5). Not a Phase-4 regression.
 
 - **§11 threading gaps** (from the positional-keys pass):
   - `plugin-table`: `extras_to_layer(head)` still uses `ExtrasOptions::default()`;
     thread `TableOptions` into the 7-layer head scan.
   - `plugin-wiki`: `WikiOptions` carries no `ComponentSet`, so extras stay on the
     built-in `slug`/`title`; add `[task.wiki.custom]` to lift this.
-  - `extract-heading`: `process(events)` takes no options; thread heading options
-    if `[task.heading.custom]` renames `backtick_key`.
 - **Phase-4 cleanup** (Step 7): OPEN-R1 `:::` deprecated alias with warning; archive
   `docs/rfc/unified-syntax.md`; rewrite `sandbox/unified`; trim
   `docs/todo/syntaxes.md`.
@@ -147,8 +174,12 @@ in [`TASKS.md`](docs/workflows/TASKS.md)). **Phases 0–3 are landed**; Phase 4
 
 ## Golden & freeze status (see [`docs/spec/golden/README.md`](docs/spec/golden/README.md))
 
-- Golden fixtures `01–12`, `14–16`, `21–28`, `30–31` are frozen and green; none
-  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (25 fixtures) is the gate.
-- `06-heading` was re-frozen for Phase 3: it loses the numbers `plugin-heading`
-  used to compute, and keeps its authored `number:` props (they pass through now).
-  `28-type-selectors` dropped its `auto_number` key with no output change.
+- Golden fixtures `01–12`, `14–16`, `21–28`, `30–33` are frozen and green; none
+  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (27 fixtures) is the gate.
+- Phase 3 re-froze `06-heading` (it loses the numbers `plugin-heading` used to
+  compute and keeps its authored `number:` props) and `28-type-selectors`
+  (dropped `auto_number`, no output change).
+- Phase 4 added one line to every golden with headings (`06`, `16`, `21`, `22`,
+  `25`, `28`, `30`, `31`): `export const headings` is now automatic instead of
+  depending on the deleted `plugin-extract-heading`. No other byte moved; `32`
+  and `33` are new (the latter also freezes side files in `NN-name.out/`).
