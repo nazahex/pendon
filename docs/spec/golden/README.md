@@ -15,7 +15,13 @@ docs/spec/golden/NN-name.toml         pendon.toml for the fixture (plugins + cus
 docs/spec/golden/NN-name.jsx          expected Solid output (GENERATED — do not hand-edit)
 docs/spec/golden/NN-name.events.json  expected event IR (optional, for parser bugs)
 docs/spec/golden/NN-name.data/        payload files a fixture reads from a path (optional; copied to `data/`)
+docs/spec/golden/NN-name.out/         side files the render writes beside the page (optional; mirrors `out/`)
 ```
+
+`NN-name.out/` exists for fixtures whose task writes files — an
+`[[task.<element>.extract]]` block (§21 of `SYNTAX.md`). Every file in it is
+compared byte-for-byte with the file the render wrote under `out/`, so the side
+file is as frozen as the page.
 
 The `.mdp` files are written to **double as prose**: they carry short comments
 explaining the rule the fixture exercises (e.g. `01-extras-head.mdp` explains that
@@ -29,7 +35,7 @@ explaining the rule the fixture exercises (e.g. `01-extras-head.mdp` explains th
 cover config loading and the full CLI path, not just the parsers.
 
 ```bash
-cargo test -p pendon --test syntax_spec      # 23 fixtures, none #[ignore]d
+cargo test -p pendon --test syntax_spec      # 27 fixtures, none #[ignore]d
 ```
 
 ## Re-freezing (when output intentionally changes)
@@ -76,11 +82,13 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | 28 | `type-selectors`   | `type` as selectors — `*` / literal / `_` / `?` against one document (§11, ADR-0008 `D-3a`) |
 | 30 | `number-heading`   | `[[task.heading.number]]` — one counter for `HeadingA`+`HeadingB`, styles per depth, undefined depth defaults to decimal, unselected types stay bare (ADR-0010, P.1) |
 | 31 | `number-custom`    | `%%numberType` markers: marker depth (`%`−1), marker beats element numbering, `[[task.number.custom]]` blocks, numbers on headings/anchors/images (ADR-0010, P.2) |
+| 32 | `extract-heading`  | `[[task.heading.extract]]` — a file **and** `export const outline`; the automatic nested `headings` survives the deletion of `plugin-extract-heading` (ADR-0011, T4.5/T4.7) |
+| 33 | `extract-scopes`   | P.1.a/b/c — two `type`-scoped blocks (two paths, two formats), the `_` remainder, and one `export` name where the later block wins (D-6) |
 
 Fixtures 17–20 are covered by unit tests in the renderer/CLI crates rather than as
 golden files.
 
-## Two findings to keep in mind
+## Three findings to keep in mind
 
 - A `Link` node produced by the core lexer inside an extras head is rebuilt by
   `plugin-table` before the table is parsed, so a long `("title")` in the
@@ -88,3 +96,7 @@ golden files.
 - The cite head's location is the quoted string after the unquoted reference
   (`[^^](book "hlm. 45")`); it fills the same `loc` slot as an extras `loc:` prop,
   with the head winning (fixture 05).
+- `extract` reads the stream, so it must run **last**: with `extract` before
+  `markdown` the source lines are not nodes yet and the rows are half-parsed
+  (headings swallow the rest of the document). The validator only rejects an
+  element plugin or `number` placed after it (fixture 32).

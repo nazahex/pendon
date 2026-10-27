@@ -1,0 +1,9 @@
+This fixture is P.1.a/b/c of `docs/issues/plugin-extract.md`: three `cite` blocks over
+one element. Two name `CiteA`/`CiteB` and write two destinations each in two formats
+through one block; the third names no type — `_`, the safety net for the types no
+block names — and takes `citationsC` away from the block before it, because a later
+`export` of the same name wins entirely (D-6). `references` still lists every entry:
+extraction reads the document, it does not cite anything.
+
+A [^^](alpha)@@CiteA, B [^^](beta)@@CiteB, C [^^](gamma).
+

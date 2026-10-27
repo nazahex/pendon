@@ -1,0 +1,36 @@
+[[task]]
+name = "Golden 33"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,cite,extract,markdown"
+format = "solid"
+
+# P.1.a: one block, two paths, two formats — the rows are the `CiteA`+`CiteB` slice.
+[[task.cite.extract]]
+type = ["CiteA", "CiteB"]
+output = ["./out/[slug].cite.json", "./out/[slug].cite.yaml"]
+format = ["json", "yaml"]
+only = ["ref_id", "citation_number"]
+
+# P.1.c: this block owns `citationsC` first…
+[[task.cite.extract]]
+export = "citationsC"
+
+# …and the later block wins, value and position alike (D-6), while the `_`-scoped
+# row (`gamma` is untyped) still lands in its own file.
+[[task.cite.extract]]
+output = "./out/[slug].rest.yaml"
+format = "yaml"
+export = "citationsC"
+recommended = true
+only = ["ref_id", "citation_number"]
+omit = ["ref_id"]
+
+[task.cite]
+reference_source = "external"
+reference_file = "./data/refs.yaml"
+
+[task.cite.custom]
+name = "Cite"
+imports = "import { Cite } from '@comp/Cite'"
+template = "<Cite {...attrs} />"

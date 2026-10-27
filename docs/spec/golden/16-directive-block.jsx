@@ -1,6 +1,7 @@
 import { DirectiveDefault } from '@comp/Directive'
 import { Note } from '@comp/Directive'
 
+export const headings = [{"id":"a-heading-inside-the-directive","level":1,"text":"A heading inside the directive"}];
 export default function PendonView() { return (<>
 <p>A block directive owns its line and its body is parsed as block content (§10.3):
 </p>

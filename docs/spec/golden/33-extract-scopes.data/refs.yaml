@@ -1,0 +1,24 @@
+alpha:
+  type: book
+  title: Alpha
+  authors:
+    - family: A
+      given: A
+  issuedDate:
+    year: 2020
+beta:
+  type: article
+  title: Beta
+  authors:
+    - family: B
+      given: B
+  issuedDate:
+    year: 2021
+gamma:
+  type: book
+  title: Gamma
+  authors:
+    - family: G
+      given: G
+  issuedDate:
+    year: 2022

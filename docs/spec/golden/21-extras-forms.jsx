@@ -1,3 +1,4 @@
+export const headings = [{"id":"slug-a","level":3,"text":"A typed heading"}];
 export default function PendonView() { return (<>
 <p>The bare <code>&#123;…&#125;</code> spelling is the same head as <code>@@&#123;…&#125;</code> (§3); the <code>@@</code> prefix only
 adds the optional type marker (§4.1):

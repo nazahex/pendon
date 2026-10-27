@@ -2,6 +2,7 @@ import { HeadingFallback } from '@comp/Fallback'
 import { HeadingTypeA } from '@comp/SpecialA'
 import { HeadingUntyped } from '@comp/Untyped'
 
+export const headings = [{"id":"heading-a","level":3,"text":"TypeA — the literal (R.2) beats * (R.1)"},{"id":"heading-b","level":3,"text":"TypeB — no entry names it, so it lands in _ (R.3)"},{"id":"heading-c","level":3,"text":"TypeC — also _; R.3 is later than R.1 at equal specificity"},{"id":"heading-d","level":3,"text":"TypeD — a type nobody wrote down still occurs, so it is _ too"},{"id":"a-heading-with-no-head-is-untyped","level":2,"text":"A heading with no @@ head is untyped"},{"id":"r-1-never-wins-here","level":2,"text":"* (R.1) never wins here"}];
 export default function PendonView() { return (<>
 <p><code>type</code> in a <code>[task.&lt;layer&gt;.custom]</code> entry is a <strong>selector</strong>, and the renderer
 resolves every layer <strong>once per document</strong> against the types the document

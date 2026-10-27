@@ -1,3 +1,4 @@
+export const headings = [{"id":"slug-section","level":2,"text":"Section A"},{"id":"bare-section-b","level":2,"text":"Bare Section B"}];
 export default function PendonView() { return (<>
 <section>
 <p>§9.5: a decorator line above a heading decorates the <strong>section</strong>, not the

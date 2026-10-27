@@ -1,6 +1,7 @@
 import { HeadingDefault } from '@comp/Heading'
 import { HeadingXY } from '@comp/Heading'
 
+export const headings = [{"id":"slug-head","level":3,"text":"Extras-routed heading"},{"id":"heading-y","level":3,"text":"Routed by the second marker"},{"id":"unrouted","level":3,"text":"An unclaimed marker keeps the layer default"},{"id":"a-plain-heading-without-extras","level":2,"text":"A plain heading without extras"}];
 export default function PendonView() { return (<>
 <p><code>[slug]</code>, <code>(&quot;title&quot;)</code> and <code>@@type&#123;…&#125;</code> are all optional and independent (§7.4).
 </p>

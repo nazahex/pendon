@@ -1,0 +1,37 @@
+---
+Foo: Bar
+# Frontmatter Comment
+---
+
+This fixture pins the automatic `headings` export (§20) in the **nested** shape the
+retired `plugin-extract-heading` used to inject. `renderer-solid` now builds that
+outline from the AST, so `sandbox/heading` renders byte-identically without the
+plugin. The `[[task.heading.extract]]` block is the plugin's replacement: the same
+headings as a **flat** array with `depth`.
+
+A heading is a heading wherever the lexer finds one — inside a section, inside an
+HTML comment, or inside a `{{{…}}}` block that no `bind` stage consumed. A code
+fence is not:
+
+# Lorem Isum
+
+## Foo Bar
+
+## Bar Foo
+
+
+<!--
+# Markdown Comment
+-->
+
+# Hiz
+
+
+{{{toml[dataY]
+# Bind Comment
+}}}
+
+```
+## Codefence Comment
+```
+

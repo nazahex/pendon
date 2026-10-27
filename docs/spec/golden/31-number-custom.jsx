@@ -1,5 +1,6 @@
 import { Heading } from '@comp/Heading'
 
+export const headings = [{"id":"slug-heading","level":2,"text":"Title Heading - I.a (depth 2, so the missing parent counts as I)"},{"id":"slug","level":2,"text":"Will Be Numbered IV"},{"id":"will-be-numbered-iv-a-1-number-depth-3-even-though-heading-depth-is-2","level":2,"text":"Will Be Numbered IV.a.1 (number depth 3, even though heading depth is 2)"},{"id":"will-be-numbered-a","level":2,"subheadings":[{"id":"will-be-numbered-a-a","level":3,"text":"Will Be Numbered A.a"}],"text":"Will Be Numbered A"},{"id":"will-be-numbered-b","level":2,"text":"Will Be Numbered B"}];
 export default function PendonView() { return (<>
 <p><code>%%numberType</code> is an extras item (§5): the marker names a <code>[[task.number.custom]]</code>
 block and carries its own depth (<code>%</code> count − 1). It always beats the element&#39;s

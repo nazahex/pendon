@@ -1,5 +1,6 @@
 import { Heading } from '@comp/Heading'
 
+export const headings = [{"id":"will-be-numbered-1","level":1,"subheadings":[{"id":"will-be-numbered-1-1","level":2,"text":"Will Be Numbered 1.1"},{"id":"will-be-numbered-1-2","level":2,"subheadings":[{"id":"will-be-numbered-1-2-a","level":3,"subheadings":[{"id":"will-be-numbered-1-2-a-1-1-an-undefined-depth-style-defaults-to-decimal","level":5,"text":"Will Be Numbered 1.2.a.1.1 (an undefined depth style defaults to decimal)"}],"text":"Will Be Numbered 1.2.a"}],"text":"Will Be Numbered 1.2"},{"id":"will-not-be-numbered","level":2,"text":"Will Not Be Numbered"},{"id":"will-not-be-numbered","level":2,"text":"Will Not Be Numbered"}],"text":"Will Be Numbered 1"},{"id":"will-not-be-numbered","level":1,"subheadings":[{"id":"will-be-numbered-1-3","level":2,"text":"Will Be Numbered 1.3"}],"text":"Will Not Be Numbered"}];
 export default function PendonView() { return (<>
 <p><code>[[task.heading.number]]</code> scopes one counter with <code>type</code> selectors (ADR-0010).
 The plugin writes <code>attrs.number</code> — an array of one string per depth — and never

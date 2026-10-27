@@ -1,0 +1,25 @@
+[[task]]
+name = "Golden 32"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,section,heading,number,markdown,extract"
+format = "solid"
+
+[[task.heading.number]]
+style = "decimal"
+
+[task.heading.custom.heading]
+name = "DocHeading"
+template = "<DocHeading {...attrs} >{children}</DocHeading>"
+
+[[task.heading.custom.heading.imports]]
+module = "@/components/DocHeading"
+default = "DocHeading"
+
+# T4.5/T4.7: the deleted plugin's outline as an ordinary extract — the same
+# headings, flat, with `depth`, and both destinations of one block (P.1).
+[[task.heading.extract]]
+output = "./out/[slug].heading.json"
+format = "json"
+export = "outline"
+omit = ["number"]
