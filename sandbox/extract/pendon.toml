@@ -44,7 +44,7 @@ references_export = "references"
 # citations_export = "citations" this field is no longer valid and needed
 references_scope = "all"
 
-[task.cite.custom]
+[[task.cite.custom]]
 name = "Cite"
 imports = "import { Cite } from '@comp/Cite'"
 template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"

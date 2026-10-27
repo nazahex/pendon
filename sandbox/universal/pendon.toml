@@ -10,7 +10,7 @@ markdown_allow_html = true
 [task.cite]
 reference_source = "internal"
 
-[task.cite.custom]
+[[task.cite.custom]]
 name = "Cite"
 template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
 

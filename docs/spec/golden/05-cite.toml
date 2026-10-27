@@ -8,7 +8,7 @@ format = "solid"
 [task.cite]
 reference_source = "internal"
 
-[task.cite.custom]
+[[task.cite.custom]]
 name = "Cite"
 imports = "import { Cite } from '@comp/Cite'"
 template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"

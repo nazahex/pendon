@@ -80,6 +80,15 @@ impl ComponentEntry {
         self.selectors.is_empty()
     }
 
+    /// True when the entry names a component (`name` / `template` / `imports`).
+    ///
+    /// This is what reaches the renderer. A **fields-only** entry (D-8) is
+    /// `false` here even though it is a perfectly good entry: it configures
+    /// public field names instead of a component.
+    pub fn is_configured(&self) -> bool {
+        self.name.is_some() || self.template.is_some() || !self.imports.is_empty()
+    }
+
     /// Answers `type_marker` through a **literal** selector, or `None` when it
     /// is not this entry's type.
     ///
@@ -143,6 +152,31 @@ impl ComponentSet {
         self.typed.push(entry);
         Ok(())
     }
+
+    /// The field config a node of `type_marker` uses (D-8 merge order): a typed
+    /// entry for that marker beats the layer default, and an entry with no
+    /// `field.*` keys is transparent — the next level applies.
+    ///
+    /// `None` means "configured nothing", which keeps the element's preset
+    /// assignments alive (D-7).
+    #[allow(dead_code)] // D-7 read side: wired per element in `S2-2.6`.
+    pub fn field_config(&self, type_marker: Option<&str>) -> Option<&FieldConfig> {
+        if let Some(marker) = type_marker {
+            if let Some(field) = self
+                .typed
+                .iter()
+                .filter(|entry| entry.matches_type(marker))
+                .map(|entry| &entry.field)
+                .find(|field| !field.is_empty())
+            {
+                return Some(field);
+            }
+        }
+        self.default
+            .as_ref()
+            .map(|entry| &entry.field)
+            .filter(|field| !field.is_empty())
+    }
 }
 
 /// Every layer's component set for one task-level plugin.
@@ -158,6 +192,14 @@ impl PluginComponents {
 
     pub fn layer(&self, layer: &str) -> Option<&ComponentSet> {
         self.layers.get(layer)
+    }
+
+    /// The field config for one layer and type marker (see
+    /// [`ComponentSet::field_config`]); `None` for an unknown layer.
+    #[allow(dead_code)] // D-7 read side: wired per element in `S2-2.6`.
+    pub fn field_config(&self, layer: &str, type_marker: Option<&str>) -> Option<&FieldConfig> {
+        self.layer(layer)
+            .and_then(|set| set.field_config(type_marker))
     }
 
     fn entry(&mut self, layer: &str) -> &mut ComponentSet {
@@ -243,9 +285,16 @@ pub fn load(
                 merge_set(&mut out.components, set)?;
             }
         }
+        // D-8: `custom` is **always** an array of entries. A single table is
+        // ambiguous — it reads as one entry *and* as a map of layers — so it is
+        // a load error, never a guess (D-16).
         toml::Value::Table(_) => {
-            let set = parse_set(plugin, primary_layer, custom, &mut out.warnings)?;
-            merge_set(&mut out.components, set)?;
+            return Err(ConfigError(format!(
+                "task.{plugin}.custom must be an array of tables \
+                 (`[[task.{plugin}.custom]]`); a single `[task.{plugin}.custom]` table is \
+                 ambiguous. Use `[[task.{plugin}.custom]]` for an entry, or \
+                 `[task.{plugin}.custom.<layer>]` for a layer"
+            )))
         }
         other => {
             return Err(ConfigError(format!(
@@ -314,16 +363,25 @@ fn parse_set(
 /// Decision D-4: an exact literal may appear once per layer, wildcards may
 /// repeat and are ordered (later wins). Two entries with no `type` at all are
 /// still the "two defaults" hard error, handled by [`ComponentSet::insert`].
+///
+/// D-8 refines "once": a **fields-only** entry is not a component, so it may
+/// share a literal with the component entry of the same type — that is how
+/// `[[custom]] type = "A"` + `field.*` merges with `[[custom]] type = "A"` +
+/// `name`. Two components (or two field configs) for one literal still clash.
 fn check_duplicate_type(
     set: &ComponentSet,
     entry: &ComponentEntry,
     label: &str,
 ) -> Result<(), ConfigError> {
     for known in entry.literal_types() {
-        if set.typed().iter().any(|other| other.matches_type(known)) {
-            return Err(ConfigError(format!(
-                "{label}: duplicate `type` marker `{known}`"
-            )));
+        for other in set.typed().iter().filter(|other| other.matches_type(known)) {
+            let both_components = entry.is_configured() && other.is_configured();
+            let both_field_configs = !entry.field.is_empty() && !other.field.is_empty();
+            if both_components || both_field_configs {
+                return Err(ConfigError(format!(
+                    "{label}: duplicate `type` marker `{known}`"
+                )));
+            }
         }
     }
     Ok(())
@@ -373,7 +431,11 @@ fn parse_entry(
         imports = parse_imports(label, value)?;
     }
 
-    Ok(ComponentEntry {
+    let field = match table.get("field") {
+        Some(value) => parse_field_config(label, value)?,
+        None => FieldConfig::new(),
+    };
+    let entry = ComponentEntry {
         selectors,
         name,
         imports,
@@ -384,11 +446,17 @@ fn parse_entry(
             bracket_key: optional_string(table, "bracket_key", label)?,
             parentheses_key: optional_string(table, "parentheses_key", label)?,
         },
-        field: match table.get("field") {
-            Some(value) => parse_field_config(label, value)?,
-            None => FieldConfig::new(),
-        },
-    })
+        field,
+    };
+    // D-8: an entry that carries neither a component nor a `field.*` key says
+    // nothing, so it is a load error rather than a silent no-op.
+    if !entry.is_configured() && entry.field.is_empty() {
+        return Err(ConfigError(format!(
+            "{label}: empty custom entry; give it a component (`name`, `template` or \
+             `imports`) or at least one `field.*` key"
+        )));
+    }
+    Ok(entry)
 }
 
 /// Parses one entry's `field.*` keys (D-5, ADR-0014).
@@ -788,13 +856,13 @@ mod tests {
     #[test]
     fn unbalanced_template_and_deprecated_import_are_reported() {
         let custom =
-            custom_of(r#"custom = { name = "X", template = "<X {...attrs}>{children}<span>" }"#);
+            custom_of(r#"custom = [{ name = "X", template = "<X {...attrs}>{children}<span>" }]"#);
         let error = load("anchor", "anchor", Some(&custom)).unwrap_err();
         assert!(error.to_string().contains("unclosed"), "{error}");
 
         // `type` accepts a single string, and `import` only warns.
         let single = custom_of(
-            r#"custom = { type = "anchorA", name = "A", import = "import A from 'x'", template = "<A {...attrs}>{children}</A>" }"#,
+            r#"custom = [{ type = "anchorA", name = "A", import = "import A from 'x'", template = "<A {...attrs}>{children}</A>" }]"#,
         );
         let loaded = load("anchor", "anchor", Some(&single)).unwrap();
         assert_eq!(loaded.warnings.len(), 1);
@@ -1029,24 +1097,37 @@ template = "<H>{{children}}</H>"
         );
     }
 
-    /// A table whose only content is `field.*` is an entry for the primary
-    /// layer — never a layer named `field` (D-8's fields-only entry).
+    /// D-8: `custom` is always an array, so a single table is a load error —
+    /// and the message points at the array form rather than reading `field` as
+    /// a layer name.
     #[test]
-    fn a_field_only_table_is_an_entry_not_a_layer() {
+    fn a_single_custom_table_points_at_the_array_form() {
         let custom = custom_of(
             r#"
             [custom]
             field.paren.bare = "something"
             "#,
         );
-        let loaded = load("anchor", "anchor", Some(&custom)).unwrap();
-        assert!(loaded.components.layer("field").is_none());
+        let error = load("anchor", "anchor", Some(&custom)).unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("must be an array of tables"), "{message}");
+        assert!(message.contains("[[task.anchor.custom]]"), "{message}");
+
+        // The array form of the same entry is a fields-only entry, and it is
+        // the layer default because it carries no `type`.
+        let array = custom_of(
+            r#"
+            [[custom]]
+            field.paren.bare = "something"
+            "#,
+        );
+        let loaded = load("anchor", "anchor", Some(&array)).unwrap();
         let entry = loaded
             .components
             .layer("anchor")
             .unwrap()
             .default_entry()
-            .expect("primary-layer entry");
+            .expect("field-only entry is the layer default");
         assert_eq!(
             entry
                 .field
@@ -1139,6 +1220,85 @@ template = "<H>{{children}}</H>"
             let message = error.to_string();
             assert!(message.contains(expected), "{source}: {message}");
             assert!(message.contains("anchor"), "{source}: {message}");
+        }
+    }
+
+    /// One entry may carry a component **and** a field config (D-8); the
+    /// fields reach the layer through the same lookup as a fields-only entry.
+    #[test]
+    fn one_entry_can_carry_a_component_and_fields() {
+        let custom = custom_of(
+            r#"
+            [[custom]]
+            type = "typeA"
+            name = "AnchorA"
+            template = "<AnchorA>{children}</AnchorA>"
+            field.bracket.bare = "anchor_id"
+            "#,
+        );
+        let loaded = load("anchor", "anchor", Some(&custom)).unwrap();
+        let layer = loaded.components.layer("anchor").unwrap();
+        let entry = &layer.typed()[0];
+        assert!(entry.is_configured());
+        assert_eq!(
+            entry
+                .field
+                .assignment(Slot::Bracket, SlotKind::Bare)
+                .and_then(Option::as_ref)
+                .map(Path::dotted)
+                .as_deref(),
+            Some("anchor_id")
+        );
+        assert!(layer.field_config(Some("typeA")).is_some());
+        // Nothing configures the default slot, so the element's preset stays.
+        assert!(layer.field_config(Some("typeZ")).is_none());
+        assert!(layer.field_config(None).is_none());
+    }
+
+    /// D-8 merge order: a typed entry's fields beat the element-wide default's,
+    /// and an entry without `field.*` is transparent in both directions.
+    #[test]
+    fn a_typed_field_entry_beats_the_element_wide_default() {
+        let custom = custom_of(
+            r#"
+            [[custom]]
+            field.bracket.bare = "wide_default"
+
+            [[custom]]
+            type = "typeA"
+            name = "AnchorA"
+            template = "<AnchorA>{children}</AnchorA>"
+
+            [[custom]]
+            type = "typeA"
+            field.bracket.bare = "typed_name"
+            "#,
+        );
+        let loaded = load("anchor", "anchor", Some(&custom)).unwrap();
+        let layer = loaded.components.layer("anchor").unwrap();
+        let bare_of = |marker| {
+            layer
+                .field_config(marker)
+                .and_then(|field| field.assignment(Slot::Bracket, SlotKind::Bare))
+                .and_then(Option::as_ref)
+                .map(Path::dotted)
+        };
+        assert_eq!(bare_of(Some("typeA")).as_deref(), Some("typed_name"));
+        assert_eq!(bare_of(Some("typeZ")).as_deref(), Some("wide_default"));
+        assert_eq!(bare_of(None).as_deref(), Some("wide_default"));
+    }
+
+    /// D-8: an entry that says nothing at all is a load error, not a silent
+    /// no-op — and the array form is the only way to write an entry.
+    #[test]
+    fn an_empty_entry_is_a_load_error() {
+        for source in ["[[custom]]\n", "custom = [{}]"] {
+            let custom = custom_of(source);
+            let error = load("anchor", "anchor", Some(&custom)).unwrap_err();
+            assert!(
+                error.to_string().contains("empty custom entry"),
+                "{source}: {error}"
+            );
         }
     }
 }

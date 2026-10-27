@@ -69,7 +69,7 @@ ref_id_prefix = "cite-"
 citation_class = "cite-ref"
 citation_id_prefix = "cra-"
 
-[task.cite.custom]
+[[task.cite.custom]]
 name = "Cite"
 imports = "import { Cite } from '@comp/Cite'"
 template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"

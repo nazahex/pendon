@@ -192,12 +192,28 @@ is an identity at this point).
       assignment block verbatim, both override spellings, the duplicate-source
       error, and one case per malformed shape. Workspace 705 pass, no golden
       byte moved.
-- [ ] **S2-2.4 — Fields-only custom entries (D-8).** Dep: S2-2.3.
+- [x] **S2-2.4 — Fields-only custom entries (D-8).** Dep: S2-2.3.
       Do: `custom` is always an array; entries without `name`/`template` are
       field-only; typed entry beats the element-wide default; empty entry is an
       error.
       Exit: tests for merge order, the empty-entry error, and "component + field
       config in one entry".
+      **Done 2026-10-28** — a single `[task.<plugin>.custom]` table is now a load
+      error that names `[[task.<plugin>.custom]]` (a _layer_ table,
+      `[task.table.custom.thead]`, is untouched — that is `custom.<layer>`);
+      an entry with neither a component nor a `field.*` key is "empty custom
+      entry"; and `ComponentSet::field_config(type)` implements the merge order
+      (a typed entry's non-empty `field.*` → the layer default's → `None`, so an
+      entry without fields is transparent and the preset stays alive). D-8's
+      "merges with the component entry for the same type" needed one relaxation:
+      `check_duplicate_type` now allows a fields-only entry to share a literal
+      with a component entry (two components, or two field configs, still
+      clash). `plugins.rs::entry_is_configured` is now
+      `ComponentEntry::is_configured`. Fixtures moved to the array form
+      (`sandbox/{anchor,cite,extract,universal,unified,img/regular}`,
+      `docs/spec/golden/{05-cite,33-extract-scopes}.toml`,
+      `apps/cli/tests/extract_spec.rs`); `SYNTAX.md` §11 states the rules.
+      Workspace 708 pass, **zero** golden output changed.
 - [ ] **S2-2.5 — Declare preset assignments per element.** Dep: S2-1.6.
       Files: each `crates/plugin-*/src/lib.rs`.
       Do: replace hard-coded `insert("href", …)`-style calls with the element's

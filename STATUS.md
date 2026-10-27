@@ -106,7 +106,11 @@ exactly one `export const headings` line each (no bytes removed), and
       no golden byte moved. `S2-2.3` done: `FieldConfig` (typed
       `slot`/`specs`/`overrides` maps, `Slot::from_name` inverses) parsed from
       `field.*` dotted keys in `apps/cli/src/components.rs`, every malformed
-      shape a load error. Next: `S2-2.4` (fields-only entries).
+      shape a load error. `S2-2.4` done: `custom` is array-only (a single table
+      is a load error), fields-only entries work, an empty entry is an error, and
+      `ComponentSet::field_config` encodes the D-8 merge order; six sandbox and
+      two golden configs moved to `[[…]]` with no output change. Next: `S2-2.5`
+      (per-element preset tables).
       No `MIGRATION.md` by policy.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to

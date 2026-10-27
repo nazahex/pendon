@@ -174,7 +174,7 @@ pub struct AnchorTaskConfig {
     /// `[[task.anchor.number]]` — numbering blocks (ADR-0010).
     #[serde(default)]
     pub number: Vec<NumberRule>,
-    /// §11 layer component sets: `[task.anchor.custom]`.
+    /// §11 layer component sets: `[[task.anchor.custom]]`.
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.anchor.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,
@@ -211,7 +211,7 @@ pub struct CiteTaskConfig {
     pub class: Option<toml::Value>,
     /// Removed pre-RFC-0002 name (`id_prefix` → `citation_id_prefix`).
     pub id_prefix: Option<toml::Value>,
-    /// §11 layer component sets: `[task.cite.custom]` (primary layer `cite`).
+    /// §11 layer component sets: `[[task.cite.custom]]` (primary layer `cite`).
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.cite.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,
@@ -276,7 +276,7 @@ pub struct MarkerTaskConfig {
     #[serde(default)]
     pub number: Vec<NumberRule>,
     /// §11 layer component sets: `[task.marker.custom.marker]` (the primary
-    /// layer, so `[task.marker.custom]` addresses it too).
+    /// layer, so `[[task.marker.custom]]` addresses it too).
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.marker.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,
@@ -291,7 +291,7 @@ pub struct DirectiveTaskConfig {
     #[serde(default)]
     pub number: Vec<NumberRule>,
     /// §11 layer component sets: `[task.directive.custom.directive]` (the primary
-    /// layer, so `[task.directive.custom]` addresses it too).
+    /// layer, so `[[task.directive.custom]]` addresses it too).
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.directive.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,
@@ -307,7 +307,7 @@ pub struct ListTaskConfig {
     pub number: Vec<NumberRule>,
     /// §11/§9.4 layer component sets: `[task.list.custom.list]` (the primary
     /// layer, the `<li>` item) plus `…custom.unordered` / `…custom.ordered`
-    /// (the `<ul>` / `<ol>` containers). A bare `[task.list.custom]` addresses
+    /// (the `<ul>` / `<ol>` containers). A bare `[[task.list.custom]]` addresses
     /// the primary layer.
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.list.custom_node]`, §14).
@@ -323,7 +323,7 @@ pub struct BlockquoteTaskConfig {
     #[serde(default)]
     pub number: Vec<NumberRule>,
     /// §11/§9.2 layer component set: `[task.blockquote.custom.blockquote]`
-    /// (the primary layer, so `[task.blockquote.custom]` addresses it too).
+    /// (the primary layer, so `[[task.blockquote.custom]]` addresses it too).
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.blockquote.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,
@@ -338,7 +338,7 @@ pub struct SectionTaskConfig {
     #[serde(default)]
     pub number: Vec<NumberRule>,
     /// §11/§9.5 layer component set: `[task.section.custom.section]`
-    /// (the primary layer, so `[task.section.custom]` addresses it too).
+    /// (the primary layer, so `[[task.section.custom]]` addresses it too).
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.section.custom_node]`, §14).
     pub custom_node: Option<toml::Value>,

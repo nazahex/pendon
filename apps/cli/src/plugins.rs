@@ -233,15 +233,15 @@ fn check_custom_node_removed(plugin: &str, legacy: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// A layer entry with no name, template or imports carries no intent (an empty
-/// `[custom]` table, or `custom = []`).
+/// A layer entry with no name, template or imports carries no component
+/// (D-8's fields-only entry); it still configures `field.*`.
 fn entry_is_configured(entry: &crate::components::ComponentEntry) -> bool {
-    entry.name.is_some() || entry.template.is_some() || !entry.imports.is_empty()
+    entry.is_configured()
 }
 
 /// Loads one §11 layer as a component set: every entry of the layer with its
-/// `type` markers (§11 rule 3). Entries with no name, template or imports are
-/// dropped, so an empty `[custom]` table stays a no-op.
+/// `type` markers (§11 rule 3). A fields-only entry (D-8) carries no component
+/// and is skipped here — its `field.*` config is read from the component set.
 fn layer_set<C>(
     loaded: Option<&crate::components::LoadedComponents>,
     layer: &str,
@@ -591,7 +591,7 @@ fn require(value: Option<&String>, key: &str) -> Result<String, String> {
 }
 
 /// §10.1/§11: the marker layer is addressed by the plugin's own key, so
-/// `[task.marker.custom]` and `[task.marker.custom.marker]` are equivalent.
+/// `[[task.marker.custom]]` and `[task.marker.custom.marker]` are equivalent.
 pub fn build_marker_options(
     config: Option<&crate::config::MarkerTaskConfig>,
 ) -> Result<MarkerOptions, String> {
@@ -612,7 +612,7 @@ pub fn build_marker_options(
 }
 
 /// §10.2/§10.3/§11: the directive layer is addressed by the plugin's own key, so
-/// `[task.directive.custom]` and `[task.directive.custom.directive]` are
+/// `[[task.directive.custom]]` and `[task.directive.custom.directive]` are
 /// equivalent.
 pub fn build_directive_options(
     config: Option<&crate::config::DirectiveTaskConfig>,
@@ -671,7 +671,7 @@ pub fn build_list_options(config: Option<&ListTaskConfig>) -> Result<ListOptions
 }
 
 /// §9.2/§11: the blockquote layer. `blockquote` is the plugin's only (primary)
-/// layer, so `[task.blockquote.custom]` and
+/// layer, so `[[task.blockquote.custom]]` and
 /// `[task.blockquote.custom.blockquote]` are equivalent.
 pub fn build_blockquote_options(
     config: Option<&BlockquoteTaskConfig>,
@@ -697,7 +697,7 @@ pub fn build_blockquote_options(
 }
 
 /// §9.5/§11: the `section` layer. `section` is the plugin's only (primary)
-/// layer, so `[task.section.custom]` and `[task.section.custom.section]` are
+/// layer, so `[[task.section.custom]]` and `[task.section.custom.section]` are
 /// equivalent.
 pub fn build_section_options(config: Option<&SectionTaskConfig>) -> Result<SectionOptions, String> {
     let Some(config) = config else {
@@ -1336,10 +1336,16 @@ names = ["TableHead"]
         assert!(node.cell.is_empty());
     }
 
-    /// A `custom` key with nothing in it keeps the built-in element path.
+    /// An empty `custom` says nothing: D-8 makes the single-table form a load
+    /// error, and `custom = []` stays a no-op.
     #[test]
-    fn empty_custom_key_changes_nothing() {
-        assert!(table_options("[custom]\n").custom_node.is_none());
+    fn an_empty_custom_is_an_error_not_a_no_op() {
+        let cfg: TableTaskConfig = toml::from_str("[custom]\n").expect("valid table config");
+        let error = build_table_options(Some(&cfg)).expect_err("single `[custom]` table");
+        assert!(
+            error.contains("must be an array of tables"),
+            "unexpected error: {error}"
+        );
 
         let cfg: AnchorTaskConfig = toml::from_str("custom = []\n").expect("valid anchor config");
         assert!(build_anchor_options(Some(&cfg))
@@ -1564,7 +1570,7 @@ template = "<DocHeading>{children}</DocHeading>"
         );
 
         let cfg: CiteTaskConfig =
-            toml::from_str("[custom]\nname = \"Cite\"\n").expect("valid cite config");
+            toml::from_str("custom = [{ name = \"Cite\" }]").expect("valid cite config");
         let options = build_cite_options(Some(&cfg), "./src/[slug].md", "./src/a.md", None)
             .expect("valid cite options");
         let node = options.custom.default_component().expect("cite component");
@@ -1578,7 +1584,7 @@ template = "<DocHeading>{children}</DocHeading>"
     #[test]
     fn the_default_cite_template_follows_a_renamed_reference_export() {
         let cfg: CiteTaskConfig = toml::from_str(
-            "references_export = \"bibliographyData\"\n[custom]\nname = \"Citation\"\n",
+            "references_export = \"bibliographyData\"\ncustom = [{ name = \"Citation\" }]",
         )
         .expect("valid cite config");
         let options = build_cite_options(Some(&cfg), "./src/[slug].md", "./src/a.md", None)

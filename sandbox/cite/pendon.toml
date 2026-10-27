@@ -25,7 +25,7 @@ name = "Cite"
 imports = "import { Cite } from '@comp/Cite'"
 template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
 
-[task.marker.custom]
+[[task.marker.custom]]
 type = ["bibliography"]
 name = "Bibliography"
 imports = "import { Bibliography } from '@comp/Bibliography'"

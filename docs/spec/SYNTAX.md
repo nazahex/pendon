@@ -877,9 +877,20 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
 
 A plugin that declares **one** layer may address that layer directly, using the
 plugin's own key as the layer name (the _primary layer_): `[[task.anchor.custom]]`
-above is shorthand for `[[task.anchor.custom.anchor]]`. A bare
-`task.<plugin>.custom` is also accepted when the table holds one entry
-(`[task.anchor.custom]` with `name`/`template`) instead of a map of layers.
+above is shorthand for `[[task.anchor.custom.anchor]]`.
+
+`custom` is **always an array of tables** (`[[task.<plugin>.custom]]`). A single
+`[task.<plugin>.custom]` table is a **load error**: it reads both as one entry
+and as a map of layers, so it is never guessed
+([D-8](../workflows/unified-syntax-stage-2/DECISIONS.md),
+[ADR-0018](../decisions/0018-clean-replacement.md)).
+
+An entry is either a **component** (`name` / `template` / `imports`) or
+**fields-only** (`field.*` keys — [ADR-0014](../decisions/0014-field-model.md)),
+or both. A fields-only entry with `type` configures that type only; without
+`type` it is the element-wide default, and a typed entry's `field.*` beats it. An
+entry with neither a component nor a `field.*` key is a load error
+("empty custom entry").
 
 Rules:
 

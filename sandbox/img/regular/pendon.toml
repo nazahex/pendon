@@ -38,7 +38,7 @@ template = "<AdvancedImage id=\"{attrs.id}\" src=\"{attrs.src}\" alt=\"{attrs.al
 module = "@/components/AdvancedImage"
 default = "AdvancedImage"
 
-[task.anchor.custom]
+[[task.anchor.custom]]
 name = "Anchor"
 template = "<Anchor attrs={attrs} qux=\"{attrs.qux}\">{children}</Anchor>"
 

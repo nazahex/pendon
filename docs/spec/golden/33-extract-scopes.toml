@@ -30,7 +30,7 @@ omit = ["ref_id"]
 reference_source = "external"
 reference_file = "./data/refs.yaml"
 
-[task.cite.custom]
+[[task.cite.custom]]
 name = "Cite"
 imports = "import { Cite } from '@comp/Cite'"
 template = "<Cite {...attrs} />"

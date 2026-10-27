@@ -51,7 +51,7 @@ const CITE: &str = r#"
 reference_source = "external"
 reference_file = "./src/reference.yaml"
 
-[task.cite.custom]
+[[task.cite.custom]]
 name = "Cite"
 template = "<Cite {...attrs} />"
 "#;
