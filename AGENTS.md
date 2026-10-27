@@ -6,23 +6,23 @@ after**, so no single giant file has to be loaded. Pendon's old `TODO.md` /
 
 ## Read before acting (task → context)
 
-| Task                                                   | Read first (in order)                                                                                                                  |
-| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Any task at all                                        | [`STATUS.md`](STATUS.md) (what's live), then this table                                                                                |
-| Touch markup grammar / a `@@`-head rule                | [`docs/spec/SYNTAX.md`](docs/spec/SYNTAX.md)                                                                                           |
-| Understand _why_ a grammar rule exists                 | [`docs/decisions/0001-typed-extras-reconciliation.md`](docs/decisions/0001-typed-extras-reconciliation.md)                             |
-| Touch `type = …` / custom component selection          | §11 of [`docs/spec/SYNTAX.md`](docs/spec/SYNTAX.md) + [`ADR-0008`](docs/decisions/0008-type-selectors.md) + `crates/types/README.md`   |
-| Change or add a fixture / golden                       | [`docs/spec/golden/README.md`](docs/spec/golden/README.md) + [`docs/guides/testing.md`](docs/guides/testing.md)                        |
-| Work on a specific plugin                              | `crates/<plugin>/README.md` **and** its §N in `docs/spec/SYNTAX.md`                                                                    |
-| Touch `[[task.<element>.extract]]` / extraction        | `crates/plugin-extract/README.md` + `docs/spec/EXTRAS-INVENTORY.md` (the frozen field tables) + P.1 of `docs/issues/plugin-extract.md` |
-| Touch `plugin-bind` data blocks (`{{{lang[var] … }}}`) | `crates/plugin-bind/README.md`, §19 in `docs/spec/SYNTAX.md`, ADR-0004 + ADR-0005, the RFC's §2.5–§2.8                                 |
-| Add a new plugin / syntax                              | [`docs/guides/plugin-authoring.md`](docs/guides/plugin-authoring.md) + `CONTRIBUTORS.md`                                               |
-| Run / change the CLI                                   | [`docs/guides/cli.md`](docs/guides/cli.md)                                                                                             |
-| Touch CLI report output / styling                      | [`docs/spec/CLI-REPORT.md`](docs/spec/CLI-REPORT.md)                                                                                   |
-| Touch `crates/tui` / how the report is drawn           | [`docs/rfc/tui-overhaul.md`](docs/rfc/tui-overhaul.md) + [`docs/spec/CLI-REPORT.md`](docs/spec/CLI-REPORT.md)                          |
-| Run tests / validate output                            | [`CONTRIBUTORS.md`](CONTRIBUTORS.md) + [`docs/guides/testing.md`](docs/guides/testing.md)                                              |
-| Touch the editor grammar (`editors/vscode/`)           | [`editors/vscode/README.md`](editors/vscode/README.md) + the §N it names in `docs/spec/SYNTAX.md`                                      |
-| Renderer output contract (Solid/HTML/JSON/AST)         | `crates/renderer-*/README.md` if present, else `docs/spec/SYNTAX.md` §20 (module-level exports) / §6.3 (values)                        |
+| Task                                                   | Read first (in order)                                                                                                                                                                                        |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Any task at all                                        | [`STATUS.md`](STATUS.md) (what's live), then this table                                                                                                                                                      |
+| Touch markup grammar / a `@@`-head rule                | [`docs/spec/SYNTAX.md`](docs/spec/SYNTAX.md); if the change is part of the rework, also [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md)                          |
+| Understand _why_ a grammar rule exists                 | [`docs/decisions/0001-typed-extras-reconciliation.md`](docs/decisions/0001-typed-extras-reconciliation.md)                                                                                                   |
+| Touch `type = …` / custom component selection          | §11 of [`docs/spec/SYNTAX.md`](docs/spec/SYNTAX.md) + [`ADR-0008`](docs/decisions/0008-type-selectors.md) + `crates/types/README.md`                                                                         |
+| Change or add a fixture / golden                       | [`docs/spec/golden/README.md`](docs/spec/golden/README.md) + [`docs/guides/testing.md`](docs/guides/testing.md)                                                                                              |
+| Work on a specific plugin                              | `crates/<plugin>/README.md` **and** its §N in `docs/spec/SYNTAX.md`                                                                                                                                          |
+| Touch `[[task.<element>.extract]]` / extraction        | `crates/plugin-extract/README.md` + `docs/spec/EXTRAS-INVENTORY.md` (the frozen field tables) + P.1 of `docs/issues/plugin-extract.md`                                                                       |
+| Touch `plugin-bind` data blocks (`{{{lang[var] … }}}`) | `crates/plugin-bind/README.md`, §19 in `docs/spec/SYNTAX.md`, ADR-0004 + ADR-0005, the RFC's §2.5–§2.8                                                                                                       |
+| Add a new plugin / syntax                              | [`docs/guides/plugin-authoring.md`](docs/guides/plugin-authoring.md) + `CONTRIBUTORS.md`; during the rework also [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md) |
+| Run / change the CLI                                   | [`docs/guides/cli.md`](docs/guides/cli.md)                                                                                                                                                                   |
+| Touch CLI report output / styling                      | [`docs/spec/CLI-REPORT.md`](docs/spec/CLI-REPORT.md)                                                                                                                                                         |
+| Touch `crates/tui` / how the report is drawn           | [`docs/rfc/tui-overhaul.md`](docs/rfc/tui-overhaul.md) + [`docs/spec/CLI-REPORT.md`](docs/spec/CLI-REPORT.md)                                                                                                |
+| Run tests / validate output                            | [`CONTRIBUTORS.md`](CONTRIBUTORS.md) + [`docs/guides/testing.md`](docs/guides/testing.md)                                                                                                                    |
+| Touch the editor grammar (`editors/vscode/`)           | [`editors/vscode/README.md`](editors/vscode/README.md) + the §N it names in `docs/spec/SYNTAX.md`                                                                                                            |
+| Renderer output contract (Solid/HTML/JSON/AST)         | `crates/renderer-*/README.md` if present, else `docs/spec/SYNTAX.md` §20 (module-level exports) / §6.3 (values)                                                                                              |
 
 Do **not** read `docs/archive/**` unless asked — it is historical and frozen.
 
@@ -54,3 +54,8 @@ Do **not** read `docs/archive/**` unless asked — it is historical and frozen.
 4. **Respect the layer model.** A plugin only owns its own syntax; shared
    `@@`-head parsing lives in `crates/extra`. See `CONTRIBUTORS.md`.
 5. When done, verify: `cargo test -p <affected>` first, then widen.
+6. **No compatibility shims.** Pendon is alpha and every rework is a clean
+   replacement: no `#[serde(alias)]`, no `#[deprecated]`, no dual parsing, no
+   migration notes. Removed config keys are a load **error**; removed syntax is
+   plain text. See D-16 in
+   [`docs/workflows/unified-syntax-stage-2/DECISIONS.md`](docs/workflows/unified-syntax-stage-2/DECISIONS.md).

@@ -15,6 +15,16 @@ for interpreting the parsed properties.
   `parse_type_marker` (the `@@type` run), `parse_directive_head`, and
   `parse_extras_body`. A malformed head returns `ExtrasMatch::Malformed` and the
   caller MUST render the original text verbatim (literal fallback, §4.3).
+- **Slot grammar** — `parse_slots` (`src/slot.rs`) reads a `[…]` / `(…)` head
+  before Markdown sees it: the tag sigil (`@` `!` `#` before the bracket, `^`
+  right after it, head position only), the bracket, and the paren **only when it
+  is attached**. Each slot yields `SlotParts { bare, quote, tick }` in the fixed
+  bare → quote → tick order, and the bracket may carry a `|…` modifier run
+  (`SlotPair::modifiers`, first-appearance order, deduped). `SlotMatch` mirrors
+  `ExtrasMatch`: `Absent` (literal, no diagnostic), `Slots { pair, rest }`,
+  `Malformed { error, rest }` (`Severity::Error` + literal, D-2). A plugin
+  supplies only a `SlotContract { accepted, tag }`; no plugin may split a bracket
+  itself (§5.2–§5.4, ADR-0012, ADR-0017).
 - **IR glue** — `scan_extras_chars` / `emit_attrs` / `warning_event` (`src/emit.rs`):
   the shared **emit** pass that turns a parsed head into event attributes. It is
   not data binding — that is `plugin-bind` (§12.2, ADR-0005).

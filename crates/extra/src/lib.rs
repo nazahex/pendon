@@ -3,10 +3,14 @@
 //! Plugins remain responsible for interpreting parsed properties. This crate
 //! only defines the common syntax and preserves the unprefixed property key.
 //!
-//! Three pieces live here:
+//! Four pieces live here:
 //!
 //! * [`parse_extras`] / [`parse_directive_head`] / [`to_attributes`] — the
 //!   `{…}` / `@@type{…}` extras head defined by `docs/spec/SYNTAX.md` §4–§6.
+//! * [`parse_slots`] / [`SlotPair`] / [`SlotTag`] — a `[…]` / `(…)` head
+//!   (§5.2–§5.4, ADR-0012), parsed before Markdown sees it, plus
+//!   [`parse_slot_parts`] for one slot's content and [`SlotContract`] for the
+//!   positions an element accepts.
 //! * [`scan_extras_chars`] / [`emit_attrs`] / [`warning_event`] — the glue that
 //!   binds a parsed head to the event IR, shared by the construct plugins.
 //! * [`AttrValue`] / [`classify_scalar`] — typed attribute values (§6.3).
@@ -16,10 +20,16 @@
 
 mod decorator;
 mod emit;
+mod slot;
 mod typed;
 mod value;
 
 pub use emit::{emit_attr_warnings, emit_attrs, scan_extras_chars, warning_event, warning_message};
+
+pub use slot::{
+    parse_slot_parts, parse_slots, Slot, SlotContract, SlotError, SlotKind, SlotMatch, SlotPair,
+    SlotParts, SlotPos, SlotTag,
+};
 
 pub use decorator::{
     bind_decorators, parse_decorator_line, Bindings, BoundDecorator, DecoratorDrop, DecoratorLine,

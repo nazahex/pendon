@@ -131,3 +131,23 @@ fn strict_escalates_blank_run_to_error() {
         |e| matches!(e, Event::Diagnostic { severity, .. } if matches!(severity, Severity::Error))
     ));
 }
+
+/// `OBJ-1` (ADR-0012, D-11): the core parser implements no footnote extension,
+/// so `[^ref]` reaches the slot parser instead of becoming a footnote. There is
+/// no footnote node kind at all, so the remaining risk is `[^ref]` becoming a
+/// link — which this pins as *not* happening.
+#[test]
+fn footnote_syntax_is_not_claimed_by_the_core_parser() {
+    for source in ["See [^ref] here\n", "[^ref]: a note\n"] {
+        let ev = parse(source, &Options::default());
+        assert!(
+            !ev.iter()
+                .any(|e| matches!(e, Event::StartNode(NodeKind::Link))),
+            "core turned footnote syntax into a link in {source:?}"
+        );
+        assert!(
+            render_concat(&ev).contains("^ref"),
+            "footnote text was swallowed in {source:?}"
+        );
+    }
+}

@@ -14,25 +14,25 @@ and the rest link to it. If you are an AI agent, also read [`AGENTS.md`](../AGEN
 
 ## "I want to…" → read this
 
-| I want to…                                        | Read                                                                                                                            |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Understand what Pendon is                         | [`README.md`](../README.md)                                                                                                     |
-| Look up the exact markup grammar                  | [`spec/SYNTAX.md`](spec/SYNTAX.md)                                                                                              |
-| Highlight Pendon in an editor                     | [`editors/vscode/README.md`](../editors/vscode/README.md)                                                                       |
-| See a worked example as executable data           | [`spec/golden/`](spec/golden/) + [`spec/golden/README.md`](spec/golden/README.md)                                               |
-| Know why a syntax rule exists (D1–D10)            | [`decisions/0001-typed-extras-reconciliation.md`](decisions/0001-typed-extras-reconciliation.md)                                |
-| See what is being worked on / blocked             | [`STATUS.md`](../STATUS.md)                                                                                                     |
-| Run the CLI                                       | [`guides/cli.md`](guides/cli.md)                                                                                                |
-| Understand the CLI's report output                | [`spec/CLI-REPORT.md`](spec/CLI-REPORT.md)                                                                                      |
-| Overhaul the terminal toolkit                     | [`rfc/tui-overhaul.md`](rfc/tui-overhaul.md) + [`spec/CLI-REPORT.md`](spec/CLI-REPORT.md)                                       |
-| Author or modify a plugin                         | [`guides/plugin-authoring.md`](guides/plugin-authoring.md)                                                                      |
-| Write/run tests, goldens, sandboxes               | [`guides/testing.md`](guides/testing.md)                                                                                        |
-| Contribute (principles, PR checklist)             | [`CONTRIBUTORS.md`](../CONTRIBUTORS.md)                                                                                         |
-| Read a plugin's public behaviour                  | that crate's `crates/plugin-*/README.md`                                                                                        |
-| Propose a new feature                             | [`rfc/`](rfc/) (create `rfc/<feature>.md`)                                                                                      |
-| Bind data / read accepted proposals               | §19 in [`spec/SYNTAX.md`](spec/SYNTAX.md) + [`archive/fulfilled/plugin-bind.md`](archive/fulfilled/plugin-bind.md) (historical) |
-| Read superseded/old material                      | [`archive/`](archive/) (historical, frozen)                                                                                     |
-| See the build plan for type/export/number/extract | [`workflows/`](workflows/) (planning, not normative)                                                                            |
+| I want to…                                       | Read                                                                                                                                                                     |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Understand what Pendon is                        | [`README.md`](../README.md)                                                                                                                                              |
+| Look up the exact markup grammar                 | [`spec/SYNTAX.md`](spec/SYNTAX.md)                                                                                                                                       |
+| Highlight Pendon in an editor                    | [`editors/vscode/README.md`](../editors/vscode/README.md)                                                                                                                |
+| See a worked example as executable data          | [`spec/golden/`](spec/golden/) + [`spec/golden/README.md`](spec/golden/README.md)                                                                                        |
+| Know why a syntax rule exists (D1–D10)           | [`decisions/0001-typed-extras-reconciliation.md`](decisions/0001-typed-extras-reconciliation.md)                                                                         |
+| See what is being worked on / blocked            | [`STATUS.md`](../STATUS.md)                                                                                                                                              |
+| Run the CLI                                      | [`guides/cli.md`](guides/cli.md)                                                                                                                                         |
+| Understand the CLI's report output               | [`spec/CLI-REPORT.md`](spec/CLI-REPORT.md)                                                                                                                               |
+| Overhaul the terminal toolkit                    | [`rfc/tui-overhaul.md`](rfc/tui-overhaul.md) + [`spec/CLI-REPORT.md`](spec/CLI-REPORT.md)                                                                                |
+| Author or modify a plugin                        | [`guides/plugin-authoring.md`](guides/plugin-authoring.md)                                                                                                               |
+| Write/run tests, goldens, sandboxes              | [`guides/testing.md`](guides/testing.md)                                                                                                                                 |
+| Contribute (principles, PR checklist)            | [`CONTRIBUTORS.md`](../CONTRIBUTORS.md)                                                                                                                                  |
+| Read a plugin's public behaviour                 | that crate's `crates/plugin-*/README.md`                                                                                                                                 |
+| Propose a new feature                            | [`rfc/`](rfc/) (create `rfc/<feature>.md`)                                                                                                                               |
+| Bind data / read accepted proposals              | §19 in [`spec/SYNTAX.md`](spec/SYNTAX.md) + [`archive/fulfilled/plugin-bind.md`](archive/fulfilled/plugin-bind.md) (historical)                                          |
+| Read superseded/old material                     | [`archive/`](archive/) (historical, frozen)                                                                                                                              |
+| Plan / execute the Unified Syntax Stage 2 rework | [`workflows/unified-syntax-stage-2/`](workflows/unified-syntax-stage-2/README.md) (planning, not normative — scope, decisions, tasks; **no** migration notes, by policy) |
 
 ## Layout
 
@@ -53,12 +53,15 @@ docs/
    guides/              how-tos: cli, plugin-authoring, testing
    rfc/                 proposals (pre-spec)
    workflows/           build plans for multi-phase work (pre-implementation)
+     unified-syntax-stage-2/  README + DECISIONS + TASKS (live plan)
    archive/             historical, frozen
 
 memory-bank/            Cline per-session working memory (not project truth)
 crates/*/README.md      per-crate public reference (link to spec, don't restate it)
                        crates/types = pendon-types (shared type resolution, ADR-0008)
                        crates/plugin-number = every `attrs.number` producer (ADR-0010)
+                       crates/plugin-extract = every `[[task.<element>.extract]]` reader
+                       (files + `export const`; never rewrites the stream)
 editors/vscode/         TextMate grammars for .mdp / .md + the scope harness
 ```
 

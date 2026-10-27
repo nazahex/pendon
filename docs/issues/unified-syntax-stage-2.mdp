@@ -1,0 +1,1138 @@
+# Pendon Rework - Unified Syntaxes Stage 2
+
+This rework brings Pendon's syntax to a much higher level of flexibility, customization, and precision.
+
+> **Replacement policy (alpha).** This rework is a **clean, total replacement**.
+> There is **no backward compatibility** with previous config or output formats,
+> **no deprecation warnings** or transitional periods, **no changelog/migration
+> notes** for old field names, and **no legacy code paths** retained. Users must
+> adopt the new API in full; old configurations fail fast instead of silently
+> falling back. See `docs/workflows/unified-syntax-stage-2/DECISIONS.md` D-16.
+
+## Table of Contents
+
+1. Working Terminology
+2. List of Heads
+3. Extras
+4. Slots
+5. Specs
+6. Decorator
+7. Fields
+8. Element Rework
+9. Plugin Rework
+
+---
+
+## 1. New Terminology
+
+### Parties and regions
+
+- **User**: the party who writes or manages MDP (Markdown Pendon) documents.
+- **Public**: the region outside Pendon's internals, for example output and JSX implementations.
+
+### Elements and syntaxes
+
+- **Element**: a discrete entity whose primary identity is marked by its head.
+- **Head**: the code for building an entity.
+- **Extras**: additional code to enrich an element. Consists of `@@type`, `{ specs }`, and `%%numbering`.
+  - **Type**: the element type written by the user (not by Pendon's internals).
+  - **Specs**: additional data written by the user for the related element, in various data kinds: object, array, class, id, style, and others.
+  - **Numbering**: the numbering type written by the user.
+- **Slot**: a pair of universal structures (`[]` and `()`) serving as a container for positional input. Its contents are generic until a particular element contracts it into meaningful fields.
+  - **Slot tag**: a symbol (1 character) used by an element to contract a slot.
+  - **Slot content**: the actual generic content inside the brackets or parentheses.
+  - **Slot contract**: the claim over a particular slot by an element.
+- **Slot modifier**: a shortcut for specs that can be configured uniformly at the configuration level.
+- **Decorator**: a slot and/or extras that stands alone on a single line and is owned by the block element that follows it.
+
+### Fields
+
+- **Fields**: the property names of an element, whether from an assignment or from the element's internal processor. Can be extracted by `plugin-extract`.
+  - **Fields preset**: Pendon's recommended selection of fields that can be extracted by `plugin-extract` through the configuration `task.<element>.extract.preset = "pendon"`.
+  - **Bare field**: a generic field from a slot and extras.
+  - **Built-in field**: a specific field produced by an element.
+  - **Assign field**: setting a field name for a bare field.
+  - **Override field**: changing the name of a built-in field.
+  - **Preset assignment**: the assignment of fields by Pendon's internals for an element.
+
+---
+
+## 2. List of Heads
+
+### Inline elements
+
+````mdp
+@[foo](bar) - anchor
+[^foo] - cite
+![](foo) - image
+::foo:: - directive
+{{foo}} - marker
+$foo$ - latex
+````
+
+### Block elements
+
+````mdp
+<!-- blockquote -->
+> foo
+
+<!-- codefence -->
+```
+foo
+```
+
+<!-- directive -->
+==foo
+==
+
+<!-- heading -->
+# foo
+
+<!-- latex -->
+$$foo$$
+
+<!-- list -->
+- foo
+
+1. foo
+
+<!-- marker -->
+{{foo}}
+
+<!-- paragraph -->
+foo
+
+<!-- table -->
+| foo | foo |
+````
+
+> Paragraph has no special head, as in standard markdown.
+> Section has no special head; it depends on the heading head.
+
+### Data elements
+
+````mdp
+---
+# frontmatter
+foo: bar
+---
+
+<!-- bind -->
+{{{lang[foo]
+foo
+}}}
+````
+
+> IMPORTANT: `[foo]` inside bind is not a bracket of the universal slot.
+
+---
+
+## 3. Extras
+
+Extras consist of 3 kinds:
+
+- `@@` **type**: gives a type to the element.
+- `{}` **specs**: holds various kinds of attributes, props, and additional data.
+- `%%` **numbering**: gives a type to the numbering system.
+
+The term "extras" means all three at once or any one of them.
+
+All three are optional and independent of each other, except in decorators, which require `@@`.
+
+````mdp
+Code - Name
+[^foo]@@bar - typed cite, `@@bar` is the extras, namely the type
+[^foo]@@bar{ foo: "bar" }%%baz - `@@bar{ foo: "bar" }%%baz` is the extras, namely the type, k:v specs, and numbering
+````
+
+### Writing order
+
+Although optional, they must be written in order: **type → specs → numbering**.
+
+````mdp
+Correct examples:
+[^foo]@@bar{isFoo}%%baz
+[^foo]{isFoo}%%baz
+[^foo]%%baz
+[^foo]@@bar{isFoo}
+[^foo]@@bar%%baz
+[^foo]{isFoo}
+
+Incorrect examples:
+[^foo]{isFoo}@@bar
+[^foo]%%baz@@bar
+[^foo]%%baz{isFoo}
+````
+
+If the order is wrong, an error is thrown.
+
+### Empty extras
+
+All three extras may be empty. There is no warning and they do not become literal.
+
+````mdp
+[^foo]@@{}%% lorem ipsum.
+````
+
+### Notes
+
+- Previously, `{}` was considered the canonical extras. This rework puts all three extras on equal footing as a single extras family.
+- `{}` is now named "specs", because the term "canonical extras" is ambiguous.
+
+---
+
+## 4. Slot
+
+Previously, brackets `[]` and parentheses `()` were owned directly and exclusively by particular elements (anchor, cite, image). This rework makes both universal, so they can be used by all block and inline elements, similar to extras.
+
+> Positional names was the slot terminology in the previous version. It is now obsolete.
+
+### How it works
+
+Brackets and parentheses each have 3 kinds of content (slot content): **bare**, **quote**, and **tick**.
+
+````mdp
+[^bracket bare "bracket quote" `bracket tick` |modifiers](paren bare "paren quote" `paren tick`)
+````
+
+An element assigns particular parts according to its needs. For example, anchor contracts:
+
+- `bracket.bare` as `inner_text`
+- `paren.bare` as `href`
+- `paren.quote` as `title`
+- Other positions are not defined.
+
+Rules:
+
+- The three kinds of content have no built-in format rules (for example, there is no prohibition on spaces in bare). Enforcing rules is done on the user's side, not Pendon's. Field positions can be customized, so hardcoded checks in the internals are not possible.
+- Brackets and parentheses are optional by default.
+- Parentheses MUST be attached right after the bracket.
+- Slot content must be in order: bare → quote → tick. If it is not in order: error.
+- Slot content must be separated by spaces. Without a space, the content that follows is considered part of the preceding content.
+  - `[bare"quote"`tick`]`: `bare"quote"`tick`` is bare content.
+  - `[bare "quote"`tick`]`: `bare` is bare content, `"quote"`tick`` is quote content.
+- All three kinds of slot content are optional and may all be left empty at once: `[]()`.
+- `quote` slot content may use single quotes `'...'` as well as double quotes `"..."`.
+- If `bare` content needs a backtick or quote, use escaping:
+
+````mdp
+  [bare \"bare\" bare "quote"](bare \`bare\` bare `tick`)
+````
+
+- If any one kind of slot content appears more than once: error.
+
+### Slot tag
+
+Because slots are now universal, a slot tag is needed to distinguish elements. A slot tag is a single symbol placed attached before or after the opening bracket `[`, processed internally (hard-coded) by the processor or plugin of the related element. A slot tag must be attached to the bracket or parenthesis, with no space.
+
+| Slot tag | Position | Marker |
+| --- | --- | --- |
+| `@` | Attached before the bracket | Bracket and parentheses belong to **anchor** |
+| `^` | Attached after the opening bracket | Bracket and parentheses belong to **cite** |
+| `!` | Attached before the bracket | Bracket and parentheses belong to **image** |
+| `#` | Attached before the bracket | Bracket and parentheses belong to **heading** |
+
+A slot must have a slot tag if it stands alone. If a slot is attached to a head that is not slot-based (for example marker, heading, decorator), then the slot may stand without a slot tag.
+
+What happens to a slot that has no modifier and stands alone: it becomes literal text. This behavior is also needed when the user really intends to write literal text in ordinary parentheses.
+
+> Previously, an empty slot without a tag was the syntax for anchor. Because slots are now universal, the slot for anchor requires the slot tag `@` as a distinguisher.
+
+### Slot modifier
+
+A slot modifier is a shortcut for adding certain data that can be configured uniformly at the configuration level. The modifier must be at the very end of the bracket content.
+
+````mdp
+<!-- anchor -->
+@[Foo |?~uv$%](/foo)
+````
+
+- `?`, `~`, `u`, `v`, `$`, `%` are modifier symbols.
+- `|?~uv$%` are the modifiers.
+- `|` is the code indicating that the characters that follow are modifier symbols.
+- A modifier symbol may be any character (all UTF-8), including `|` itself.
+
+Another example:
+
+````mdp
+@[Foo ||Œ©\ńЖئ]
+````
+
+`\` inside a modifier is not an escape. It is one of the modifier symbols.
+
+A modifier may stand alone in a bracket:
+
+````mdp
+[|?xu*](foo.png)
+````
+
+A modifier may be written more than once, but is still considered one:
+
+````
+[Foo ||||] is considered [Foo ||]
+[|?xx?|ee? ] is considered [|?x|e]
+````
+
+Modifiers are written in the bracket. Parentheses do not support modifiers.
+
+Escaping is supported only if the bracket contains bare only or is entirely empty.
+
+````mdp
+[Foo \|?x]    "|?x" is considered bare bracket content.
+[\|?x]        "|?x" is considered bare bracket content.
+
+[Foo "Bar" \|?x]    error, because `|?x` becomes bare, and it MUST come before quote.
+````
+
+This feature completely overhauls the previous modifier implementation and replaces it with one that is clearer, more flexible, and customizable.
+
+- Previously, modifier symbols were at the end of the `url` in `plugin-anchor` and before the bracket (merged with the slot tag) in `plugin-image`. Both are now removed entirely without nostalgia.
+- Modifiers are now universal and customizable. Pendon no longer provides hard-coded built-in modifiers. The meaning of modifiers is entirely left to the user.
+
+Usage example:
+
+````mdp
+<!-- anchor -->
+@[Foo |?~$%](/foo)
+````
+
+Then configured in the configuration:
+
+````toml
+# PSM.1
+[[task.anchor.custom]]
+bracket.modifier."?" = { rel = "nofollow" }
+bracket.modifier."~" = { foo = { target = "self" }}
+bracket.modifier."!" = { rel = "noopener" }
+bracket.modifier."x" = { soo = { baz = "wax" }}
+bracket.modifier."y" = { soo = { baz = "wax" }}
+````
+
+> NOTE: The modifier settings are not inside `field.bracket` because those settings are not field settings.
+
+````mdp
+@[Jambu Air |?y!~x](/jambur-air)
+````
+
+Using the PSM.1 settings, if the example above is extracted (demo):
+
+````json
+{
+  "inner_text": "Jambur Air",
+  "href": "/jambu-air",
+  "rel": ["nofollow", "noopener"],
+  "foo": {
+    "target": "self"
+  },
+  "soo": {
+    "baz": ["wax", "wax"]
+  }
+}
+````
+
+If modifiers target the same output field, their values are not overwritten by each other, but are merged into an array. If one of the values being merged is already an array while the other is a non-array, the merged result remains the same array. If both values being merged are arrays, the merged result becomes a nested array (array of arrays). If the values truly cannot be merged, throw an error.
+
+
+---
+
+## 5. Specs
+
+Rework:
+
+- Replaces the terminology "canonical extras" with "specs" to be clear and unambiguous.
+- Overhauls the data structure of the bare-fields form.
+- Renames the override fields settings to be consistent with the override fields configuration on slots:
+  - `backtick_key` → `field.specs.tick`
+  - `quote_key` → `field.specs.quote`
+
+
+### Syntax
+
+The specs syntax is already strong and clear:
+
+````md
+{ `tick`, "quote", .class, #id, k: v, k: $bind, --style: "2em" }
+````
+
+Rules that need further explanation:
+
+- `specs.tick`, `specs.quote`, and `specs.id` (`#id`) may only appear once in one specs. If there is more than one, an error is thrown.
+- There is no content order rule in specs. `tick` may come after `k:v`, quote may come after style, and so on.
+
+### Fields produced by specs
+
+- `specs.tick`
+- `specs.quote`
+- `specs.class`
+- `specs.id`
+- `specs.style`
+- For `k: v`: the field name is `k`, not `specs.k`
+
+### Example
+
+````mdp
+[Lorem](/foo){ .price-detail, isOpened, price: { currency: "USD", amount: 21, details: { isSettled: false } }, --width: "200px", consumer: [{ lastName: "John"}, { lastName: "Jena" }], .price-tag, --color: "#f1f1f1", #john-foo, `price_slug`, "Price Title", priceGood }
+````
+
+Fields produced:
+
+````json
+{
+  "inner_text": "Lorem",
+  "href": "/foo",
+  "specs": {
+    "class": [
+      "price-detail",
+      "price-tag"
+    ],
+    "style": {
+      "--width": "200px",
+      "--color": "#f1f1f1"
+    },
+    "id": "john-foo",
+    "tick": "price_slug",
+    "quote": "Price Title",
+  },
+  "isOpened": true,
+  "price": {
+    "currency": "USD",
+    "amount": 21,
+    "details": {
+      "isSettled": false
+    }
+  },
+  "consumer": [
+    {
+      "lastName": "John"
+    },
+    {
+      "lastName": "Jena"
+    }
+  ],
+  "priceGood": true
+}
+````
+
+### Assign specs fields
+
+All specs fields can be assigned:
+
+````toml
+[[task.anchor.custom]]
+name = "AnchorDefault"
+imports = "import { AnchorDefault } from '@comp/shared/Anchor'"
+template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
+field.specs.tick = "slug"
+field.specs.quote = "title"
+field.specs.class = "foo.class"
+field.specs.id = "bar.id"
+field.specs.style = "foo.style"
+````
+
+The new fields based on the settings above:
+
+````json
+{
+  "inner_text": "Lorem",
+  "href": "/foo",
+  "foo": {
+    "class": [
+      "price-detail",
+      "price-tag"
+    ],
+    "style": {
+      "--width": "200px",
+      "--color": "#f1f1f1"
+    }
+  },
+  "bar": {
+    "id": "john-foo"
+  },
+  "slug": "price_slug",
+  "title": "Price Title",
+  "isOpened": true,
+  "price": {
+    "currency": "USD",
+    "amount": 21,
+    "details": {
+      "isSettled": false
+    }
+  },
+  "consumer": [
+    {
+      "lastName": "John"
+    },
+    {
+      "lastName": "Jena"
+    }
+  ],
+  "priceGood": true
+}
+````
+
+---
+
+## 6. Decorator
+
+A decorator is a slot and/or extras that sits alone on a single line (not followed by anything, including literal text). It is owned by the block element after it that supports it.
+
+Elements that can receive a decorator:
+
+- blockquote
+- codefence
+- list
+- paragraph
+- table
+
+Other elements cannot receive a decorator.
+
+````mdp
+@@type[bracket bare "bracket quote" `bracket tick`](paren bare "paren quote" `paren tick`){ specs }%%numbering
+> Block quote content.
+
+@@[](){}%%
+
+- List foo
+- List bar
+````
+
+The positions of the slot and extras in a decorator differ from usual. For decorators specifically, `@@` is mandatory and placed first, before the slot, specs, and numbering. The goal is to make reading easier for both parsers and humans.
+
+As in the previous version, a decorator may be attached on top of the related block element, or may also be separated by a line break.
+
+Problematic behavior:
+
+- If a decorator is followed by literal text outside the valid slot and extras on the same line, that text is ignored and removed. A warning is thrown.
+- If the block element after a decorator does not accept decorators, the decorator is ignored and removed. A warning is thrown.
+
+Special case:
+
+- If `plugin-section` is active, a decorator before a heading is consumed by `section`. No warning is thrown.
+
+---
+
+## 7. Fields
+
+### Field name rules
+
+Field name rules for those who want to assign bare-fields and override preset-fields.
+
+- Only alphanumeric characters and `_` `-` are allowed.
+- Case sensitive.
+- The first character must not be numeric or `-`. Only `_` and alphabet.
+- A dot `.` indicates field nesting.
+
+Pendon throws an error if there are invalid characters.
+
+### Bare fields and their behavior
+
+- If not assigned by a preset assignment or a custom assignment, the value from a slot or specs is stored in bare fields.
+
+For example:
+
+````mdp
+@[foo "Bar" `baz`](soo "Sar" `zaz`)
+````
+
+Anchor only assigns bracket.bare, paren.bare, and paren.quote. Therefore, if extracted:
+
+````json
+{
+  "inner_text": "foo",
+  "bracket": {
+    "quote": "Bar",
+    "tick": "baz"
+  },
+  "href": "soo",
+  "title": "Sar",
+  "paren": {
+    "tick": "zaz"
+  }
+}
+````
+
+- If the user has no custom field assignment for bracket and paren **at all**, the element uses Pendon's preset built-in fields.
+- If there is **even one** user-made field definition for bracket or paren, Pendon's built-in fields are completely disabled on all fields available in the related `task.<element>.custom` (not globally).
+
+Example:
+
+````mdp
+@[foo "Bar" `baz`](soo "Sar" `zaz`)
+````
+
+````toml
+[task.anchor.custom]
+field.bracket.bare = "something"
+````
+
+````json
+{
+  "something": "foo",
+  "bracket": {
+    "quote": "Bar",
+    "tick": "baz"
+  },
+  "paren": {
+    "bare": "soo",
+    "quote": "Sar",
+    "tick": "zaz"
+  }
+}
+````
+
+
+- `plugin-extract` extracts element data using the field names currently active on the related element. It does not use `bare-fields` nor Pendon's built-in fields that have been disabled because they were overridden by custom definitions. (Currently `plugin-extract` cannot yet handle custom fields.)
+
+### Assign fields
+
+- Not every slot content needs to be assigned.
+- If the user fills in slot content that is not assigned (by a custom assignment or a preset assignment), the value is not lost. The value is stored under its original bare-field name as exemplified earlier.
+
+Demo of custom fields assignment configuration:
+
+````toml
+
+[[task.anchor.custom]]
+type = "typeA"
+# example of custom fields assignment
+# note the various field name formats supported
+field.bracket.bare = "anchor_id"
+field.bracket.quote = "inner_text"
+field.bracket.tick = "extra-class"
+field.paren.bare = "href"
+field.paren.quote = "title"
+field.paren.tick = "popupID"
+field.specs.tick = "ref-id"
+field.specs.quote = "_extra-note"
+field.specs.id = "id-123"
+field.specs.class = "class"
+field.specs.style = "styles"
+````
+
+### Override fields
+
+All public fields can be overridden, except the `type` field produced by:
+
+- `@@type` (extras)
+- `::type` (inline directive)
+- `==type` (block directive)
+- `{{type}}` (marker)
+
+#### Overriding an element's built-in fields
+
+Most elements have built-in fields. How to override:
+
+````toml
+field.override.<built_in_field_name> = "custom_field"
+````
+
+> The list of built-in field names will be provided in the new FIELDS-INVENTORY.md documentation.
+
+Some fields are needed by Pendon's internal processors or plugins, for example `reference_id` in `plugin-cite` to compute `citation_number`. Therefore, overrides only apply to the final public result (render and extract). Overrides must not affect the work of Pendon's internals and its plugins.
+
+If there are colliding names, an error is thrown.
+
+---
+
+## 8. Element Rework
+
+### Fields documentation: FIELDS-INVENTORY.md
+
+The section "Reworked Extractable Fields (Pendon Preset)" on each element is the list of fields that go into the extract preset `preset = "pendon"`. This list is NOT a "list of fields that may only exist on the related element", so it must not lead to the trimming of functional fields.
+
+`EXTRAS-INVENTORY.md` is the previous version's document that documented Pendon's preset fields.
+
+- Its name and title are changed to `FIELDS-INVENTORY.md`, because the old name is no longer appropriate.
+- Pendon's preset fields are overhauled to be more consistent:
+  - All fields originating from extras and custom slot assignments are removed and must not exist in presets or in the inventory list, including `type` (except directive and marker `type`).
+  - If users need the `type` field, they register it through `include` or `preset="all"` + `only`.
+- `FIELDS-INVENTORY.md` ONLY documents the built-in/original fields provided by the related element, whether or not they are in the preset, so other developers know what fields the element has.
+  - Fields from slots that are not contracted by default by the element, as well as all fields from extras, MUST NOT be included.
+
+### Anchor
+
+The syntax becomes: `@[Inner Text](href "title")`.
+
+Slot contract:
+
+````md
+@[inner_text "bracket quote" `bracket tick`](href "title" `paren tick`)
+````
+
+- A slot with the tag `@` at the start of the bracket is contracted by anchor.
+- Preset assignment:
+  - `bracket.bare`: `inner_text`
+  - `paren.bare`: `href`
+  - `paren.quote`: `title`
+
+Preset fields:
+
+- `inner_text`
+- `href`
+- `title`
+
+Features removed entirely:
+
+- Automatic detection of external URLs with the application of `target="_blank"` and `rel="noopener"`. This feature should be controlled by the user (for example through a JavaScript util function in the user's implementation). Pendon has no right to do it.
+- URL suffix modifiers for controlling link behavior. Moved to the universal slot modifier, while the mechanism in `plugin-anchor` is removed entirely.
+- Warnings for conflicting modifier combinations (no longer needed).
+
+### Blockquote
+
+Currently, blockquote specs can be written inside the `>` as well as above it (decorator):
+
+````mdp
+> @@type[slot](slot){ specs }%%numbering Inner text.
+````
+
+````mdp
+@@type[slot](slot){ specs }%%numbering
+> Inner text.
+````
+
+This is redundant.
+
+- Decision: blockquote's ability to receive slots and extras inside the `>` is removed. Decorator is enough.
+- Slots and extras inside the `>` can now be used by blockquote content that needs them.
+- All slots and extras on blockquote are optional. Slot and extras fields may be freely assigned, because blockquote does not contract slots.
+
+Preset fields:
+
+- Blockquote has no built-in fields.
+- Users can still extract blockquote with data from the slots and extras in the decorator.
+
+### Cite
+
+The syntax changes from `[^^](ref-slug "locator")` to `[^reference_id "locator"]`.
+
+Slot contract:
+
+````mdp
+[^reference_id "locator" `bracket tick`](paren bare "paren quote" `paren tick`)
+````
+
+- The slot is contracted with the slot tag `^` after `[`.
+- `bracket.bare` is assigned as `reference_id`.
+- `bracket.quote` is assigned as `locator`.
+
+Users can override fields, with the following notes:
+- The cite processor uses `reference_id` and `locator` to compute `citation_number`.
+- `reference_id` is mandatory on cite.
+- `locator` is optional.
+- If the user does not fill in `reference_id` (that is, when the preset assignment is voided), Pendon throws an error.
+- Its position in the slot does not have to be `bracket.bare` and `bracket.quote`. Users may assign `reference_id` and `locator` to any slot position, and cite must still function properly.
+- For public consumption, `reference_id` and `locator` may be overridden with other names.
+
+Features removed:
+
+- The settings `citation_class`, `ref_id_prefix`, and `citation_id_prefix`. Reason: if users want a global class/id, they should use a Custom Component.
+- `instance_index` is now removed entirely, because it can already be replaced by `plugin-number`.
+
+Preset fields:
+
+- `reference_id`
+- `locator`
+- `citation_number` (from the `plugin-cite` processor)
+
+Configuration example:
+
+````toml
+[task.cite]
+reference_source = "external"
+reference_file = "./src/reference.yaml"
+references_export = "references" # Override the exported variable name for references data
+citations_export = "citations"
+references_scope = "cited" # `cited` (external default) | `all` (frontmatter default)
+
+[[task.cite.custom]]
+name = "Cite"
+imports = "import { Cite } from '@comp/Cite'"
+template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
+
+# new configurations
+field.bracket.bare = "" # empty string = unassign preset assignment
+# if any one slot content is defined, the preset assignment is voided (disabled)
+field.bracket.tick = "reference_id" # moving reference_id from bare to tick
+field.bracket.quote = "locator" # because the preset assignment is voided, locator must be redefined
+# changing field names to shorter ones for public needs
+field.override.reference_id = "ref_id"
+field.override.citation_number = "no"
+field.override.locator = "loc"
+````
+
+A simpler version:
+
+````toml
+# bare does not need to be emptied manually, because by defining `bracket.tick`, the preset is voided and the assignments automatically become empty (becoming bare-fields)
+field.bracket.tick = "reference_id"
+field.bracket.quote = "locator"
+# changing field names to shorter ones for public needs
+field.override.reference_id = "ref_id"
+field.override.citation_number = "no"
+field.override.locator = "loc"
+````
+
+### Directive
+
+Preset fields:
+
+- `type`
+
+The directive preset fields are unchanged, because `type` on directives (`::type`, `==type`) does not come from the `@@` extras.
+
+### Heading
+
+The syntax is essentially unchanged.
+
+Slot contract:
+
+````mdp
+#[slug "bracket quote" `bracket tick`](paren bare "title" `paren tick`) Inner Text
+````
+
+- The slot is contracted with the slot tag `#` before `[`.
+  - The `#` tag serves double duty as a slot tag and as the heading depth marker
+  - `######[]()` remains valid; only the one `#` attached to `[` is considered the slot tag.
+- `bracket.bare` is assigned as `slug`.
+- `paren.quote` is assigned as `title`.
+- `slug` and `title` are optional.
+- The slot in a heading itself is optional, because the heading head does not depend on slots.
+
+Full syntax:
+
+````mdp
+#[slug "bracket quote" `bracket tick`](paren bare "title" `paren tick`)@@typeA{.spec-class, #spec-id, `specs tick`, "specs quote", foo: "bar" }%%numberA Inner Text
+````
+
+Rework:
+
+- The old `id` field is renamed to `slug`. Its mechanism is simplified:
+  - If `slug` is not filled in by the user, the `slug` value is automatically a _sluggified string_ of `inner_text` (already implemented). It no longer gets a fallback from specs.
+- The old `title` field from extras (`specs.quote`) is removed from the heading core.
+- Renaming built-in fields:
+  - `level` → `depth` (`depth` from number is renamed to `number_depth`)
+  - `raw_title` → `title`, now taken from `paren.quote`.
+- `number` from `plugin-number` is no longer part of the heading core. It is optional and entirely left to the user. All numbering settings and functionality in `plugin-heading` are removed entirely without nostalgia.
+
+Preset fields:
+
+- `slug`
+- `depth`
+- `inner_text`
+
+### Image
+
+Slot contract:
+
+````mdp
+![alt "bracket quote" `bracket tick`](src "paren quote" `paren tick`)
+````
+
+- The slot is contracted with the slot tag `!` before `[`.
+- `bracket.bare` is assigned as `alt`.
+- `paren.bare` is assigned as `src`.
+- `alt` and `src` are optional (validation is done by the user).
+
+Rework:
+
+- The image modifier before the bracket is removed entirely.
+- Therefore, `!![]()` no longer denotes a figure.
+- Figure, figcaption, and all related mechanisms are removed entirely from `plugin-image`.
+- All extras on the image head are now fully owned by image, because they are no longer shared with figure.
+- All these changes are made without nostalgia.
+
+For users who need a figure wrapper around an image, directive can already do it far more flexibly, precisely, and in depth.
+
+Preset fields:
+
+- `src`
+- `alt`
+
+### List
+
+No significant changes other than the preset fields recommendation. List makes use of decorator, so there is no slot contract.
+
+Preset fields:
+
+- None.
+
+Preset fields are now empty, because the fields that used to be recommended came from extras. Everything that comes from extras is optional and entirely in the user's hands.
+
+### Marker
+
+No significant changes other than the preset fields recommendation.
+
+Full syntax:
+
+````mdp
+{{type}}[slot](slot)@@type{ specs }%%numbering
+````
+
+> Reminder: because extras are fully universal, `@@type` remains valid for use with marker, but is always overridden by `{{type}}`. It causes neither an error nor a warning.
+
+- Marker does not contract slots exclusively.
+- The marker head does not depend on slots, so slots and extras are entirely optional.
+
+Preset fields:
+
+- `type`, because it comes from the main syntax `{{type}}`, not from extras.
+
+All fields other than `type` in the old inventory table came from extras. Marker has no built-in fields other than `type`, including `inner_text`.
+
+### Section
+
+No significant changes other than the preset fields recommendation.
+
+Section has no special head. It appears automatically from the heading if `plugin-section` is used. A decorator above a heading is consumed by section, not by heading. Heading itself cannot consume a decorator.
+
+Preset fields:
+
+- `id`
+- `depth`
+
+### Table
+
+Old syntax:
+
+````mdp
+|-[table-slug]("Table Title")@@tableType{ specs }-|
+||@@captionType{ specs } Inner text. ||
+|@@cellType{ specs } THead Text 1 |@@cellType{ specs } THead Text 2 |@@rowType{ specs }
+...
+````
+
+Details are in the source code.
+
+The rework occurs in the main `<table>` head below:
+
+````mdp
+|-[table-slug]("Table Title")@@tableType{ specs }-|
+````
+
+- This syntax is now removed entirely, because it is more appropriate to switch to decorator only.
+
+Latest version:
+
+````mdp
+@@tableType[bracket bare "bracket quote" `bracket tick`](paren bare "paren quote" `paren tick`){ specs }%%numbering
+||@@captionType{ specs } Inner text. ||
+|@@cellType{ specs } THead Text 1 |@@cellType{ specs } THead Text 2 |@@rowType{ specs }
+...
+````
+
+- The decorator is consumed by the main `<table>`.
+- `<table>` and all its layers (`<thead>`, `<tbody>`, etc.) do not contract any part of the slot. Users are free to use them.
+- All table layers must be able to support full slots and extras (including `%%numbering`), because currently they only support `@@type` and `{ specs }`.
+
+Preset fields:
+- none
+
+Because the table structure is quite complex, extract settings are left to the user.
+
+---
+
+## 9. Plugin Rework
+
+### Plugin-Extract Upgrade
+
+Promote `plugin-extract` to `extract` (one of the main crates), no longer a plugin.
+
+- `extract` must be able to extract fields that are already final.
+- Change the configuration `recommended = true` to `preset = "pendon"`.
+- Add the configuration `include = string | arrayOfString`. Its function is to add fields to the selected preset. Providing only `only` and `omit` is not convenient enough.
+- Add `preset = "all"`. Its function is to extract all provided fields, including all extra/custom fields from slots and extras. Internal fields used solely by Pendon's internals are not included, as in the current implementation.
+- Change the default preset to `pendon`, no longer `all`.
+- `extract` must be able to extract all specs fields and `%%numbering`.
+- `include`, `only`, and `omit` must be able to operate on all fields, including those from slots, extras, custom fields, and overridden fields.
+- `include`, `only`, and `omit` manipulate the currently active preset.
+- `include`, `only`, and `omit` must be able to target nested fields.
+- `only` must not be used together with `include`.
+- `include` may be used together with `omit`.
+- `only` may be used together with `omit` (same as before).
+
+#### Upgraded Extraction Examples
+
+```mdp
+@[Jambu biji](/buah/jambu_biji){ price: { details: { currency: "IDR" }, amount: { total: 12, unit: "thousand" }}}%%nomorBuah
+```
+
+Suppose the result of a `preset="all"` extraction looks like this:
+
+````json
+[{
+  "inner_text": "Jambu biji",
+  "href": "/buah/jambu_biji",
+  "number": {
+    "type": "nomorBuah",
+    "raw": ["A", "1"],
+    "depth": 2
+  },
+  "price": {
+    "details": {
+      "currency": "IDR",
+      "amount": {
+        "total": 12,
+        "unit": "thousand"
+      }
+    }
+  }
+}]
+````
+
+Using PE.1,
+
+````toml
+# PE.1
+[[task.anchor.extract]]
+output = "./out/anchor_PE.1.json"
+format = "json"
+preset = "pendon"
+include = ["number.raw", "price.details.amount"]
+omit = ["price.details.amount.unit"]
+````
+
+The output becomes:
+
+````json
+[{
+  "inner_text": "Jambu biji",
+  "href": "/buah/jambu_biji",
+  "number": {
+    "raw": ["A", "1"]
+  },
+  "price": {
+    "details": {
+      "amount": {
+        "total": 12
+      }
+    }
+  }
+}]
+````
+
+Using PE.2
+
+````toml
+# PE.2
+[[task.anchor.extract]]
+output = "./out/anchor_PE.2.json"
+format = "json"
+preset = "all"
+include = ["number.raw", "price.details.amount"] # redundant, but still valid
+omit = ["price.details.amount.unit"]
+````
+
+The output becomes:
+
+````json
+[{
+  "inner_text": "Jambu biji",
+  "href": "/buah/jambu_biji",
+  "number": {
+    "type": "nomorBuah",
+    "raw": ["A", "1"],
+    "depth": 2
+  },
+  "price": {
+    "details": {
+      "currency": "IDR",
+      "amount": {
+        "total": 12
+      }
+    }
+  }
+}]
+````
+
+Using PE.3
+
+````toml
+# PE.3
+[[task.anchor.extract]]
+output = "./out/anchor_PE.3.json"
+format = "json"
+preset = "all"
+only = ["number.raw", "price.details.amount"]
+omit = ["price.details.amount.unit"]
+````
+
+The output becomes:
+
+````json
+[{
+  "number": {
+    "raw": ["A", "1"]
+  },
+  "price": {
+    "details": {
+      "amount": {
+        "total": 12
+      }
+    }
+  }
+}]
+````
+
+Using PE.4
+
+````toml
+# PE.4
+[[task.anchor.extract]]
+output = "./out/anchor_PE.4.json"
+format = "json"
+preset = "pendon"
+only = ["number.raw", "price.details.amount"]
+omit = ["price.details.amount.unit"]
+````
+
+The output becomes:
+
+````json
+[{}]
+````
+
+The result is empty, because `number` and `price` are not in the pendon preset. So `only` in PE.4 picks up nothing.
+
+#### Extract frontmatter
+
+Frontmatter must be extractable like other elements.
+
+- Output formats: JSON, YAML, TOML, and internal `export const`, like other elements.
+- Supports `only` and `omit`.
+- Has no preset.
+
+### Plugin-Number Upgrade
+
+Promote `plugin-number` to `number` (one of the main crates), no longer a plugin.
+
+The fields of `plugin-number` are set as follows:
+
+- `number.type`
+- `number.raw`: raw number array, e.g. `["II", "A", "21"]`
+- `number.depth`
+
+All three can be overridden:
+
+````toml
+[[task.<element>.custom]] # not in [[task.<element>.number]]
+field.override.number.type = "foo"
+field.override.number.raw = "bar"
+field.override.number.depth = "baz"
+
+# or in task.number.custom
+[[task.number.custom]]
+field.override.number.type = "foo"
+field.override.number.raw = "bar"
+field.override.number.depth = "baz"
+````
+
+Plugin number must be extractable from any element that uses it, just like type and specs.
+
+### VSCode Plugin Adjustments
+
+- The highlighter needs to be updated to accommodate all the changes that have been made.
+
+## Notes
+
+- `plugin-wiki` is planned for a full overhaul in the future. So, in this rework, `plugin-wiki`, especially wikilink, can be ignored and skipped.
+- The following plugins can be ignored and skipped because they will be removed entirely in the near future: `plugin-vicado`, `plugin-dialog`, and `plugin-quiz`.

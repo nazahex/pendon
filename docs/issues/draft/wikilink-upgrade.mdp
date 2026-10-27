@@ -1,0 +1,37 @@
+
+[[Lorem Ipsum]]
+- inner_text: Lorem Ipsum
+- href: Lorem_Ipsum
+- title: Lorem Ipsum
+
+[[Lorem Ipsum | Dolor]]
+- inner_text: Dolor
+- href: Lorem_Ipsum
+- title: Lorem Ipsum
+
+[[Lorem Ipsum "Dolor"]]
+- inner_text: Lorem Ipsum
+- href: Lorem_Ipsum
+- title: Dolor
+
+[[Lorem Ipsum | Dolor "Amet"]]
+- inner_text: Dolor
+- href: Lorem_Ipsum
+- title: Amet
+
+
+[[Lorem Ipsum#Dolor Sit]]
+Link ke Heading Dolor Sit di halaman Lorem Ipsum
+- inner_text: ?
+- href: Lorem_Ipsum#Dolor_Sit
+- title: ?
+
+[[#Dolor Sit]]
+Link ke heading di halaman yang sama.
+-
+
+
+```toml
+[[task.anchor.custom]]
+url_format =  "Snake_Case" | "snake_case" | "snake-case" | "Snake-Case"
+```

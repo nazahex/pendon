@@ -1,0 +1,1131 @@
+# Pendon Rework - Unified Syntaxes Stage 2
+
+Rework kali ini membawa sintaksis Pendon ke tingkat fleksibilitas, kustomisasi, dan presisi yang jauh lebih tinggi.
+
+## Daftar Isi
+
+1. Terminologi Kerja
+2. Daftar Head
+3. Extras
+4. Slot
+5. Specs
+6. Decorator
+7. Fields
+8. Rework Elemen
+9. Rework Plugin
+
+---
+
+## 1. Terminologi Baru
+
+### Pihak dan wilayah
+
+- **Pengguna**: pihak yang menulis atau mengelola dokumen MDP (Markdown Pendon).
+- **Publik**: wilayah di luar internal Pendon, misalnya output dan implementasi JSX.
+
+### Elemen dan sintaksis
+
+- **Elemen**: entitas diskrit yang identitas utamanya ditandai oleh head.
+- **Head**: kode untuk membangun suatu entitas.
+- **Extras**: kode tambahan untuk memperkaya elemen. Terdiri dari `@@type`, `{ specs }`, dan `%%numbering`.
+  - **Type**: tipe elemen yang ditulis pengguna (bukan oleh internal Pendon).
+  - **Specs**: data tambahan yang ditulis pengguna untuk elemen terkait, dalam berbagai jenis data: objek, array, class, id, style, dan lainnya.
+  - **Numbering**: tipe penomoran yang ditulis pengguna.
+- **Slot**: pasangan struktur universal (`[]` dan `()`) sebagai wadah input posisional. Isinya generik sampai elemen tertentu mengontraknya menjadi field yang bermakna.
+  - **Slot tag**: simbol (1 karakter) yang dipakai suatu elemen untuk mengontrak slot.
+  - **Slot content**: isi aktual di dalam bracket atau paren yang bersifat generik.
+  - **Kontrak slot**: klaim atas slot tertentu oleh suatu elemen.
+- **Slot modifier**: shortcut untuk specs yang dapat diatur seragam di tingkat konfigurasi.
+- **Decorator**: slot dan/atau extras yang berdiri sendiri di satu baris dan dimiliki oleh elemen block sesudahnya.
+
+### Fields
+
+- **Fields**: nama properti suatu elemen, baik dari assignment maupun dari processor internal elemen. Dapat diekstrak oleh `plugin-extract`.
+  - **Fields preset**: fields pilihan rekomendasi Pendon yang dapat diekstrak `plugin-extract` lewat konfigurasi `task.<element>.extract.preset = "pendon"`.
+  - **Bare field**: field generik dari slot dan extras.
+  - **Field bawaan**: field spesifik yang dihasilkan oleh elemen.
+  - **Assign field**: menetapkan nama field untuk suatu bare field.
+  - **Override field**: mengubah nama suatu field bawaan.
+  - **Preset assignment**: penetapan fields oleh internal Pendon untuk suatu elemen.
+
+---
+
+## 2. Daftar Head
+
+### Elemen inline
+
+```mdp
+@[foo](bar) - anchor
+[^foo] - cite
+![](foo) - image
+::foo:: - directive
+{{foo}} - marker
+$foo$ - latex
+```
+
+### Elemen block
+
+````mdp
+<!-- blockquote -->
+> foo
+
+<!-- codefence -->
+```
+foo
+```
+
+<!-- directive -->
+==foo
+==
+
+<!-- heading -->
+# foo
+
+<!-- latex -->
+$$foo$$
+
+<!-- list -->
+- foo
+
+1. foo
+
+<!-- marker -->
+{{foo}}
+
+<!-- paragraph -->
+foo
+
+<!-- table -->
+| foo | foo |
+````
+
+> Paragrah tidak memiliki head khusus sebagaimana markdown standar.
+> Section tidak memiliki head khusus, ia bergantung terhadap head heading.
+
+### Elemen data
+
+```mdp
+---
+# frontmatter
+foo: bar
+---
+
+<!-- bind -->
+{{{lang[foo]
+foo
+}}}
+```
+
+> PENTING: `[foo]` di dalam bind bukan merupakan bracket pada slot universal.
+
+---
+
+## 3. Extras
+
+Extras terdiri dari 3 jenis:
+
+- `@@` **type**: memberi type pada elemen.
+- `{}` **specs**: menampung berbagai jenis atribut, props, dan data tambahan.
+- `%%` **numbering**: memberi type untuk sistem penomoran.
+
+Istilah "extras" berarti ketiganya sekaligus atau salah satunya.
+
+Ketiganya opsional dan tidak saling bergantung, kecuali pada decorator yang mewajibkan `@@`.
+
+```mdp
+Kode - Nama
+[^foo]@@bar - typed cite, `@@bar` adalah extras, yakni type
+[^foo]@@bar{ foo: "bar" }%%baz - `@@bar{ foo: "bar" }%%baz` adalah extras, yakni type, k:v specs, dan numbering
+```
+
+### Urutan penulisan
+
+Meskipun opsional, penulisan harus berurutan: **type → specs → numbering**.
+
+```mdp
+Contoh benar:
+[^foo]@@bar{isFoo}%%baz
+[^foo]{isFoo}%%baz
+[^foo]%%baz
+[^foo]@@bar{isFoo}
+[^foo]@@bar%%baz
+[^foo]{isFoo}
+
+Contoh salah:
+[^foo]{isFoo}@@bar
+[^foo]%%baz@@bar
+[^foo]%%baz{isFoo}
+```
+
+Jika urutan salah, error dilemparkan.
+
+### Extras kosong
+
+Ketiga extras boleh kosong. Tidak ada warning dan tidak menjadi literal.
+
+```mdp
+[^foo]@@{}%% lorem ipsum.
+```
+
+### Catatan
+
+- Sebelumnya, `{}` dianggap sebagai extras kanonik. Rework ini menyetarakan ketiga extras sebagai satu keluarga extras.
+- `{}` kini bernama "specs", karena istilah "extras kanonik" ambigu.
+
+---
+
+## 4. Slot
+
+Sebelumnya, bracket `[]` dan paren `()` dimiliki langsung dan eksklusif oleh elemen tertentu (anchor, cite, image). Rework ini menjadikan keduanya universal, sehingga dapat dipakai semua elemen block dan inline, mirip extras.
+
+> Positional names adalah terminologi slot pada versi sebelumnya. Kini obsolete.
+
+### Cara kerja
+
+Bracket dan paren masing-masing memiliki 3 jenis isi (slot content): **bare**, **quote**, dan **tick**.
+
+```mdp
+[^bracket bare "bracket quote" `bracket tick` |modifiers](paren bare "paren quote" `paren tick`)
+```
+
+Elemen meng-assign bagian tertentu sesuai kebutuhannya. Contoh, anchor mengontrak:
+
+- `bracket.bare` sebagai `inner_text`
+- `paren.bare` sebagai `href`
+- `paren.quote` sebagai `title`
+- Posisi lain tidak didefinisikan.
+
+Aturan:
+
+- Ketiga jenis isi tidak memiliki aturan format bawaan (misalnya tidak ada larangan spasi pada bare). Pemaksaan aturan dilakukan di sisi pengguna, bukan Pendon. Posisi fields bisa diubah secara custom, sehingga pemeriksaan hardcoded di internal tidak memungkinkan.
+- Bracket dan paren pada dasarnya opsional.
+- Paren HARUS menempel setelah bracket.
+- Slot content harus berurutan: bare → quote → tick. Jika tidak berurutan: error.
+- Slot content harus dipisah spasi. Jika tanpa spasi, content setelahnya dianggap bagian dari content sebelumnya.
+  - `[bare"quote"`tick`]`: `bare"quote"`tick`` adalah bare content.
+  - `[bare "quote"`tick`]`: `bare` adalah bare content, `"quote"`tick`` adalah quote content.
+- Ketiga slot content opsional dan boleh dikosongkan sekaligus: `[]()`.
+- Slot content `quote` boleh memakai single quote `'...'` maupun double quote `"..."`.
+- Jika content `bare` membutuhkan backtick atau quote, gunakan escape:
+
+  ```mdp
+  [bare \"bare\" bare "quote"](bare \`bare\` bare `tick`)
+  ```
+
+- Jika salah satu jenis slot content muncul lebih dari satu kali: error.
+
+### Slot tag
+
+Karena slot kini universal, slot tag dibutuhkan untuk membedakan elemen. Slot tag berupa satu simbol yang terletak menempel sebelum atau sesudah bracket pembuka `[`, diproses oleh processor atau plugin elemen terkait secara internal (hard-coded). Slot tag harus menempel pada bracket atau paren, tanpa spasi.
+
+| Slot tag | Posisi | Penanda |
+| --- | --- | --- |
+| `@` | Menempel sebelum bracket | Bracket dan paren milik **anchor** |
+| `^` | Menempel setelah pembuka bracket | Bracket dan paren milik **cite** |
+| `!` | Menempel sebelum bracket | Bracket dan paren milik **image** |
+| `#` | Menempel sebelum bracket | Bracket dan paren milik **heading** |
+
+Slot wajib memiliki slot tag jika berdiri sendiri. Jika slot menempel di head yang tidak berbasis slot (misalnya marker, heading, decorator) maka slot boleh berdiri tanpa slot tag.
+
+Yang terjadi dengan slot tanpa modifier dan berdiri sendiri: mereka akan menjadi literal text. Perilaku ini juga diperlukan bilamana pengguna memang bermaksud menulis teks literal dalam kurung biasa.
+
+> Sebelumnya, slot kosong tanpa tag adalah sintaksis untuk anchor. Karena kini slot bersifat universal, slot untuk anchor memerlukan slot tag `@` untuk pembeda.
+
+### Slot modifier
+
+Slot modifier adalah shortcut untuk menambahkan data tertentu yang dapat diatur seragam di tingkat konfigurasi. Modifier harus berada di paling belakang bracket content.
+
+```mdp
+<!-- anchor -->
+@[Foo |?~uv$%](/foo)
+```
+
+- `?`, `~`, `u`, `v`, `$`, `%` adalah modifier symbol.
+- `|?~uv$%` adalah modifiers.
+- `|` adalah kode penanda bahwa karakter-karakter berikutnya adalah modifier symbols.
+- Modifier symbol boleh karakter apa saja (semua UTF-8), termasuk `|` itu sendiri.
+
+Contoh lain:
+
+```mdp
+@[Foo ||Œ©\ńЖئ]
+```
+
+`\` di dalam modifier bukan escape. Ia salah satu modifier symbol.
+
+Modifier boleh berdiri sendiri di bracket:
+
+```mdp
+[|?xu*](foo.png)
+```
+
+Modifier boleh ditulis lebih dari sekali, tetapi tetap dianggap satu:
+
+```
+[Foo ||||] dianggap [Foo ||]
+[|?xx?|ee? ] dianggap [|?x|e]
+```
+
+Modifier ditulis di bracket. Paren tidak mendukung modifier.
+
+Escape didukung hanya jika bracket berisi bare saja atau kosong sama sekali.
+
+```mdp
+[Foo \|?x]    "|?x" dianggap bare bracket content.
+[\|?x]        "|?x" dianggap bare bracket content.
+
+[Foo "Bar" \|?x]    error, karena `|?x` menjadi bare, ia WAJIB sebelum quote.
+```
+
+Fitur ini merombak total implementasi modifier sebelumnya dan menggantinya dengan yang lebih jelas, fleksibel, dan bisa dikustomisasi.
+
+- Sebelumnya, modifier symbol ada di akhir `url` pada `plugin-anchor` dan sebelum bracket (menyatu dengan slot tag) pada `plugin-image`. Kini keduanya dihapus sepenuhnya tanpa nostalgia.
+- Modifier kini universal dan bisa dikustom. Pendon tidak lagi menyediakan modifier bawaan hard-coded. Makna modifier sepenuhnya diserahkan kepada pengguna.
+
+Contoh penggunaan:
+
+```mdp
+<!-- anchor -->
+@[Foo |?~$%](/foo)
+```
+
+Lalu diatur di konfigurasi:
+
+```toml
+# PSM.1
+[[task.anchor.custom]]
+bracket.modifier."?" = { rel = "nofollow" }
+bracket.modifier."~" = { foo = { target = "self" }}
+bracket.modifier."!" = { rel = "noopener" }
+bracket.modifier."x" = { soo = { baz = "wax" }}
+bracket.modifier."y" = { soo = { baz = "wax" }}
+```
+
+> PERHATIKAN: Pengaturan modifier tidak berada di dalam `field.bracket` karena pengaturan tersebut memang bukan pengaturan field.
+
+```mdp
+@[Jambu Air |?y!~x](/jambur-air)
+```
+
+Menggunakan pengaturan PSM.1, jika contoh di atas dikestraksi (demo):
+
+```json
+{
+  "inner_text": "Jambur Air",
+  "href": "/jambu-air",
+  "rel": ["nofollow", "noopener"],
+  "foo": {
+    "target": "self"
+  },
+  "soo": {
+    "baz": ["wax", "wax"]
+  }
+}
+```
+
+Jika modifier mentargetkan output field yang sama, maka nilainya diubah tidak saling overwritten, melainkan digabung menjadi sebuah array. Jika nilai yang digabung sudah berbentuk array sedangkan salah satunya non array, maka gabungannya menjadi tetap array yang sama. Jika nilai yang digabung keduanya berbentuk array, maka gabungannya menjadi nested array (array of array). Jika nilainya yang memang tidak bisa digabung, maka lempar error.
+
+
+---
+
+## 5. Specs
+
+Rework:
+
+- Mengganti terminologi "extras kanonik" menjadi "specs" agar jelas dan tidak ambigu.
+- Merombak struktur data jika bentuk bare-fields.
+- Mengganti nama pengaturan override fields agar konsisten dengan konfigurasi override fields pada slot:
+  - `backtick_key` → `field.specs.tick`
+  - `quote_key` → `field.specs.quote`
+
+
+### Sintaksis
+
+Sintaksis specs sudah kuat dan jelas:
+
+```md
+{ `tick`, "quote", .class, #id, k: v, k: $bind, --style: "2em" }
+```
+
+Aturan yang perlu dijelaskan lebih lanjut:
+
+- `specs.tick`, `specs.quote`, dan `specs.id` (`#id`) hanya boleh satu dalam satu specs. Jika lebih dari satu, maka error dilemparkan.
+- Tidak ada aturan urutan content di specs. `tick` boleh setelah `k:v`, quote boleh setelah style, dan seterusnya.
+
+### Fields yang dihasilkan specs
+
+- `specs.tick`
+- `specs.quote`
+- `specs.class`
+- `specs.id`
+- `specs.style`
+- Untuk `k: v`: nama field adalah `k`, bukan `specs.k`
+
+### Contoh
+
+```mdp
+[Lorem](/foo){ .price-detail, isOpened, price: { currency: "USD", amount: 21, details: { isSettled: false } }, --width: "200px", consumer: [{ lastName: "John"}, { lastName: "Jena" }], .price-tag, --color: "#f1f1f1", #john-foo, `price_slug`, "Price Title", priceGood }
+```
+
+Fields yang dihasilkan:
+
+```json
+{
+  "inner_text": "Lorem",
+  "href": "/foo",
+  "specs": {
+    "class": [
+      "price-detail",
+      "price-tag"
+    ],
+    "style": {
+      "--width": "200px",
+      "--color": "#f1f1f1"
+    },
+    "id": "john-foo",
+    "tick": "price_slug",
+    "quote": "Price Title",
+  },
+  "isOpened": true,
+  "price": {
+    "currency": "USD",
+    "amount": 21,
+    "details": {
+      "isSettled": false
+    }
+  },
+  "consumer": [
+    {
+      "lastName": "John"
+    },
+    {
+      "lastName": "Jena"
+    }
+  ],
+  "priceGood": true
+}
+```
+
+### Assign fields specs
+
+Semua fields specs dapat di-assign:
+
+```toml
+[[task.anchor.custom]]
+name = "AnchorDefault"
+imports = "import { AnchorDefault } from '@comp/shared/Anchor'"
+template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
+field.specs.tick = "slug"
+field.specs.quote = "title"
+field.specs.class = "foo.class"
+field.specs.id = "bar.id"
+field.specs.style = "foo.style"
+```
+
+Hasil fields baru berbasis pengaturan di atas:
+
+```json
+{
+  "inner_text": "Lorem",
+  "href": "/foo",
+  "foo": {
+    "class": [
+      "price-detail",
+      "price-tag"
+    ],
+    "style": {
+      "--width": "200px",
+      "--color": "#f1f1f1"
+    }
+  },
+  "bar": {
+    "id": "john-foo"
+  },
+  "slug": "price_slug",
+  "title": "Price Title",
+  "isOpened": true,
+  "price": {
+    "currency": "USD",
+    "amount": 21,
+    "details": {
+      "isSettled": false
+    }
+  },
+  "consumer": [
+    {
+      "lastName": "John"
+    },
+    {
+      "lastName": "Jena"
+    }
+  ],
+  "priceGood": true
+}
+```
+
+---
+
+## 6. Decorator
+
+Decorator adalah slot dan/atau extras yang berada sendirian di satu baris (tidak diikuti apa pun, termasuk literal text). Ia dimiliki oleh elemen block setelahnya yang mendukungnya.
+
+Elemen yang dapat menerima decorator:
+
+- blockquote
+- codefence
+- list
+- paragraph
+- table
+
+Elemen lain tidak dapat menerima decorator.
+
+```mdp
+@@type[bracket bare "bracket quote" `bracket tick`](paren bare "paren quote" `paren tick`){ specs }%%numbering
+> Block quote content.
+
+@@[](){}%%
+
+- List foo
+- List bar
+```
+
+Posisi slot dan extras pada decorator berbeda dari biasanya. Khusus decorator, `@@` wajib dan diletakkan paling awal sebelum slot, specs, dan numbering. Tujuannya memudahkan pembacaan oleh parser maupun manusia.
+
+Seperti versi sebelumnya, decorator boleh menempel di atas elemen block terkait, boleh juga dipisah line break.
+
+Perilaku bermasalah:
+
+- Jika decorator diikuti teks literal di luar slot dan extras yang valid pada baris yang sama, teks tersebut diabaikan dan dihilangkan. Warning dilemparkan.
+- Jika elemen block setelah decorator tidak menerima decorator, decorator diabaikan dan dihilangkan. Warning dilemparkan.
+
+Kasus khusus:
+
+- Jika `plugin-section` aktif, decorator sebelum heading dikonsumsi oleh `section`. Warning tidak dilemparkan.
+
+---
+
+## 7. Fields
+
+### Aturan nama fields
+
+Aturan nama fields bagi yang ingin assign bare-fields dan override preset-fields.
+
+- Hanya boleh alfanumerik dan `_` `-`.
+- Case sensitive.
+- Karakter pertama tidak boleh numerik atau `-`. Hanya `_` dan alfabet.
+- Titik `.` menandakan nesting field.
+
+Pendon melempar error jika ada karakter tidak valid.
+
+### Bare fields dan perilakunya
+
+- Jika tidak di-assign oleh preset assignment atau custom assignment, value dari slot atau specs akan disimpan di bare fields.
+
+Misalnya:
+
+```mdp
+@[foo "Bar" `baz`](soo "Sar" `zaz`)
+```
+
+Anchor hanya assign brackt.bare, paren.bare, dan paren.quoe. Maka dari itu, jika diekstrak:
+
+```json
+{
+  "inner_text": "foo",
+  "bracket": {
+    "quote": "Bar",
+    "tick": "baz"
+  },
+  "href": "soo",
+  "title": "Sar",
+  "paren": {
+    "tick": "zaz"
+  }
+}
+```
+
+- Jika pengguna tidak ada assign field kustom untuk bracket dan paren **sama sekali**, elemen memakai fields bawaan preset Pendon.
+- Jika ada **satu saja** definisi field bracket atau paren buatan pengguna, fields bawaan Pendon dinonaktifkan total pada semua fields yang tersedia di `task.<element>.custom` terkait (tidak global).
+
+Contoh:
+
+```mdp
+@[foo "Bar" `baz`](soo "Sar" `zaz`)
+```
+
+```toml
+[task.anchor.custom]
+field.bracket.bare = "something"
+```
+
+```json
+{
+  "something": "foo",
+  "bracket": {
+    "quote": "Bar",
+    "tick": "baz"
+  },
+  "paren": {
+    "bare": "soo",
+    "quote": "Sar",
+    "tick": "zaz"
+  }
+}
+```
+
+
+- `plugin-extract` mengekstrak data elemen memakai nama fields yang sedang aktif pada elemen terkait. Ia tidak memakai `bare-fields` maupun fields bawaan Pendon yang sudah nonaktif karena di-override definisi kustom. (Saat ini `plugin-extract` belum bisa menangani custom fields.)
+
+### Assign fields
+
+- Tidak semua slot content perlu di-assign.
+- Jika pengguna mengisi slot content yang tidak di-assign (oleh custom assignment maupun preset assignment), nilainya tidak hilang. Nilai disimpan dengan nama bare-field asalnya sebagaimana dicontohkan sebelumnya.
+
+Demo konfigurasi custom fields assignment:
+
+```toml
+
+[[task.anchor.custom]]
+type = "typeA"
+# contoh custom fields assignment
+# perhatikan berbagai jenis format field name yang didukung
+field.bracket.bare = "anchor_id"
+field.bracket.quote = "inner_text"
+field.bracket.tick = "extra-class"
+field.paren.bare = "href"
+field.paren.quote = "title"
+field.paren.tick = "popupID"
+field.specs.tick = "ref-id"
+field.specs.quote = "_extra-note"
+field.specs.id = "id-123"
+field.specs.class = "class"
+field.specs.style = "styles"
+```
+
+### Override fields
+
+Semua fields public dapat di-override, kecuali field `type` yang dihasilkan oleh:
+
+- `@@type` (extras)
+- `::type` (inline directive)
+- `==type` (block directive)
+- `{{type}}` (marker)
+
+#### Override field bawaan elemen
+
+Sebagian besar elemen memiliki fields bawaan. Cara override:
+
+```toml
+field.override.<nama_field_bawaan> = "custom_field"
+```
+
+> Daftar nama field bawaan akan disediakan di dokumentasi FIELDS-INVENTORY.md baru.
+
+Sebagian fields dibutuhkan processor internal Pendon atau plugin, misalnya `reference_id` pada `plugin-cite` untuk menghitung `citation_number`. Karena itu, override hanya berlaku untuk hasil akhir publik (render dan extract). Override tidak boleh memengaruhi pekerjaan internal Pendon dan plugin-pluginnya.
+
+Jika ada nama yang bertabrakan, error dilemparkan.
+
+---
+
+## 8. Rework Elemen
+
+### Dokumentasi fields: FIELDS-INVENTORY.md
+
+Bagian "Reworked Extractable Fields (Pendon Preset)" pada tiap elemen adalah daftar fields yang masuk ke preset extract `preset = "pendon"`. Daftar ini BUKAN "daftar fields yang hanya boleh ada pada elemen terkait", sehingga tidak boleh berujung pada pemangkasan fields fungsional.
+
+`EXTRAS-INVENTORY.md` adalah dokumen versi sebelumnya yang mendokumentasikan fields preset Pendon.
+
+- Nama dan judulnya diganti menjadi `FIELDS-INVENTORY.md`, karena nama lama tidak sesuai.
+- Fields preset Pendon dirombak agar lebih konsisten:
+  - Semua fields yang berasal dari extras dan custom assignment slot dibuang dan tidak boleh ada di preset dan maupun list inventory, termasuk `type` (kecuali `type` directive dan marker).
+  - Jika pengguna membutuhkan field `type`, mereka mendaftarkannya lewat `include` atau `preset="all"` + `only`.
+- `FIELDS-INVENTORY.md` HANYA mendokumentasikan fields bawaan/asli yang disediakan elemen terkait, baik yang masuk preset maupun tidak, agar developer lain tahu fields apa saja yang dimiliki elemen.
+  - Fields dari slot yang tidak dikontrak secara bawaan oleh elemen, serta seluruh fields dari extras, TIDAK BOLEH dimasukkan.
+
+### Anchor
+
+Sintaksis pada menjadi: `@[Inner Text](href "title")`.
+
+Kontrak slot:
+
+```md
+@[inner_text "bracket quote" `bracket tick`](href "title" `paren tick`)
+```
+
+- Slot dengan tag `@` di awal bracket dikontrak oleh anchor.
+- Preset assignment:
+  - `bracket.bare`: `inner_text`
+  - `paren.bare`: `href`
+  - `paren.quote`: `title`
+
+Fields preset:
+
+- `inner_text`
+- `href`
+- `title`
+
+Fitur yang dibuang sepenuhnya:
+
+- Deteksi otomatis URL eksternal dengan penerapan `target="_blank"` dan `rel="noopener"`. Fitur ini seharusnya dikendalikan pengguna (misalnya lewat fungsi util JavaScript di implementasi pengguna). Pendon tidak berhak melakukannya.
+- URL suffix modifiers untuk kontrol perilaku link. Dipindah ke slot modifier universal, sedangkan mekanisme di `plugin-anchor` dihapus sepenuhnya.
+- Warning untuk kombinasi modifier yang bertentangan (sudah tidak dibutuhkan).
+
+### Blockquote
+
+Saat ini, specs blockquote bisa ditulis di dalam `>` maupun di atasnya (decorator):
+
+```mdp
+> @@type[slot](slot){ specs }%%numbering Inner text.
+```
+
+```mdp
+@@type[slot](slot){ specs }%%numbering
+> Inner text.
+```
+
+Ini redundan.
+
+- Keputusan: kemampuan blockquote menerima slot dan extras di dalam `>` dibuang. Decorator sudah cukup.
+- Slot dan extras di dalam `>` kini bisa dipakai oleh konten blockquote yang membutuhkannya.
+- Semua slot dan extras di blockquote opsional. Fields slot dan extras boleh di-assign bebas, karena blockquote tidak mengontrak slot.
+
+Fields preset:
+
+- Blockquote tidak memiliki fields bawaan.
+- Pengguna tetap dapat mengekstrak blockquote dengan data dari slot dan extras pada decorator.
+
+### Cite
+
+Sintaksis berubah dari `[^^](ref-slug "locator")` menjadi `[^reference_id "locator"]`.
+
+Kontrak slot:
+
+```mdp
+[^reference_id "locator" `bracket tick`](paren bare "paren quote" `paren tick`)
+```
+
+- Slot dikontrak dengan slot tag `^` setelah `[`.
+- `bracket.bare` di-assign menjadi `reference_id`.
+- `bracket.quote` di-assign menjadi `locator`.
+
+Pengguna bisa meng-override fields, dengan catatn berikut:
+- Processor cite menggunakan `reference_id` dan `locator` untuk menghitung `citation_number`.
+- `reference_id` wajib ada pada cite.
+- `locator` opsional.
+- Jika pengguna tidak mengisi `reference_id` (yakni bilamana preset assignment digugurkan), Pendon melempar error.
+- Posisinya dalam slot tidak wajib di `bracket.bare` dan `bracket.quote`. Pengguna boleh meng-assign `reference_id` dan `locator` ke posisi slot mana pun, dan cite harus tetap berfungsi baik.
+- Untuk konsumsi publik, `reference_id` dan `locator` boleh di-override dengan nama lain.
+
+Fitur yang dibuang:
+
+- Pengaturan `citation_class`, `ref_id_prefix`, dan `citation_id_prefix`. Alasan: jika pengguna ingin class/id global, sebaiknya memakai Custom Component.
+- `instance_index` kini dibuang sepenuhnya, karena sudah bisa digantikan oleh `plugin-number`.
+
+Fields preset:
+
+- `reference_id`
+- `locator`
+- `citation_number` (dari processor `plugin-cite`)
+
+Contoh pengaturan:
+
+```toml
+[task.cite]
+reference_source = "external"
+reference_file = "./src/reference.yaml"
+references_export = "references" # Override the exported variable name for references data
+citations_export = "citations"
+references_scope = "cited" # `cited` (external default) | `all` (frontmatter default)
+
+[[task.cite.custom]]
+name = "Cite"
+imports = "import { Cite } from '@comp/Cite'"
+template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
+
+# new configurations
+field.bracket.bare = "" # string kosong = unassign preset assignment
+# salah satu content slot didefinisikan, maka preset assignment gugur (dinonaktifkan)
+field.bracket.tick = "reference_id" # memindahkan reference_id dari bare ke tick
+field.bracket.quote = "locator" # karena preset assignment gugur, locator harus didefinisikan ulang
+# mengubah nama fields menjadi lebih singkat untuk kebutuhan publik
+field.override.reference_id = "ref_id"
+field.override.citation_number = "no"
+field.override.locator = "loc"
+```
+
+Versi lebih sederhana:
+
+```toml
+# bare tidak perlu dikosongkan manual, karena dengan mendefiniskan `bracket.tick`, preset gugur dan assignments otomatis kosong (menjadi bare-fields)
+field.bracket.tick = "reference_id"
+field.bracket.quote = "locator"
+# mengubah nama fields menjadi lebih singkat untuk kebutuhan publik
+field.override.reference_id = "ref_id"
+field.override.citation_number = "no"
+field.override.locator = "loc"
+```
+
+### Directive
+
+Fields preset:
+
+- `type`
+
+Fields preset directive tidak berubah, karena `type` pada directive (`::type`, `==type`) tidak berasal dari extras `@@`.
+
+### Heading
+
+Sintaksis pada dasarnya tidak berubah.
+
+Kontrak slot:
+
+```mdp
+#[slug "bracket quote" `bracket tick`](paren bare "title" `paren tick`) Inner Text
+```
+
+- Slot dikontrak dengan slot tag `#` sebelum `[`.
+  - Tag `#` berfungsi ganda sebagai slot tag dan sebagai penanda depth heading
+  - `######[]()` tetap sah, cukup satu `#` yang menempel pada `[` yang dianggap sebagai slot tag.
+- `bracket.bare` di-assign menjadi `slug`.
+- `paren.quote` di-assign menjadi `title`.
+- `slug` dan `title` bersifat opsional.
+- Slot dalam heading sendiri bersifat opsional, karena head heading tidak bergantung kepada slot.
+
+Sintaksis penuh:
+
+```mdp
+#[slug "bracket quote" `bracket tick`](paren bare "title" `paren tick`)@@typeA{.spec-class, #spec-id, `specs tick`, "specs quote", foo: "bar" }%%numberA Inner Text
+```
+
+Rework:
+
+- Field `id` lama renamed menjadi `slug`. Mekanismenya disederhanakan:
+  - Jika `slug` tidak diisi pengguna, maka nilai `slug` secara otomatis berupa _sluggified string_ dari `inner_text` (sudah ada implementasinya). Tidak lagi mendapatkan fallback dari specs.
+- Field `title` lama dari extras (`specs.quote`) dibuang dari inti heading.
+- Rename fields bawaan:
+  - `level` → `depth` (`depth` dari number di-rename menjadi `number_depth`)
+  - `raw_title` → `title`, kini diambil dari `paren.quote`.
+- `number` dari `plugin-number` bukan lagi merupakan bagian inti heading. Ia opsional dan sepenuhnya diserahkan kepada pengguna. Semua pengaturan dan fungsionalitas numbering di `plugin-heading` dihapus sepenuhnya tanpa nostalgia.
+
+Fields preset:
+
+- `slug`
+- `depth`
+- `inner_text`
+
+### Image
+
+Kontrak slot:
+
+```mdp
+![alt "bracket quote" `bracket tick`](src "paren quote" `paren tick`)
+```
+
+- Slot dikontrak dengan slot tag `!` sebelum `[`.
+- `bracket.bare` di-assign menjadi `alt`.
+- `paren.bare` di-assign menjadi `src`.
+- `alt` dan `src` bersifat opsional (validasi dilakukan pengguna).
+
+Rework:
+
+- Image modifier sebelum bracket dihapus sepenuhnya.
+- Karena itu, `!![]()` tidak lagi menandakan figure.
+- Figure, figcaption, dan semua mekanisme terkait dihapus sepenuhnya dari `plugin-image`.
+- Semua extras pada head image kini dimiliki sepenuhnya oleh image, karena tidak lagi dibagi dengan figure.
+- Semua perubahan ini dilakukan tanpa nostalgia.
+
+Bagi pengguna yang membutuhkan figure pembungkus image, directive sudah dapat melakukannya dengan jauh lebih fleksibel, presisi, dan mendalam.
+
+Fields preset:
+
+- `src`
+- `alt`
+
+### List
+
+Tidak ada perubahan signifikan selain rekomendasi fields preset. List memanfaatkan decorator, sehingga tidak ada kontrak terhadap slot.
+
+Fields preset:
+
+- Tidak ada.
+
+Fields preset kini kosong, karena fields yang dulu direkomendasikan berasal dari extras. Semua yang berasal dari extras opsional dan sepenuhnya di tangan pengguna.
+
+### Marker
+
+Tidak ada perubahan signifikan selain rekomendasi fields preset.
+
+Sintaksis penuh:
+
+```mdp
+{{type}}[slot](slot)@@type{ specs }%%numbering
+```
+
+> Pengingat: karena extras sepenuhnya universal, `@@type` tetap sah dipakai marker, tetapi selalu dikalahkan oleh `{{type}}`. Tidak menyebabkan error maupun warning.
+
+- Marker tidak mengkontrak slot secara eksklusif.
+- Head marker tidak bergantung kepada slot, sehingga slot dan extras sepenuhnya opsional.
+
+Fields preset:
+
+- `type`, karena berasal dari sintaksis utama `{{type}}`, bukan dari extras.
+
+Semua fields selain `type` pada tabel inventory lama berasal dari extras. Marker tidak memiliki fields bawaan selain `type`, termasuk `inner_text`.
+
+### Section
+
+Tidak ada perubahan signifikan selain rekomendasi fields preset.
+
+Section tidak memiliki head khusus. Ia muncul otomatis dari heading jika `plugin-section` dipakai. Decorator di atas heading dikonsumsi oleh section, bukan heading. Heading sendiri tidak bisa mengonsumsi decorator.
+
+Fields preset:
+
+- `id`
+- `depth`
+
+### Table
+
+Sintaksis lama:
+
+```mdp
+|-[table-slug]("Table Title")@@tableType{ specs }-|
+||@@captionType{ specs } Inner text. ||
+|@@cellType{ specs } THead Text 1 |@@cellType{ specs } THead Text 2 |@@rowType{ specs }
+...
+```
+
+Detail ada di kode sumber.
+
+Rework terjadi pada head `<table>` utama berikut:
+
+```mdp
+|-[table-slug]("Table Title")@@tableType{ specs }-|
+```
+
+- Sekarang sintaksis tersebut dibuang sepenuhnya, dikarenakan lebih tepat jika beralih ke decorator saja.
+
+Versi terbaru:
+
+```mdp
+@@tableType[bracket bare "bracket quote" `bracket tick`](paren bare "paren quote" `paren tick`){ specs }%%numbering
+||@@captionType{ specs } Inner text. ||
+|@@cellType{ specs } THead Text 1 |@@cellType{ specs } THead Text 2 |@@rowType{ specs }
+...
+```
+
+- Decorator dikonsumsi oleh `<table>` utama.
+- `<table>` dan semua layernya (`<thead>`, `<tbody>`, dll.) tidak mengontrak bagian mana pun dari slot. Pengguna bebas memakainya.
+- Semua layer table harus bisa mendukung slot dan extras penuh (termasuk `%%numbering`), karena saat ini mereka hanya mendukung `@@type` dan `{ specs }`.
+
+Fields preset:
+- tidak ada
+
+Karena struktur table cukup kompleks, pengaturan exctract diserahkan kepada pengguna.
+
+---
+
+## 9. Rework Plugin
+
+### Plugin-Extract Upgrade
+
+Promote `plugin-extract` menjadi `extract` (salah satu main crates), tidak lagi menjadi plugin.
+
+- `extract` harus bisa mengekstrak fields yang sudah final.
+- Ubah konfigurasi `recommended = true` menjadi `preset = "pendon"`.
+- Tambah konfigurasi `include = string | arrayOfString`. Fungsinya menambahkan fields ke preset terpilih. Menyediakan `only` dan `omit` saja kurang nyaman.
+- Tambah `preset = "all"`. Fungsinya mengekstrak semua fields yang disediakan, termasuk semua fields extra/custom dari slot dan extras. Fields internal yang semata-mata dipakai internal Pendon tidak dimasukkan, seperti implementasi saat ini.
+- Ganti preset default menjadi `pendon`, tidak lagi `all`.
+- `extract` harus bisa mengekstrak semua fields specs dan `%%numbering`.
+- `include`, `only`, dan `omit` harus bisa beroperasi pada semua fields, termasuk yang berasal dari slot, extras, custom fields, dan fields yang di-override.
+- `include`, `only`, dan `omit` memanipulasi preset yang sedang aktif.
+- `include`, `only`, dan `omit` harus bisa mentarget nested fields.
+- `only` tidak boleh digunakan bersamaan dengan `include`.
+- `include` boleh digunakan bersamaan dengan `omit`.
+- `only` boleh digunakan bersamaan dengan `omit` (sama seperti sebelumnya).
+
+#### Contoh Upgraded Extraction
+
+```mdp
+@[Jambu biji](/buah/jambu_biji){ price: { details: { currency: "IDR" }, amount: { total: 12, unit: "thousand" }}}%%nomorBuah
+```
+
+Misalkan, hasil extraction `preset="all"` adalah seperti ini:
+
+```json
+[{
+  "inner_text": "Jambu biji",
+  "href": "/buah/jambu_biji",
+  "number": {
+    "type": "nomorBuah",
+    "raw": ["A", "1"],
+    "depth": 2
+  },
+  "price": {
+    "details": {
+      "currency": "IDR",
+      "amount": {
+        "total": 12,
+        "unit": "thousand"
+      }
+    }
+  }
+}]
+```
+
+Dengan menggunakan PE.1,
+
+```toml
+# PE.1
+[[task.anchor.extract]]
+output = "./out/anchor_PE.1.json"
+format = "json"
+preset = "pendon"
+include = ["number.raw", "price.details.amount"]
+omit = ["price.details.amount.unit"]
+```
+
+Outputnya menjadi:
+
+```json
+[{
+  "inner_text": "Jambu biji",
+  "href": "/buah/jambu_biji",
+  "number": {
+    "raw": ["A", "1"]
+  },
+  "price": {
+    "details": {
+      "amount": {
+        "total": 12
+      }
+    }
+  }
+}]
+```
+
+Dengan menggunakan PE.2
+
+```toml
+# PE.2
+[[task.anchor.extract]]
+output = "./out/anchor_PE.2.json"
+format = "json"
+preset = "all"
+include = ["number.raw", "price.details.amount"] # redundan, tapi tetap sah
+omit = ["price.details.amount.unit"]
+```
+
+Outputnya menjadi:
+
+```json
+[{
+  "inner_text": "Jambu biji",
+  "href": "/buah/jambu_biji",
+  "number": {
+    "type": "nomorBuah",
+    "raw": ["A", "1"],
+    "depth": 2
+  },
+  "price": {
+    "details": {
+      "currency": "IDR",
+      "amount": {
+        "total": 12
+      }
+    }
+  }
+}]
+```
+
+Dengan menggunakan PE.3
+
+```toml
+# PE.3
+[[task.anchor.extract]]
+output = "./out/anchor_PE.3.json"
+format = "json"
+preset = "all"
+only = ["number.raw", "price.details.amount"]
+omit = ["price.details.amount.unit"]
+```
+
+Outputnya menjadi:
+
+```json
+[{
+  "number": {
+    "raw": ["A", "1"]
+  },
+  "price": {
+    "details": {
+      "amount": {
+        "total": 12
+      }
+    }
+  }
+}]
+```
+
+Dengan menggunakan PE.4
+
+```toml
+# PE.4
+[[task.anchor.extract]]
+output = "./out/anchor_PE.4.json"
+format = "json"
+preset = "pendon"
+only = ["number.raw", "price.details.amount"]
+omit = ["price.details.amount.unit"]
+```
+
+Outputnya menjadi:
+
+```json
+[{}]
+```
+
+Hasilnya kosong, karena `number` dan `price` tidak ada di preset pendon. Sehingga `only` di PE.4 tidak mengambil apapun.
+
+#### Extract frontmatter
+
+Frontmatter harus bisa diekstrak seperti elemen lain.
+
+- Format output: JSON, YAML, TOML, dan `export const` internal, seperti elemen lain.
+- Mendukung `only` dan `omit`.
+- Tidak memiliki preset.
+
+### Plugin-Number Upgrade
+
+Promote `plugin-number` menjadi `number` (salah satu main crate), tidak lagi menjadi plugin.
+
+Fields dari `plugin-number` ditetapkan sebagai berikut:
+
+- `number.type`
+- `number.raw`: array number mentah, mis. `["II", "A", "21"]`
+- `number.depth`
+
+Ketiganya dapat di-override:
+
+```toml
+[[task.<element>.custom]] # bukan di [[task.<element>.number]]
+field.override.number.type = "foo"
+field.override.number.raw = "bar"
+field.override.number.depth = "baz"
+
+# atau di task.number.custom
+[[task.number.custom]]
+field.override.number.type = "foo"
+field.override.number.raw = "bar"
+field.override.number.depth = "baz"
+```
+
+Plugin number harus bisa diekstrak dari elemen apa pun yang memakainya sebagaimana type dan specs.
+
+### Penyesuaian Plugin VSCode
+
+- Highlighter perlu diupdate untuk menyesuaikan semua perubahan yang ada.
+
+## Catatan
+
+- `plugin-wiki` sedang ada dalam rencana perombakan penuh di masa mendatang. Jadi, dalam rework ini `plugin-wiki` terutama wikilink bisa di-ignored dan dilewati.
+- Plugin-plugin berikut bisa di-ignored dan dilewati karena akan dihapus sepenuhnya dalam waktu dekat: `plugin-vicado`, `plugin-dialog`, dan `plugin-quiz`.

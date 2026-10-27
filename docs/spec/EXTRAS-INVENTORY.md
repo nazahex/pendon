@@ -1,129 +1,254 @@
 # Extras inventory — extractable fields per element
 
-**Status: skeleton (Phase 0).** One row per in-scope element is seeded here; the
-`recommended` column is filled by **T4.1** of
-[`../workflows/TASKS.md`](../workflows/TASKS.md) before `plugin-extract` is
-written ([ADR-0011](../decisions/0011-plugin-extract.md)). `T4.1` also expands
-each seed row into one row per field.
+**Status: frozen (T4.1).** This is the contract `plugin-extract` implements: the
+`only` / `omit` / `recommended` vocabulary, one row per field, `recommended`
+decided per element (D-7 of
+[`../workflows/numbering-extract-type-export.md`](../workflows/numbering-extract-type-export.md)).
+Changing a `recommended` mark here changes what `recommended = true` extracts, so
+it is a behaviour change and needs its own line in `STATUS.md`.
 
-Scope is fixed by
-[`../workflows/numbering-extract-type-export.md`](../workflows/numbering-extract-type-export.md)
-§8.6: `anchor`, `blockquote`, `cite`, `directive`, `heading`, `image`, `marker`,
-`list`, `section`, `table`, `wiki` (wikilink only), `codeblock` (vanilla),
-`latex`, `bind`, `micromatter`. Out of scope and deliberately absent: `quiz`,
+Scope is fixed by §8.6 of the workflow: `anchor`, `blockquote`, `cite`,
+`directive`, `heading`, `image`, `marker`, `list`, `section`, `table`, `wiki`
+(wikilink only), `codeblock` (vanilla), `latex`, `bind`, `micromatter`. §1 lists
+the five in-scope elements that are **not** extractable yet and why; §2–§11 are
+the frozen tables. Out of scope and deliberately absent: `quiz`,
 `codeblock-syntect`, `vicado`, `dialog`, and `plugin-custom`'s `toml:` specs.
-`quiz`, `vicado` and the wiki infobox are not merely unscoped — they are
-**deleted entirely in the next workflow**, so no Phase-4 row will ever be filled
-for them and no code should be written against them.
 
-## How to fill a row
+## 0. How to read a row
 
-1. **`field`** — the attribute name as it appears on the node, i.e. the `only`
-   / `omit` name a config block would use (`slug`, `loc`, `rel`, `number`, …).
-   It must already have a defined "only" name; a value with no stable name does
-   not ship.
-2. **`source`** — where the field is defined, in this order: the element's §N in
-   [`../spec/SYNTAX.md`](../spec/SYNTAX.md) (the attribute list), the plugin's
-   `emit` block (`crates/plugin-<element>/src/lib.rs`), then the golden `.jsx`
-   that shows it (`docs/spec/golden/NN-*.jsx`).
-3. **`recommended`** — `yes` (in the `recommended` preset), `no` (only on
-   request), or leave `TODO` while unreviewed. Nothing is recommended until it
-   has been reviewed against a real fixture.
-4. **`notes`** — interactions worth pinning: a reserved key (e.g. `number` once
-   `plugin-number` runs, D-10), a field only present in one form (figure vs
-   image), or a value that is structured (`U+E001`).
+1. **`field`** — the name a config block uses (`only` / `omit`), which is also the
+   key in the emitted object. Everything the element plugin writes as an
+   `Event::Attribute` is addressable by its attribute name.
+2. **`type`** — `string`, `number`, `string[]`, `text` (`inner_text`), or `flag`.
+   A value carried as `JSON_ATTR_PREFIX` + JSON (`number`, a bound `data`) is
+   emitted **structured**, not as a string.
+3. **`source`** — `§N · crate · golden`, in that order: the attribute list in
+   [`SYNTAX.md`](../spec/SYNTAX.md), the plugin's `emit` block, then the fixture
+   that proves it. A field with no golden does not ship.
+4. **`recommended`** — `yes` = in the preset, `no` = only on request.
+5. **`notes`** — interactions worth pinning.
 
-A row whose `source` cannot name a §N, an `emit` site **and** a golden stays
-`TODO` — that is the signal that the field is not yet extractable.
+Two names exist on **every** extractable element and are not repeated per table:
 
-## anchor
+| field        | type   | meaning                                                              |
+| ------------ | ------ | -------------------------------------------------------------------- |
+| `inner_text` | text   | the node's text content, descendants concatenated, trimmed           |
+| `depth`      | number | outline nesting: a heading's `level`, a section's open-section count |
 
-| field        | source                                                                                       | recommended | notes                                                        |
-| ------------ | -------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------ |
-| _all extras_ | [`SYNTAX.md` §7.2](../spec/SYNTAX.md); `crates/plugin-anchor/src/lib.rs`; golden `04-anchor` | TODO        | seed row — T4.1 splits it per field (`href`, `rel`, `id`, …) |
+Rules that hold for all rows:
 
-## blockquote
+- **Internal keys never ship.** `__layer`, `__plugin_kind`, `__number` and every
+  other `__`-prefixed attribute are the event stream's own bookkeeping (D-9);
+  `only = ["__layer"]` selects nothing rather than leaking it.
+- **Extras pass through under their own name.** An element plugin emits the
+  author's extras verbatim (`for (name, value) in attrs.values`), so
+  `only = ["extraAttr1"]` works for any author-defined key. The tables list the
+  fields the _plugin_ writes; a custom key is not less real, it is just not
+  enumerable here.
+- **A missing field is dropped, never emitted empty** — even when `only` names
+  it (P.1 of [`../issues/plugin-extract.md`](../issues/plugin-extract.md)).
+- **Selection order** is `recommended` → `only` → `omit`, and `omit` always wins
+  (P.3). Fields are emitted in **attribute order** (the order the plugin wrote
+  them), not in the order of the `only` array.
 
-| field        | source                                                                                               | recommended | notes                                             |
-| ------------ | ---------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------- |
-| _all extras_ | [`SYNTAX.md` §9.2](../spec/SYNTAX.md); `crates/plugin-blockquote/src/lib.rs`; golden `11-blockquote` | TODO        | seed row; `type` mirrors the extras marker (§6.2) |
+## 1. In scope, not extractable yet
 
-## cite
+These five are listed by §8.6 but have no row, because a field needs an `emit`
+site _and_ a golden (§0's source rule) and they have neither. They are not
+silently dropped: `[[task.<element>.extract]]` for one of them is a config error
+naming the element.
 
-| field        | source                                                                                   | recommended | notes                                                                  |
-| ------------ | ---------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------- |
-| _all extras_ | [`SYNTAX.md` §7.3](../spec/SYNTAX.md); `crates/plugin-cite/src/lib.rs`; golden `05-cite` | TODO        | seed row; `number` arrives from `plugin-cite` today — Phase 3 keeps it |
-| `ref`        | [`SYNTAX.md` §7.3](../spec/SYNTAX.md); golden `26-cite-scope`                            | TODO        | reference id, the join key into `export const references`              |
+| element       | why not                                                                                                                      | follow-up                                           |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `wiki`        | `plugin-wiki` rewrites the text into a plain `Link` with **no `__layer`** tag, so a wikilink and an anchor are the same node | tag it `__layer = "wiki"` (mirrors `plugin-anchor`) |
+| `codeblock`   | the vanilla form is `markdown`'s `CodeFence` node; there is no `plugin-codeblock` crate to emit a layer for it               | decide the layer name, then add a golden            |
+| `latex`       | `plugin-latex` emits `HtmlBlock` / `HtmlInline`, i.e. opaque HTML with **no attributes of its own**                          | none — a math node carries nothing to extract       |
+| `bind`        | `plugin-bind` writes its values onto the **host** element (`<a build=… data=…>`), not onto a node of its own                 | extract the host element (`anchor`) instead         |
+| `micromatter` | `frontmatter` is not an extras-capable element; its data is already the automatic `frontmatter` export (ADR-0009)            | none — `plugin-extract` would duplicate it          |
 
-## directive
+## 2. `anchor` — `__layer = "anchor"` (`NodeKind::Link`)
 
-| field        | source                                                                                          | recommended | notes                                             |
-| ------------ | ----------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------- |
-| _all extras_ | [`SYNTAX.md` §10.2](../spec/SYNTAX.md); `crates/plugin-directive/src/lib.rs`; goldens `15`/`16` | TODO        | seed row; inline and block forms share the fields |
+Source: §7.2 · `crates/plugin-anchor` · golden `04-anchor`.
 
-## heading
+| field        | type   | recommended | notes                                                     |
+| ------------ | ------ | ----------- | --------------------------------------------------------- |
+| `href`       | string | yes         | the construct owns it; an extras `href` is ignored (§7.2) |
+| `id`         | string | yes         | `#id` > `[slug]` head > extras `slug` (§6.2)              |
+| `title`      | string | yes         | from the head's `("title")`, never part of the label      |
+| `type`       | string | yes         | the `@@type` marker                                       |
+| `rel`        | string | no          | merged, not replaced, by the `rel:` modifier              |
+| `target`     | string | no          | `_blank` from a `!` / `?` modifier, or extras             |
+| `inner_text` | text   | yes         | the link label                                            |
 
-| field        | source                                                                                         | recommended | notes                                                                              |
-| ------------ | ---------------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------- |
-| _all extras_ | [`SYNTAX.md` §7.4](../spec/SYNTAX.md); `crates/plugin-heading/src/lib.rs`; golden `06-heading` | TODO        | seed row; `level`, `slug`, `title`, `number` are the known ones                    |
-| `number`     | `crates/plugin-number/src/lib.rs`; goldens `30-number-heading`, `31-number-custom`             | TODO        | written by `plugin-number` (ADR-0010, §10.5); `__number` is the marker on the wire |
+## 3. `blockquote` — `__layer = "blockquote"`
 
-## image
+Source: §9.2 · `crates/plugin-blockquote` · golden `11-blockquote`.
 
-| field        | source                                                                                            | recommended | notes                                                                  |
-| ------------ | ------------------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------- |
-| _all extras_ | [`SYNTAX.md` §7.1](../spec/SYNTAX.md); `crates/plugin-image/src/lib.rs`; golden `03-image-figure` | TODO        | seed row; figure-only fields (`alt`, caption) differ from bare `<img>` |
+| field | type | recommended | notes |
+| ----- | ---- | ----------- | ----- |
 
-## list
+## 4. `cite` — `__layer = "cite"` (renders as the `Cite` component)
 
-| field        | source                                                                                             | recommended | notes                                                       |
-| ------------ | -------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------- |
-| _all extras_ | [`SYNTAX.md` §9.4](../spec/SYNTAX.md); `crates/plugin-list/src/lib.rs`; golden `12-list-container` | TODO        | seed row; container vs item layers (`unordered`, `ordered`) |
+Source: §7.3 · `crates/plugin-cite` · golden `05-cite`.
 
-## marker
+The proposal's P.3 names `instance_id` and `ref_id`; the node's real names are
+`instance_index` and `cite-id`, and `recommended` uses the real ones.
 
-| field        | source                                                                                        | recommended | notes                                    |
-| ------------ | --------------------------------------------------------------------------------------------- | ----------- | ---------------------------------------- |
-| _all extras_ | [`SYNTAX.md` §10.1](../spec/SYNTAX.md); `crates/plugin-marker/src/lib.rs`; golden `14-marker` | TODO        | seed row; `{{type}}` marker is mandatory |
+| field             | type   | recommended | notes                                                            |
+| ----------------- | ------ | ----------- | ---------------------------------------------------------------- |
+| `citation_number` | number | yes         | assigned by `plugin-cite`; stable for a repeated `(ref_id, loc)` |
+| `instance_index`  | number | yes         | one per physical occurrence, `1..n` over the document            |
+| `cite-id`         | string | yes         | the node's `id` slot (`#id` / slug) — the backlink anchor        |
+| `loc`             | string | yes         | the locator; part of the citation's identity                     |
+| `type`            | string | yes         | the `@@type` marker                                              |
+| `note`            | string | no          | extras only                                                      |
+| `class`           | string | no          | extras only                                                      |
+| `inner_text`      | text   | no          | the citation's display text (`^^` → the footnote marker)         |
 
-## section
+`reference` is **not** a field: the renderer resolves it from `ref_id` against
+`export const references`. Extract `cite-id` and join on the `references` export —
+which is what golden `05`'s `citations` array does.
 
-| field        | source                                                                                         | recommended | notes                                         |
-| ------------ | ---------------------------------------------------------------------------------------------- | ----------- | --------------------------------------------- |
-| _all extras_ | [`SYNTAX.md` §9.5](../spec/SYNTAX.md); `crates/plugin-section/src/lib.rs`; golden `22-section` | TODO        | seed row; decorator + id chain (§9.5 outline) |
+## 5. `directive` — `__layer = "directive"`
 
-## table
+Source: §10.2/§10.4 · `crates/plugin-directive` · goldens `15`/`16`.
 
-| field        | source                                                                                            | recommended | notes                                                             |
-| ------------ | ------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------- |
-| _all extras_ | [`SYNTAX.md` §8](../spec/SYNTAX.md); `crates/plugin-table/src/{lib,custom}.rs`; goldens `08`/`09` | TODO        | seed row; per-layer fields (`table`, `thead`, `caption`, `tfoot`) |
+| field  | type   | recommended | notes                                                 |
+| ------ | ------ | ----------- | ----------------------------------------------------- |
+| `type` | string | yes         | `::name` — the routing key and the marker's only name |
 
-## wiki
+## 6. `heading` — `__layer = "heading"` (`NodeKind::Heading`)
 
-| field        | source                                                                                   | recommended | notes                                                                                    |
-| ------------ | ---------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------- |
-| _all extras_ | [`SYNTAX.md` §7.5](../spec/SYNTAX.md); `crates/plugin-wiki/src/lib.rs`; golden `07-wiki` | TODO        | wikilink only — infobox internals stay out of scope (§8.6) and are deleted next workflow |
+Source: §7.4/§11 · `crates/plugin-heading` · golden `06-heading`.
 
-## codeblock (vanilla)
+| field        | type     | recommended | notes                                                   |
+| ------------ | -------- | ----------- | ------------------------------------------------------- |
+| `level`      | number   | yes         | `1..6`, the `#` run                                     |
+| `id`         | string   | yes         | section id > `#id` > `[slug]` > extras slug (§6.2)      |
+| `slug`       | string   | yes         | the heading's own slug (`[slug]` head or auto-slug)     |
+| `raw_title`  | string   | yes         | the head's `("title")`, before markdown                 |
+| `number`     | string[] | yes         | written by `plugin-number` (ADR-0010); structured array |
+| `type`       | string   | yes         | the `@@type` marker                                     |
+| `class`      | string   | no          | extras only                                             |
+| `title`      | string   | no          | extras `title:` loses to the head (§6.2)                |
+| `inner_text` | text     | yes         | the visible heading text                                |
+| `depth`      | number   | no          | equals `level` for a heading                            |
 
-| field        | source                                                                      | recommended | notes                                                    |
-| ------------ | --------------------------------------------------------------------------- | ----------- | -------------------------------------------------------- |
-| _all extras_ | [`SYNTAX.md` §9.1](../spec/SYNTAX.md); `crates/plugin-codeblock/src/lib.rs` | TODO        | no golden yet — T4.1 either freezes one or drops the row |
+`number` is **reserved** once `plugin-number` runs (D-10): an extras
+`number: "auto"` is a diagnostic there, and the only `number` an extract sees is
+the array.
 
-## latex
+## 7. `image` — `__layer = "img"` or `"figure"`
 
-| field        | source                                                                   | recommended | notes                     |
-| ------------ | ------------------------------------------------------------------------ | ----------- | ------------------------- |
-| _all extras_ | [`SYNTAX.md` §10.3](../spec/SYNTAX.md); `crates/plugin-latex/src/lib.rs` | TODO        | no golden yet — see above |
+Source: §7.1 · `crates/plugin-image` · golden `03-image-figure`.
 
-## bind
+A figure is **two nodes**: the outer `figure` layer carries the extras, the inner
+`img` layer carries the source. Both report as `image`, so a block sees one row
+per layer; `container` tells them apart.
 
-| field        | source                                                                                  | recommended | notes                                                               |
-| ------------ | --------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------- |
-| _all extras_ | [`SYNTAX.md` §19](../spec/SYNTAX.md); `crates/plugin-bind/src/lib.rs`; golden `23-bind` | TODO        | bound values are structured (`U+E001`); extraction emits them as-is |
+| field            | type   | recommended | layer    | notes                                      |
+| ---------------- | ------ | ----------- | -------- | ------------------------------------------ |
+| `src`            | string | yes         | `img`    | the resolved URL; never overridable        |
+| `alt`            | string | yes         | `img`    | from the construct head                    |
+| `width`          | number | yes         | `img`    | `w` in the construct                       |
+| `height`         | number | yes         | `img`    | `h` in the construct                       |
+| `type`           | string | yes         | both     | the `@@type` marker                        |
+| `id`             | string | yes         | `figure` | `#id` / slug of the figure (§6.2)          |
+| `container`      | string | no          | both     | `figure` / `img`; the layer discriminator  |
+| `class`          | string | no          | both     | extras only                                |
+| `style`          | string | no          | both     | extras only (CSS custom properties, §10.3) |
+| `lazy`           | number | no          | `img`    | `1` when the image is lazy                 |
+| `async_decoding` | number | no          | `img`    | `1` when decoding is async                 |
+| `isLazy`         | flag   | no          | `figure` | figure-level lazy flag                     |
+| `inner_text`     | text   | no          | `figure` | the caption (figure only)                  |
 
-## micromatter
+| `id` | string | yes | head `[bracket]` (§10.4) |
 
-| field        | source                                                                       | recommended | notes                                                                |
-| ------------ | ---------------------------------------------------------------------------- | ----------- | -------------------------------------------------------------------- |
-| _all extras_ | [`SYNTAX.md` §12](../spec/SYNTAX.md); `crates/plugin-micromatter/src/lib.rs` | TODO        | frontmatter-derived; `headings`/`references` exports already read it |
+## 8. `list` — `__layer = "list"` (item), `"unordered"` / `"ordered"` (container)
+
+Source: §9.3/§9.4 · `crates/plugin-list` · golden `12-list-container`.
+
+| field        | type   | recommended | layer     | notes                                       |
+| ------------ | ------ | ----------- | --------- | ------------------------------------------- |
+| `type`       | string | yes         | container | the marker; the layer decides, not the type |
+| `id`         | string | yes         | container | `#id` / slug of the decorator               |
+| `start`      | number | yes         | `ordered` | the `<ol start>`; absent on `<ul>`          |
+| `class`      | string | no          | both      | extras only                                 |
+| `inner_text` | text   | yes         | item      | the item's text                             |
+
+## 9. `marker` — `__layer = "marker"`
+
+Source: §10.1 · `crates/plugin-marker` · golden `14-marker`.
+
+| field        | type   | recommended | notes                                              |
+| ------------ | ------ | ----------- | -------------------------------------------------- |
+| `type`       | string | yes         | **mandatory** (§10.1) and the §11 routing key      |
+| `slug`       | string | yes         | `{{type}}` groups between `}}` and the extras head |
+| `id`         | string | yes         | `#id` / extras `id`                                |
+| `title`      | string | yes         | extras `title:`                                    |
+| `isOpen`     | flag   | no          | bare extras flag                                   |
+| `class`      | string | no          | extras only                                        |
+| `inner_text` | text   | yes         | the block form's trailing text (the caption)       |
+
+## 10. `section` — `__layer = "section"` (`NodeKind::Section`)
+
+Source: §9.5 · `crates/plugin-section` · golden `22-section`.
+
+| field        | type   | recommended | notes                                               |
+| ------------ | ------ | ----------- | --------------------------------------------------- |
+| `id`         | string | yes         | `#sectionID` > `[slug]` > extras slug > title slug  |
+| `type`       | string | yes         | the decorator's marker (§6.2)                       |
+| `class`      | string | yes         | extras only                                         |
+| `title`      | string | no          | extras `title:`                                     |
+| `inner_text` | text   | no          | the whole section body; prefer the child headings   |
+| `depth`      | number | yes         | open-section count at the section's own `StartNode` |
+
+| `level` | string | yes | head `("paren")`; a positional slot, kept verbatim |
+| `summary` | string | yes | backticked extras item (§6.1) |
+
+## 11. `table` — `__layer = "table"` (+ `thead` / `tbody` / `tfoot` layers)
+
+Source: §8 · `crates/plugin-table` · goldens `08`/`09`.
+
+| field        | type   | recommended | layer   | notes                                          |
+| ------------ | ------ | ----------- | ------- | ---------------------------------------------- |
+| `type`       | string | yes         | `table` | the `@@type` marker                            |
+| `id`         | string | yes         | `table` | `#id` / slug (§6.2)                            |
+| `class`      | string | no          | `table` | extras only                                    |
+| `caption`    | string | yes         | `table` | the construct's caption slot                   |
+| `inner_text` | text   | no          | `table` | flattened cell text — prefer the per-cell rows |
+
+Per-cell fields (`colspan`, `rowspan`, `align`, `id`, `class`) live on `td`/`th`
+nodes, which are **markdown's** nodes, not a Pendon layer: they are out of the
+extract surface until a table layer owns them.
+
+## 12. Preset table (the code's source of truth)
+
+`recommended = true` extracts exactly these names, in this order, intersect
+`only`, minus `omit`:
+
+| element      | preset                                                             |
+| ------------ | ------------------------------------------------------------------ |
+| `anchor`     | `href`, `id`, `title`, `type`, `inner_text`                        |
+| `blockquote` | `type`, `id`, `class`, `inner_text`                                |
+| `cite`       | `citation_number`, `instance_index`, `cite-id`, `loc`, `type`      |
+| `directive`  | `type`, `id`, `level`, `summary`, `inner_text`                     |
+| `heading`    | `level`, `id`, `slug`, `raw_title`, `number`, `type`, `inner_text` |
+| `image`      | `src`, `alt`, `width`, `height`, `type`, `id`                      |
+| `list`       | `type`, `id`, `start`, `inner_text`                                |
+| `marker`     | `type`, `slug`, `id`, `title`, `inner_text`                        |
+| `section`    | `id`, `type`, `class`, `depth`                                     |
+| `table`      | `type`, `id`, `caption`                                            |
+
+A field in the preset that an element does not carry in a given instance is
+dropped from that row (§0), so one preset serves a whole document.
+
+| `author` | string | no | quoted extras item (§6.1) |
+| `isOpen` | flag | no | bare extras flag; emitted `true` |
+| `class` | string | no | extras only |
+| `inner_text` | text | yes | the directive body |
+
+| `type` | string | yes | the decorator's marker (§6.2) |
+| `id` | string | yes | `#id` / slug from the decorator |
+| `class` | string | yes | extras only |
+| `inner_text` | text | yes | the quote body, markup flattened |

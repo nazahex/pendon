@@ -489,7 +489,7 @@ Workflow: §7. All numbering lives in one plugin; `attrs.number` is an array.
 Workflow: §8. Files **and** exports from any extras-capable element;
 `plugin-extract-heading` is deleted.
 
-### [ ] T4.1 — `spec/EXTRAS-INVENTORY.md` (Q.1, blocks all code)
+### [x] T4.1 — `spec/EXTRAS-INVENTORY.md` (Q.1, blocks all code)
 
 - **C**: `docs/spec/`.
 - **R**: `SYNTAX.md`'s attribute list per element, each plugin's emit block, and
@@ -503,7 +503,7 @@ Workflow: §8. Files **and** exports from any extras-capable element;
 - **Done**: `recommended` presets frozen for all 15 in-scope elements — this is
   the last blocking input for the plugin.
 
-### [ ] T4.2 — `pendon-plugin-extract` core
+### [x] T4.2 — `pendon-plugin-extract` core
 
 - **C**: new crate + `apps/cli` wiring.
 - **Do**: `ExtractBlock { selector, output: Vec<String>, format: Vec<Format>,
@@ -515,7 +515,7 @@ Workflow: §8. Files **and** exports from any extras-capable element;
 - **Verify**: `cargo test -p pendon-plugin-extract` (config validation cases).
 - **Done**: every config error names `task.<element>.extract[i].<key>`.
 
-### [ ] T4.3 — Field selection pipeline
+### [x] T4.3 — Field selection pipeline
 
 - **Do**: all fields → `recommended` restricts to the preset → `only`
   intersects (a custom attribute outside the preset is ignored when
@@ -526,7 +526,7 @@ Workflow: §8. Files **and** exports from any extras-capable element;
   exactly `citation_number`).
 - **Done**: the four-step order is one function with one test per step.
 
-### [ ] T4.4 — Writers: files and exports
+### [x] T4.4 — Writers: files and exports
 
 - **Do**: one destination path = one flat array; several blocks to the same path
   overwrite (last wins, D-4's spirit); `[segment]`-dynamic paths resolve
@@ -534,10 +534,11 @@ Workflow: §8. Files **and** exports from any extras-capable element;
   succeeds; `export` pushes through Phase 2's `exports` list (so a non-Solid task
   drops it) and is validated by T2.4's validator.
 - **Verify**: `cargo test -p pendon-plugin-extract` + the P.1.a/b/c scenario as
-  an integration test.
+  an integration test (`apps/cli/tests/extract_spec.rs`, which also covers the
+  dynamic/static path rules and the non-Solid drop).
 - **Done**: extract writes nothing for a `Payload` document (test, not comment).
 
-### [ ] T4.5 — Delete `plugin-extract-heading`
+### [x] T4.5 — Delete `plugin-extract-heading`
 
 - **R**: `crates/plugin-extract-heading/` (whole crate),
   `apps/cli/src/chain.rs` (both `extract-heading` arms),
@@ -553,7 +554,7 @@ Workflow: §8. Files **and** exports from any extras-capable element;
 - **Done**: `grep -rn "extract-heading" --include=*.toml --include=*.rs .` is
   empty; an unknown-plugin name still warns (it is just an unknown name now).
 
-### [ ] T4.6 — Side outputs in the cache
+### [x] T4.6 — Side outputs in the cache
 
 - **R**: `apps/cli/src/cache.rs` (`CacheEntry:48`, `CACHE_VERSION:28`,
   `create_entry:222`, `is_fresh:137`, the private tmp+rename at `:130`),
@@ -566,7 +567,7 @@ Workflow: §8. Files **and** exports from any extras-capable element;
 - **Done**: deleting a side file makes the next run rewrite it; a bumped version
   silently invalidates old records (existing behaviour).
 
-### [ ] T4.7 — Goldens `32-extract-heading`, `33-extract-scopes`
+### [x] T4.7 — Goldens `32-extract-heading`, `33-extract-scopes`
 
 - **Do**: `32` rebuilds the outline that `sandbox/heading`'s `extract-heading`
   produced **before** deletion (capture that output first, in T4.5's branch, and
@@ -576,7 +577,7 @@ Workflow: §8. Files **and** exports from any extras-capable element;
 - **Done**: `32` proves the deletion behaviour-preserving; `33` proves the scoping
   and last-wins rules.
 
-### [ ] T4.8 — Docs + Phase 4 gate
+### [x] T4.8 — Docs + Phase 4 gate
 
 - **Do**: SYNTAX's `extract` §N (keys, order, `omit` wins, flat arrays, depth
   field), `docs/guides/cli.md` if a flag moves, ADR for "only `Page` writes
@@ -589,8 +590,13 @@ Workflow: §8. Files **and** exports from any extras-capable element;
 
 ## Done criteria for the whole sequence
 
-- [ ] `cargo test --workspace` and `cargo clippy --workspace --all-targets` clean.
+- [x] `cargo test --workspace` and `cargo clippy --workspace --all-targets` clean
+      (plus `cargo fmt --all -- --check`), and every golden green.
 - [ ] Every acceptance box in the workflow's §5.3, §6.3, §7.4, §8.5 checked.
+      **One left:** §5.3's "the four golden suites stay byte-identical" — that is a
+      statement about the Phase-1 diff, not about today's tree (today's goldens
+      are green; `06`/`28` were legitimately re-frozen by Phases 3–4).
 - [ ] `SYNTAX.md` is the only place the rules live; `docs/workflows/*` stays
       internal and can be archived once the four phases land.
-- [ ] `STATUS.md` has no line about this sequence.
+- [ ] `STATUS.md` has no line about this sequence. (Still there on purpose: the
+      L37 blocker and the deferred baseline re-render outlive Phase 4.)

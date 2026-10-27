@@ -212,6 +212,11 @@ zig-out/
 *.dylib
 *.exe
 *.out
+# …but the golden fixtures freeze a render's side files in `NN-name.out/`
+# (`docs/spec/golden/README.md`); those are checked-in expectations, not build
+# artifacts.
+!docs/spec/golden/*.out/
+!docs/spec/golden/*.out/**
 
 cmake-build-*/
 CMakeFiles/

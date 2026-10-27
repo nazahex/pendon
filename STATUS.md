@@ -84,6 +84,22 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## In progress
 
+- [ ] **Stage 2 — Phase 0 done, Phase 1 in progress.** Docs live in
+      [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md).
+      **Phase 0 complete 2026-10-28**: D-1…D-17 signed (D-16 = clean total
+      replacement: no compat, no warnings, no migration doc, old configs fail
+      fast), OBJ-1…OBJ-11 answered, ADRs
+      [0012](docs/decisions/0012-universal-slots.md)–[0018](docs/decisions/0018-clean-replacement.md)
+      written and registered. Baseline `244bbb9`: 645 tests green.
+      **Phase 1**: `S2-1.1` (`crates/extra/src/slot.rs`: `SlotKind`/`SlotParts`/
+      `parse_slot_parts` + 13 tests), `S2-1.2` (`parse_slots` + `SlotMatch`:
+      bracket + attached paren, trailing text, `[[…]]` left to wiki), `S2-1.3`
+      (`SlotTag` + `read_head`, head position only), `S2-1.5` (bracket modifier
+      run, dedupe in written order, parens exempt) and `S2-1.6`
+      (`SlotPos`/`SlotContract`) done — 34 module tests. `S2-1.4` (OBJ-1 probe:
+      `crates/core` has no footnote extension, so cite keeps `^`) done. Phase 1
+      is complete: no golden byte moved. Next: Phase 2 (field model).
+      No `MIGRATION.md` by policy.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden

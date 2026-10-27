@@ -1127,6 +1127,7 @@ docs/spec/golden/NN-name.toml         pendon.toml for the fixture (plugins + cus
 docs/spec/golden/NN-name.jsx          expected solid output (generated — never hand-edited)
 docs/spec/golden/NN-name.events.json  expected event IR (optional, for parser bugs)
 docs/spec/golden/NN-name.data/        payload files read by a `(path)` block (optional)
+docs/spec/golden/NN-name.out/         side files the render writes, a mirror of `out/` (optional, §21)
 ```
 
 ### 16.2 Test gating
@@ -1300,9 +1301,81 @@ name        = ( ALPHA | "_" | "$" ) { ALPHA | DIGIT | "_" | "$" }
 
 Current producers:
 
-| Name                              | Producer                     | Notes                                   |
-| --------------------------------- | ---------------------------- | --------------------------------------- |
-| `frontmatter`                     | `renderer-solid` (automatic) | only when the document has frontmatter  |
-| `headings`                        | `renderer-solid` (automatic) | only when it has headings; nested shape |
-| `references`, `citations`         | `plugin-cite` (§7.3)         | names configurable; references first    |
-| `[[task.bind.inject]]`'s `export` | `plugin-bind` (§19)          | whole file payloads; Solid tasks only   |
+| Name                                    | Producer                     | Notes                                                             |
+| --------------------------------------- | ---------------------------- | ----------------------------------------------------------------- |
+| `frontmatter`                           | `renderer-solid` (automatic) | only when the document has frontmatter                            |
+| `headings`                              | `renderer-solid` (automatic) | built from the AST (§21); only when it has headings; nested shape |
+| `references`, `citations`               | `plugin-cite` (§7.3)         | names configurable; references first                              |
+| `[[task.bind.inject]]`'s `export`       | `plugin-bind` (§19)          | whole file payloads; Solid tasks only                             |
+| `[[task.<element>.extract]]`'s `export` | `plugin-extract` (§21)       | one flat row per occurrence; Solid tasks only                     |
+
+The automatic `headings` outline used to be injected into the event stream by
+`plugin-extract-heading`; the renderer now builds it from the `Heading` nodes
+themselves (T4.5, [ADR-0011](../decisions/0011-plugin-extract.md)), so no plugin
+has to run for it and the data is unchanged. A _flat_ outline is an ordinary
+extract block (§21).
+
+## 21. Data extraction (`[[task.<element>.extract]]`)
+
+An **extract** block reads one element's occurrences and writes their fields to a
+file (`output` + `format`) and/or to a module-level binding (`export`, §20). It is
+a **reader**: adding one never changes a rendered byte (P.2 of
+[`../issues/plugin-extract.md`](../issues/plugin-extract.md)).
+
+```text
+[[task.<element>.extract]]
+type        = <selector> | [<selector>, …]   # default: `_`
+output      = <path>     | [<path>, …]
+format      = "json" | "yaml" | "toml"       # required, one per `output`
+export      = <name>                         # one binding per block
+recommended = <bool>
+only        = [<field>, …]
+omit        = [<field>, …]
+```
+
+1. **The plugin is `extract`.** The blocks are _validated_ for every task (a typo
+   fails before rendering), but the pass only runs when `extract` is in
+   `task.plugin`, and it must **follow** every plugin whose attributes it reads —
+   after the element plugins and after `number`. A misordered chain is a task
+   error naming both plugins.
+2. **`<element>` is one of** `anchor`, `blockquote`, `cite`, `directive`,
+   `heading`, `image`, `list`, `marker`, `section`, `table`. Any other name is a
+   task error naming it. The extractable **fields** per element are frozen in
+   [`EXTRAS-INVENTORY.md`](EXTRAS-INVENTORY.md).
+3. **`type` is a selector list** (§11, [ADR-0008](../decisions/0008-type-selectors.md)):
+   a literal, `?`, `_` or `*`, resolved per element against the types that element
+   actually occurs with, so two blocks naming disjoint types cannot both claim a
+   node, and an omitted `type` is `_` — the remainder no other block named.
+4. **Field selection** starts from every field the occurrence carries, then
+   `recommended` restricts to the preset, `only` intersects it and **`omit`
+   subtracts last — omit always wins** (P.3). A field the element does not carry
+   is dropped, never emitted empty, even when `only` names it. Internal `__`-keys
+   never ship; an author's extras key passes through under its own name.
+5. **Two names exist on every element:** `inner_text` (the node's text,
+   descendants concatenated, trimmed) and `depth` (a heading's `level`, a
+   section's open-section count).
+6. **One destination path = one array.** Blocks listing several `output`s write
+   the _same_ rows to each; several blocks resolving to one path overwrite it —
+   the later value wins, at the position the first block gave it. `output` and
+   `format` arrays must have the same length, and the **extension never decides
+   the format** (`format = "json"` writes JSON to a `.yaml` path). `paths` are
+   project-root-relative and take the task's `[segment]` captures.
+7. **`export` is §20's channel**: a `solid` task emits `export const <name>`, a
+   non-solid task drops the binding and keeps the files. Two blocks exporting one
+   name leave the later value only (D-6).
+8. **Rows are flat and one per occurrence, in document order.** Nothing is nested:
+   a heading row carries `level`/`depth` and a consumer builds the tree. (The
+   _nested_ `headings` outline of §20 is separate and automatic.)
+9. **Written after the page renders, atomically.** A failed render leaves no side
+   file behind; a block that matched nothing writes no file and registers no
+   binding. Side files are **outputs**: the cache records them, so deleting one
+   makes the next run rewrite it.
+10. **Only a `Page` extracts.** An `mdp` payload (§19) runs every plugin for its
+    in-document effects, but `extract` is skipped there, so a payload writes
+    neither a file nor an export.
+
+Executable contracts: goldens [`32-extract-heading`](golden/README.md) (a heading
+block writing a file _and_ `export const outline`, next to the automatic nested
+`headings`) and [`33-extract-scopes`](golden/README.md) (two `type`-scoped blocks,
+the `_` remainder, a last-wins `export`); `apps/cli/tests/extract_spec.rs` adds
+the dynamic/static path rules, the non-Solid drop and the cache rewrite.

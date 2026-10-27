@@ -32,8 +32,13 @@ The golden set in [`../spec/golden/`](../spec/golden/) is copied into a temp
 project, rendered with the real CLI, and compared byte-for-byte.
 
 ```bash
-cargo test -p pendon --test syntax_spec          # 19 fixtures
+cargo test -p pendon --test syntax_spec          # 27 fixtures
 ```
+
+A fixture may also freeze the **files** its render writes
+(`docs/spec/golden/NN-name.out/`): an `[[task.<element>.extract]]` block writes
+side files instead of markup, and the harness compares each of them byte for byte
+too.
 
 When output changes **intentionally**, re-freeze (do not hand-edit `.jsx`):
 

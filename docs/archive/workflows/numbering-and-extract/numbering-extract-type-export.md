@@ -174,18 +174,22 @@ D-6…D-10 stay open until their own phase, as the paragraph below already says.
 
 ### 5.3 Acceptance criteria
 
-- [ ] A document with `TypeA…TypeD` and config R.1–R.4 renders `TypeA` with
+- [x] A document with `TypeA…TypeD` and config R.1–R.4 renders `TypeA` with
       `HeadingTypeA`, `TypeB`/`TypeC` with `HeadingFallback`, untyped with
-      `HeadingUntyped`, and `HeadingDefault`'s import never appears.
+      `HeadingUntyped`, and `HeadingDefault`'s import never appears
+      (`golden/28-type-selectors.jsx`).
 - [ ] `type` omitted still behaves exactly as today (untyped **and** unknown
       markers reach the layer default) — the four existing golden suites stay
       byte-identical.
-- [ ] `type = ["TypeA","_"]` and `type = "*"` behave as `type-upgrade.md` D.4/D.5.
-- [ ] A duplicate literal `type = ["TypeA","TypeA"]` in one layer still errors
-      with the current message.
-- [ ] `cargo test -p pendon-types -p pendon-renderer-solid -p pendon --test syntax_spec`
+- [x] `type = ["TypeA","_"]` and `type = "*"` behave as `type-upgrade.md` D.4/D.5
+      (`crates/types/src/group.rs`: `winner_literal_beats_underscore`,
+      `winner_literal_beats_star_and_question_beats_underscore`).
+- [x] A duplicate literal `type = ["TypeA","TypeA"]` in one layer still errors
+      with the current message
+      (`apps/cli/src/components.rs::duplicate_literals_stay_an_error_but_wildcards_may_repeat`).
+- [x] `cargo test -p pendon-types -p pendon-renderer-solid -p pendon --test syntax_spec`
       green; no fixture `#[ignore]`d.
-- [ ] `cargo test -p pendon --test custom_spec` still green (custom components
+- [x] `cargo test -p pendon --test custom_spec` still green (custom components
       are the main regression risk).
 
 ### 5.4 Where resolution happens (D-3)
@@ -264,9 +268,11 @@ order (frontmatter → headings → references → citations) through
       `export default function` (`apps/cli/tests/bind_inject_spec.rs`).
 - [x] Two producers registering the same name emit one line, last value wins
       (`renderer-solid::tests::the_last_registration_of_a_name_wins`).
-- [ ] `export = "frontmatter"` overrides the automatic `frontmatter` export
-      (P.2's rule, tested in Phase 4). The mechanism is the "last wins" test
-      above; the end-to-end config case belongs to Phase 4.
+- [x] `export = "frontmatter"` overrides the automatic `frontmatter` export
+      (P.2's rule). The mechanism is the "last wins" test above; the end-to-end
+      config case is
+      `apps/cli/tests/extract_spec.rs::an_extract_export_overrides_the_automatic_frontmatter`
+      (one line, the block's rows, still before `export default function`).
 - [x] An invalid identifier is rejected naming the key and the value
       (`bind.inject 'data-x' is not a valid JavaScript identifier`).
 - [x] An edited inject source invalidates the cache (it is a `deps` entry).
@@ -396,9 +402,12 @@ removal is three moves:
    name in the four sandbox configs (`sandbox/{heading,ultimate,unified,universal}`).
 2. Make the outline an ordinary `[[task.heading.extract]]` with `to` and/or
    `export`, whose value is a **flat array** of `{ level, id, text, … }` —
-   nesting disappears (a consumer that wants a tree builds it; the automatic
+   nesting disappears (a consumer that wants a tree builds it). The automatic
    `export const headings` keeps its current nested shape so goldens stay
-   stable).
+   stable; since the plugin's injection is what produced it, the renderer now
+   builds it from the `Heading` nodes themselves
+   (`renderer-solid/src/metadata.rs`), which is what makes the deletion
+   behaviour-preserving.
 3. Replace the hard-coded `if fragment && name == "extract-heading" { continue }`
    (`chain.rs:232`) with the general rule: **only a `Page` document writes
    document-level outputs** (files + exports); a `Payload` runs every plugin for
@@ -408,6 +417,12 @@ Note there is **no golden for `extract-heading` today** (`spec/golden/README.md`
 has no 22-extract row) — Phase 4 closes that gap with `32-extract-heading`
 built from `sandbox/heading`'s config, so the deletion is provably
 behaviour-preserving for the outline data.
+
+**Outcome.** It is behaviour-preserving for that sandbox (rendered byte-identical
+before and after), but the export is now automatic for _every_ `solid` document
+with headings rather than only when the plugin ran, so the eight goldens that
+contain headings gained exactly one line (`06`, `16`, `21`, `22`, `25`, `28`,
+`30`, `31`). ADR-0011's outcome records it.
 
 ### 8.4 Cache and files
 
@@ -424,22 +439,22 @@ behaviour-preserving for the outline data.
 
 ### 8.5 Acceptance criteria
 
-- [ ] `[[task.heading.extract]]` with `output = ["out/headings.json"],
+- [x] `[[task.heading.extract]]` with `output = ["out/headings.json"],
       format = ["json"]` and `export = "citationsC"` produces the file **and** the
       export.
-- [ ] P.1.a/P.1.b/P.1.c reproduce: two blocks with disjoint `type` scopes write
+- [x] P.1.a/P.1.b/P.1.c reproduce: two blocks with disjoint `type` scopes write
       disjoint data, and the third block's `export = "citationsC"` wins over the
       second's while both `_`-scoped blocks still write their own files.
-- [ ] P.3 reproduces exactly: `recommended` + `only` + `omit` leaves one field
+- [x] P.3 reproduces exactly: `recommended` + `only` + `omit` leaves one field
       (`citation_number`).
-- [ ] An `extract` on a `Payload`/`mdp` sub-document writes neither file nor
+- [x] An `extract` on a `Payload`/`mdp` sub-document writes neither file nor
       export.
-- [ ] Two blocks resolving to the same `output` leave only the later data; a
+- [x] Two blocks resolving to the same `output` leave only the later data; a
       `output`/`format` length mismatch is a task error.
-- [ ] A field list including an absent attribute emits no empty value.
-- [ ] Deleting a side file makes the next run rewrite it (cache freshness).
-- [ ] `extract-heading` is gone as a plugin name and warns like any unknown one.
-- [ ] `cargo test -p pendon --test syntax_spec` green with new `32-extract-heading`,
+- [x] A field list including an absent attribute emits no empty value.
+- [x] Deleting a side file makes the next run rewrite it (cache freshness).
+- [x] `extract-heading` is gone as a plugin name and warns like any unknown one.
+- [x] `cargo test -p pendon --test syntax_spec` green with new `32-extract-heading`,
       `33-extract-scopes` goldens.
 
 ### 8.6 Scope of elements

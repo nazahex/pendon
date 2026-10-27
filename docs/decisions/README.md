@@ -17,6 +17,13 @@ rejected alternatives, and the evidence that pins each decision.
 | [0009](0009-generic-data-exports.md)        | One `export const` writer (`DataExport`)                | Accepted / complete     |
 | [0010](0010-plugin-number.md)               | `plugin-number` owns numbering; `%%` grammar in `extra` | Proposed                |
 | [0011](0011-plugin-extract.md)              | `plugin-extract`: field-level extraction per element    | Proposed                |
+| [0012](0012-universal-slots.md)             | Slots are universal and parsed before Markdown          | Accepted / building     |
+| [0013](0013-decorator-unification.md)       | `@@` is the only decorator, and it comes first          | Accepted / building     |
+| [0014](0014-field-model.md)                 | Public fields are a projection, not the IR              | Accepted / building     |
+| [0015](0015-extract-promotion.md)           | `extract` is a main crate; frontmatter is extractable   | Accepted / building     |
+| [0016](0016-number-promotion.md)            | `number` is a main crate and exports `number.*`         | Accepted / building     |
+| [0017](0017-slot-modifiers.md)              | Slot modifiers merge in written order                   | Accepted / building     |
+| [0018](0018-clean-replacement.md)           | Clean total replacement: no compatibility of any kind   | Accepted / enforced     |
 
 ## Conventions
 

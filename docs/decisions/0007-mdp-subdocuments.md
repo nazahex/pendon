@@ -33,9 +33,8 @@ JSX text. Four problems followed:
 1. **`mdp` is a sub-document.** Its body is parsed with `pendon_core::parse` and
    run through the **host's own chain** — the CLI's `chain::run_chain` with the
    payload flag — so the payload sees exactly the plugins the page does. Only the
-   stages that export _document-level_ data (`extract-heading`'s `headings`) are
-   skipped; every other enabled plugin runs and shares the host
-   `DocumentContext`.
+   stage that writes _document-level_ outputs (`extract`, ADR-0011) is skipped;
+   every other enabled plugin runs and shares the host `DocumentContext`.
 2. **`plugin-bind` does not know the plugins.** `resolve_with(events, &registry,
    &mut render)` takes the renderer from the caller; `resolve(events, &registry)`
    remains as the Markdown-only wrapper for embedders that have no chain.
