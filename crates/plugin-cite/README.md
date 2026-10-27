@@ -20,6 +20,10 @@ extra HTML attributes, and external reference files.
 - Splits the display ordinal (`citation_number`) from the per-occurrence anchor target (`instance_index`)
 - Deduplicates `citation_number` by the `(ref_id, loc)` tuple only
 - Emits diagnostics when a referenced ID is not found
+- Declares its slot contract and preset assignment as data (`pub const HEAD`,
+  `crates/extra`'s `ElementHead`) — the single copy of §7.3's
+  `bracket.bare`/`bracket.quote` mapping; the `citation_number`/`citation_class`
+  work below is this plugin's own, not a slot preset
 
 ## Recommended Plugin Order
 

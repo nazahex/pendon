@@ -14,6 +14,9 @@ Advanced image syntax plugin for Pendon.
 - Accepts extra classes, IDs, data attributes, and CSS custom properties
 - Provides image behavior flags: lazy loading, async decoding, explicit dimensions
 - Integrates with the shared `Pipeline` so caption sub-parsing runs through wiki, cite, and anchor plugins
+- Declares its slot contract and preset assignment as data (`pub const HEAD`,
+  `crates/extra`'s `ElementHead`) — the single copy of §7.1's
+  `bracket.bare`/`paren.bare` mapping
 
 ## Recommended Plugin Order
 

@@ -1,9 +1,46 @@
 use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr};
+use pendon_extra::{
+    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, FieldName, Preset, Slot,
+    SlotContract, SlotKind, SlotPos, SlotTag,
+};
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+// --- Slot head (§7.4, §6.1) ---
+
+/// Every position heading claims: `#[slug "bracket quote" `bracket tick`](paren …)`
+/// — a claimed head is read whole, so an unnamed content becomes a bare field
+/// (`paren.bare`, …) rather than being dropped (D-7).
+const SLOTS: &[SlotPos] = &[
+    (Slot::Bracket, SlotKind::Bare),
+    (Slot::Bracket, SlotKind::Quote),
+    (Slot::Bracket, SlotKind::Tick),
+    (Slot::Paren, SlotKind::Bare),
+    (Slot::Paren, SlotKind::Quote),
+    (Slot::Paren, SlotKind::Tick),
+];
+
+/// §7.4's preset assignment: `bracket.bare` → `slug`, `paren.quote` → `title`.
+///
+/// `depth` and `inner_text` are part of the element's *fields* but not of this
+/// table: neither comes from a slot (`depth` is the heading level, `inner_text`
+/// the Markdown body), so there is no position to assign.
+const PRESET: &[Preset] = &[
+    Preset::new(Slot::Bracket, SlotKind::Bare, FieldName::new("slug")),
+    Preset::new(Slot::Paren, SlotKind::Quote, FieldName::new("title")),
+];
+
+/// The tag that claims heading's head (D-11), the positions it claims, and their
+/// fallback-to-preset assignment (§6.1, §6.5, D-7).
+pub const HEAD: ElementHead = ElementHead::new(
+    SlotContract {
+        accepted: SLOTS,
+        tag: SlotTag::Heading,
+    },
+    PRESET,
+);
 
 // --- Configuration & Types ---
 
@@ -432,6 +469,37 @@ pub fn primary_layer() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// §7.4's preset, position by position (S2-2.5). `slug` is the slot value and
+    /// `title` the paren's quote; `depth`/`inner_text` are not slot-derived, so
+    /// they must not appear here.
+    #[test]
+    fn the_head_declares_the_spec_preset() {
+        assert_eq!(HEAD.contract.tag, SlotTag::Heading);
+        assert!(
+            HEAD.is_consistent(),
+            "a preset must sit on a claimed position"
+        );
+        let got: Vec<String> = HEAD
+            .presets()
+            .iter()
+            .map(|preset| {
+                format!(
+                    "{}.{} -> {}",
+                    preset.slot.name(),
+                    preset.kind.name(),
+                    preset.name
+                )
+            })
+            .collect();
+        assert_eq!(got, ["bracket.bare -> slug", "paren.quote -> title"]);
+        assert!(!got
+            .iter()
+            .any(|row| row.contains("inner_text") || row.contains("depth")));
+        // The bracket quote is claimed but unpreset: it stays `bracket.quote`.
+        assert!(HEAD.contract.accepts(Slot::Bracket, SlotKind::Quote));
+        assert_eq!(HEAD.preset_for(Slot::Bracket, SlotKind::Quote), None);
+    }
 
     fn consumed_len(text: &str, head: &HeadingHead) -> usize {
         assert!(head.consumed <= text.chars().count());

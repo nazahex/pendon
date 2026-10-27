@@ -16,6 +16,10 @@ owns `attrs.number` (ADR-0010).
 - Auto-generates URL-safe slugs as fallback IDs when no custom ID is provided
 - Supports custom Solid components with full attribute access, including `raw_title`
 - Strips all extras syntax from visible heading text in both standard and custom modes
+- Declares its slot contract and preset assignment as data (`pub const HEAD`,
+  `crates/extra`'s `ElementHead`) — the single copy of §7.4's
+  `bracket.bare`/`paren.quote` mapping; `depth` and `inner_text` are fields of the
+  element but are not slot-derived, so they are not in the table
 
 ## Recommended Plugin Order
 

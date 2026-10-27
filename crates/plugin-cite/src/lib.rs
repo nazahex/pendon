@@ -3,11 +3,55 @@ use std::fs;
 use std::path::Path;
 
 use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead};
+use pendon_extra::{
+    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead, FieldName, Preset, Slot,
+    SlotContract, SlotKind, SlotPos, SlotTag,
+};
 use pendon_renderer_solid::{
     layer_templates, ComponentSet, DataExport, ImportEntry, SolidRenderHints,
 };
 use serde_json::{Map, Value};
+
+// --- Slot head (§7.3, §6.1) ---
+
+/// Every position cite claims: `[^reference_id "locator" `bracket tick`](paren …)`
+/// — a claimed head is read whole, so an unnamed content becomes a bare field
+/// (`bracket.tick`, `paren.bare`, …) rather than being dropped (D-7).
+const SLOTS: &[SlotPos] = &[
+    (Slot::Bracket, SlotKind::Bare),
+    (Slot::Bracket, SlotKind::Quote),
+    (Slot::Bracket, SlotKind::Tick),
+    (Slot::Paren, SlotKind::Bare),
+    (Slot::Paren, SlotKind::Quote),
+    (Slot::Paren, SlotKind::Tick),
+];
+
+/// §7.3's preset assignment: `bracket.bare` → `reference_id`,
+/// `bracket.quote` → `locator`.
+///
+/// These two are the only *slot* presets; `citation_number` is computed by this
+/// plugin and is therefore not a position. The processor reads `reference_id` and
+/// `locator` **by name**, so a user may move them to any position in the head
+/// (§7.3) as long as the names survive — or override the names and keep the
+/// processor reading its own (D-4).
+const PRESET: &[Preset] = &[
+    Preset::new(
+        Slot::Bracket,
+        SlotKind::Bare,
+        FieldName::new("reference_id"),
+    ),
+    Preset::new(Slot::Bracket, SlotKind::Quote, FieldName::new("locator")),
+];
+
+/// The tag that claims cite's head (D-11), the positions it claims, and their
+/// fallback-to-preset assignment (§6.1, §6.5, D-7).
+pub const HEAD: ElementHead = ElementHead::new(
+    SlotContract {
+        accepted: SLOTS,
+        tag: SlotTag::Cite,
+    },
+    PRESET,
+);
 
 // --- Public Types ---
 
@@ -928,6 +972,37 @@ fn yaml_to_json(value: &serde_yaml::Value) -> Result<Value, String> {
 mod tests {
     use super::*;
     use pendon_renderer_solid::TypedComponent;
+
+    /// §7.3's preset, position by position (S2-2.5): cite presets the bracket,
+    /// not the paren — the old `[^^](ref "locator")` form is pre-D-16 history.
+    #[test]
+    fn the_head_declares_the_spec_preset() {
+        assert_eq!(HEAD.contract.tag, SlotTag::Cite);
+        assert!(
+            HEAD.is_consistent(),
+            "a preset must sit on a claimed position"
+        );
+        let got: Vec<String> = HEAD
+            .presets()
+            .iter()
+            .map(|preset| {
+                format!(
+                    "{}.{} -> {}",
+                    preset.slot.name(),
+                    preset.kind.name(),
+                    preset.name
+                )
+            })
+            .collect();
+        assert_eq!(
+            got,
+            ["bracket.bare -> reference_id", "bracket.quote -> locator"]
+        );
+        // The paren is claimed (its contents are fields) but never preset.
+        assert!(HEAD.contract.accepts(Slot::Paren, SlotKind::Bare));
+        assert_eq!(HEAD.preset_for(Slot::Paren, SlotKind::Bare), None);
+        assert_eq!(HEAD.preset_for(Slot::Bracket, SlotKind::Tick), None);
+    }
 
     fn events_with_refs() -> Vec<Event> {
         vec![

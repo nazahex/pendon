@@ -13,6 +13,9 @@ Link processing and external URL safety plugin for Pendon.
 - Emits structured `Link` nodes or custom Solid component nodes
 - Skips links inside code fences, inline code, HTML blocks, and HTML inline elements
 - Emits warnings for conflicting modifier combinations
+- Declares its slot contract and preset assignment as data (`pub const HEAD`,
+  `crates/extra`'s `ElementHead`) — the single copy of §7.2's
+  `bracket.bare`/`paren.bare`/`paren.quote` mapping
 
 ## Recommended Plugin Order
 

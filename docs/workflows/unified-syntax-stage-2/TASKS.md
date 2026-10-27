@@ -214,13 +214,41 @@ is an identity at this point).
       `docs/spec/golden/{05-cite,33-extract-scopes}.toml`,
       `apps/cli/tests/extract_spec.rs`); `SYNTAX.md` §11 states the rules.
       Workspace 708 pass, **zero** golden output changed.
-- [ ] **S2-2.5 — Declare preset assignments per element.** Dep: S2-1.6.
+- [x] **S2-2.5 — Declare preset assignments per element.** Dep: S2-1.6.
       Files: each `crates/plugin-*/src/lib.rs`.
       Do: replace hard-coded `insert("href", …)`-style calls with the element's
       `SlotContract` + a `preset: &[(&str, FieldName)]` table (identity mapping
       to today's names). Data only.
       Exit: every element's head values flow through the contract table; output
       unchanged (workspace green, no re-freeze).
+      **Done 2026-10-28** — `crates/extra/src/preset.rs` holds the vocabulary:
+      `FieldName` (a `const fn`-validated, single-segment built-in name, so a
+      typo in a table is a **compile** error), `Preset { slot, kind, name }`,
+      and `ElementHead { contract, preset }` with `preset_for`, `is_consistent`
+      (every preset sits on a contracted position) and `fallback_path`
+      (`bracket.quote`, `paren.tick` — D-7's bare name, from `Slot::name` /
+      `SlotKind::name`, so the literals still live in one place). The four slot
+      elements now declare `pub const HEAD` in their own crate — the only copy of
+      the assignment, matching §7.1–§7.4 exactly: anchor
+      `bracket.bare→inner_text`, `paren.bare→href`, `paren.quote→title`; cite
+      `bracket.bare→reference_id`, `bracket.quote→locator`; heading
+      `bracket.bare→slug`, `paren.quote→title`; image `bracket.bare→alt`,
+      `paren.bare→src`. Each element claims **all six** positions (a claimed head
+      is read whole; an unnamed content becomes a bare field, never a dropped
+      one), which is what makes the D-7 fallbacks expressible. Fields that are not
+      slot-derived (`depth`, `inner_text`, `citation_number`, section's `id`) stay
+      out of the table by construction. `slot.rs`'s element-named contract
+      fixtures became one element-neutral `FIXTURE`, so the crate no longer holds
+      a second copy of an element fact. 5 new tests in `extra` + 1 per plugin, each
+      pinning the table row by row as `bracket.bare -> inner_text`.
+      The `insert("href", …)` calls stayed **for now** on purpose: they are not
+      pure preset lookups — anchor's are entangled with the URL modifiers,
+      `target`/`rel` and §6.2 head-wins-over-extras rules, image's with the figure
+      container, heading's with the `slug`→DOM `id` mapping — so deleting them is
+      each element's Phase 4 step (S2-4.2…), which reads `HEAD` after
+      `parse_slots` replaces the private head parsers. This task's proof is
+      therefore the absence of a diff: workspace 716 pass, 0 fail, **zero** golden
+      output changed.
 - [ ] **S2-2.6 — Preset voiding (D-7).** Dep: S2-2.4, S2-2.5.
       Do: any `field.*` in the matched entry disables all preset assignments for
       that element/entry; unassigned slot values fall back to slot-qualified bare

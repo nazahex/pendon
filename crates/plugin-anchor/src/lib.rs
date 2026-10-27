@@ -1,8 +1,48 @@
 use std::collections::BTreeMap;
 
 use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead, KeyResolver};
+use pendon_extra::{
+    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead, FieldName, KeyResolver,
+    Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag,
+};
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
+
+// --- Slot head (§7.2, §6.1) ---
+
+/// Every position anchor claims.
+///
+/// A head the element claims is read **whole**: a content the preset does not
+/// name is not dropped, it becomes a bare field (`bracket.quote`, `paren.tick`,
+/// …) when the preset is in play (D-7).
+const SLOTS: &[SlotPos] = &[
+    (Slot::Bracket, SlotKind::Bare),
+    (Slot::Bracket, SlotKind::Quote),
+    (Slot::Bracket, SlotKind::Tick),
+    (Slot::Paren, SlotKind::Bare),
+    (Slot::Paren, SlotKind::Quote),
+    (Slot::Paren, SlotKind::Tick),
+];
+
+/// §7.2's preset assignment, from
+/// `@[inner_text "bracket quote" `bracket tick`](href "title" `paren tick`)`.
+///
+/// Any `field.*` key in the matched `custom` entry voids the whole table for that
+/// entry (D-7); the values then stay under their slot-qualified bare names.
+const PRESET: &[Preset] = &[
+    Preset::new(Slot::Bracket, SlotKind::Bare, FieldName::new("inner_text")),
+    Preset::new(Slot::Paren, SlotKind::Bare, FieldName::new("href")),
+    Preset::new(Slot::Paren, SlotKind::Quote, FieldName::new("title")),
+];
+
+/// The tag that claims anchor's head (D-11), the positions it claims, and where
+/// each lands when the user configures nothing (§6.1, §6.5, D-7).
+pub const HEAD: ElementHead = ElementHead::new(
+    SlotContract {
+        accepted: SLOTS,
+        tag: SlotTag::Anchor,
+    },
+    PRESET,
+);
 
 /// §11: the layer `[[task.anchor.custom]]` declares.
 const ANCHOR_LAYER: &str = "anchor";
@@ -463,6 +503,51 @@ fn flush_text(normal: &mut String, out: &mut Vec<Event>) {
 mod tests {
     use super::*;
     use pendon_renderer_solid::TypedComponent;
+
+    /// §7.2's preset, position by position (S2-2.5). This is the element's
+    /// contract as data: a change here changes the syntax, not the plumbing.
+    #[test]
+    fn the_head_declares_the_spec_preset() {
+        assert_eq!(HEAD.contract.tag, SlotTag::Anchor);
+        assert!(
+            HEAD.is_consistent(),
+            "a preset must sit on a claimed position"
+        );
+        // Every position of the head is claimed; the preset names three of them.
+        for slot in Slot::ALL {
+            for kind in SlotKind::ALL {
+                assert!(
+                    HEAD.contract.accepts(slot, kind),
+                    "anchor drops {}.{}",
+                    slot.name(),
+                    kind.name()
+                );
+            }
+        }
+        let got: Vec<String> = HEAD
+            .presets()
+            .iter()
+            .map(|preset| {
+                format!(
+                    "{}.{} -> {}",
+                    preset.slot.name(),
+                    preset.kind.name(),
+                    preset.name
+                )
+            })
+            .collect();
+        assert_eq!(
+            got,
+            [
+                "bracket.bare -> inner_text",
+                "paren.bare -> href",
+                "paren.quote -> title",
+            ]
+        );
+        // Everything else is a bare field, never a preset (D-7).
+        assert_eq!(HEAD.preset_for(Slot::Bracket, SlotKind::Quote), None);
+        assert_eq!(HEAD.preset_for(Slot::Paren, SlotKind::Tick), None);
+    }
 
     #[test]
     fn adds_external_defaults_without_modifiers() {

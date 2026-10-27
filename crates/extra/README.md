@@ -61,6 +61,18 @@ for interpreting the parsed properties.
   (unassign, OBJ-10) and `is_empty()` as the D-7 preset-voiding trigger.
   Neither type touches the IR — see
   [`docs/decisions/0014-field-model.md`](../../docs/decisions/0014-field-model.md).
+- **Preset assignment** (`src/preset.rs`) — each element that contracts a slot
+  head declares **two** static pieces of data in its own crate: its
+  `SlotContract` and a `preset: &[Preset]` table naming the field each position
+  lands in (`@[Inner Text](href "title")` → `inner_text`, `href`, `title`).
+  `ElementHead` is just the pair, with `preset_for(slot, kind)` (the lookup),
+  `is_consistent()` (every preset sits on a contracted position) and
+  `fallback_path(slot, kind)` (D-7's bare name for an unassigned value:
+  `bracket.quote`, `paren.tick`, …). The names are `FieldName`s — a
+  `const fn`-validated, single-segment built-in name — so a typo in a preset
+  table **fails to compile** rather than at load. Voiding a preset is the
+  entry's job: one `field.*` key in the matched `custom` entry disables the whole
+  table for that entry (D-7, `FieldConfig::is_empty`).
 - **Positional keys** — `ExtrasOptions` / `PositionalKeys` / `KeyResolver` for
   the §6.1 per-component `backtick_key` / `quote_key` (and, for directive heads,
   `bracket_key` / `parentheses_key`).

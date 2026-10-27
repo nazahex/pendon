@@ -942,7 +942,10 @@ mod tests {
 
     // ---- S2-1.6: slot contracts (§6.1) ----
 
-    const ANCHOR: SlotContract = SlotContract {
+    /// A grammar fixture, **not** an element's contract: the real ones are
+    /// declared next to their element (`plugin_anchor::HEAD`, …) and that is the
+    /// only copy (§6.1). This one just has a shape to test `accepts` with.
+    const FIXTURE: SlotContract = SlotContract {
         accepted: &[
             (Slot::Bracket, SlotKind::Bare),
             (Slot::Paren, SlotKind::Bare),
@@ -950,65 +953,26 @@ mod tests {
         ],
         tag: SlotTag::Anchor,
     };
-    const CITE: SlotContract = SlotContract {
-        accepted: &[
-            (Slot::Bracket, SlotKind::Bare),
-            (Slot::Paren, SlotKind::Bare),
-            (Slot::Paren, SlotKind::Quote),
-        ],
-        tag: SlotTag::Cite,
-    };
-    const IMAGE: SlotContract = SlotContract {
-        accepted: &[
-            (Slot::Bracket, SlotKind::Bare),
-            (Slot::Paren, SlotKind::Bare),
-            (Slot::Paren, SlotKind::Quote),
-        ],
-        tag: SlotTag::Image,
-    };
-    const HEADING: SlotContract = SlotContract {
-        accepted: &[
-            (Slot::Bracket, SlotKind::Bare),
-            (Slot::Paren, SlotKind::Bare),
-            (Slot::Paren, SlotKind::Quote),
-        ],
-        tag: SlotTag::Heading,
-    };
 
     #[test]
-    fn a_contract_lists_the_positions_its_element_reads() {
-        // §7.2 anchor: `@[text](href "title")` — and nothing else.
-        assert!(ANCHOR.accepts(Slot::Bracket, SlotKind::Bare));
-        assert!(ANCHOR.accepts(Slot::Paren, SlotKind::Bare));
-        assert!(ANCHOR.accepts(Slot::Paren, SlotKind::Quote));
-        assert!(!ANCHOR.accepts(Slot::Bracket, SlotKind::Quote));
-        assert!(!ANCHOR.accepts(Slot::Bracket, SlotKind::Tick));
-        assert!(!ANCHOR.accepts(Slot::Paren, SlotKind::Tick));
-    }
-
-    #[test]
-    fn every_contract_accepts_exactly_what_it_lists() {
-        for contract in [ANCHOR, CITE, IMAGE, HEADING] {
-            for &(slot, kind) in contract.accepted {
-                assert!(
-                    contract.accepts(slot, kind),
-                    "{:?} drops its own {slot:?}.{kind:?}",
-                    contract.tag
-                );
-            }
-            // No element reads a tick today (§7.1–§7.4).
-            assert!(!contract.accepts(Slot::Bracket, SlotKind::Tick));
-            assert!(!contract.accepts(Slot::Paren, SlotKind::Tick));
+    fn a_contract_accepts_the_positions_it_lists_and_no_others() {
+        assert!(FIXTURE.accepts(Slot::Bracket, SlotKind::Bare));
+        assert!(FIXTURE.accepts(Slot::Paren, SlotKind::Bare));
+        assert!(FIXTURE.accepts(Slot::Paren, SlotKind::Quote));
+        assert!(!FIXTURE.accepts(Slot::Bracket, SlotKind::Quote));
+        assert!(!FIXTURE.accepts(Slot::Bracket, SlotKind::Tick));
+        assert!(!FIXTURE.accepts(Slot::Paren, SlotKind::Tick));
+        // Listing a position and then not accepting it is impossible.
+        for &(slot, kind) in FIXTURE.accepted {
+            assert!(FIXTURE.accepts(slot, kind));
         }
     }
 
     #[test]
-    fn each_contract_names_the_tag_it_claims() {
-        assert_eq!(ANCHOR.tag, SlotTag::Anchor);
-        assert_eq!(CITE.tag, SlotTag::Cite);
-        assert_eq!(IMAGE.tag, SlotTag::Image);
-        assert_eq!(HEADING.tag, SlotTag::Heading);
-        // An untagged head is only ever claimed through a contract (D-11).
+    fn an_untagged_head_is_claimed_through_a_contract() {
+        // D-11: an untagged `[x](y)` parses as `SlotTag::None`; whether an
+        // element may claim it is that element's `SlotContract::tag`.
         assert_eq!(slots("[x](y)").tag, SlotTag::None);
+        assert_eq!(FIXTURE.tag, SlotTag::Anchor);
     }
 }

@@ -109,8 +109,16 @@ exactly one `export const headings` line each (no bytes removed), and
       shape a load error. `S2-2.4` done: `custom` is array-only (a single table
       is a load error), fields-only entries work, an empty entry is an error, and
       `ComponentSet::field_config` encodes the D-8 merge order; six sandbox and
-      two golden configs moved to `[[…]]` with no output change. Next: `S2-2.5`
-      (per-element preset tables).
+      two golden configs moved to `[[…]]` with no output change. `S2-2.5` done:
+      `crates/extra/src/preset.rs` (`FieldName` — a `const fn`-validated
+      single-segment built-in name, so a preset typo fails to compile — `Preset`,
+      `ElementHead { contract, preset }`, `preset_for` / `is_consistent` /
+      `fallback_path`), and the four slot elements declare `pub const HEAD` in
+      their own crate, claiming all six positions and presetting §7.1–§7.4
+      exactly (anchor `inner_text`/`href`/`title`, cite
+      `reference_id`/`locator`, heading `slug`/`title`, image `alt`/`src`).
+      Data only — the private `insert("href", …)` calls stay until each element's
+      Phase 4 step. Next: `S2-2.6` (D-7 preset voiding + bare fallbacks).
       No `MIGRATION.md` by policy.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to

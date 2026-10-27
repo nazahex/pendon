@@ -108,6 +108,68 @@ pub fn validate_field_name(name: &str) -> Result<(), FieldNameError> {
     Ok(())
 }
 
+/// A **built-in** field name, validated at compile time: `href`, `inner_text`.
+///
+/// This is the name half of a [`Preset`](crate::Preset) assignment, so it is
+/// spelled in a plugin's own source rather than in a config file. That is why it
+/// wraps a `&'static str`: [`FieldName::new`] is a `const fn` that asserts the
+/// name rules, so a preset table with a typo (`inner-text`, `1x`, `price.amount`)
+/// **fails to compile** instead of failing at load. Limits:
+///
+/// * one segment only — a preset lands in a top-level field; dotted names are
+///   config business ([`Path`]) and nesting is the projection's (ADR-0014);
+/// * the rest is exactly [`validate_field_name`]'s rule, so the two cannot drift.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FieldName(&'static str);
+
+impl FieldName {
+    /// Declares a built-in field name, panicking at compile time when invalid.
+    ///
+    /// Usable in a `const`/`static` initializer (every preset table is one), which
+    /// is the whole point: the check runs while compiling, not while loading.
+    pub const fn new(name: &'static str) -> Self {
+        let bytes = name.as_bytes();
+        assert!(!bytes.is_empty(), "a field name cannot be empty");
+        let mut index = 0;
+        while index < bytes.len() {
+            let byte = bytes[index];
+            assert!(
+                byte != b'.',
+                "a built-in field name is one segment; dotted names belong in `field.*`"
+            );
+            assert!(
+                byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-',
+                "a field name allows only `A-Z`, `a-z`, `0-9`, `_` and `-`, ASCII only"
+            );
+            if index == 0 {
+                assert!(
+                    byte.is_ascii_alphabetic() || byte == b'_',
+                    "a field name must start with a letter or `_`"
+                );
+            }
+            index += 1;
+        }
+        Self(name)
+    }
+
+    /// The name as written.
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
+
+    /// The name as a one-segment [`Path`], which is what the projection emits.
+    pub fn path(self) -> Path {
+        // `new` already proved the segment obeys the rules, so this cannot fail.
+        Path::from_segments(&[self.0]).expect("a FieldName is a valid path segment")
+    }
+}
+
+impl fmt::Display for FieldName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
 /// A validated dotted public field path, e.g. `price.details.amount`.
 ///
 /// The segments are the truth and the dotted spelling is only a rendering, so
@@ -881,5 +943,24 @@ mod tests {
             .add_override(path("number.raw"), path("bar"))
             .unwrap();
         assert_eq!(first, second);
+    }
+
+    /// The built-in names a preset table writes. Each is one segment, so
+    /// `path()` is total and the projection never sees a dotted preset name.
+    #[test]
+    fn a_built_in_name_is_validated_at_compile_time() {
+        const NAMES: [FieldName; 6] = [
+            FieldName::new("inner_text"),
+            FieldName::new("href"),
+            FieldName::new("title"),
+            FieldName::new("reference_id"),
+            FieldName::new("_private"),
+            FieldName::new("alt"),
+        ];
+        for name in NAMES {
+            assert_eq!(name.path().segments(), [name.as_str()]);
+            assert!(validate_field_name(name.as_str()).is_ok());
+        }
+        assert_eq!(FieldName::new("href").to_string(), "href");
     }
 }

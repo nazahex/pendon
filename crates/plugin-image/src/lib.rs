@@ -2,10 +2,46 @@ use pendon_core::{
     element_close, element_open, parse, raw_inline, Event, InlinePipeline, NodeKind, Options,
     Pipeline, Severity,
 };
-use pendon_extra::{scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead, ExtrasOptions};
+use pendon_extra::{
+    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead, ExtrasOptions,
+    FieldName, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag,
+};
 use pendon_plugin_markdown::process as process_markdown;
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
+
+// --- Slot head (§7.1, §6.1) ---
+
+/// Every position image claims: `![alt "bracket quote" `bracket tick`](src "paren quote" …)`
+/// — a claimed head is read whole, so an unnamed content becomes a bare field
+/// (`paren.tick`, …) rather than being dropped (D-7).
+const SLOTS: &[SlotPos] = &[
+    (Slot::Bracket, SlotKind::Bare),
+    (Slot::Bracket, SlotKind::Quote),
+    (Slot::Bracket, SlotKind::Tick),
+    (Slot::Paren, SlotKind::Bare),
+    (Slot::Paren, SlotKind::Quote),
+    (Slot::Paren, SlotKind::Tick),
+];
+
+/// §7.1's preset assignment: `bracket.bare` → `alt`, `paren.bare` → `src`.
+///
+/// Both are optional; validating them is the user's job (D-2: no element may
+/// refuse a head for looking incomplete).
+const PRESET: &[Preset] = &[
+    Preset::new(Slot::Bracket, SlotKind::Bare, FieldName::new("alt")),
+    Preset::new(Slot::Paren, SlotKind::Bare, FieldName::new("src")),
+];
+
+/// The tag that claims image's head (D-11), the positions it claims, and their
+/// fallback-to-preset assignment (§6.1, §6.5, D-7).
+pub const HEAD: ElementHead = ElementHead::new(
+    SlotContract {
+        accepted: SLOTS,
+        tag: SlotTag::Image,
+    },
+    PRESET,
+);
 
 // --- Configuration & Types ---
 
@@ -992,6 +1028,33 @@ fn find_matching_end(events: &[Event], start_idx: usize, kind: NodeKind) -> Opti
 mod tests {
     use super::*;
     use pendon_core::ContextPipeline;
+
+    /// §7.1's preset, position by position (S2-2.5). `alt` and `src` are the only
+    /// slot-derived fields; `caption`/figure did not survive the rework (§14).
+    #[test]
+    fn the_head_declares_the_spec_preset() {
+        assert_eq!(HEAD.contract.tag, SlotTag::Image);
+        assert!(
+            HEAD.is_consistent(),
+            "a preset must sit on a claimed position"
+        );
+        let got: Vec<String> = HEAD
+            .presets()
+            .iter()
+            .map(|preset| {
+                format!(
+                    "{}.{} -> {}",
+                    preset.slot.name(),
+                    preset.kind.name(),
+                    preset.name
+                )
+            })
+            .collect();
+        assert_eq!(got, ["bracket.bare -> alt", "paren.bare -> src"]);
+        // `("title")` is claimed but unpreset: it stays `paren.quote` (D-7).
+        assert!(HEAD.contract.accepts(Slot::Paren, SlotKind::Quote));
+        assert_eq!(HEAD.preset_for(Slot::Paren, SlotKind::Quote), None);
+    }
     use pendon_renderer_solid::TypedComponent;
 
     fn paragraph_events(text: &str) -> Vec<Event> {
