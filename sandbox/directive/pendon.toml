@@ -2,37 +2,21 @@
 name = "Plugin Directive Demo Solid"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "directive,markdown"
+plugin = "directive,markdown,extract"
 format = "solid"
 no_cache = true
 
 [[task.directive.custom]]
-type = ["asideA", "asideB"]
-name = "AsideAB"
+type = ["DireA", "DirA"]
+name = "DireA"
 bracket_key = "label"
 parentheses_key = "kind"
 backtick_key = "author"
 quote_key = "summary"
-imports = "import { AsideAB } from '@comp/AsideAB'"
-template = "<AsideAB slug={\"{attrs.slug}\"} title={\"{attrs.title}\"} type={\"{attrs.type}\"} {...attrs}>{children}</AsideAB>"
+imports = "import { DireA } from '@comp/DireA'"
+template = "<DireA slug={\"{attrs.slug}\"} title={\"{attrs.title}\"} type={\"{attrs.type}\"} {...attrs}>{children}</DireA>"
 
-[[task.directive.custom]]
-type = ["note"]
-name = "Note"
-bracket_key = "id"
-parentheses_key = "level"
-imports = "import Note from '@comp/Note'"
-template = "<Note {...attrs}>{children}</Note>"
-
-[[task.directive.custom]]
-type = ["warning"]
-name = "Warning"
-bracket_key = "number"
-parentheses_key = "reason"
-imports = "import Warning from '@comp/Warning'"
-template = "<Warning {...attrs}>{children}</Warning>"
-
-[[task.directive.custom]]
-name = "DirectiveGeneric"
-imports = "import DirGen from '@comp/DirGen'"
-template = "<DirGen {...attrs}>{children}</DirGen>"
+[[task.directive.extract]]
+type = ["DireA", "DirA"]
+export = "direA"
+# only = ["label", "kind", "author", "summary"]

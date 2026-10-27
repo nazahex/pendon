@@ -1,0 +1,7 @@
+- depth: 2
+  foo: bar
+  id: heading-satu
+  inner_text: Heading Satu
+  level: '2'
+  title: Title Heading 1
+  type: HeadingA

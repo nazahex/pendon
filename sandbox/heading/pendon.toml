@@ -2,7 +2,7 @@
 name = "Plugin Heading Demo Solid"
 input = "./src/heading.mdp"
 output = "./out/heading.jsx"
-plugin = "micromatter,section,heading,number,markdown,extract-heading"
+plugin = "micromatter,section,heading,number,markdown"
 format = "solid"
 
 [[task.heading.number]]
@@ -22,5 +22,5 @@ default = "DocHeading"
 name = "Normal Demo Solid"
 input = "./src/normal.md"
 output = "./out/normal.jsx"
-plugin = "micromatter,section,markdown,heading,extract-heading"
+plugin = "micromatter,section,markdown,heading"
 format = "solid"

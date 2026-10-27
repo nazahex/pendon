@@ -1,0 +1,18 @@
+[
+  {
+    "citation_number": "1",
+    "depth": 1,
+    "instance_index": "1",
+    "loc": "hlm. 12",
+    "name": "sup",
+    "ref_id": "smith2020"
+  },
+  {
+    "citation_number": "2",
+    "depth": 1,
+    "instance_index": "2",
+    "loc": "§3",
+    "name": "sup",
+    "ref_id": "doe2022"
+  }
+]

@@ -1,6 +1,6 @@
 Lorem Ipsum
 
-===DirecA
+===DirecA[foo-a]("Foo B")
 
 Lorem DirecA ::DirA ipsum::
 
@@ -13,3 +13,8 @@ Lorem DirecB :::DirA ipsum ::DirC dolor:: :::.
 Lorem DirecA 2
 
 ===
+
+Lorem ::ipsum:: dolor.
+
+==foo
+==

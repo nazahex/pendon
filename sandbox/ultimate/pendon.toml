@@ -63,7 +63,7 @@
 name = "Unified Full"
 input = "./src/[slug].md"
 output = "./out/full/[slug].jsx"
-plugin = "micromatter,section,heading,table,image,directive,cite,wiki,anchor,marker,blockquote,list,number,markdown,latex,syntect,extract-heading"
+plugin = "micromatter,section,heading,table,image,directive,cite,wiki,anchor,marker,blockquote,list,number,markdown,latex,syntect"
 format = "solid"
 markdown_strip_comments = true
 markdown_allow_html = true
@@ -313,7 +313,7 @@ template = "<TableCellDefault {...attrs}>{children}</TableCellDefault>"
 name = "Unified Defaults"
 input = "./src/[slug].md"
 output = "./out/default/[slug].jsx"
-plugin = "micromatter,section,heading,table,image,directive,cite,wiki,anchor,marker,blockquote,list,number,markdown,latex,syntect,extract-heading"
+plugin = "micromatter,section,heading,table,image,directive,cite,wiki,anchor,marker,blockquote,list,number,markdown,latex,syntect"
 format = "solid"
 markdown_strip_comments = true
 markdown_allow_html = true

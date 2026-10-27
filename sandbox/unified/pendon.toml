@@ -8,7 +8,7 @@
 name = "Unified Demo"
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "micromatter,section,heading,table,image,directive,cite,wiki,anchor,marker,number,markdown,latex,syntect,extract-heading"
+plugin = "micromatter,section,heading,table,image,directive,cite,wiki,anchor,marker,number,markdown,latex,syntect"
 format = "solid"
 markdown_strip_comments = true
 markdown_allow_html = true

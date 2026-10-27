@@ -1,6 +1,7 @@
 import CustomTable, {TableBody, TableCell, TableFoot, TableHead, TableRow} from "@comp/shared/Table";
 import { TableCaption } from '@comp/shared/Table';
 
+export const headings = [{"id":"custom-table-demo","level":2,"text":"Custom Table Demo"},{"id":"lorem","level":2,"text":"Lorem"}];
 export default function PendonView() { return (<>
 <h2>Custom Table Demo</h2>
 <p>Adipisicing mollit dolore aute consequat culpa nisi consectetur.

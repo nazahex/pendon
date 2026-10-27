@@ -1,3 +1,4 @@
+export const headings = [{"id":"custom-table-demo","level":2,"text":"Custom Table Demo"},{"id":"lorem","level":2,"text":"Lorem"}];
 export const references = {};
 export const citations = [];
 export default function PendonView() { return (<>

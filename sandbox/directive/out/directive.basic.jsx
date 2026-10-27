@@ -1,13 +1,16 @@
-import DirGen from '@comp/DirGen'
+import { DireA } from '@comp/DireA'
 
+export const direA = [{"depth":1,"inner_text":"ipsum","name":"span","type":"DirA"},{"depth":1,"inner_text":"ipsum dolor","name":"span","type":"DirA"}];
 export default function PendonView() { return (<>
 <p>Lorem Ipsum
 </p>
-<DirGen type="DirecA"><p>Lorem DirecA <DirGen type="DirA"> ipsum</DirGen>
+<div slug="foo-a" title="Foo B" type="DirecA"><p>Lorem DirecA <DireA type={"DirA"}> ipsum</DireA>
 </p>
-<DirGen type="DirecB"><p>Lorem DirecB <DirGen type="DirA"> ipsum <DirGen type="DirC"> dolor</DirGen></DirGen>.
+<div type="DirecB"><p>Lorem DirecB <DireA type={"DirA"}> ipsum <span type="DirC"> dolor</span></DireA>.
 </p>
-</DirGen><p>Lorem DirecA 2
+</div><p>Lorem DirecA 2
 </p>
-</DirGen>
+</div><p>Lorem <span type="ipsum"></span> dolor.
+</p>
+<div type="foo"></div>
 </>); }

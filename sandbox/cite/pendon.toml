@@ -20,7 +20,7 @@ references_export = "references" # Override the exported variable name for refer
 citations_export = "citations"
 references_scope = "all" # `cited` (external default) | `all` (frontmatter default)
 
-[task.cite.custom]
+[[task.cite.custom]]
 name = "Cite"
 imports = "import { Cite } from '@comp/Cite'"
 template = "<Cite reference={references[\"{attrs.ref_id}\"]} {...attrs} />"

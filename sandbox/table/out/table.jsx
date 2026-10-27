@@ -1,3 +1,4 @@
+export const headings = [{"id":"table-demo","level":2,"text":"Table Demo"},{"id":"lorem","level":2,"text":"Lorem"}];
 export default function PendonView() { return (<>
 <h2>Table Demo</h2>
 <p>Adipisicing mollit dolore aute consequat culpa nisi consectetur.
@@ -47,5 +48,15 @@ export default function PendonView() { return (<>
 <h2>Lorem</h2>
 <p>Anim ea dolore sunt cupidatat nisi nisi dolor amet do.
 </p>
+<table>
+<thead>
+<tr>
+<th>foo</th>
+<th>foo</th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
 
 </>); }

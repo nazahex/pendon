@@ -1,0 +1,16 @@
+smith2020:
+  type: book
+  title: A Book About Extraction
+  authors:
+    - family: Smith
+      given: John
+  issuedDate:
+    year: 2020
+doe2022:
+  type: article
+  title: Extracting Structured Data
+  authors:
+    - family: Doe
+      given: Jane
+  issuedDate:
+    year: 2022

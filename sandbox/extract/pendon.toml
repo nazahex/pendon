@@ -4,7 +4,7 @@
 name = "Plugin Extract Sandbox (Solid)"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,marker,cite,markdown"
+plugin = "micromatter,marker,heading,cite,markdown,extract"
 format = "solid"
 no_cache = true
 markdown_allow_html = true
