@@ -168,7 +168,7 @@ is an identity at this point).
       D-12), and a structural clash is `FieldMapError::ParentIsNotObject` /
       `ParentHasChildren`. 13 module tests; workspace 693 pass, 0 fail; no
       golden byte moved.
-- [ ] **S2-2.3 — Config: `field.*` deserialization.** Dep: S2-2.2.
+- [x] **S2-2.3 — Config: `field.*` deserialization.** Dep: S2-2.2.
       Files: `apps/cli/src/config.rs`, `apps/cli/src/components.rs` (or the
       custom-entry type's home).
       Do: `FieldConfig { slot: BTreeMap<String, BTreeMap<String, String>>, specs:
@@ -176,6 +176,22 @@ is an identity at this point).
       `field.*` sub-key → `Severity::Error`.
       Exit: unit tests in `config.rs` parsing the proposal's assignment block
       verbatim.
+      **Done 2026-10-28** — the shape landed in `pendon-extra` as `FieldConfig`
+      (typed keys `BTreeMap<Slot, BTreeMap<SlotKind, Option<Path>>>`, plus
+      `specs` and `overrides`), because the name rules and `Path` already live
+      there; `components.rs` only maps TOML onto it and
+      `ComponentEntry::field` carries it. `Slot::from_name` / `SlotKind::from_name`
+      (inverses of `name()`) keep the key literals in one place. `""` is stored
+      as `None` (unassign, OBJ-10); every malformed shape is a load error —
+      unknown family (`field.brackett`), unknown kind (`field.bracket.tikc`),
+      unknown specs position, non-string value, invalid name (via
+      `validate_field_name`) and `field.override` without a table — so nothing
+      is ignored (D-16). `field` also joined `ENTRY_KEYS`, so a table whose only
+      keys are `field.*` is an _entry_, not a layer named `field`. Tests live in
+      `components.rs` (that is where `custom` is parsed): the proposal's
+      assignment block verbatim, both override spellings, the duplicate-source
+      error, and one case per malformed shape. Workspace 705 pass, no golden
+      byte moved.
 - [ ] **S2-2.4 — Fields-only custom entries (D-8).** Dep: S2-2.3.
       Do: `custom` is always an array; entries without `name`/`template` are
       field-only; typed entry beats the element-wide default; empty entry is an

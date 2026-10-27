@@ -53,6 +53,17 @@ impl SlotKind {
             SlotKind::Tick => "tick",
         }
     }
+
+    /// Every kind, in canonical (bare → quote → tick) order.
+    pub const ALL: [Self; 3] = [Self::Bare, Self::Quote, Self::Tick];
+
+    /// The kind a config key names (`field.bracket.tick`), or `None`.
+    ///
+    /// The inverse of [`SlotKind::name`], so a typo can never be read as a
+    /// position (it is a load error, D-16).
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.name() == name)
+    }
 }
 
 /// Which of the two bracket kinds a slot is, in head order.
@@ -83,6 +94,17 @@ impl Slot {
             Self::Bracket => "bracket",
             Self::Paren => "paren",
         }
+    }
+
+    /// Every slot, in head order (bracket first).
+    pub const ALL: [Self; Self::COUNT] = [Self::Bracket, Self::Paren];
+
+    /// The slot a config key names (`field.bracket.bare`), or `None`.
+    ///
+    /// The inverse of [`Slot::name`]: an unknown prefix is a load error, never
+    /// an ignored key (D-16).
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|slot| slot.name() == name)
     }
 }
 
@@ -737,6 +759,23 @@ mod tests {
         assert_eq!(Slot::Paren.index(), 1);
         assert_eq!(Slot::Bracket.name(), "bracket");
         assert_eq!(Slot::Paren.name(), "paren");
+    }
+
+    /// A config key's names round-trip, and a typo is `None` — never a silent
+    /// default (`field.bracket.tikc` is a load error).
+    #[test]
+    fn names_are_the_inverse_of_the_config_keys() {
+        for kind in SlotKind::ALL {
+            assert_eq!(SlotKind::from_name(kind.name()), Some(kind));
+        }
+        for slot in Slot::ALL {
+            assert_eq!(Slot::from_name(slot.name()), Some(slot));
+        }
+        assert_eq!(SlotKind::from_name("bare "), None);
+        assert_eq!(SlotKind::from_name("Bare"), None);
+        assert_eq!(Slot::from_name("brackets"), None);
+        assert_eq!(Slot::from_name("specs"), None);
+        assert_eq!(Slot::from_name(""), None);
     }
 
     // ---- S2-1.2: both slots and adjacency (§5.2, §4.1) ----

@@ -29,7 +29,10 @@ mod value;
 
 pub use emit::{emit_attr_warnings, emit_attrs, scan_extras_chars, warning_event, warning_message};
 
-pub use field::{validate_field_name, FieldMap, FieldMapError, FieldNameError, Path};
+pub use field::{
+    validate_field_name, FieldConfig, FieldConfigError, FieldMap, FieldMapError, FieldNameError,
+    Path, SPECS_KEYS,
+};
 
 pub use slot::{
     parse_slot_parts, parse_slots, Slot, SlotContract, SlotError, SlotKind, SlotMatch, SlotPair,

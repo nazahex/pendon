@@ -27,6 +27,8 @@ use std::fmt;
 use pendon_renderer_solid::ImportEntry;
 use pendon_types::Selector;
 
+use pendon_extra::{Path, Slot, SlotKind, SPECS_KEYS};
+
 use crate::plugins::parse_import_entries;
 
 /// A fatal configuration problem: §11 rules 2 and 6 are hard errors at load.
@@ -48,6 +50,12 @@ impl std::error::Error for ConfigError {}
 /// plugins and the CLI share one shape and one `resolve`.
 pub use pendon_extra::PositionalKeys;
 
+/// §7 field vocabulary — the `field.*` keys of one entry (D-5, ADR-0014).
+///
+/// Defined in `pendon-extra` with the name rules and the [`pendon_extra::Path`]
+/// type, so this module only maps TOML onto it.
+pub use pendon_extra::FieldConfig;
+
 /// One `custom` entry: the `type` selectors it answers, its imports and its
 /// template.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,6 +68,10 @@ pub struct ComponentEntry {
     pub imports: Vec<ImportEntry>,
     pub template: Option<String>,
     pub positional: PositionalKeys,
+    /// §7 `field.*` — the entry's public-field assignment. Empty for an entry
+    /// that configures no fields, which is what keeps the element's preset
+    /// assignments alive (D-7).
+    pub field: FieldConfig,
 }
 
 impl ComponentEntry {
@@ -187,12 +199,16 @@ pub struct LoadedComponents {
 }
 
 /// Keys that mark a table as a component entry rather than a map of layers.
-const ENTRY_KEYS: [&str; 9] = [
+///
+/// `field` belongs here: `[task.anchor.custom]` with only `field.*` keys is a
+/// (field-only) **entry**, never a layer named `field` (D-8).
+const ENTRY_KEYS: [&str; 10] = [
     "type",
     "name",
     "imports",
     "import",
     "template",
+    "field",
     "backtick_key",
     "quote_key",
     "bracket_key",
@@ -368,7 +384,147 @@ fn parse_entry(
             bracket_key: optional_string(table, "bracket_key", label)?,
             parentheses_key: optional_string(table, "parentheses_key", label)?,
         },
+        field: match table.get("field") {
+            Some(value) => parse_field_config(label, value)?,
+            None => FieldConfig::new(),
+        },
     })
+}
+
+/// Parses one entry's `field.*` keys (D-5, ADR-0014).
+///
+/// TOML already turns a dotted key into nested tables, so the three families
+/// arrive as `field.<slot>.<kind>`, `field.specs.<k>` and
+/// `field.override.<path…>`. Every other shape is a load error naming the three
+/// families — no key is ignored (D-16), and every name goes through
+/// `pendon_extra`'s name rules. A value of `""` unassigns the position
+/// (OBJ-10).
+fn parse_field_config(label: &str, value: &toml::Value) -> Result<FieldConfig, ConfigError> {
+    let table = value.as_table().ok_or_else(|| {
+        ConfigError(format!(
+            "{label}: `field` must be a table of dotted keys, found {}",
+            value.type_str()
+        ))
+    })?;
+
+    let mut config = FieldConfig::new();
+    for (key, value) in table {
+        if key == "specs" {
+            for (spec, target) in field_sub_table(label, "specs", value)? {
+                let target = field_name(label, &format!("field.specs.{spec}"), target)?;
+                config.assign_specs(spec, target).map_err(|error| {
+                    ConfigError(format!("{label}: field.specs.{spec}: {error}"))
+                })?;
+            }
+            continue;
+        }
+        if key == "override" {
+            if value.as_table().is_none() {
+                return Err(ConfigError(format!(
+                    "{label}: `field.override` must be a table of dotted paths, found {}",
+                    value.type_str()
+                )));
+            }
+            let mut leaves = Vec::new();
+            flatten_override_paths(Vec::new(), value, &mut leaves);
+            for (segments, target) in leaves {
+                let names: Vec<&str> = segments.iter().map(String::as_str).collect();
+                let source = Path::from_segments(&names).map_err(|error| {
+                    ConfigError(format!(
+                        "{label}: field.override.{}: {error}",
+                        segments.join(".")
+                    ))
+                })?;
+                let target = field_name(label, &format!("field.override.{source}"), target)?
+                    .ok_or_else(|| {
+                        ConfigError(format!(
+                            "{label}: field.override.{source} needs a name; `\"\"` only unassigns \
+                             a slot or specs position"
+                        ))
+                    })?;
+                config
+                    .add_override(source.clone(), target)
+                    .map_err(|error| {
+                        ConfigError(format!("{label}: field.override.{source}: {error}"))
+                    })?;
+            }
+            continue;
+        }
+        let Some(slot) = Slot::from_name(key) else {
+            return Err(ConfigError(format!(
+                "{label}: `{key}` is not a field config key; `field` takes \
+                 `field.bracket.<bare|quote|tick>`, `field.paren.<bare|quote|tick>`, \
+                 `field.specs.<{}>` or `field.override.<path>`",
+                SPECS_KEYS.join("|")
+            )));
+        };
+        for (kind_name, target) in field_sub_table(label, key, value)? {
+            let Some(kind) = SlotKind::from_name(kind_name) else {
+                return Err(ConfigError(format!(
+                    "{label}: `field.{key}.{kind_name}` is not a slot content; use \
+                     bare, quote or tick"
+                )));
+            };
+            let target = field_name(label, &format!("field.{key}.{kind_name}"), target)?;
+            config.assign_slot(slot, kind, target);
+        }
+    }
+    Ok(config)
+}
+
+/// One `field` family's sub-table (`field.specs`, `field.bracket`, …).
+fn field_sub_table<'a>(
+    label: &str,
+    family: &str,
+    value: &'a toml::Value,
+) -> Result<&'a toml::Table, ConfigError> {
+    value.as_table().ok_or_else(|| {
+        ConfigError(format!(
+            "{label}: `field.{family}` must be a table of dotted keys, found {}",
+            value.type_str()
+        ))
+    })
+}
+
+/// A field name (`field.bracket.bare = "anchor_id"`), validated by the §7 rules.
+///
+/// `Ok(None)` is the OBJ-10 unassign spelling: `""`.
+fn field_name(label: &str, key: &str, value: &toml::Value) -> Result<Option<Path>, ConfigError> {
+    let name = value.as_str().ok_or_else(|| {
+        ConfigError(format!(
+            "{label}: `{key}` must be a string, found {}",
+            value.type_str()
+        ))
+    })?;
+    if name.is_empty() {
+        return Ok(None);
+    }
+    Path::from_dotted(name).map(Some).map_err(|error| {
+        ConfigError(format!(
+            "{label}: `{key}` = \"{name}\" is not a valid field name: {error}"
+        ))
+    })
+}
+
+/// Flattens `field.override.<path> = "<name>"` into dotted sources.
+///
+/// A quoted key (`field.override."number.raw"`) and the nested spelling
+/// (`field.override.number.raw`) are the same path, so both are split on `.`;
+/// a name can never contain a dot, so nothing legitimate is lost.
+fn flatten_override_paths<'a>(
+    prefix: Vec<String>,
+    value: &'a toml::Value,
+    out: &mut Vec<(Vec<String>, &'a toml::Value)>,
+) {
+    let Some(table) = value.as_table() else {
+        out.push((prefix, value));
+        return;
+    };
+    for (key, value) in table {
+        let mut path = prefix.clone();
+        path.extend(key.split('.').map(str::to_string));
+        flatten_override_paths(path, value, out);
+    }
 }
 
 fn optional_string(
@@ -795,5 +951,194 @@ template = "<H>{{children}}</H>"
         assert!(error.to_string().contains("unsupported layer"), "{error}");
 
         assert!(reject_unwired_layers("table", &loaded.components, &["thead", "legend"]).is_ok());
+    }
+
+    // ---- S2-2.3: `field.*` keys (D-5, ADR-0014, §7 name rules) ----
+
+    /// The proposal's own assignment block, verbatim (§7 "Assign fields").
+    #[test]
+    fn the_proposal_assignment_block_parses_verbatim() {
+        let custom = custom_of(
+            r#"
+            [[custom]]
+            type = "typeA"
+            field.bracket.bare = "anchor_id"
+            field.bracket.quote = "inner_text"
+            field.bracket.tick = "extra-class"
+            field.paren.bare = "href"
+            field.paren.quote = "title"
+            field.paren.tick = "popupID"
+            field.specs.tick = "ref-id"
+            field.specs.quote = "_extra-note"
+            field.specs.id = "id-123"
+            field.specs.class = "class"
+            field.specs.style = "styles"
+            "#,
+        );
+        let loaded = load("anchor", "anchor", Some(&custom)).unwrap();
+        let entry = &loaded.components.layer("anchor").unwrap().typed()[0];
+        assert!(entry.matches_type("typeA"));
+
+        let field = &entry.field;
+        assert!(!field.is_empty());
+        let assigned = |slot, kind| {
+            field
+                .assignment(slot, kind)
+                .and_then(Option::as_ref)
+                .map(Path::dotted)
+        };
+        assert_eq!(
+            assigned(Slot::Bracket, SlotKind::Bare).as_deref(),
+            Some("anchor_id")
+        );
+        assert_eq!(
+            assigned(Slot::Bracket, SlotKind::Quote).as_deref(),
+            Some("inner_text")
+        );
+        assert_eq!(
+            assigned(Slot::Bracket, SlotKind::Tick).as_deref(),
+            Some("extra-class")
+        );
+        assert_eq!(
+            assigned(Slot::Paren, SlotKind::Bare).as_deref(),
+            Some("href")
+        );
+        assert_eq!(
+            assigned(Slot::Paren, SlotKind::Quote).as_deref(),
+            Some("title")
+        );
+        assert_eq!(
+            assigned(Slot::Paren, SlotKind::Tick).as_deref(),
+            Some("popupID")
+        );
+
+        let specs: Vec<(&str, Option<String>)> = field
+            .specs()
+            .iter()
+            .map(|(key, target)| (key.as_str(), target.as_ref().map(Path::dotted)))
+            .collect();
+        assert_eq!(
+            specs,
+            [
+                ("class", Some("class".to_string())),
+                ("id", Some("id-123".to_string())),
+                ("quote", Some("_extra-note".to_string())),
+                ("style", Some("styles".to_string())),
+                ("tick", Some("ref-id".to_string())),
+            ]
+        );
+    }
+
+    /// A table whose only content is `field.*` is an entry for the primary
+    /// layer — never a layer named `field` (D-8's fields-only entry).
+    #[test]
+    fn a_field_only_table_is_an_entry_not_a_layer() {
+        let custom = custom_of(
+            r#"
+            [custom]
+            field.paren.bare = "something"
+            "#,
+        );
+        let loaded = load("anchor", "anchor", Some(&custom)).unwrap();
+        assert!(loaded.components.layer("field").is_none());
+        let entry = loaded
+            .components
+            .layer("anchor")
+            .unwrap()
+            .default_entry()
+            .expect("primary-layer entry");
+        assert_eq!(
+            entry
+                .field
+                .assignment(Slot::Paren, SlotKind::Bare)
+                .and_then(Option::as_ref)
+                .map(Path::dotted)
+                .as_deref(),
+            Some("something")
+        );
+    }
+
+    /// `""` unassigns a position (OBJ-10) and still counts as a field
+    /// definition, so it voids the preset (D-7).
+    #[test]
+    fn an_empty_name_unassigns_the_position() {
+        let custom = custom_of(
+            r#"
+            [[custom]]
+            field.paren.quote = ""
+            "#,
+        );
+        let loaded = load("anchor", "anchor", Some(&custom)).unwrap();
+        let entry = loaded
+            .components
+            .layer("anchor")
+            .unwrap()
+            .default_entry()
+            .expect("field-only entry is the layer default");
+        assert!(!entry.field.is_empty());
+        assert_eq!(
+            entry.field.assignment(Slot::Paren, SlotKind::Quote),
+            Some(&None)
+        );
+    }
+
+    /// An `override` source may be written nested or quoted; both mean one path,
+    /// and naming it twice is a load error.
+    #[test]
+    fn overrides_accept_both_spellings_and_reject_a_duplicate() {
+        let custom = custom_of(
+            r#"
+            [[custom]]
+            field.override.number.raw = "bar"
+            field.override.specs.tick = "ref"
+            "#,
+        );
+        let loaded = load("anchor", "anchor", Some(&custom)).unwrap();
+        let entry = loaded
+            .components
+            .layer("anchor")
+            .unwrap()
+            .default_entry()
+            .expect("field-only entry is the layer default");
+        assert_eq!(entry.field.overrides().len(), 2);
+
+        let duplicate = custom_of(
+            r#"
+            [[custom]]
+            field.override.number.raw = "bar"
+            field.override."number.raw" = "baz"
+            "#,
+        );
+        let error = load("anchor", "anchor", Some(&duplicate)).unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("overridden twice"), "{message}");
+        assert!(message.contains("number.raw"), "{message}");
+    }
+
+    /// Every malformed `field.*` shape is a load error naming the key — none is
+    /// ignored (D-16).
+    #[test]
+    fn malformed_field_keys_are_load_errors() {
+        let cases = [
+            ("field.brackett.bare = \"x\"", "is not a field config key"),
+            ("field.bracket.tikc = \"x\"", "is not a slot content"),
+            ("field.bracket = \"x\"", "must be a table"),
+            ("field.bracket.bare = 12", "must be a string"),
+            ("field.specs.tikc = \"x\"", "unknown specs position"),
+            ("field.specs = \"x\"", "must be a table"),
+            ("field.bracket.bare = \"1x\"", "is not a valid field name"),
+            ("field.override = \"x\"", "`field.override` must be a table"),
+            ("field.override.number.raw = \"\"", "needs a name"),
+            ("field = 3", "`field` must be a table"),
+        ];
+        for (source, expected) in cases {
+            let custom = custom_of(&format!("[[custom]]\n{source}\n"));
+            let error = load("anchor", "anchor", Some(&custom))
+                .err()
+                .unwrap_or_else(|| panic!("{source} should not load"));
+            let message = error.to_string();
+            assert!(message.contains(expected), "{source}: {message}");
+            assert!(message.contains("anchor"), "{source}: {message}");
+        }
     }
 }

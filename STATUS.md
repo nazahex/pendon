@@ -103,7 +103,10 @@ exactly one `export const headings` line each (no bytes removed), and
       `FieldNameError`) and `S2-2.2` (`Path` segment-wise prefixes, `FieldMap`
       ordered dotted map with nesting + structural-clash errors) done in
       `crates/extra/src/field.rs` — 13 module tests, workspace 693 pass, still
-      no golden byte moved. Next: `S2-2.3` (`field.*` config keys).
+      no golden byte moved. `S2-2.3` done: `FieldConfig` (typed
+      `slot`/`specs`/`overrides` maps, `Slot::from_name` inverses) parsed from
+      `field.*` dotted keys in `apps/cli/src/components.rs`, every malformed
+      shape a load error. Next: `S2-2.4` (fields-only entries).
       No `MIGRATION.md` by policy.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to

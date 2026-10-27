@@ -14,8 +14,10 @@
 //! the proposal's, verbatim: `A-Z a-z 0-9 _ -` only, a segment starts with a
 //! letter or `_`, names are case-sensitive, and `.` nests.
 
+use std::collections::BTreeMap;
 use std::fmt;
 
+use crate::slot::{Slot, SlotKind};
 use crate::value::AttrValue;
 
 /// Why a public field name was rejected.
@@ -112,7 +114,7 @@ pub fn validate_field_name(name: &str) -> Result<(), FieldNameError> {
 /// prefix tests stay segment-wise (`priced` is **not** under `price`). A `Path`
 /// can only be built by [`Path::from_dotted`] or [`Path::from_segments`], so
 /// every instance obeys the name rules.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Path(Vec<String>);
 
 impl Path {
@@ -330,6 +332,152 @@ fn nested(entries: &[(&Path, &AttrValue)], depth: usize) -> Vec<(String, AttrVal
         object.push((name, AttrValue::Object(nested(&group, depth + 1))));
     }
     object
+}
+
+/// The five specs positions a field can be assigned to (§6.3, D-5).
+///
+/// `specs` is a **field namespace**, not a slot: a modifier never lives inside
+/// `field.*`, and `specs.tick` is a different path from `bracket.tick`.
+pub const SPECS_KEYS: [&str; 5] = ["tick", "quote", "class", "id", "style"];
+
+/// Why a `field.*` key was rejected at load (`Severity::Error`, D-16).
+///
+/// The caller prefixes the offending key, e.g.
+/// `task.anchor.custom[1]: field.specs.tikc: unknown specs position …`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FieldConfigError {
+    /// `field.specs.<k>` with a `k` that is not a specs position.
+    UnknownSpecsKey {
+        /// The offending sub-key.
+        key: String,
+    },
+    /// Two spellings name the same override source (`a.b` and `"a.b"`).
+    DuplicateOverride {
+        /// The source path that was named twice.
+        source: Path,
+    },
+    /// Two overrides rename to one name (ADR-0014 rule 3).
+    DuplicateOverrideTarget {
+        /// The target that was produced twice.
+        target: Path,
+    },
+}
+
+impl fmt::Display for FieldConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownSpecsKey { key } => write!(
+                f,
+                "unknown specs position `{key}`; expected one of {}",
+                SPECS_KEYS.join(", ")
+            ),
+            Self::DuplicateOverride { source } => {
+                write!(f, "`{source}` is overridden twice")
+            }
+            Self::DuplicateOverrideTarget { target } => write!(
+                f,
+                "two overrides rename to `{target}`; a name can have only one source"
+            ),
+        }
+    }
+}
+
+/// The `field.*` keys of one `custom` entry (D-5, ADR-0014).
+///
+/// Exactly three of the proposal's four prefix families — the fourth,
+/// `<slot>.modifier."<c>"`, configures a modifier and is not a field:
+///
+/// | key                     | stores                                              |
+/// | ----------------------- | --------------------------------------------------- |
+/// | `field.<slot>.<kind>`   | [`FieldConfig::slots`] — `bracket.bare` → a name     |
+/// | `field.specs.<k>`       | [`FieldConfig::specs`] — `tick` → a name            |
+/// | `field.override.<path>` | [`FieldConfig::overrides`] — a path → a new name    |
+///
+/// A value of `""` means **unassign** (OBJ-10), stored as `None`: the position
+/// falls back to its bare name. Names are [`Path`]s, so an invalid one never
+/// reaches this type. Nothing here is applied yet — Phase 3 wires `specs.*`,
+/// Phase 4 each element's preset, and Phase 2's preset *voiding* only asks
+/// whether the entry configured anything at all (D-7).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FieldConfig {
+    slot: BTreeMap<Slot, BTreeMap<SlotKind, Option<Path>>>,
+    specs: BTreeMap<String, Option<Path>>,
+    overrides: BTreeMap<Path, Path>,
+}
+
+impl FieldConfig {
+    /// An entry that configured no `field.*` key at all.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// True when no `field.*` key was configured.
+    ///
+    /// This is the D-7 trigger: **any** assignment voids every preset
+    /// assignment for the element, for this entry only.
+    pub fn is_empty(&self) -> bool {
+        self.slot.is_empty() && self.specs.is_empty() && self.overrides.is_empty()
+    }
+
+    /// `field.<slot>.<kind>` assignments, by slot then kind.
+    ///
+    /// `None` for a kind means the position was explicitly unassigned.
+    pub fn slots(&self) -> &BTreeMap<Slot, BTreeMap<SlotKind, Option<Path>>> {
+        &self.slot
+    }
+
+    /// One position's assignment: `None` = not configured, `Some(None)` =
+    /// unassigned (`= ""`), `Some(Some(path))` = assigned.
+    pub fn assignment(&self, slot: Slot, kind: SlotKind) -> Option<&Option<Path>> {
+        self.slot.get(&slot).and_then(|kinds| kinds.get(&kind))
+    }
+
+    /// `field.specs.<k>` assignments (see [`SPECS_KEYS`]).
+    pub fn specs(&self) -> &BTreeMap<String, Option<Path>> {
+        &self.specs
+    }
+
+    /// `field.override.<path>` — the rename table, read only by
+    /// `project(node)` (ADR-0014 rules 3–4).
+    pub fn overrides(&self) -> &BTreeMap<Path, Path> {
+        &self.overrides
+    }
+
+    /// Assigns one slot position to `target`, or unassigns it with `None`.
+    pub fn assign_slot(&mut self, slot: Slot, kind: SlotKind, target: Option<Path>) {
+        self.slot.entry(slot).or_default().insert(kind, target);
+    }
+
+    /// Assigns one specs position; the key must be one of [`SPECS_KEYS`].
+    pub fn assign_specs(
+        &mut self,
+        key: &str,
+        target: Option<Path>,
+    ) -> Result<(), FieldConfigError> {
+        if !SPECS_KEYS.contains(&key) {
+            return Err(FieldConfigError::UnknownSpecsKey {
+                key: key.to_string(),
+            });
+        }
+        self.specs.insert(key.to_string(), target);
+        Ok(())
+    }
+
+    /// Adds an override from `source` to `target`.
+    ///
+    /// Both ends are checked here so the failure names the config key the user
+    /// wrote, not the map that noticed: a source may be renamed once, and no
+    /// two sources may collapse onto one name.
+    pub fn add_override(&mut self, source: Path, target: Path) -> Result<(), FieldConfigError> {
+        if self.overrides.contains_key(&source) {
+            return Err(FieldConfigError::DuplicateOverride { source });
+        }
+        if self.overrides.values().any(|existing| existing == &target) {
+            return Err(FieldConfigError::DuplicateOverrideTarget { target });
+        }
+        self.overrides.insert(source, target);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -630,5 +778,108 @@ mod tests {
         assert!(!map.contains(&path("a")));
         assert_eq!(map.get(&path("a")), None);
         assert_eq!(map.to_value(), AttrValue::Object(Vec::new()));
+    }
+
+    // ---- S2-2.3: the `field.*` config shape ----
+
+    /// A fresh config configures nothing, which is what keeps D-7's preset
+    /// alive; any assignment flips it.
+    #[test]
+    fn a_field_config_reports_whether_it_configured_anything() {
+        let mut config = FieldConfig::new();
+        assert!(config.is_empty());
+        config.assign_slot(Slot::Bracket, SlotKind::Bare, Some(path("anchor_id")));
+        assert!(!config.is_empty());
+        assert_eq!(
+            config.assignment(Slot::Bracket, SlotKind::Bare),
+            Some(&Some(path("anchor_id")))
+        );
+        // An untouched position is absent, not unassigned.
+        assert_eq!(config.assignment(Slot::Bracket, SlotKind::Tick), None);
+        assert_eq!(config.assignment(Slot::Paren, SlotKind::Bare), None);
+    }
+
+    /// `""` (OBJ-10) is stored as `None`: configured, but with no name.
+    #[test]
+    fn an_empty_name_unassigns_the_position() {
+        let mut config = FieldConfig::new();
+        config.assign_slot(Slot::Paren, SlotKind::Quote, None);
+        assert!(!config.is_empty());
+        assert_eq!(config.assignment(Slot::Paren, SlotKind::Quote), Some(&None));
+    }
+
+    /// The specs namespace is a fixed list of five, so a typo is a load error
+    /// naming the accepted set (D-16, no silent drop).
+    #[test]
+    fn specs_keys_are_exactly_the_five_positions() {
+        let mut config = FieldConfig::new();
+        for key in SPECS_KEYS {
+            config.assign_specs(key, Some(path("ref-id"))).unwrap();
+        }
+        assert_eq!(config.specs().len(), 5);
+        assert_eq!(SPECS_KEYS, ["tick", "quote", "class", "id", "style"]);
+
+        let error = config
+            .assign_specs("tikc", Some(path("ref-id")))
+            .expect_err("unknown specs position");
+        assert_eq!(
+            error,
+            FieldConfigError::UnknownSpecsKey {
+                key: "tikc".to_string()
+            }
+        );
+        let message = error.to_string();
+        assert!(message.contains("tikc"), "{message}");
+        assert!(
+            message.contains("tick, quote, class, id, style"),
+            "{message}"
+        );
+    }
+
+    /// ADR-0014 rule 3: one source, one target — the two collision directions
+    /// are caught where the key is read.
+    #[test]
+    fn overrides_may_not_collide() {
+        let mut config = FieldConfig::new();
+        config
+            .add_override(path("number.raw"), path("bar"))
+            .unwrap();
+        assert_eq!(config.overrides().len(), 1);
+
+        assert_eq!(
+            config.add_override(path("number.raw"), path("baz")),
+            Err(FieldConfigError::DuplicateOverride {
+                source: path("number.raw")
+            })
+        );
+        assert_eq!(
+            config.add_override(path("specs.tick"), path("bar")),
+            Err(FieldConfigError::DuplicateOverrideTarget {
+                target: path("bar")
+            })
+        );
+        assert_eq!(config.overrides().len(), 1);
+    }
+
+    /// `Path` is `Ord` so a config can key a `BTreeMap` by it. The order is
+    /// segment-wise, which is what makes a dotted map readable in a diff.
+    #[test]
+    fn paths_are_ordered_by_segment() {
+        assert!(path("a.b") < path("a.c"));
+        assert!(path("a") < path("a.b"));
+        assert!(path("a.b.c") < path("a.c"));
+    }
+
+    /// A `FieldConfig` is the entry's; the same path in two different configs
+    /// is not a collision.
+    #[test]
+    fn separate_configs_do_not_share_overrides() {
+        let mut first = FieldConfig::new();
+        let mut second = FieldConfig::new();
+        first.add_override(path("number.raw"), path("bar")).unwrap();
+        second
+            .add_override(path("number.raw"), path("bar"))
+            .unwrap();
+        assert_eq!(first, second);
     }
 }

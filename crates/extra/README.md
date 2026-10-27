@@ -24,7 +24,9 @@ for interpreting the parsed properties.
   `ExtrasMatch`: `Absent` (literal, no diagnostic), `Slots { pair, rest }`,
   `Malformed { error, rest }` (`Severity::Error` + literal, D-2). A plugin
   supplies only a `SlotContract { accepted, tag }`; no plugin may split a bracket
-  itself (§5.2–§5.4, ADR-0012, ADR-0017).
+  itself (§5.2–§5.4, ADR-0012, ADR-0017). `Slot::name` / `SlotKind::name` and
+  their `from_name` inverses are the `field.<slot>.<kind>` config vocabulary, so
+  a typo can never be read as a position.
 - **IR glue** — `scan_extras_chars` / `emit_attrs` / `warning_event` (`src/emit.rs`):
   the shared **emit** pass that turns a parsed head into event attributes. It is
   not data binding — that is `plugin-bind` (§12.2, ADR-0005).
@@ -53,8 +55,12 @@ for interpreting the parsed properties.
   the ordered `path → AttrValue` map the projection fills, and `to_value()`
   nests it (`price.details.amount` → `price` → `details` → `amount`) in
   insertion order. A path cannot be a scalar _and_ have children, so both
-  structural clashes are errors (`FieldMapError`). Neither type touches the IR —
-  see [`docs/decisions/0014-field-model.md`](../../docs/decisions/0014-field-model.md).
+  structural clashes are errors (`FieldMapError`). `FieldConfig` is the config
+  side of the same vocabulary — one `custom` entry's `field.<slot>.<kind>` /
+  `field.specs.<k>` / `field.override.<path>` keys, with `""` stored as `None`
+  (unassign, OBJ-10) and `is_empty()` as the D-7 preset-voiding trigger.
+  Neither type touches the IR — see
+  [`docs/decisions/0014-field-model.md`](../../docs/decisions/0014-field-model.md).
 - **Positional keys** — `ExtrasOptions` / `PositionalKeys` / `KeyResolver` for
   the §6.1 per-component `backtick_key` / `quote_key` (and, for directive heads,
   `bracket_key` / `parentheses_key`).
