@@ -138,20 +138,36 @@ Leave when a `FieldMap` is built for every element, renderers read it, and
 `cargo test --workspace` passes **without re-freezing anything** (the projection
 is an identity at this point).
 
-- [ ] **S2-2.1 — Field-name validation.** Dep: S2-0.1.
+- [x] **S2-2.1 — Field-name validation.** Dep: S2-0.1.
       Files: `crates/extra/src/field.rs` (new).
       U: name rules table.
       Do: allow `[A-Za-z0-9_-]`, first char not digit or `-`, case-sensitive,
       `.` = nesting; reject empty segments and trailing dots.
       Exit: tests for valid/invalid names, incl. `id-123`, `_extra-note`,
       `price.details.amount`, and errors for `1x`, `-x`, `a..b`.
-- [ ] **S2-2.2 — `Path` + `FieldMap`.** Dep: S2-2.1.
+      **Done 2026-10-28** — `validate_field_name` + `FieldNameError`
+      (`Empty` / `EmptySegment` / `InvalidStart` / `InvalidChar`, 1-based
+      segment index in every message; ASCII only, so `ünicode` is rejected).
+      One rule table per side: 14 accepted names (every name the proposal's
+      assignment block writes) and 10 rejected ones. Trailing/leading/doubled
+      dots are all `EmptySegment`, so `a.` and `a..b` cannot drift.
+- [x] **S2-2.2 — `Path` + `FieldMap`.** Dep: S2-2.1.
       U: path matching table.
       Do: `Path(Vec<String>)` with `from_dotted`, `starts_with`, `is_prefix_of`;
       `FieldMap` = ordered map of dotted path → `AttrValue`; insertion of a
       dotted key nests (`price.details.amount` → nested object).
       Exit: tests for nesting, prefix match, and conflict detection (scalar where
       an object is needed → error).
+      **Done 2026-10-28** — `Path` is only buildable through `from_dotted` /
+      `from_segments` (both run the same validator), so no invalid path exists;
+      prefix tests are **segment-wise** and inclusive (`priced` is not under
+      `price`; `a.b` is a prefix of itself — what `only`/`omit` need).
+      `FieldMap` keeps insertion order in a `Vec` (no new dependency) and
+      `to_value()` nests into `AttrValue::Object` in first-appearance order;
+      re-inserting a path replaces it in place (duplicate policy stays with
+      D-12), and a structural clash is `FieldMapError::ParentIsNotObject` /
+      `ParentHasChildren`. 13 module tests; workspace 693 pass, 0 fail; no
+      golden byte moved.
 - [ ] **S2-2.3 — Config: `field.*` deserialization.** Dep: S2-2.2.
       Files: `apps/cli/src/config.rs`, `apps/cli/src/components.rs` (or the
       custom-entry type's home).

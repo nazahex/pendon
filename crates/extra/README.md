@@ -45,6 +45,16 @@ for interpreting the parsed properties.
   marker is unreachable from a document; the merge itself belongs to
   `plugin-bind`, which is the only consumer. It travels as a key because a JSON
   object in this workspace has no item order to preserve.
+- **Public field names and the field map** (`src/field.rs`) —
+  `validate_field_name` enforces the proposal's name rules (`A-Z a-z 0-9 _ -`,
+  a segment starts with a letter or `_`, case-sensitive, `.` nests, no empty
+  segment); `Path` is a validated dotted name whose prefix tests are
+  **segment-wise** and inclusive (`priced` is not under `price`); `FieldMap` is
+  the ordered `path → AttrValue` map the projection fills, and `to_value()`
+  nests it (`price.details.amount` → `price` → `details` → `amount`) in
+  insertion order. A path cannot be a scalar _and_ have children, so both
+  structural clashes are errors (`FieldMapError`). Neither type touches the IR —
+  see [`docs/decisions/0014-field-model.md`](../../docs/decisions/0014-field-model.md).
 - **Positional keys** — `ExtrasOptions` / `PositionalKeys` / `KeyResolver` for
   the §6.1 per-component `backtick_key` / `quote_key` (and, for directive heads,
   `bracket_key` / `parentheses_key`).

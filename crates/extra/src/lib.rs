@@ -14,17 +14,22 @@
 //! * [`scan_extras_chars`] / [`emit_attrs`] / [`warning_event`] — the glue that
 //!   binds a parsed head to the event IR, shared by the construct plugins.
 //! * [`AttrValue`] / [`classify_scalar`] — typed attribute values (§6.3).
+//! * [`validate_field_name`] / [`Path`] / [`FieldMap`] — the public field
+//!   vocabulary the projection emits (ADR-0014, proposal §7).
 //!
 //! The pre-§11 `[.class,#id]{key: value}` form is **removed** (§14): it is
 //! plain literal text and this crate has no parser for it.
 
 mod decorator;
 mod emit;
+mod field;
 mod slot;
 mod typed;
 mod value;
 
 pub use emit::{emit_attr_warnings, emit_attrs, scan_extras_chars, warning_event, warning_message};
+
+pub use field::{validate_field_name, FieldMap, FieldMapError, FieldNameError, Path};
 
 pub use slot::{
     parse_slot_parts, parse_slots, Slot, SlotContract, SlotError, SlotKind, SlotMatch, SlotPair,

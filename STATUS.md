@@ -84,7 +84,7 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## In progress
 
-- [ ] **Stage 2 — Phase 0 done, Phase 1 in progress.** Docs live in
+- [ ] **Stage 2 — Phase 0 and Phase 1 done, Phase 2 in progress.** Docs live in
       [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md).
       **Phase 0 complete 2026-10-28**: D-1…D-17 signed (D-16 = clean total
       replacement: no compat, no warnings, no migration doc, old configs fail
@@ -98,7 +98,12 @@ exactly one `export const headings` line each (no bytes removed), and
       run, dedupe in written order, parens exempt) and `S2-1.6`
       (`SlotPos`/`SlotContract`) done — 34 module tests. `S2-1.4` (OBJ-1 probe:
       `crates/core` has no footnote extension, so cite keeps `^`) done. Phase 1
-      is complete: no golden byte moved. Next: Phase 2 (field model).
+      is complete: no golden byte moved.
+      **Phase 2**: `S2-2.1` (name rules: `validate_field_name` +
+      `FieldNameError`) and `S2-2.2` (`Path` segment-wise prefixes, `FieldMap`
+      ordered dotted map with nesting + structural-clash errors) done in
+      `crates/extra/src/field.rs` — 13 module tests, workspace 693 pass, still
+      no golden byte moved. Next: `S2-2.3` (`field.*` config keys).
       No `MIGRATION.md` by policy.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
