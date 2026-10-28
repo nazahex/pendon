@@ -34,7 +34,7 @@ pub use emit::{emit_attr_warnings, emit_attrs, scan_extras_chars, warning_event,
 
 pub use field::{
     project, validate_field_name, FieldConfig, FieldConfigError, FieldMap, FieldMapError,
-    FieldName, FieldNameError, Path, SPECS_KEYS,
+    FieldName, FieldNameError, Path, SPECS_KEYS, SPECS_NAMESPACE,
 };
 
 pub use preset::{fallback_path, ElementHead, Preset};
@@ -52,17 +52,17 @@ pub use decorator::{
 pub use typed::{
     parse_directive_head, parse_extras, parse_extras_body, parse_type_marker, read_number_mark,
     read_positional_groups, to_attributes, Attrs, DirectiveHead, DirectiveMatch, DirectiveSigil,
-    ExtrasAttr, ExtrasError, ExtrasHead, ExtrasItem, ExtrasMatch, ExtrasOptions, ExtrasWarning,
-    NumberMark, PositionalKeys,
+    ExtrasAttr, ExtrasError, ExtrasHead, ExtrasItem, ExtrasMatch, ExtrasWarning, NumberMark,
+    PositionalNames,
 };
 
-/// Resolves the §6.1 [`ExtrasOptions`] for a node's `type` marker (§11 rule 5).
+/// Resolves the §6.1 [`PositionalNames`] for a node's `type` marker (§11 rule 5).
 ///
 /// The construct plugins own the component set that answers the marker, so they
-/// provide this callback: an exact `type` match resolves to that entry's keys, an
-/// unclaimed marker to the layer default's, and a marker with no entry at all to
-/// the built-in `slug` / `title` (§11 rule 3).
-pub type KeyResolver<'a> = &'a dyn Fn(Option<&str>) -> ExtrasOptions;
+/// provide this callback: an exact `type` match resolves to that entry's
+/// `field.*`, an unclaimed marker to the layer default's, and a marker with no
+/// entry at all to the built-in `slug` / `title` (§11 rule 3).
+pub type NamesResolver<'a> = &'a dyn Fn(Option<&str>) -> PositionalNames;
 pub use value::{classify_scalar, number_kind, AttrValue, NumberKind, SPREAD_KEY};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

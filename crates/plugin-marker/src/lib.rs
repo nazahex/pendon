@@ -189,7 +189,7 @@ fn scan_marker(
 
     // §6.1/§11 rule 5: the entry answering this marker `type` names the
     // extras positional keys; the groups map through the same keys.
-    let keys = options.custom.keys_for(Some(marker.type_name.as_str()));
+    let keys = options.custom.names_for(Some(marker.type_name.as_str()));
 
     // §4.1: the extras head must be adjacent; a malformed one is left alone
     // (the marker still renders, §4.3).
@@ -200,14 +200,14 @@ fn scan_marker(
             marker
                 .warnings
                 .push(warning_message(&ExtrasWarning::Overridden {
-                    key: keys.bracket_key.clone(),
+                    key: keys.bracket.clone(),
                 }));
         }
         if group_parentheses.is_some() && head.parentheses.is_some() {
             marker
                 .warnings
                 .push(warning_message(&ExtrasWarning::Overridden {
-                    key: keys.parentheses_key.clone(),
+                    key: keys.paren.clone(),
                 }));
         }
         if group_bracket.is_some() {

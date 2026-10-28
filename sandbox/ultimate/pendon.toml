@@ -179,16 +179,17 @@ template = "<MarkerDefault {...attrs}>{children}</MarkerDefault>"
 [[task.directive.custom]]
 type = ["asideA", "asideB"]
 name = "AsideAB"
-bracket_key = "slug"
-parentheses_key = "title"
 imports = "import { AsideAB } from '@comp/AsideAB'"
 template = "<AsideAB slug={\"{attrs.slug}\"} title={\"{attrs.title}\"} type={\"{attrs.type}\"} {...attrs}>{children}</AsideAB>"
 
 [[task.directive.custom]]
 type = ["note"]
 name = "Note"
-bracket_key = "id"
-parentheses_key = "level"
+field.bracket.bare = "id"
+field.paren.bare = "level"
+# The preset is void as a whole (D-7), so the item names are spelled out too.
+field.specs.tick = "slug"
+field.specs.quote = "title"
 imports = "import Note from '@comp/Note'"
 template = "<Note {...attrs}>{children}</Note>"
 

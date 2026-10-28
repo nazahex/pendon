@@ -118,7 +118,7 @@ enum Marker {
 }
 
 pub fn process(events: &[Event], options: &SectionOptions) -> Vec<Event> {
-    let keys = |target: Option<&str>| options.section.keys_for(target);
+    let keys = |target: Option<&str>| options.section.names_for(target);
     let bindings = bind_decorators(events, &keys, section_target);
     let decorators: HashMap<usize, &BoundDecorator> = bindings
         .bound
@@ -449,12 +449,10 @@ fn heading_chain(raw: &str, level: usize, options: &SectionOptions) -> HeadInfo 
     let mut extras_slug = None;
     let mut extras_id = None;
     if let Some((head, next)) = scan_extras_chars(&chars, cursor) {
-        let keys = options.section.keys_for(head.type_marker.as_deref());
+        let keys = options.section.names_for(head.type_marker.as_deref());
         let parsed = to_attributes(&head, &keys);
         extras_id = parsed.value("id").map(|value| value.literal());
-        extras_slug = parsed
-            .value(&keys.backtick_key)
-            .map(|value| value.literal());
+        extras_slug = parsed.value(&keys.tick).map(|value| value.literal());
         cursor = next;
     }
 

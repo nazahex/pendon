@@ -134,18 +134,16 @@ fn parse_heading_head(raw_text: &str, options: &HeadingOptions) -> HeadingHead {
         cursor = next;
         type_marker = head.type_marker.clone();
         // §6.1/§11 rule 5: the entry answering this `type` names the extras
-        // positional keys (`backtick_key` for the slug, `quote_key` for the title).
-        let keys = options.custom.keys_for(head.type_marker.as_deref());
+        // positional names (`tick` for the slug, `quote` for the title).
+        let keys = options.custom.names_for(head.type_marker.as_deref());
         let parsed = to_attributes(&head, &keys);
         for warning in &parsed.warnings {
             warnings.push(pendon_extra::warning_message(warning));
         }
         let extras_id = parsed.value("id").map(|value| value.literal());
-        let extras_slug = parsed
-            .value(&keys.backtick_key)
-            .map(|value| value.literal());
+        let extras_slug = parsed.value(&keys.tick).map(|value| value.literal());
         for (key, value) in &parsed.items {
-            if key == "id" || key == &keys.backtick_key {
+            if key == "id" || key == &keys.tick {
                 continue;
             }
             match value {

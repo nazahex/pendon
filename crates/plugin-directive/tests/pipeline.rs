@@ -5,7 +5,7 @@
 //! mode (§10.2/§10.3).
 
 use pendon_core::{parse, Event, NodeKind, Options};
-use pendon_extra::PositionalKeys;
+use pendon_extra::{FieldConfig, Path, Slot, SlotKind};
 use pendon_plugin_directive::{process, solid_hints, DirectiveCustomNode, DirectiveOptions};
 use pendon_renderer_solid::{render_solid_with_hints, ComponentSet, TypedComponent};
 
@@ -63,22 +63,35 @@ fn attr(events: &[Event], name: &str) -> Option<String> {
     })
 }
 
-/// §6.1 + §11 rule 5: a component entry renames all four positional slots
-/// independently, and an entry that overrides none keeps `slug` / `title`.
+/// §6.1 + D-5: a component entry renames all four positional contents through
+/// its `field.*` keys, and an entry that configures none keeps `slug` / `title`.
 #[test]
-fn each_type_resolves_its_own_positional_keys() {
+fn each_type_resolves_its_own_positional_names() {
+    let mut field = FieldConfig::new();
+    field.assign_slot(
+        Slot::Bracket,
+        SlotKind::Bare,
+        Some(Path::from_dotted("label").unwrap()),
+    );
+    field.assign_slot(
+        Slot::Paren,
+        SlotKind::Bare,
+        Some(Path::from_dotted("kind").unwrap()),
+    );
+    field
+        .assign_specs("tick", Some(Path::from_dotted("author").unwrap()))
+        .unwrap();
+    field
+        .assign_specs("quote", Some(Path::from_dotted("summary").unwrap()))
+        .unwrap();
+
     let opts = DirectiveOptions {
         custom: ComponentSet::from_entries([
             TypedComponent::typed(
                 vec!["note"],
                 component("Note", "<Note {...attrs}>{children}</Note>"),
             )
-            .with_positional(PositionalKeys {
-                bracket_key: Some("label".into()),
-                parentheses_key: Some("kind".into()),
-                backtick_key: Some("author".into()),
-                quote_key: Some("summary".into()),
-            }),
+            .with_field(field),
             TypedComponent::default_component(component(
                 "DirectiveDefault",
                 "<DirectiveDefault {...attrs}>{children}</DirectiveDefault>",
@@ -104,8 +117,8 @@ fn each_type_resolves_its_own_positional_keys() {
     assert_eq!(attr(&out, "slug"), None, "{out:?}");
     assert_eq!(attr(&out, "title"), None, "{out:?}");
 
-    // A type with no positional override falls through to the layer default,
-    // which overrides nothing, so the §6.1 defaults apply (head > extras §6.2).
+    // A type with no `field.*` config falls through to the layer default, which
+    // configures nothing, so the §6.1 defaults apply (head > extras §6.2).
     let out = run("::other[X](\"Y\"){`Z`, \"W\"}Body::");
     assert_eq!(attr(&out, "slug"), Some("X".to_string()), "{out:?}");
     assert_eq!(attr(&out, "title"), Some("Y".to_string()), "{out:?}");

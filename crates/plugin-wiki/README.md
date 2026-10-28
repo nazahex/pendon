@@ -50,11 +50,11 @@ let events = process_with_options(&parsed, opts);
 
 `WikiOptions` fields: `link_prefix: Option<String>` and `latex: Option<LatexOptions>`.
 
-### Positional keys (§6.1 / §11 rule 5)
+### Positional names (§6.1, D-5)
 
-An entry may rename the §6.1 positional slots in its extras head: `backtick_key`
-(default `slug`) for a `` `slug` `` item and `quote_key` (default `title`) for a
-`"title"` item.
+An entry renames the §6.1 positional slots through its `field.*` keys —
+`field.specs.tick` / `field.specs.quote` — and an entry that configures none
+keeps `slug` / `title` (D-7). `plugin-wiki` does not read them yet (see below).
 
 > **Not yet wired:** `plugin-wiki`'s `WikiOptions` carries no `ComponentSet`, so
 > a `[task.wiki.custom]` key is not read yet and the extras stay on the built-in

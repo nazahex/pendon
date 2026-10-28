@@ -58,7 +58,7 @@ pub struct BlockquoteOptions {
 /// node.
 pub fn process(events: &[Event], options: &BlockquoteOptions) -> Vec<Event> {
     // §9.1: a decorator line directly above the quote decorates it too.
-    let keys = |target: Option<&str>| options.custom.keys_for(target);
+    let keys = |target: Option<&str>| options.custom.names_for(target);
     let bindings = bind_decorators(events, &keys, quote_target);
     let decorators: HashMap<usize, &BoundDecorator> = bindings
         .bound
@@ -213,8 +213,10 @@ fn emit_quote(
                 // space between the head and the content is allowed here.
                 ExtrasMatch::Head { head, rest } => {
                     type_marker = head.type_marker.clone();
-                    inner =
-                        to_attributes(&head, &options.custom.keys_for(head.type_marker.as_deref()));
+                    inner = to_attributes(
+                        &head,
+                        &options.custom.names_for(head.type_marker.as_deref()),
+                    );
                     body.push(Event::Text(rest.trim_start_matches(' ').to_string()));
                 }
                 // §4.3: an absent or malformed head stays literal text.

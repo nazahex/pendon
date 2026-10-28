@@ -88,11 +88,11 @@ Left column is proposal language; right column is what an agent actually touches
 | numbering             | §10.5 `%%numberType` → `__number` → `crates/plugin-number`                                             |
 | slot                  | brackets/parentheses parsed ad hoc by `plugin-anchor`, `plugin-cite`, `plugin-image`, `plugin-heading` |
 | slot tag              | today: the whole head (`@[`, `[^^]`, `![`, `#[`)                                                       |
-| slot contract         | today: hard-coded per plugin, mirrored in `PositionalKeys` (`crates/extra/src/typed.rs`)               |
+| slot contract         | `SlotContract` in `crates/extra/src/slot.rs`, declared per element (S2-1.x)                            |
 | slot modifier         | today: anchor URL suffix + image pre-bracket — **both deleted**                                        |
 | decorator             | `crates/extra/src/decorator.rs` (`bind_decorators`), §9.1                                              |
 | bare / built-in field | `AttrValue` on the node; rows in `docs/spec/EXTRAS-INVENTORY.md`                                       |
-| assign / override     | today: `bracket_key` / `parentheses_key` / `backtick_key` / `quote_key` (`PositionalKeys`)             |
+| assign / override     | `field.*` (D-5) + `PositionalNames::resolve`; the four old naming keys are deleted (S2-2.8)            |
 | preset                | today: `recommended: bool` in `ExtractRule` (`apps/cli/src/config.rs`)                                 |
 | extract               | `crates/plugin-extract` + `[[task.<element>.extract]]` (§21)                                           |
 | number                | `crates/plugin-number` + `[[task.<element>.number]]` (ADR-0010)                                        |

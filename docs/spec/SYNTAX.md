@@ -285,14 +285,20 @@ ws          = 1*( " " | "\t" )
 
 ### 6.1 Positional names
 
-Positional items are named through per-component config (§11):
+Positional items are named through the entry's `field.*` config (§7, §11, D-5):
 
-| item      | config key        | default | meaning          |
-| --------- | ----------------- | ------- | ---------------- |
-| `` `x` `` | `backtick_key`    | `slug`  | construct slug   |
-| `"x"`     | `quote_key`       | `title` | construct title  |
-| `[x]`     | `bracket_key`     | `slug`  | bracket slot     |
-| `("x")`   | `parentheses_key` | `title` | parentheses slot |
+| item      | config key           | default | meaning          |
+| --------- | -------------------- | ------- | ---------------- |
+| `` `x` `` | `field.specs.tick`   | `slug`  | construct slug   |
+| `"x"`     | `field.specs.quote`  | `title` | construct title  |
+| `[x]`     | `field.bracket.bare` | `slug`  | bracket slot     |
+| `("x")`   | `field.paren.bare`   | `title` | parentheses slot |
+
+An entry that configures **no** `field.*` key keeps every default. Once it
+configures one, the preset is void as a whole (D-7): a position it leaves
+unassigned falls back to its own qualified name (`bracket.bare`, `paren.bare`,
+`specs.tick`, `specs.quote`), never to a name the author chose for another
+position. There is no separate naming key (§14).
 
 Every `@@` head may carry the `[x]` / `("x")` groups between its type and its
 `{…}` body (`@@type[x]("y"){…}`, `@@type[x]("y")`, `@@[x]("y")`), each part
@@ -406,8 +412,8 @@ stable:
 
 1. `class` (single joined value, head classes then `.x` items in source order);
 2. `id`;
-3. positional keys — the groups first (`bracket_key`, then `parentheses_key`),
-   then `slug` and `title` (using `backtick_key`/`quote_key`);
+3. the positional names — the groups first (`bracket`, then `paren`), then `tick`
+   and `quote` (§6.1);
 4. all remaining props and flags in source order, with `style` where the first
    `style:` prop or `--var` item appeared.
 
@@ -655,7 +661,7 @@ marker         = "-" | "*" | "+" | DIGIT+ "."
 - Ordered list start offsets follow CommonMark behavior (first item number); extras cannot currently override this value.
 - Decorator lines that fail to bind to a valid list trigger a `Severity::Warning` diagnostic.
 - Item-level decorators (L2/L3) and nesting validation (L5) are defined in spec but not yet implemented.
-- Positional slots default to `` `slug` `` and `"title"` but can be renamed per entry via `backtick_key` and `quote_key`.
+- Positional slots default to `` `slug` `` and `"title"` but can be renamed per entry via `field.specs.tick` and `field.specs.quote` (§6.1).
 - Unbound decorators outside of lists remain as ordinary block nodes to prevent silent data loss.
 
 ### 9.4 Layer mapping for lists
@@ -724,7 +730,7 @@ marker-block  = "{{" type "}}" groups? extras?   # own line (block context)
 - Extras are optional but must be adjacent.
 - The positional groups (§6.1) sit directly after `}}`, **before** any extras
   head: `{{type}}[x]("y"){…}` and `{{type}}[x]("y")@@head{…}`. They map through
-  the marker type's `bracket_key` / `parentheses_key`. A marker-level group
+  the marker type's `field.bracket.bare` / `field.paren.bare`. A marker-level group
   beats a same-key group of the extras head (§6.2, dropped with a §13 Warning);
   a malformed group stays literal text while the marker still renders (§4.3).
   A `[x]("y")` pair is also a legal anchor head, so which layer reads it first
@@ -745,8 +751,8 @@ inline-directive = colons type [ "[" bracket "]" ] [ "(" paren ")" ] extras? tex
 colons           = "::" up to ":::::::" (2..7)
 ```
 
-- `[bracket]` key = `bracket_key` (default `slug`), `("paren")` key =
-  `parentheses_key` (default `title`).
+- `[bracket]` name = `field.bracket.bare` (default `slug`), `("paren")` name =
+  `field.paren.bare` (default `title`) (§6.1).
 - The closing run MUST be `>=` the opening run (nesting depth = colon count).
   An inner directive with fewer colons closes implicitly at the outer's close.
 - Content is parsed as inline content.
@@ -944,8 +950,10 @@ Rules:
    > migrated to `__layer` / `layer_templates` — ignore them when changing §11.
 4. `imports` is canonical. The legacy singular `import` is accepted with a
    deprecation `Severity::Warning` (see §14 OPEN-C2).
-5. Positional naming (per component, all layers): `backtick_key`, `quote_key`
-   (§6.1). Directive heads additionally use `bracket_key`, `parentheses_key`.
+5. Positional naming (per component, all layers): `field.specs.tick`,
+   `field.specs.quote` (§6.1). Directive heads additionally use
+   `field.bracket.bare`, `field.paren.bare`. A removed naming key is a load
+   error, not a warning (§13, §14).
 6. `template` validation is a **hard error** when:
    - a non-void element is opened (`<X …>`) but the template contains neither a
      `{children}` nor a `{text}` token — children would be silently dropped; or
@@ -1030,7 +1038,8 @@ attributes — this is the item layer (L2/L3, §9.3), which is still pending.
 | dropped extras value because a head value won             | Warning                  |
 | unclosed block directive at EOF                           | Warning                  |
 | unknown plugin name in `task.plugin`                      | Warning                  |
-| unknown `task.<plugin>` key in `pendon.toml`              | Warning                  |
+| unknown `task.<plugin>` key in `pendon.toml`              | **Error (config load)**  |
+| unknown key inside a `custom` entry                       | **Error (config load)**  |
 | template without `{children}` (non-void element)          | Error (config load)      |
 | unbalanced template element                               | Error (config load)      |
 | two default components for one layer                      | Error (config load)      |
@@ -1042,18 +1051,19 @@ Config-load errors MUST abort the build before any file is processed.
 
 ## 14. Retirement and collisions
 
-| Removed                                         | Replaced by                          | Note                                                                                                                                                                                                                                                                                                              |
-| ----------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `[task.cite.section]`                           | `plugin-marker` (`{{bibliography}}`) | **removed**: `CiteOptions.section` and `CitationContext::replace_section_markers` are gone; the section component is now a marker.                                                                                                                                                                                |
-| `{{section}}` in sources                        | marker block                         | **removed**: the `{{ footnote }}` lines in `sandbox/cite` and `sandbox/img` are gone; `{{…}}` is free for `plugin-marker`.                                                                                                                                                                                        |
-| `:::name` custom blocks                         | `==type` block directive             | deprecated alias kept for one release (Warning), then hard-error — §15 OPEN-R1.                                                                                                                                                                                                                                   |
-| bare `===` table footer                         | `\|===\|`                            | **removed**: only `\|===\|` remains.                                                                                                                                                                                                                                                                              |
-| `o.` ordered-list offset                        | first item's number                  | **removed**: an `ol`'s `start` comes from the first item and is not overridable (§9.4).                                                                                                                                                                                                                           |
-| `plugin-quiz` (`:::quiz`)                       | —                                    | retired from the pipeline; plugin code stays, deep rework later.                                                                                                                                                                                                                                                  |
-| legacy `[.c,#id]{k:v}`                          | `{…}` / `@@type{…}`                  | **removed** (D3): plain literal text, no warning, no deprecation path. Gone from the code (`parse_attrs`, `ExtraAttrs`, `legacy_extras_warning`), docs, sandboxes and READMEs.                                                                                                                                    |
-| `import = "…"` (string)                         | `imports = ["…"]`                    | **removed**: the singular form is accepted with a Warning (§15 OPEN-C2), then hard-errors.                                                                                                                                                                                                                        |
-| `[task.<plugin>.custom_node]`                   | `[task.<plugin>.custom.<layer>]`     | **removed**: `custom.<layer>` is read for `anchor`, `image` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`); every sandbox/fixture config is migrated. The stale key fails the build with a migration message. Unwired layers (`task.image.custom.img`) are config errors. |
-| `[task.heading]` `auto_number` / `number_style` | `[[task.heading.number]]`            | **removed** (ADR-0010): both keys are read only to raise the §14 migration error. Numbering is `plugin-number` (§10.5), which writes `attrs.number` as an array and never prefixes the text.                                                                                                                      |
+| Removed                                                          | Replaced by                                                                          | Note                                                                                                                                                                                                                                                                                                              |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `[task.cite.section]`                                            | `plugin-marker` (`{{bibliography}}`)                                                 | **removed**: `CiteOptions.section` and `CitationContext::replace_section_markers` are gone; the section component is now a marker.                                                                                                                                                                                |
+| `{{section}}` in sources                                         | marker block                                                                         | **removed**: the `{{ footnote }}` lines in `sandbox/cite` and `sandbox/img` are gone; `{{…}}` is free for `plugin-marker`.                                                                                                                                                                                        |
+| `:::name` custom blocks                                          | `==type` block directive                                                             | deprecated alias kept for one release (Warning), then hard-error — §15 OPEN-R1.                                                                                                                                                                                                                                   |
+| bare `===` table footer                                          | `\|===\|`                                                                            | **removed**: only `\|===\|` remains.                                                                                                                                                                                                                                                                              |
+| `o.` ordered-list offset                                         | first item's number                                                                  | **removed**: an `ol`'s `start` comes from the first item and is not overridable (§9.4).                                                                                                                                                                                                                           |
+| `plugin-quiz` (`:::quiz`)                                        | —                                                                                    | retired from the pipeline; plugin code stays, deep rework later.                                                                                                                                                                                                                                                  |
+| legacy `[.c,#id]{k:v}`                                           | `{…}` / `@@type{…}`                                                                  | **removed** (D3): plain literal text, no warning, no deprecation path. Gone from the code (`parse_attrs`, `ExtraAttrs`, `legacy_extras_warning`), docs, sandboxes and READMEs.                                                                                                                                    |
+| `import = "…"` (string)                                          | `imports = ["…"]`                                                                    | **removed**: the singular form is accepted with a Warning (§15 OPEN-C2), then hard-errors.                                                                                                                                                                                                                        |
+| `[task.<plugin>.custom_node]`                                    | `[task.<plugin>.custom.<layer>]`                                                     | **removed**: `custom.<layer>` is read for `anchor`, `image` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`); every sandbox/fixture config is migrated. The stale key fails the build with a migration message. Unwired layers (`task.image.custom.img`) are config errors. |
+| `[task.heading]` `auto_number` / `number_style`                  | `[[task.heading.number]]`                                                            | **removed** (ADR-0010): both keys are read only to raise the §14 migration error. Numbering is `plugin-number` (§10.5), which writes `attrs.number` as an array and never prefixes the text.                                                                                                                      |
+| `backtick_key` / `quote_key` / `bracket_key` / `parentheses_key` | `field.specs.tick` / `field.specs.quote` / `field.bracket.bare` / `field.paren.bare` | **removed** (D-16): the four naming keys are gone from the loader, so a config that still uses them **fails to load** with an unknown-key error (§13) — no alias, no deprecation. Naming is `field.*` only (§6.1); an entry that configures none keeps `slug` / `title`.                                          |
 
 ## 15. Open decisions
 

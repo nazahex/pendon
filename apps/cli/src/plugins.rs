@@ -260,7 +260,7 @@ fn layer_set<C>(
         entries.push(TypedComponent {
             selectors: entry.selectors.clone(),
             component: make(entry)?,
-            positional: entry.positional.clone(),
+            field: entry.field.clone(),
         });
     }
     Ok(ComponentSet::from_entries(entries))

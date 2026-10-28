@@ -29,17 +29,22 @@ pub fn run_from_config() -> ExitCode {
         }
     };
 
-    // §13: an unknown key inside a `[[task]]` table would otherwise be dropped
-    // silently. Report it and keep going, so a typo never changes the output
-    // without saying so.
+    // §13: an unknown key inside a `[[task]]` table is a **load error**, not a
+    // warning — a typo must never change the output while the build succeeds.
+    // Every offending key is reported before aborting, so one run fixes them all.
+    let mut unknown_keys = false;
     for (index, task) in cfg.tasks.iter().enumerate() {
         let name = task
             .name
             .clone()
             .unwrap_or_else(|| format!("task-{}", index));
         for key in task.unknown.keys() {
-            eprintln!("Warning: [{name}] unknown key '{key}' in pendon.toml; it is ignored (§13)");
+            eprintln!("Error: [{name}] unknown key '{key}' in pendon.toml (§13); remove it or fix the typo");
+            unknown_keys = true;
         }
+    }
+    if unknown_keys {
+        return ExitCode::from(2);
     }
 
     let custom_registry = match load_custom_registry(cfg.plugin_custom.as_ref()) {

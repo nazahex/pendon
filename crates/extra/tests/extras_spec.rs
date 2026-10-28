@@ -5,13 +5,13 @@
 use pendon_extra::{
     parse_directive_head, parse_extras, parse_type_marker, to_attributes, AttrValue, Attrs,
     DirectiveMatch, DirectiveSigil, ExtrasAttr, ExtrasError, ExtrasHead, ExtrasMatch,
-    ExtrasOptions, ExtrasWarning, PositionalKeys, SPREAD_KEY,
+    ExtrasWarning, FieldConfig, Path, PositionalNames, Slot, SlotKind, SPREAD_KEY,
 };
 
 /// Parses `input` as a complete head and maps it to attributes.
 fn attrs_of(input: &str) -> (Vec<(String, ExtrasAttr)>, Vec<ExtrasWarning>) {
     let head = head_of(input);
-    let attrs = to_attributes(&head, &ExtrasOptions::default());
+    let attrs = to_attributes(&head, &PositionalNames::default());
     (attrs.items, attrs.warnings)
 }
 
@@ -201,9 +201,9 @@ fn empty_items_are_ignored() {
 }
 
 #[test]
-fn positional_keys_are_emitted_slug_then_title() {
+fn positional_names_default_to_slug_then_title() {
     let head = head_of("@@type{\"T\", .c, `s`}");
-    let keys: Vec<String> = to_attributes(&head, &ExtrasOptions::default())
+    let keys: Vec<String> = to_attributes(&head, &PositionalNames::default())
         .items
         .into_iter()
         .map(|(key, _)| key)
@@ -212,50 +212,61 @@ fn positional_keys_are_emitted_slug_then_title() {
 }
 
 #[test]
-fn positional_keys_follow_component_config() {
+fn positional_names_follow_the_item_names() {
     let head = head_of("@@type{`a`, \"L\"}");
-    let items = to_attributes(&head, &ExtrasOptions::new("anchorId", "label")).items;
+    let items = to_attributes(&head, &PositionalNames::new("anchorId", "label")).items;
     assert_eq!(items[0].0, "anchorId");
     assert_eq!(items[1].0, "label");
 }
 
-/// §11 rule 5: the config-side overrides are all optional, so an entry that
-/// overrides nothing keeps every built-in §6.1 key, and a partial override
-/// fills only the gaps it left.
+/// §6.1/§11 + D-5/D-7: an entry that configures no `field.*` key keeps every
+/// built-in name, and each `field.*` key renames exactly one position — the
+/// groups through `field.<slot>.bare`, the items through `field.specs.<k>`.
 #[test]
-fn positional_key_overrides_resolve_unset_keys_to_the_defaults() {
-    let empty = PositionalKeys::default();
-    assert!(empty.is_empty());
-    assert_eq!(empty.resolve(), ExtrasOptions::default());
-
-    let partial = PositionalKeys {
-        parentheses_key: Some("level".into()),
-        ..PositionalKeys::default()
-    };
-    assert!(!partial.is_empty());
+fn positional_names_resolve_from_field_config() {
+    // No entry at all, and an entry with no `field.*` key, are the same thing.
+    assert_eq!(PositionalNames::resolve(None), PositionalNames::default());
     assert_eq!(
-        partial.resolve(),
-        ExtrasOptions {
-            parentheses_key: "level".into(),
-            ..ExtrasOptions::default()
-        }
+        PositionalNames::resolve(Some(&FieldConfig::new())),
+        PositionalNames::default()
     );
 
-    // The four slots stay independent: overriding one never touches the others.
-    let all = PositionalKeys {
-        backtick_key: Some("ref".into()),
-        quote_key: Some("blurb".into()),
-        bracket_key: Some("label".into()),
-        parentheses_key: Some("kind".into()),
-    };
-    assert!(!all.is_empty());
+    let mut partial = FieldConfig::new();
+    partial.assign_slot(
+        Slot::Paren,
+        SlotKind::Bare,
+        Some(Path::from_dotted("level").unwrap()),
+    );
+    let names = PositionalNames::resolve(Some(&partial));
+    assert_eq!(names.paren, "level");
+    // D-7: the positions the entry left alone fall back to their own qualified
+    // spelling, never to a name the user chose.
+    assert_eq!(names.bracket, "bracket.bare");
+    assert_eq!(names.tick, "specs.tick");
+    assert_eq!(names.quote, "specs.quote");
+
+    let mut all = FieldConfig::new();
+    all.assign_slot(
+        Slot::Bracket,
+        SlotKind::Bare,
+        Some(Path::from_dotted("label").unwrap()),
+    );
+    all.assign_slot(
+        Slot::Paren,
+        SlotKind::Bare,
+        Some(Path::from_dotted("kind").unwrap()),
+    );
+    all.assign_specs("tick", Some(Path::from_dotted("ref").unwrap()))
+        .unwrap();
+    all.assign_specs("quote", Some(Path::from_dotted("blurb").unwrap()))
+        .unwrap();
     assert_eq!(
-        all.resolve(),
-        ExtrasOptions {
-            backtick_key: "ref".into(),
-            quote_key: "blurb".into(),
-            bracket_key: "label".into(),
-            parentheses_key: "kind".into(),
+        PositionalNames::resolve(Some(&all)),
+        PositionalNames {
+            bracket: "label".into(),
+            paren: "kind".into(),
+            tick: "ref".into(),
+            quote: "blurb".into(),
         }
     );
 }
@@ -315,7 +326,7 @@ fn class_props_accumulate_with_class_items() {
 #[test]
 fn flags_stay_bare_in_the_dom_fallback() {
     let head = head_of("@@type{isBar, role: tab}");
-    let attrs = to_attributes(&head, &ExtrasOptions::default());
+    let attrs = to_attributes(&head, &PositionalNames::default());
     assert_eq!(
         attrs.to_dom(),
         vec![
@@ -347,7 +358,7 @@ fn escapes_are_consumed() {
 fn the_head_wins_over_extras() {
     let extras = {
         let head = head_of("@@type{\"Extras\", href: \"evil\"}");
-        to_attributes(&head, &ExtrasOptions::default())
+        to_attributes(&head, &PositionalNames::default())
     };
 
     let mut construct = Attrs::default();
@@ -527,12 +538,12 @@ fn groups_must_be_adjacent() {
     assert_eq!(literal_error("@@ plain"), InvalidHead);
 }
 
-/// §6.1/§6.4: the groups map through `bracket_key` / `parentheses_key`, sit
+/// §6.1/§6.4: the groups map through `bracket` / `paren`, sit
 /// with the positional keys, and win a collision with a body item (§6.2).
 #[test]
 fn groups_map_through_the_positional_keys() {
     let head = head_of("@@aside[intro](\"T\"){.c, `body-slug`, slug: \"p\"}");
-    let attrs = to_attributes(&head, &ExtrasOptions::default());
+    let attrs = to_attributes(&head, &PositionalNames::default());
     let keys: Vec<String> = attrs.items.iter().map(|(key, _)| key.clone()).collect();
     // class, then the group keys, and the colliding body items are dropped.
     assert_eq!(keys, vec!["class", "slug", "title"]);
@@ -555,14 +566,14 @@ fn groups_map_through_the_positional_keys() {
         attrs.warnings
     );
 
-    // The keys follow the component config like every other positional.
+    // The names follow the entry's `field.*` config like every other positional.
     let head = head_of("@@note[n](\"T\")");
-    let options = ExtrasOptions {
-        bracket_key: "level".into(),
-        parentheses_key: "summary".into(),
-        ..ExtrasOptions::default()
+    let names = PositionalNames {
+        bracket: "level".into(),
+        paren: "summary".into(),
+        ..PositionalNames::default()
     };
-    let attrs = to_attributes(&head, &options);
+    let attrs = to_attributes(&head, &names);
     assert_eq!(
         attrs.value("level").map(AttrValue::literal),
         Some("n".to_string())
@@ -574,7 +585,7 @@ fn groups_map_through_the_positional_keys() {
 
     // Without a body the groups still emit, in §6.4 order.
     let head = head_of("@@[s](\"t\")");
-    let attrs = to_attributes(&head, &ExtrasOptions::default());
+    let attrs = to_attributes(&head, &PositionalNames::default());
     let keys: Vec<String> = attrs.items.iter().map(|(key, _)| key.clone()).collect();
     assert_eq!(keys, vec!["slug", "title"]);
 }
@@ -586,7 +597,7 @@ mod nested_values {
 
     fn prop_value(input: &str, key: &str) -> AttrValue {
         let head = head_of(input);
-        let attrs = to_attributes(&head, &ExtrasOptions::default());
+        let attrs = to_attributes(&head, &PositionalNames::default());
         attrs
             .value(key)
             .unwrap_or_else(|| panic!("no value for {key} in {input:?}"))

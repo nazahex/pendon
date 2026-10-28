@@ -1,7 +1,7 @@
 use pendon_core::{Event, NodeKind};
 use pendon_extra::{
     emit_attr_warnings, parse_extras, to_attributes, warning_event, ExtrasAttr, ExtrasHead,
-    ExtrasMatch, ExtrasOptions, ExtrasWarning,
+    ExtrasMatch, ExtrasWarning, PositionalNames,
 };
 
 use crate::options::WikiOptions;
@@ -99,7 +99,7 @@ fn emit_wikilink_extras(head: Option<&ExtrasHead>, out: &mut Vec<Event>) {
     let Some(head) = head else {
         return;
     };
-    let attrs = to_attributes(head, &ExtrasOptions::default());
+    let attrs = to_attributes(head, &PositionalNames::default());
     emit_attr_warnings("wiki", &attrs, out);
 
     // §11 rule 3: the marker is the routing key of the instance; it is carried

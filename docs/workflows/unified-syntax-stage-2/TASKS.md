@@ -304,7 +304,7 @@ is an identity at this point).
       node, override applies in place / is ignored when the field is absent,
       typed values through Solid and HTML), workspace 729 pass, 0 fail, **zero**
       golden and sandbox bytes changed.
-- [ ] **S2-2.8 — Fail fast on unknown/removed keys (D-16).** Dep: S2-2.3.
+- [x] **S2-2.8 — Fail fast on unknown/removed keys (D-16).** Dep: S2-2.3.
       Files: `apps/cli/src/config.rs`, `apps/cli/src/components.rs`,
       `docs/spec/SYNTAX.md` §13.
       Do: (a) delete the four positional-naming fields outright — `backtick_key`,
@@ -317,6 +317,29 @@ is an identity at this point).
       asserting a config without them still loads.
       Exit: `grep -rn "backtick_key\|quote_key\|bracket_key\|parentheses_key"`
       over `crates/`/`apps/` finds only error text and tests; §13 updated.
+      **Done 2026-10-28** — the plan's premise ("`field.*` replaces them" already)
+      was wrong: `ExtrasOptions` _was_ the live naming path (`to_attributes`), and
+      golden 15 froze its effect (`id`/`level`/`author`/`summary`). So the
+      replacement was built before the deletion — `PositionalNames { bracket,
+      paren, tick, quote }` + `PositionalNames::resolve(Option<&FieldConfig>)` in
+      `crates/extra/src/typed.rs` (D-5 note in `DECISIONS.md`): the groups come
+      from `field.bracket.bare` / `field.paren.bare`, the items from
+      `field.specs.tick` / `field.specs.quote`, an entry with no `field.*` keeps
+      `slug` / `title`, and an unassigned position under a configured entry falls
+      back to its qualified path (`bracket.bare`, `paren.bare`, `specs.tick`,
+      `specs.quote`). `TypedComponent` now carries the entry's `FieldConfig`
+      (`#[serde(skip)]`) instead of a bespoke struct, and `keys_for(_opt)` became
+      `names_for(_opt)`. Deleted: `PositionalKeys` (crate + CLI + renderer + the
+      four TOML keys) and the `KEY`-named fields everywhere; fixture 15,
+      `sandbox/directive` and `sandbox/ultimate` migrate to `field.*` with
+      **byte-identical** output. Fail-fast: an unknown entry key is a load error
+      (the entry vocabulary is closed) and an unknown `[[task]]` key aborts the
+      run with exit 2 (§13 table now says Error; §14 records the removal). Two
+      stale sandboxes lost their junk keys (`syntect`'s `css_embed`, `list/
+      regular`'s `description`). New tests: one loop asserting each of the four
+      removed keys is a load error, a `field.*` entry that still loads, an unknown
+      entry key, and an unknown `[[task]]` key (CLI, exit 2). Workspace 733 pass,
+      0 fail, **zero** golden bytes moved.
 
 ## Phase 3 — specs
 

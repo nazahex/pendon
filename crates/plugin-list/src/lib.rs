@@ -90,9 +90,9 @@ pub fn process(events: &[Event], options: &ListOptions) -> Vec<Event> {
     let keys = |target: Option<&str>| {
         options
             .unordered
-            .keys_for_opt(target)
-            .or_else(|| options.ordered.keys_for_opt(target))
-            .or_else(|| options.list.keys_for_opt(target))
+            .names_for_opt(target)
+            .or_else(|| options.ordered.names_for_opt(target))
+            .or_else(|| options.list.names_for_opt(target))
             .unwrap_or_default()
     };
     let bindings = bind_decorators(events, &keys, list_target);

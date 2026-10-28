@@ -15,6 +15,9 @@
 //!   A type that ends on a symbol (`@@anchorA.`) is a type-only head and the
 //!   symbol stays literal text.
 
+use crate::field::{FieldConfig, Path, SPECS_NAMESPACE};
+use crate::preset::fallback_path;
+use crate::slot::{Slot, SlotKind};
 use crate::value::{classify_scalar, AttrValue, SPREAD_KEY};
 
 /// Why a head was rejected.
@@ -44,9 +47,9 @@ pub enum ExtrasItem {
     Class(String),
     /// `#name`
     Id(String),
-    /// `` `value` `` — mapped to `backtick_key` (`slug` by default).
+    /// `` `value` `` — mapped to the `tick` name (`slug` by default).
     Slug(String),
-    /// `"value"` / `'value'` — mapped to `quote_key` (`title` by default).
+    /// `"value"` / `'value'` — mapped to the `quote` name (`title` by default).
     Title(String),
     /// `key: value`
     Prop { key: String, value: AttrValue },
@@ -112,84 +115,98 @@ pub fn read_number_mark(input: &str) -> Option<(NumberMark, usize)> {
 pub struct ExtrasHead {
     /// `type` of `@@type{…}`; `None` for `@@{…}`.
     pub type_marker: Option<String>,
-    /// Raw contents of the optional `[…]` group (key = `bracket_key`).
+    /// Raw contents of the optional `[…]` group (name = `bracket`).
     pub bracket: Option<String>,
     /// Raw contents of the optional `(\u2026)` group, unquoted
-    /// (key = `parentheses_key`).
+    /// (name = `paren`).
     pub parentheses: Option<String>,
     pub items: Vec<ExtrasItem>,
 }
 
-/// Positional names, per component (§6.1).
+/// The public field each positional content of a head lands in (§6.1).
 ///
-/// `` `x` `` → `backtick_key` and `"x"` → `quote_key`; a directive **head**
-/// additionally maps `[x]` to `bracket_key` and `("x")` to `parentheses_key`.
+/// A head has at most four positional contents — the `[…]` / `(…)` **groups** and
+/// the `` `…` `` / `"…"` **items** — and each of them lands in exactly one field.
+/// The built-in names are `slug` / `title`; an entry's `field.*` keys rename them
+/// (D-5): `field.bracket.bare`, `field.paren.bare`, `field.specs.tick`,
+/// `field.specs.quote`. [`resolve`](Self::resolve) is the only place that reads
+/// those keys for naming.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExtrasOptions {
-    pub backtick_key: String,
-    pub quote_key: String,
-    pub bracket_key: String,
-    pub parentheses_key: String,
+pub struct PositionalNames {
+    /// `[…]` — `field.bracket.bare`.
+    pub bracket: String,
+    /// `(…)` — `field.paren.bare`.
+    pub paren: String,
+    /// `` `…` `` — `field.specs.tick`.
+    pub tick: String,
+    /// `"…"` — `field.specs.quote`.
+    pub quote: String,
 }
 
-impl Default for ExtrasOptions {
+impl Default for PositionalNames {
     fn default() -> Self {
         Self {
-            backtick_key: "slug".to_string(),
-            quote_key: "title".to_string(),
-            bracket_key: "slug".to_string(),
-            parentheses_key: "title".to_string(),
+            bracket: "slug".to_string(),
+            paren: "title".to_string(),
+            tick: "slug".to_string(),
+            quote: "title".to_string(),
         }
     }
 }
 
-impl ExtrasOptions {
-    pub fn new(backtick_key: impl Into<String>, quote_key: impl Into<String>) -> Self {
+impl PositionalNames {
+    /// The two **item** names, leaving the groups at their built-ins (§6.1).
+    pub fn new(tick: impl Into<String>, quote: impl Into<String>) -> Self {
         Self {
-            backtick_key: backtick_key.into(),
-            quote_key: quote_key.into(),
+            tick: tick.into(),
+            quote: quote.into(),
             ..Self::default()
         }
     }
-}
 
-/// The per-component §11 positional overrides: `backtick_key` / `quote_key`
-/// (§6.1) and — for directive heads — `bracket_key` / `parentheses_key`.
-///
-/// Every field is optional, so a component entry that overrides none keeps the
-/// built-in default for each key (§11 rule 5); [`resolve`](Self::resolve) fills
-/// the gaps. This is the config-side (all-`Option`) form of [`ExtrasOptions`].
-#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(default)]
-pub struct PositionalKeys {
-    pub backtick_key: Option<String>,
-    pub quote_key: Option<String>,
-    pub bracket_key: Option<String>,
-    pub parentheses_key: Option<String>,
-}
-
-impl PositionalKeys {
-    /// `true` when the entry overrides no positional key at all.
-    pub fn is_empty(&self) -> bool {
-        self.backtick_key.is_none()
-            && self.quote_key.is_none()
-            && self.bracket_key.is_none()
-            && self.parentheses_key.is_none()
-    }
-
-    /// Fills the §6.1 default for every key the entry left unset.
-    pub fn resolve(&self) -> ExtrasOptions {
-        let default = ExtrasOptions::default();
-        ExtrasOptions {
-            backtick_key: self.backtick_key.clone().unwrap_or(default.backtick_key),
-            quote_key: self.quote_key.clone().unwrap_or(default.quote_key),
-            bracket_key: self.bracket_key.clone().unwrap_or(default.bracket_key),
-            parentheses_key: self
-                .parentheses_key
-                .clone()
-                .unwrap_or(default.parentheses_key),
+    /// The names the matched `custom` entry configures (D-5, D-7).
+    ///
+    /// `None` — no entry, or an entry that configured no `field.*` key — keeps
+    /// every built-in name, which is the D-7 "preset is alive" case. Otherwise
+    /// each name is the entry's assignment, and a position it left **unassigned**
+    /// falls back to its own qualified spelling: `bracket.bare` / `paren.bare` for
+    /// the groups (D-7) and `specs.tick` / `specs.quote` for the items (§6.3,
+    /// S2-3.2). A name the user chose is therefore never silently reused for an
+    /// unnamed position, and an unnamed value is never lost.
+    pub fn resolve(config: Option<&FieldConfig>) -> Self {
+        let Some(config) = config.filter(|config| !config.is_empty()) else {
+            return Self::default();
+        };
+        Self {
+            bracket: slot_name(config, Slot::Bracket, SlotKind::Bare),
+            paren: slot_name(config, Slot::Paren, SlotKind::Bare),
+            tick: specs_name(config, "tick"),
+            quote: specs_name(config, "quote"),
         }
     }
+}
+
+/// One slot position's assigned name, or the qualified bare name it falls back
+/// to (D-7).
+fn slot_name(config: &FieldConfig, slot: Slot, kind: SlotKind) -> String {
+    match config.assignment(slot, kind) {
+        Some(Some(path)) => path.dotted(),
+        _ => fallback_path(slot, kind).dotted(),
+    }
+}
+
+/// One specs position's assigned name, or its `specs.<k>` spelling (§6.3).
+fn specs_name(config: &FieldConfig, key: &str) -> String {
+    match config.specs().get(key) {
+        Some(Some(path)) => path.dotted(),
+        _ => specs_path(key).dotted(),
+    }
+}
+
+/// `<specs>.<k>` as a [`Path`]; the one place the namespace literal is built.
+fn specs_path(key: &str) -> Path {
+    Path::from_segments(&[SPECS_NAMESPACE, key])
+        .expect("`specs` and its keys are valid path segments")
 }
 
 /// Outcome of scanning extras off the front of some text.
@@ -228,9 +245,9 @@ pub struct DirectiveHead {
     pub count: usize,
     /// `None` for a bare fence, which only closes an open directive (§10.3).
     pub type_marker: Option<String>,
-    /// Raw contents of `[…]` (key = `bracket_key`).
+    /// Raw contents of `[…]` (name = `bracket`).
     pub bracket: Option<String>,
-    /// Raw contents of `(…)` (key = `parentheses_key`), unquoted.
+    /// Raw contents of `(…)` (name = `paren`), unquoted.
     pub parentheses: Option<String>,
 }
 
@@ -938,15 +955,15 @@ fn is_key(text: &str) -> bool {
 // ----------------------------------------------------- extras → attributes
 
 /// Maps a head onto attributes in the deterministic §6.4 order: `class`, `id`,
-/// the positional keys (`bracket_key`, `parentheses_key`, `backtick_key`, then
-/// `quote_key`), then every remaining prop and flag in source order with `style`
-/// where the first `style:` prop or `--var` item appeared.
+/// the positional names (`bracket`, `paren`, `tick`, then `quote`), then every
+/// remaining prop and flag in source order with `style` where the first
+/// `style:` prop or `--var` item appeared.
 ///
 /// A positional **group** (`[…]` / `(…)` of §6.1) wins over a same-key item of
 /// the `{…}` body: the item is dropped with an `Overridden` warning (§6.2
 /// head-wins style). A `class` / `id` collision is left to the §6.4 collapse
 /// below, where the later group value wins at the first occurrence's position.
-pub fn to_attributes(head: &ExtrasHead, options: &ExtrasOptions) -> Attrs {
+pub fn to_attributes(head: &ExtrasHead, names: &PositionalNames) -> Attrs {
     let mut classes: Vec<String> = Vec::new();
     let mut id: Option<String> = None;
     let mut slug: Option<String> = None;
@@ -957,23 +974,23 @@ pub fn to_attributes(head: &ExtrasHead, options: &ExtrasOptions) -> Attrs {
     let mut warnings = Vec::new();
 
     // §6.1: the positional groups of the head itself, mapped through their
-    // keys. They occupy the §6.4 slot before the body's positional items and
+    // names. They occupy the §6.4 slot before the body's positional items and
     // win every key collision with them.
     let mut group_keys: Vec<&str> = Vec::new();
     let mut groups: Vec<(String, ExtrasAttr)> = Vec::new();
     if let Some(bracket) = &head.bracket {
         groups.push((
-            options.bracket_key.clone(),
+            names.bracket.clone(),
             ExtrasAttr::Value(AttrValue::Str(bracket.clone())),
         ));
-        group_keys.push(&options.bracket_key);
+        group_keys.push(&names.bracket);
     }
     if let Some(parentheses) = &head.parentheses {
         groups.push((
-            options.parentheses_key.clone(),
+            names.paren.clone(),
             ExtrasAttr::Value(AttrValue::Str(parentheses.clone())),
         ));
-        group_keys.push(&options.parentheses_key);
+        group_keys.push(&names.paren);
     }
 
     for item in &head.items {
@@ -986,18 +1003,18 @@ pub fn to_attributes(head: &ExtrasHead, options: &ExtrasOptions) -> Attrs {
                 }
             }
             ExtrasItem::Slug(value) => {
-                if group_keys.contains(&options.backtick_key.as_str()) {
+                if group_keys.contains(&names.tick.as_str()) {
                     warnings.push(ExtrasWarning::Overridden {
-                        key: options.backtick_key.clone(),
+                        key: names.tick.clone(),
                     });
                 } else {
                     slug = Some(value.clone());
                 }
             }
             ExtrasItem::Title(value) => {
-                if group_keys.contains(&options.quote_key.as_str()) {
+                if group_keys.contains(&names.quote.as_str()) {
                     warnings.push(ExtrasWarning::Overridden {
-                        key: options.quote_key.clone(),
+                        key: names.quote.clone(),
                     });
                 } else {
                     title = Some(value.clone());
@@ -1051,14 +1068,11 @@ pub fn to_attributes(head: &ExtrasHead, options: &ExtrasOptions) -> Attrs {
     }
     items.extend(groups);
     if let Some(slug) = slug {
-        items.push((
-            options.backtick_key.clone(),
-            ExtrasAttr::Value(AttrValue::Str(slug)),
-        ));
+        items.push((names.tick.clone(), ExtrasAttr::Value(AttrValue::Str(slug))));
     }
     if let Some(title) = title {
         items.push((
-            options.quote_key.clone(),
+            names.quote.clone(),
             ExtrasAttr::Value(AttrValue::Str(title)),
         ));
     }
@@ -1276,7 +1290,7 @@ mod tests {
     #[test]
     fn the_marker_becomes_the_internal_number_attribute() {
         let (parsed, _) = head("@@headingA{foo: \"bar\"}%%%numberB");
-        let attrs = to_attributes(&parsed, &ExtrasOptions::default());
+        let attrs = to_attributes(&parsed, &PositionalNames::default());
         let value = attrs.value("__number").expect("a __number value");
         assert_eq!(
             value.literal(),

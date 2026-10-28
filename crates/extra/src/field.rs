@@ -464,6 +464,13 @@ fn nested(entries: &[(&Path, &AttrValue)], depth: usize) -> Vec<(String, AttrVal
     object
 }
 
+/// The dotted namespace of the five specs positions (§6.3, D-5).
+///
+/// Written once because two things build a `specs.*` path: the config parser
+/// (`field.specs.tick`) and the naming fallback an unassigned specs position
+/// keeps ([`crate::PositionalNames`]).
+pub const SPECS_NAMESPACE: &str = "specs";
+
 /// The five specs positions a field can be assigned to (§6.3, D-5).
 ///
 /// `specs` is a **field namespace**, not a slot: a modifier never lives inside

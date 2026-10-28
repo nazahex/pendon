@@ -222,7 +222,7 @@ fn golden_14_marker() {
     assert_fixture("14-marker");
 }
 
-/// §16.3 fixture 15: `::…::` nesting 2..7, `bracket_key`/`parentheses_key`
+/// §16.3 fixture 15: `::…::` nesting 2..7, `field.*` naming the head slots
 /// (§10.2).
 #[test]
 fn golden_15_directive_inline() {

@@ -183,6 +183,27 @@ express slot vs specs, and the proposal already fixed the dotted spelling.
 when _assigned_. TOML dotted keys are already what `serde` sees, so the parser
 change is mostly `#[serde(rename)]` + validation (Phase 2).
 
+> **Implementation note (S2-2.8).** The four old keys were **live**, not dead
+> config: `ExtrasOptions` named a head's four positional contents and
+> `to_attributes` emitted those names, so deleting the keys without a replacement
+> would have moved golden 15's bytes. The replacement is the config-side type
+> itself: `PositionalNames { bracket, paren, tick, quote }` +
+> `PositionalNames::resolve(Option<&FieldConfig>)` (`crates/extra/src/typed.rs`),
+> resolved in the renderer's component set (`names_for`) from the matched entry's
+> `field.*`. `resolve` is the only reader of D-5 for naming:
+>
+> - `field.bracket.bare` / `field.paren.bare` name the two groups;
+> - `field.specs.tick` / `field.specs.quote` name the two items;
+> - an entry that configures **nothing** keeps `slug` / `title` (the preset is
+>   alive, D-7); once it configures **anything**, an unassigned position falls back
+>   to its own qualified path (`bracket.bare`, `paren.bare`, and — because specs
+>   become map entries in Phase 3 — `specs.tick`, `specs.quote`).
+>
+> `TypedComponent` now carries the entry's `FieldConfig` (not a bespoke naming
+> struct), which is also the shape Phase 4 needs. Because the naming path is the
+> only consumer, no golden byte moved: fixture 15 migrates its four keys to
+> `field.*` and renders identically.
+
 ---
 
 ## D-6 — Selection vocabulary and the default preset

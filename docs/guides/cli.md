@@ -93,9 +93,11 @@ for why the cache is shaped this way.
 
 Each `[[task]]` names `input` (a glob with `[slug]`-style placeholders),
 `output`, `plugin`, and `format`, plus optional keys such as `name`, `pretty`
-and `[task.<plugin>]` layers (see each `crates/plugin-*/README.md`). Unknown
-keys are reported as warnings and otherwise ignored (see `docs/spec/SYNTAX.md`
-§13); they are never a silent no-op.
+and `[task.<plugin>]` layers (see each `crates/plugin-*/README.md`). **An
+unknown key is a load error** — in a `[[task]]` table and in a `[[task.<plugin>.custom]]`
+entry alike — so the build aborts (exit 2) before any file is rendered instead of
+ignoring a typo (see `docs/spec/SYNTAX.md` §13, D-16). A removed key is an
+unknown key: there is no compatibility surface (§14).
 
 ### `no_cache`
 

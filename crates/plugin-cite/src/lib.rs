@@ -806,7 +806,7 @@ fn parse_cite_extra_attrs(
 /// accumulates (§6.4) and bare flags stay bare attributes (§6.3).
 fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead, options: &CiteOptions) {
     // §6.1/§11 rule 5: the entry answering this marker names the extras keys.
-    let keys = options.custom.keys_for(head.type_marker.as_deref());
+    let keys = options.custom.names_for(head.type_marker.as_deref());
     let parsed = to_attributes(head, &keys);
     for warning in &parsed.warnings {
         extra.warnings.push(pendon_extra::warning_message(warning));
@@ -814,12 +814,10 @@ fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead, options: &Ci
 
     // §6.2: `#id` > extras `slug`; both feed the `cite-id` slot.
     let extras_id = parsed.value("id").map(|value| value.literal());
-    let extras_slug = parsed
-        .value(&keys.backtick_key)
-        .map(|value| value.literal());
+    let extras_slug = parsed.value(&keys.tick).map(|value| value.literal());
 
     for (key, value) in &parsed.items {
-        if key == "id" || key == &keys.backtick_key {
+        if key == "id" || key == &keys.tick {
             continue;
         }
         match value {

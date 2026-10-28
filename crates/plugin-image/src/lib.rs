@@ -3,8 +3,8 @@ use pendon_core::{
     Pipeline, Severity,
 };
 use pendon_extra::{
-    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead, ExtrasOptions,
-    FieldName, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag,
+    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead, FieldName,
+    PositionalNames, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag,
 };
 use pendon_plugin_markdown::process as process_markdown;
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
@@ -656,8 +656,8 @@ fn build_parsed_image(
             // positional keys, across the `img` and `figure` layers.
             let keys = options
                 .img
-                .keys_for_opt(head.type_marker.as_deref())
-                .or_else(|| options.figure.keys_for_opt(head.type_marker.as_deref()))
+                .names_for_opt(head.type_marker.as_deref())
+                .or_else(|| options.figure.names_for_opt(head.type_marker.as_deref()))
                 .unwrap_or_default();
             image_attrs_from_head(head, &mut flags, &mut warnings, &keys)
         }
@@ -703,7 +703,7 @@ fn image_attrs_from_head(
     head: &ExtrasHead,
     flags: &mut Vec<String>,
     warnings: &mut Vec<String>,
-    keys: &ExtrasOptions,
+    keys: &PositionalNames,
 ) -> ImageAttrs {
     let parsed = to_attributes(head, keys);
     for warning in &parsed.warnings {
@@ -712,7 +712,7 @@ fn image_attrs_from_head(
 
     let mut attrs = ImageAttrs::default();
     for (key, value) in &parsed.items {
-        if key == "id" || key == &keys.backtick_key {
+        if key == "id" || key == &keys.tick {
             continue;
         }
         match (key.as_str(), value) {
@@ -726,10 +726,10 @@ fn image_attrs_from_head(
         }
     }
 
-    // §6.2: `#id` beats the extras `slug` (the resolved `backtick_key`).
+    // §6.2: `#id` beats the extras `slug` (the resolved `tick` name).
     attrs.id = parsed
         .value("id")
-        .or_else(|| parsed.value(&keys.backtick_key))
+        .or_else(|| parsed.value(&keys.tick))
         .map(|value| value.literal());
     attrs
 }

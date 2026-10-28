@@ -88,9 +88,12 @@ for interpreting the parsed properties.
   table **fails to compile** rather than at load. Voiding a preset is the
   entry's job: one `field.*` key in the matched `custom` entry disables the whole
   table for that entry (D-7, `FieldConfig::is_empty`).
-- **Positional keys** — `ExtrasOptions` / `PositionalKeys` / `KeyResolver` for
-  the §6.1 per-component `backtick_key` / `quote_key` (and, for directive heads,
-  `bracket_key` / `parentheses_key`).
+- **Positional names** — `PositionalNames` / `NamesResolver`: what each of the
+  head's four positional contents is called (`bracket`, `paren`, `tick`,
+  `quote`). [`PositionalNames::resolve`] is the only read side of the entry's
+  `field.*` naming (`field.bracket.bare` / `field.paren.bare` /
+  `field.specs.tick` / `field.specs.quote` — §6.1, D-5); an entry that configures
+  nothing keeps the built-in `slug` / `title`.
 
 ## The retired form
 

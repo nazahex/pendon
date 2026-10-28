@@ -83,7 +83,7 @@ pub fn warning_message(warning: &ExtrasWarning) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::typed::{to_attributes, ExtrasOptions};
+    use crate::typed::{to_attributes, PositionalNames};
 
     fn chars(text: &str) -> Vec<char> {
         text.chars().collect()
@@ -134,7 +134,7 @@ mod tests {
             ExtrasMatch::Head { head, .. } => head,
             other => panic!("expected head, got {other:?}"),
         };
-        let attrs = to_attributes(&head, &ExtrasOptions::default());
+        let attrs = to_attributes(&head, &PositionalNames::default());
         let mut out = Vec::new();
         emit_attrs(&attrs, &mut out);
         let names: Vec<String> = out

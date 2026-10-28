@@ -24,14 +24,14 @@ directly after `}}`:
   `@@` head accepts them (uniform grammar; a repo grep found zero existing
   `@@type[` / `{{type}}[` patterns — no meaning changes).
 - Marker order: groups right after `}}`, **before** any extras head. They map
-  through `keys_for(marker type)` → `bracket_key` / `parentheses_key` (§6.1).
+  through `names_for(marker type)` → `bracket` / `paren` (§6.1; the names come
+  from the entry's `field.*` since S2-2.8).
 - **Key collision:** the positional group wins over a same-key `{…}` item; the
   dropped value reports an §13 `Overridden` warning (§6.2 head-wins style).
 - **Malformed group** (`[` or `(` without its closer) ⇒ `UnterminatedHead` ⇒ the
   head/line stays literal text (§4.3), matching directive behaviour.
-- **Emission order** (§6.4): `class`, `id`, then the positional keys — `bracket_key`,
-  `parentheses_key`, `backtick_key`, `quote_key` — then remaining props/flags in
-  source order.
+- **Emission order** (§6.4): `class`, `id`, then the positional names — `bracket`,
+  `paren`, `tick`, `quote` — then remaining props/flags in source order.
 - **Layer order** (now §6.1): the groups belong to the layer that runs first. Under
   the canonical order (`anchor` before `marker`) a marker keeps no attribute from an
   adjacent `[x]("y")` pair (the anchor claims it); swapping the entries hands the

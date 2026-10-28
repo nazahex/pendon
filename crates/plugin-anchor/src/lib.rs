@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
-    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead, FieldName, KeyResolver,
-    Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag,
+    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead, FieldName,
+    NamesResolver, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 
@@ -127,7 +127,7 @@ fn emit_text(text: &str, options: &AnchorOptions, out: &mut Vec<Event>) {
 
         if chars[cursor] == '[' && !is_image_syntax {
             if let Some(link) = parse_link(&chars, cursor) {
-                let keys = |target: Option<&str>| options.custom.keys_for(target);
+                let keys = |target: Option<&str>| options.custom.names_for(target);
                 let built = build_attributes(&link.target, link.extras.as_ref(), &keys);
                 flush_text(&mut normal, out);
 
@@ -218,7 +218,7 @@ struct AnchorAttrs {
 fn build_attributes(
     encoded_target: &str,
     extras: Option<&ExtrasHead>,
-    keys: KeyResolver,
+    keys: NamesResolver,
 ) -> AnchorAttrs {
     let (encoded_url, title) = encoded_target
         .split_once('\u{0}')
@@ -306,11 +306,9 @@ fn build_attributes(
         for warning in &parsed.warnings {
             warnings.push(pendon_extra::warning_message(warning));
         }
-        let positional_id = parsed
-            .value(&resolved.backtick_key)
-            .map(|value| value.literal());
+        let positional_id = parsed.value(&resolved.tick).map(|value| value.literal());
         for (key, value) in &parsed.items {
-            if key == &resolved.backtick_key {
+            if key == &resolved.tick {
                 continue;
             }
             if key == "href" {

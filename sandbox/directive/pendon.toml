@@ -9,10 +9,10 @@ no_cache = true
 [[task.directive.custom]]
 type = ["DireA", "DirA"]
 name = "DireA"
-bracket_key = "label"
-parentheses_key = "kind"
-backtick_key = "author"
-quote_key = "summary"
+field.bracket.bare = "label"
+field.paren.bare = "kind"
+field.specs.tick = "author"
+field.specs.quote = "summary"
 imports = "import { DireA } from '@comp/DireA'"
 template = "<DireA slug={\"{attrs.slug}\"} title={\"{attrs.title}\"} type={\"{attrs.type}\"} {...attrs}>{children}</DireA>"
 

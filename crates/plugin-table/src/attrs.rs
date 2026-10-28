@@ -1,7 +1,7 @@
 // src/attrs.rs
 use crate::parser::Align;
 use pendon_core::Event;
-use pendon_extra::{to_attributes, ExtrasAttr, ExtrasHead, ExtrasOptions};
+use pendon_extra::{to_attributes, ExtrasAttr, ExtrasHead, PositionalNames};
 
 /// The attributes of one table layer (table/caption/thead/tbody/tfoot/row/cell).
 ///
@@ -32,7 +32,7 @@ pub struct LayerAttrs {
 /// stay bare attributes. The marker is carried as a `type` property (first) so
 /// both renderers see it; an explicit `type:` prop keeps its own value.
 pub fn extras_to_layer(head: &ExtrasHead) -> LayerAttrs {
-    let parsed = to_attributes(head, &ExtrasOptions::default());
+    let parsed = to_attributes(head, &PositionalNames::default());
     let mut layer = LayerAttrs {
         type_marker: head.type_marker.clone(),
         ..LayerAttrs::default()

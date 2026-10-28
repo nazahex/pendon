@@ -84,7 +84,7 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## In progress
 
-- [ ] **Stage 2 — Phase 0 and Phase 1 done, Phase 2 in progress.** Docs live in
+- [ ] **Stage 2 — Phases 0–2 done; Phase 3 is next.** Docs live in
       [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md).
       **Phase 0 complete 2026-10-28**: D-1…D-17 signed (D-16 = clean total
       replacement: no compat, no warnings, no migration doc, old configs fail
@@ -132,9 +132,17 @@ exactly one `export const headings` line each (no bytes removed), and
       `render_attrs_except` + `Link`), `AttrValue` gained `Null` and a total
       `from_json` so a bound value survives the round trip, and the JSON/AST
       renderers needed no call site (their `attrs` _is_ the projection). Zero
-      golden bytes moved — that is the proof. Next: `S2-2.8` (delete
-      `backtick_key`/`quote_key`/`bracket_key`/`parentheses_key`; an unknown key
-      becomes a load error).
+      golden bytes moved — that is the proof. `S2-2.8` done: the four naming
+      keys are gone (a leftover `backtick_key`/`quote_key`/`bracket_key`/
+      `parentheses_key` is a load error, one test each) and their job is now
+      `field.*` — `PositionalNames::resolve` reads `field.bracket.bare` /
+      `field.paren.bare` / `field.specs.tick` / `field.specs.quote` off the
+      matched entry (which now carries its `FieldConfig` instead of a bespoke
+      naming struct). Fixture 15 and `sandbox/{directive,ultimate}` moved to
+      `field.*` with **byte-identical** output. Fail-fast is complete: an unknown
+      `custom` entry key and an unknown `[[task]]` key are both load errors
+      (§13 = Error), and an unknown entry key test pins the closed vocabulary.
+      **Phase 2 complete.** Next: Phase 3 (`S2-3.1`).
       No `MIGRATION.md` by policy.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
@@ -213,7 +221,7 @@ exactly one `export const headings` line each (no bytes removed), and
   scratch copy — the gate never depends on a sandbox staying in sync.
 
 - **§11 threading gaps** (from the positional-keys pass):
-  - `plugin-table`: `extras_to_layer(head)` still uses `ExtrasOptions::default()`;
+  - `plugin-table`: `extras_to_layer(head)` still uses `PositionalNames::default()`;
     thread `TableOptions` into the 7-layer head scan.
   - `plugin-wiki`: `WikiOptions` carries no `ComponentSet`, so extras stay on the
     built-in `slug`/`title`; add `[task.wiki.custom]` to lift this.

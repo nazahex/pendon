@@ -6,15 +6,16 @@ plugin = "micromatter,directive,markdown"
 format = "solid"
 
 # §10.2: the `directive` primary layer, addressed by the plugin's own key.
-# §11: the entry renames the positional slots — `[bracket]`→`id`,
-# `("paren")`→`level`, a backticked item→`author`, a quoted item→`summary`.
+# §6.1/D-5: the entry renames the positional slots through `field.*` —
+# `[bracket]`→`id`, `("paren")`→`level`, a backticked item→`author`, a quoted
+# item→`summary`.
 [[task.directive.custom]]
 type = ["note"]
 name = "Note"
-bracket_key = "id"
-parentheses_key = "level"
-backtick_key = "author"
-quote_key = "summary"
+field.bracket.bare = "id"
+field.paren.bare = "level"
+field.specs.tick = "author"
+field.specs.quote = "summary"
 imports = "import { Note } from '@comp/Directive'"
 template = "<Note {...attrs}>{children}</Note>"
 

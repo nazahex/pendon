@@ -24,7 +24,7 @@
 use pendon_core::{Event, NodeKind};
 
 use crate::typed::{parse_extras, to_attributes, Attrs, ExtrasMatch};
-use crate::KeyResolver;
+use crate::NamesResolver;
 
 /// Nodes whose text is copied verbatim (§4.3): a decorator-looking line inside
 /// a code fence or raw HTML is literal text.
@@ -99,7 +99,7 @@ pub struct Bindings {
 /// Returns `None` for a blank line, for a line that is not a head at all and for
 /// a malformed head (§4.3 keeps those literal). Trailing text after the head
 /// also disqualifies the line: a decorator is the line's *entire* content.
-pub fn parse_decorator_line(line: &str, keys: KeyResolver) -> Option<DecoratorLine> {
+pub fn parse_decorator_line(line: &str, keys: NamesResolver) -> Option<DecoratorLine> {
     let trimmed = line.trim();
     if trimmed.is_empty() {
         return None;
@@ -156,7 +156,7 @@ fn decorator_paragraph(events: &[Event], line: usize) -> Option<(usize, usize)> 
 /// The decorator lines of `events`, each with the paragraph it owns.
 fn decorator_lines(
     events: &[Event],
-    keys: KeyResolver,
+    keys: NamesResolver,
 ) -> Vec<(usize, DecoratorLine, (usize, usize))> {
     let mut excluded = 0usize;
     let mut raw: Vec<(usize, DecoratorLine)> = Vec::new();
@@ -210,7 +210,7 @@ fn mark_removed(removed: &mut [bool], (start, end): (usize, usize)) {
 /// such a paragraph into two. A paragraph that is *only* decorator lines (the
 /// blank-line spelling) or that has no non-blank content after the run is left
 /// untouched, so the transform is idempotent.
-fn split_leading_decorator_paragraphs(events: &[Event], keys: KeyResolver) -> Vec<Event> {
+fn split_leading_decorator_paragraphs(events: &[Event], keys: NamesResolver) -> Vec<Event> {
     let mut out: Vec<Event> = Vec::with_capacity(events.len() + 4);
     let mut i = 0;
     while i < events.len() {
@@ -245,7 +245,7 @@ fn split_leading_decorator_paragraphs(events: &[Event], keys: KeyResolver) -> Ve
 /// The offset inside a paragraph's inner events where a leading run of decorator
 /// lines ends and the decorated block begins. `None` when the paragraph does not
 /// start with a decorator run or has no non-blank content after it.
-fn leading_decorator_split(inner: &[Event], keys: KeyResolver) -> Option<usize> {
+fn leading_decorator_split(inner: &[Event], keys: NamesResolver) -> Option<usize> {
     let mut k = 0;
     let mut run_end = None;
     while k < inner.len() {
@@ -298,7 +298,7 @@ fn leading_decorator_split(inner: &[Event], keys: KeyResolver) -> Option<usize> 
 /// nothing is bound.
 pub fn bind_decorators(
     events: &[Event],
-    keys: KeyResolver,
+    keys: NamesResolver,
     target: impl Fn(&[Event], usize) -> Option<usize>,
 ) -> Bindings {
     // §9.1: the canonical spelling puts the decorator line *touching* its block
@@ -430,7 +430,7 @@ pub fn bind_decorators(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ExtrasOptions;
+    use crate::PositionalNames;
     use pendon_core::{parse, Options};
 
     fn document(src: &str) -> Vec<Event> {
@@ -477,7 +477,7 @@ mod tests {
         let events = document(src);
         bind_decorators(
             &events,
-            &|_: Option<&str>| ExtrasOptions::default(),
+            &|_: Option<&str>| PositionalNames::default(),
             list_target,
         )
     }
@@ -624,7 +624,7 @@ mod tests {
 
     #[test]
     fn parse_decorator_line_rejects_non_heads() {
-        let keys = |_: Option<&str>| ExtrasOptions::default();
+        let keys = |_: Option<&str>| PositionalNames::default();
         assert!(parse_decorator_line("", &keys).is_none());
         assert!(parse_decorator_line("   ", &keys).is_none());
         assert!(parse_decorator_line("plain text", &keys).is_none());
@@ -641,7 +641,7 @@ mod tests {
     /// lines; a plain `[x](y)` line is not (omitting `@@` means link, §4.1).
     #[test]
     fn positional_groups_make_a_decorator_line() {
-        let keys = |_: Option<&str>| ExtrasOptions::default();
+        let keys = |_: Option<&str>| PositionalNames::default();
 
         let line =
             parse_decorator_line("@@aside[intro](\"T\"){.box}", &keys).expect("decorator line");

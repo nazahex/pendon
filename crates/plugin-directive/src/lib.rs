@@ -99,9 +99,10 @@ pub(crate) fn is_verbatim(kind: &NodeKind) -> bool {
     )
 }
 
-/// §6.1/§11 rule 5: the entry that answers this directive `type` names the head
-/// slots — `bracket_key` (default `slug`) for `[…]` and `parentheses_key`
-/// (default `title`) for `("…")` — and the extras head's backtick/quote keys.
+/// §6.1/D-5: the entry that answers this directive `type` names the head slots
+/// through its `field.*` — `field.bracket.bare` (default `slug`) for `[…]` and
+/// `field.paren.bare` (default `title`) for `("…")` — and the extras head's
+/// `field.specs.tick` / `field.specs.quote`.
 /// Both head slots win over an extras head that sets the same key (§10.4).
 /// Returns the parsed directive and how many bytes of `rest` the adjacent extras
 /// head consumed (zero when there is none, §4.1/§4.3).
@@ -115,18 +116,18 @@ pub(crate) fn resolve_head(
         ..ParsedDirective::default()
     };
 
-    let keys = options.custom.keys_for(head.type_marker.as_deref());
+    let keys = options.custom.names_for(head.type_marker.as_deref());
 
     let mut head_attrs = Attrs::default();
     if let Some(bracket) = &head.bracket {
         head_attrs.push(
-            keys.bracket_key.clone(),
+            keys.bracket.clone(),
             ExtrasAttr::Value(AttrValue::Str(bracket.clone())),
         );
     }
     if let Some(parentheses) = &head.parentheses {
         head_attrs.push(
-            keys.parentheses_key.clone(),
+            keys.paren.clone(),
             ExtrasAttr::Value(AttrValue::Str(parentheses.clone())),
         );
     }

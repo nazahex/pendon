@@ -52,9 +52,9 @@ That has three consequences the proposals asked to remove:
    component's `import` line never appears.
 5. **A config `type` that is not a selector is a `ConfigError`**, naming the
    layer and the key. Typos never silently become wildcards.
-6. `keys_for` / `keys_for_opt` (positional keys, §6.1) stay **literal-only**:
-   `_`/`*` contribute no `slug`/`title` override, because a wildcard has no
-   single entry to read keys from.
+6. `names_for` / `names_for_opt` (positional names, §6.1) stay
+   **literal-only**: `_`/`*` contribute no `slug`/`title` override, because a
+   wildcard has no single entry to read the names from.
 
 ## Rejected alternatives
 

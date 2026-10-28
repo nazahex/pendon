@@ -16,8 +16,8 @@ then parses the interior of every `Section` this plugin emits.
   indentation, blank line allowed) decorates the **section**, not the heading —
   the heading already owns its extras on its `#` run. The decorator is bound
   through `pendon-extra` like the other block binders, and may carry positional
-  groups (`[…]` / `(…)`) that are resolved via the section type's
-  `bracket_key`/`parentheses_key`.
+  groups (`[…]` / `(…)`) that are resolved through the section type's
+  `field.bracket.bare` / `field.paren.bare` (§6.1).
 - **ID priority.** The section id is the first available of `#sectionID`
   (decorator `#id`) > `` `slug-section` `` (decorator slug) > `` `slug-head` ``
   (heading `[slug]`) > `` `slug-head-extras` `` (heading extras slug) > the slug
@@ -56,9 +56,10 @@ template = "<DocSection {...attrs}>{children}</DocSection>"
 `[task.section.custom.section]` are equivalent. Without a component the built-in
 `<section>` element is used.
 
-### Positional keys (§6.1 / §11 rule 5)
+### Positional names (§6.1, D-5)
 
-An entry may rename the §6.1 positional slots in its extras head: `backtick_key`
-(default `slug`) for a `` `slug` `` item and `quote_key` (default `title`) for a
-`"title"` item. Keys the entry leaves unset keep the built-in default, so an
-entry with no overrides behaves exactly as before.
+An entry renames the §6.1 positional slots through its `field.*` keys —
+`field.specs.tick` / `field.specs.quote` for a `` `slug` `` / `"title"` item. An
+entry that configures none keeps `slug` / `title`; once it configures one the
+preset is void as a whole (D-7). The table is in
+[`docs/spec/SYNTAX.md` §6.1](../../docs/spec/SYNTAX.md).

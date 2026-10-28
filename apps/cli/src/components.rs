@@ -31,7 +31,8 @@ use pendon_extra::{Path, Slot, SlotKind, SPECS_KEYS};
 
 use crate::plugins::parse_import_entries;
 
-/// A fatal configuration problem: §11 rules 2 and 6 are hard errors at load.
+/// A fatal configuration problem: §11 rules 2 and 6 and any unknown key are hard
+/// errors at load (D-16).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConfigError(pub String);
 
@@ -43,17 +44,12 @@ impl fmt::Display for ConfigError {
 
 impl std::error::Error for ConfigError {}
 
-/// Positional naming (§6.1, §11 rule 5): the per-component `backtick_key` /
-/// `quote_key`, plus `bracket_key` / `parentheses_key` for directive heads.
-///
-/// Defined in `pendon-extra` (the all-`Option` config form) so the renderer, the
-/// plugins and the CLI share one shape and one `resolve`.
-pub use pendon_extra::PositionalKeys;
-
 /// §7 field vocabulary — the `field.*` keys of one entry (D-5, ADR-0014).
 ///
 /// Defined in `pendon-extra` with the name rules and the [`pendon_extra::Path`]
-/// type, so this module only maps TOML onto it.
+/// type, so this module only maps TOML onto it. Positional naming reads it too
+/// ([`pendon_extra::PositionalNames::resolve`]): since §14 there is no separate
+/// naming key, so `field.*` is the only way to rename a slot or a specs position.
 pub use pendon_extra::FieldConfig;
 
 /// One `custom` entry: the `type` selectors it answers, its imports and its
@@ -67,7 +63,6 @@ pub struct ComponentEntry {
     pub name: Option<String>,
     pub imports: Vec<ImportEntry>,
     pub template: Option<String>,
-    pub positional: PositionalKeys,
     /// §7 `field.*` — the entry's public-field assignment. Empty for an entry
     /// that configures no fields, which is what keeps the element's preset
     /// assignments alive (D-7).
@@ -93,7 +88,7 @@ impl ComponentEntry {
     /// is not this entry's type.
     ///
     /// Wildcards are resolved per document by the renderer (decision D-3a), so
-    /// they never match here — `keys_for` and the duplicate check are
+    /// they never match here — `names_for` and the duplicate check are
     /// literal-only by design (see `pendon-types`).
     pub fn matches_type(&self, type_marker: &str) -> bool {
         self.selectors
@@ -244,18 +239,10 @@ pub struct LoadedComponents {
 ///
 /// `field` belongs here: `[task.anchor.custom]` with only `field.*` keys is a
 /// (field-only) **entry**, never a layer named `field` (D-8).
-const ENTRY_KEYS: [&str; 10] = [
-    "type",
-    "name",
-    "imports",
-    "import",
-    "template",
-    "field",
-    "backtick_key",
-    "quote_key",
-    "bracket_key",
-    "parentheses_key",
-];
+///
+/// Every other key is a load error (D-16): an entry is a closed vocabulary, so a
+/// typo — or a removed key (§14) — can never be silently ignored.
+const ENTRY_KEYS: [&str; 6] = ["type", "name", "imports", "import", "template", "field"];
 
 /// Loads the `custom` key of one task-level plugin.
 ///
@@ -392,6 +379,18 @@ fn parse_entry(
     table: &toml::Table,
     warnings: &mut Vec<String>,
 ) -> Result<ComponentEntry, ConfigError> {
+    // D-16: the entry vocabulary is closed. A key this version does not know is a
+    // load error, not a warning — a typo or a removed key (§14) must never be
+    // dropped silently and leave the output looking configured.
+    for key in table.keys() {
+        if !ENTRY_KEYS.contains(&key.as_str()) {
+            return Err(ConfigError(format!(
+                "{label}: unknown key `{key}`; a custom entry takes `type`, `name`, \
+                 `imports`, `template` and `field.*` keys (§11, D-16)"
+            )));
+        }
+    }
+
     let tokens: Vec<String> = match table.get("type") {
         None => Vec::new(),
         Some(toml::Value::String(marker)) => vec![marker.clone()],
@@ -440,12 +439,6 @@ fn parse_entry(
         name,
         imports,
         template,
-        positional: PositionalKeys {
-            backtick_key: optional_string(table, "backtick_key", label)?,
-            quote_key: optional_string(table, "quote_key", label)?,
-            bracket_key: optional_string(table, "bracket_key", label)?,
-            parentheses_key: optional_string(table, "parentheses_key", label)?,
-        },
         field,
     };
     // D-8: an entry that carries neither a component nor a `field.*` key says
@@ -1300,5 +1293,65 @@ template = "<H>{{children}}</H>"
                 "{source}: {error}"
             );
         }
+    }
+
+    /// §14/D-16: the four positional-naming keys are **removed**, not aliased.
+    /// Each one is an unknown key now, so a stale config fails the load instead
+    /// of silently keeping `slug` / `title` (the tested `field.*` spelling is
+    /// `field.bracket.bare` / `field.paren.bare` / `field.specs.tick|quote`).
+    #[test]
+    fn each_removed_positional_key_is_a_load_error() {
+        for key in [
+            "backtick_key",
+            "quote_key",
+            "bracket_key",
+            "parentheses_key",
+        ] {
+            let source = format!("[[custom]]\nname = \"Anchor\"\n{key} = \"slug\"\n");
+            let custom = custom_of(&source);
+            let error = load("anchor", "anchor", Some(&custom)).unwrap_err();
+            let message = error.to_string();
+            assert!(message.contains("unknown key"), "{key}: {message}");
+            assert!(message.contains(key), "{key}: {message}");
+        }
+    }
+
+    /// …and the entry that spends its vocabulary on `field.*` still loads: the
+    /// removal above must not turn a valid config into an error.
+    #[test]
+    fn an_entry_with_field_keys_still_loads() {
+        let custom = custom_of(
+            r#"
+            [[custom]]
+            name = "Anchor"
+            field.bracket.bare = "anchor"
+            field.paren.bare = "level"
+            field.specs.tick = "ref"
+            field.specs.quote = "blurb"
+            "#,
+        );
+        let loaded = load("anchor", "anchor", Some(&custom)).unwrap();
+        let layer = loaded.components.layer("anchor").unwrap();
+        let field = layer.field_config(Some("x")).expect("the default entry");
+        assert_eq!(
+            field.assignment(Slot::Bracket, SlotKind::Bare),
+            Some(&Some(Path::from_dotted("anchor").unwrap()))
+        );
+        assert_eq!(
+            field.specs().get("tick"),
+            Some(&Some(Path::from_dotted("ref").unwrap()))
+        );
+    }
+
+    /// D-16: a typo inside an entry is a load error too — the entry vocabulary is
+    /// closed, so nothing is ever dropped silently.
+    #[test]
+    fn an_unknown_entry_key_is_a_load_error() {
+        let custom = custom_of("[[custom]]\nname = \"Anchor\"\ncolour = \"red\"\n");
+        let error = load("anchor", "anchor", Some(&custom)).unwrap_err();
+        assert!(
+            error.to_string().contains("unknown key `colour`"),
+            "{error}"
+        );
     }
 }

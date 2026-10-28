@@ -956,6 +956,37 @@ fn run_config_cite_rejects_an_unknown_references_scope() {
         );
 }
 
+/// §13: an unknown key inside a `[[task]]` table is a **load error** — the build
+/// aborts before any file is processed, so a typo can never change the output
+/// while the run reports success.
+#[test]
+fn run_config_rejects_an_unknown_task_key() {
+    let dir = tempdir().expect("temp dir");
+    let src_dir = dir.path().join("src");
+    std::fs::create_dir_all(&src_dir).expect("create src dir");
+    std::fs::write(src_dir.join("page.md"), "Body text.\n").expect("write markdown file");
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        "[[task]]\nname = \"Typo\"\ninput = \"./src/[slug].md\"\noutput = \"./out/[slug].jsx\"\n\
+         plugin = \"markdown\"\nformat = \"solid\"\ncolour = \"red\"\n",
+    )
+    .expect("write config file");
+
+    let mut cmd = cargo_bin_cmd!("pendon");
+    cmd.current_dir(dir.path())
+        .arg("run")
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("unknown key 'colour'")
+                .and(predicate::str::contains("pendon.toml")),
+        );
+    assert!(
+        !dir.path().join("out").join("page.jsx").exists(),
+        "the build must abort before rendering"
+    );
+}
+
 // === `no_cache` / `post_hook` (docs/rfc/no-cache-and-post-hook.md) ===
 
 /// Writes an HTML task named `Hooked` over `src/[slug].md` and appends `extra`

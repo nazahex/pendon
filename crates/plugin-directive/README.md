@@ -58,12 +58,12 @@ template = "<DirectiveDefault {...attrs}>{children}</DirectiveDefault>"
 
 `primary_layer()` is `directive`.
 
-### Positional keys (§6.1 / §11 rule 5)
+### Positional names (§6.1, D-5)
 
-Directive heads use all four positional keys: `backtick_key` (default `slug`),
-`quote_key` (default `title`), `bracket_key` (default `slug`) and
-`parentheses_key` (default `title`). Keys an entry leaves unset keep the built-in
-default.
+A directive head uses all four: `field.bracket.bare` (default `slug`) for
+`[….]`, `field.paren.bare` (default `title`) for `(…)`, and
+`field.specs.tick` / `field.specs.quote` (defaults `slug` / `title`) for the
+`{…}` items. An entry that configures none keeps every default (D-7).
 
 ## Rust API
 

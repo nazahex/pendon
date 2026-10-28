@@ -8,4 +8,3 @@ plugin = "markdown,syntect"
 format = "html"
 pretty = true
 strict = false
-css_embed = "./styles.css"

@@ -35,9 +35,9 @@ pub struct ConfigTask {
     /// Shell command(s) run after this task rendered a file successfully.
     /// See `docs/rfc/no-cache-and-post-hook.md`.
     pub post_hook: Option<PostHook>,
-    /// §13: keys this version does not know. They are reported as warnings
-    /// instead of being dropped silently (a typo must never change the output
-    /// without saying so).
+    /// §13: keys this version does not know. They are a **load error** (not a
+    /// warning): a typo must never change the output while the build succeeds.
+    /// Collected here so `run_from_config` can report every one of them.
     #[serde(flatten)]
     pub unknown: std::collections::BTreeMap<String, toml::Value>,
 }
