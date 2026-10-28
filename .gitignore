@@ -3,6 +3,7 @@ demo/
 # docs/
 bug/
 memory-bank/
+/docs/issues/draft/
 
 # Pendon incremental build cache
 .pendon/
