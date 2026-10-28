@@ -226,6 +226,14 @@ exactly one `export const headings` line each (no bytes removed), and
       regression test (`a_decorator_never_overrides_the_directive_type`: a
       `@@other{…}` line cannot change a block or inline directive's `type`) and
       one §10.3 sentence. 760 tests. Next: `S2-4.4` (cite).
+      `S2-4.9` done — the marker's grammar was already right, the override was
+      not: `{{type}}` now beats an extras `@@type` **silently** (the
+      `ExtrasIssue::warning` is gone), `type` stays its only built-in field (no
+      `inner_text` — the text is the children) and it contracts nothing. Test
+      renamed to `an_extras_type_is_overridden_silently`; fixture `14-marker`
+      gained both type sources and was re-frozen; §10.1's obsolete
+      "layer order decides which element reads `[x]("y")`" note now points at
+      `@[x]("y")`. 760 tests. Next: `S2-4.10` (section) / `S2-4.4` (cite).
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden

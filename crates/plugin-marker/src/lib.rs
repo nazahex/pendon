@@ -210,11 +210,9 @@ fn scan_marker(
         }
         let parsed = to_attributes(&head, &specs);
         marker.issues.extend(parsed.issues);
-        if head.type_marker.is_some() {
-            marker.issues.push(ExtrasIssue::warning(
-                "a marker is routed by its own type; the extras head type was ignored (§10.1)",
-            ));
-        }
+        // §10.1: `{{type}}` silently overrides an extras `@@type` — one node has
+        // one routing key, and the marker's own is the one it was written with.
+        // No diagnostic: the extras type is not a mistake, just redundant.
         marker.attrs = parsed.items;
     } else if group_bracket.is_some() || group_parentheses.is_some() {
         // Groups without an extras head still resolve to attributes (§6.1).
@@ -657,18 +655,18 @@ mod tests {
         assert!(!text_of(&out).contains("{{note}}"));
     }
 
-    /// A marker has exactly one type: an extras head type is reported and
-    /// ignored rather than silently overriding the routing key.
+    /// §10.1: a marker has exactly one type — `{{type}}` overrides an extras
+    /// `@@type` **silently**, because the marker's own type is the routing key
+    /// and the extras one is merely redundant (no error, no warning).
     #[test]
-    fn an_extras_type_is_reported_and_ignored() {
-        let out = run(&paragraph("{{note}}@@noteX{}"), &MarkerOptions::default());
+    fn an_extras_type_is_overridden_silently() {
+        let out = run(&paragraph("{{note}}@@noteX{.x}"), &MarkerOptions::default());
         assert_eq!(attr(&out, "type").as_deref(), Some("note"));
-        assert!(
-            warnings(&out)
-                .iter()
-                .any(|message| message.contains("routed by its own type")),
-            "{:?}",
-            warnings(&out)
-        );
+        assert_eq!(attr(&out, "specs.class").as_deref(), Some("x"));
+        assert!(warnings(&out).is_empty(), "{:?}", warnings(&out));
+
+        // The built-in field is `type` alone: the marker's own text is its
+        // children, never an `inner_text` attribute (§10.1).
+        assert_eq!(attr(&out, "inner_text"), None, "{out:?}");
     }
 }

@@ -640,12 +640,27 @@ README. If an element has nothing to delete, say so in the commit message.
       (drop the extras-derived fields from the inventory rows).
       G: list fixture with a decorator.
       Exit: preset assignment is empty in code and inventory.
-- [ ] **S2-4.9 — Marker.** Dep: S2-4.1. `§10.1`
+- [x] **S2-4.9 — Marker.** Dep: S2-4.1. `§10.1`
       Do: `{{type}}[slot](slot)@@type{specs}%%numbering`; `{{type}}` silently
       overrides `@@type` (no error, no warning); marker contracts nothing; the
       built-in field is `type` only (no `inner_text`).
       G: marker fixture with both type sources.
       Exit: preset assignment = `type`; the override precedence is asserted.
+      **Done 2026-10-28.** The head grammar was already right (groups directly
+      after `}}`, then the extras head, then `%%numbering`); the one behaviour
+      that was wrong is the override: `plugin-marker` reported an
+      `ExtrasIssue::warning` when an extras head carried a `@@type`. That warning
+      is gone — one node has one routing key, so `{{type}}` wins **silently**
+      (§10.1). `an_extras_type_is_reported_and_ignored` became
+      `an_extras_type_is_overridden_silently`, which also pins that `type` is the
+      only built-in field (no `inner_text` attribute; the text is the children).
+      No contract, no preset: the marker declares no `ElementHead`, and §10.1 says
+      so in its first bullet. Fixture `14-marker` gained both type sources
+      (`{{aside}}@@asideAB{.marked, isOpen}` → `type="aside"`, extras kept, no
+      diagnostic) and was re-frozen; §10.1's obsolete "a `[x]("y")` pair is also a
+      legal anchor head, so layer order decides" note became "an anchor is
+      `@[x]("y")`, so nothing competes for a marker's groups" (S2-4.2's tag makes
+      it true). Gate green: fmt + dprint clean, clippy at baseline, 760 tests.
 - [ ] **S2-4.10 — Section.** Dep: S2-4.6. `§9.5`
       Do: section has no head; preset assignment = `id`, `depth` (from heading
       depth); a

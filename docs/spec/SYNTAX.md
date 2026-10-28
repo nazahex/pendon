@@ -896,16 +896,19 @@ marker-inline = "{{" type "}}" groups? extras?   # inside inline content
 marker-block  = "{{" type "}}" groups? extras?   # own line (block context)
 ```
 
-- `type` is **mandatory** for markers; `{{}}` is literal text.
+- `type` is **mandatory** for markers; `{{}}` is literal text. The marker's own
+  type **silently** overrides an extras `@@type` (one node, one routing key: no
+  error, no warning), and `type` is its only built-in field — a marker contracts
+  no slot position, and its text is its children, never an `inner_text`
+  attribute.
 - Extras are optional but must be adjacent.
 - The positional groups (§6.1) sit directly after `}}`, **before** any extras
   head: `{{type}}[x]("y"){…}` and `{{type}}[x]("y")@@head{…}`. They map through
   the marker type's `field.bracket.bare` / `field.paren.bare`. A marker-level group
   beats a same-key group of the extras head (§6.2, dropped with a §13 Warning);
   a malformed group stays literal text while the marker still renders (§4.3).
-  A `[x]("y")` pair is also a legal anchor head, so which layer reads it first
-  decides: §6.1's layer-order rule applies (in the canonical order the anchor
-  layer claims it and the marker keeps no attribute from it).
+  The groups belong to the head they touch: an anchor is `@[x]("y")` (§7.2), so
+  no other element competes for a marker's groups.
 - Inline form emits an inline node; block form emits a block node.
 - The block form carries the same line's trailing text as its `children` and
   does not absorb the following block.

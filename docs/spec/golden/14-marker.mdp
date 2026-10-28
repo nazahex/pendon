@@ -21,6 +21,13 @@ The extras head must be adjacent, so only the first marker reads it:
 A marker without a legal type stays literal text: {{}}, {{ note }}, {{a-b}} and
 an unterminated {{note are all text.
 
+§10.1: one node has one routing key, so a marker's own type **silently**
+overrides an extras `@@type` — no error, no warning — and its built-in field is
+`type` alone (its text is its children, never an `inner_text` attribute):
+
+{{aside}}@@asideAB{.marked, isOpen} keeps the class and the flag, and stays an
+`aside`.
+
 §6.1/§10.1: the groups sit between `}}` and an adjacent extras head. Each position
 lands in its own public field (the groups in `bracket.bare` / `paren.bare`, the
 items in `specs.tick` / `specs.quote`, D-7), so nothing collides; a malformed group
