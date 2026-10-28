@@ -77,17 +77,21 @@ for interpreting the parsed properties.
   renderers emit from — `(dotted name, JSON value)` pairs, flat, in insertion
   order; `to_value()` nests the same entries for the JSON/AST view).
 - **Preset assignment** (`src/preset.rs`) — each element that contracts a slot
-  head declares **two** static pieces of data in its own crate: its
-  `SlotContract` and a `preset: &[Preset]` table naming the field each position
-  lands in (`@[Inner Text](href "title")` → `inner_text`, `href`, `title`).
-  `ElementHead` is just the pair, with `preset_for(slot, kind)` (the lookup),
+  head declares **three** static pieces of data in its own crate: its
+  `SlotContract`, a `preset: &[Preset]` table naming the field each position
+  lands in (`@[Inner Text](href "title")` → `inner_text`, `href`, `title`), and
+  the `owned: &[FieldName]` list of fields the element writes itself (D-12 rule
+  5, `with_owned` / `owns`). `ElementHead` is the triple, with
+  `preset_for(slot, kind)` (the lookup),
   `is_consistent()` (every preset sits on a contracted position) and
   `fallback_path(slot, kind)` (D-7's bare name for an unassigned value:
   `bracket.quote`, `paren.tick`, …). The names are `FieldName`s — a
   `const fn`-validated, single-segment built-in name — so a typo in a preset
   table **fails to compile** rather than at load. Voiding a preset is the
   entry's job: one `field.*` key in the matched `custom` entry disables the whole
-  table for that entry (D-7, `FieldConfig::is_empty`).
+  table for that entry (D-7, `FieldConfig::is_empty`). `owns_field(&owned, key)`
+  is the same rule for an element with no contract (`plugin-wiki`'s link); the
+  collision itself is reported by the element as `ExtrasIssue::owned_key`.
 - **Specs** — `Specs` / `SpecsResolver`: _where_ each of the head's contents
   lands — the slot groups `bracket` / `paren` and the five specs positions
   [`SpecsKey`]: `tick` / `quote` (a construct's slug and title) and the universal

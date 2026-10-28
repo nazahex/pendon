@@ -1,14 +1,16 @@
 use pendon_core::{Event, NodeKind};
 use pendon_extra::{
-    emit_attr_issues, issue_event, parse_extras, to_attributes, ExtrasAttr, ExtrasHead,
-    ExtrasIssue, ExtrasMatch, Specs, SpecsKey,
+    emit_attr_issues, issue_event, owns_field, parse_extras, to_attributes, ExtrasAttr, ExtrasHead,
+    ExtrasIssue, ExtrasMatch, FieldName, Specs, SpecsKey,
 };
 
 use crate::options::WikiOptions;
 use crate::util::capitalize_first;
 
-/// Keys the plugin produces itself; extras must not override them (§7.5).
-const WIKI_OWNED_KEYS: [&str; 2] = ["href", "title"];
+/// D-12 rule 5: the fields the link writes itself, so a head item that spells
+/// one of them is an `Error` (§7.5). `[[…]]` is not a slot head, so the list is
+/// declared here rather than on an [`ElementHead`](pendon_extra::ElementHead).
+const OWNED: &[FieldName] = &[FieldName::new("href"), FieldName::new("title")];
 
 #[derive(Debug)]
 pub(crate) struct WikiLink {
@@ -119,7 +121,7 @@ fn emit_wikilink_extras(head: Option<&ExtrasHead>, out: &mut Vec<Event>) {
     // universal DOM fields and an extras `"title"` is the `title` this plugin
     // produces itself (§7.5).
     for (key, value) in specs.dom_fields(&attrs.items, &[(SpecsKey::Quote, "title")]) {
-        if WIKI_OWNED_KEYS.contains(&key) {
+        if owns_field(OWNED, key) {
             out.push(issue_event("wiki", &ExtrasIssue::owned_key(key)));
             continue;
         }
@@ -312,6 +314,19 @@ mod tests {
         assert!(out.iter().any(|event| matches!(
             event,
             Event::Diagnostic { message, .. } if message.contains("`href`")
+        )));
+    }
+
+    /// D-12 rule 5: the link writes `title` too, so an extras quote moved onto it
+    /// is the same `Error` (it is an `Error`, not the §6.2 `Warning`).
+    #[test]
+    fn title_is_not_overridable_by_extras() {
+        let out = events_of("[[Anim Esta]]@@wikiA{\"Evil\"}");
+        assert_eq!(attr(&out, "title").as_deref(), Some("Anim Esta"));
+        assert!(out.iter().any(|event| matches!(
+            event,
+            Event::Diagnostic { message, severity: pendon_core::Severity::Error, .. }
+                if message.contains("`title`")
         )));
     }
 

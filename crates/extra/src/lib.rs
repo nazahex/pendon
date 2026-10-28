@@ -37,7 +37,7 @@ pub use field::{
     FieldName, FieldNameError, Path, SPECS_KEYS, SPECS_NAMESPACE,
 };
 
-pub use preset::{fallback_path, ElementHead, Preset};
+pub use preset::{fallback_path, owns_field, ElementHead, Preset};
 
 pub use slot::{
     parse_slot_parts, parse_slots, Slot, SlotContract, SlotError, SlotKind, SlotMatch, SlotPair,

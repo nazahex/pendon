@@ -35,6 +35,10 @@ const PRESET: &[Preset] = &[
     Preset::new(Slot::Paren, SlotKind::Quote, FieldName::new("title")),
 ];
 
+/// D-12 rule 5: the fields `<a>` writes itself, so a head item that spells one
+/// of them is an `Error` (`field.override.<k>` publishes it under another name).
+const OWNED: &[FieldName] = &[FieldName::new("href")];
+
 /// The tag that claims anchor's head (D-11), the positions it claims, and where
 /// each lands when the user configures nothing (§6.1, §6.5, D-7).
 pub const HEAD: ElementHead = ElementHead::new(
@@ -43,7 +47,8 @@ pub const HEAD: ElementHead = ElementHead::new(
         tag: SlotTag::Anchor,
     },
     PRESET,
-);
+)
+.with_owned(OWNED);
 
 /// §11: the layer `[[task.anchor.custom]]` declares.
 const ANCHOR_LAYER: &str = "anchor";
@@ -316,11 +321,11 @@ fn build_attributes(
             if tick == Some(key) {
                 continue;
             }
-            if key == "href" {
+            if HEAD.owns(key) {
                 // D-12's built-in collision: `href` is written by the link, so a
                 // `href:` extra is an `Error`, and `field.override.href` (D-4) is
                 // the way to publish it under another name.
-                issues.push(ExtrasIssue::owned_key("href"));
+                issues.push(ExtrasIssue::owned_key(key));
                 continue;
             }
             let text = match value {

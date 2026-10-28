@@ -431,8 +431,19 @@ rule 5 are implemented in `to_attributes` (`crates/extra/src/typed.rs`); the
 know its element. Its carrier is `ExtrasIssue::owned_key` (an `Error` whose
 message names `field.override.<k>`), used by `Attrs::merge_with` for the keys a
 construct passes as `owned` and reported directly by an element that owns a key
-outright. Only `plugin-anchor`'s `href` does so today; the rest of the wiring is
-S2-4.1, where each element declares the keys it writes.
+outright. Only `plugin-anchor`'s `href` did so in this pass; the rest of the
+wiring is S2-4.1, where each element declares the keys it writes.
+
+**Implementation note (S2-4.1, 2026-10-28).** The declaration is data now:
+`ElementHead.owned: &'static [FieldName]` (declared with
+`ElementHead::with_owned`, read with `ElementHead::owns`), plus the same
+predicate as a free function (`owns_field`) for an element that has no slot
+contract — `plugin-wiki`'s `[[…]]` link, which owns `href` and `title`. An
+element that declares nothing owns nothing, so no element inherits a rule it did
+not ask for, and the collision is still the element's own
+`ExtrasIssue::owned_key` `Error`. `plugin-anchor` (`href`) and `plugin-wiki`
+(`href`, `title`) are wired; each remaining element declares its list with its
+contract in its own Phase-4 task (S2-4.2 … S2-4.11).
 
 ---
 

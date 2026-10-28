@@ -557,6 +557,12 @@ slot-qualified bare name (`bracket.bare`, `paren.quote`, …). A preset may only
 sit on a position the contract accepts (`ElementHead::is_consistent`, asserted by
 each plugin's own test), so the two halves cannot drift.
 
+The same declaration carries the fields the element writes **itself**
+(`ElementHead::owned`, D-12 rule 5: `href` on an anchor, `src` on an image): a
+head item that spells one of them is an `Error`, and `field.override.<k>` (D-4)
+is how that value gets its own public name. An element that declares nothing owns
+nothing, so a construct never inherits a collision rule it did not ask for.
+
 ## 7. Construct grammars
 
 Notation: `head?` = optional, `extras?` = optional `@@type{…}`, `∘` = no space.

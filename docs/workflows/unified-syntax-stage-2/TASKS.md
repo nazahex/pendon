@@ -485,7 +485,7 @@ assignments into the projection, **(3)** delete the element's private head code,
 **(4)** re-freeze that element's fixture, **(5)** update its `SYNTAX.md` §7.x and
 README. If an element has nothing to delete, say so in the commit message.
 
-- [ ] **S2-4.1 — Extras are universal.** Dep: S2-3.5.
+- [x] **S2-4.1 — Extras are universal.** Dep: S2-3.5.
       Files: `crates/extra/src/lib.rs`, `decorator.rs`, every plugin head.
       Do: audit that `@@type`/`{specs}`/`%%numbering` are accepted on _every_
       element head and (via decorator) every block; keep `{{type}}`/`::type`/
@@ -499,6 +499,31 @@ README. If an element has nothing to delete, say so in the commit message.
       `Error` pointing at `field.override.<k>` (D-4) — instead of dropping it
       silently or last-wins. `plugin-anchor` is the reference; the remaining
       heads follow with their contracts (S2-4.2 … S2-4.8).
+      **Done 2026-10-28.** The audit is
+      `apps/cli/tests/extras_heads_spec.rs`: 17 rows — anchor, image, cite,
+      heading, wiki, marker, `::`/`==` directive, table decl, table cell, quote
+      inner head, quote decorator, list container, section, code fence,
+      paragraph, and a `%%numbering` row — each rendered from one project with
+      the **same** head (all five specs positions + `%%%numberA`) and asserted on
+      its element's projection, plus two universal checks per row (no literal
+      `@@`, no literal marker). No element failed: every head already funnels
+      through `to_attributes` + `Specs::dom_fields` (§6.3), so "universal" was
+      already true and is now proved. One anomaly recorded, not fixed: the table
+      **declaration's** own `("T")` loses its `title` to an extras quote (a §6.2
+      inversion in `plugin-table`'s layer props) — the decl line is Phase 5's
+      (`S2-4.11`), so the row documents today's shape and names the gap.
+      D-12 rule 5 is now **data**: `ElementHead.owned: &'static [FieldName]`
+      (`with_owned` / `owns`) plus `owns_field(&owned, key)` for an element with
+      no contract, both in `crates/extra/src/preset.rs`; `plugin-anchor` declares
+      `href` and reads `HEAD.owns(key)` instead of `if key == "href"`, and
+      `plugin-wiki` replaces its `WIKI_OWNED_KEYS: [&str; 2]` with
+      `&[FieldName; 2]` (`href`, `title`). Tests:
+      `an_element_declares_the_fields_it_writes_itself` (`crates/extra`, incl.
+      "an untouched head owns nothing") and
+      `title_is_not_overridable_by_extras` (`plugin-wiki`, the `Error` the
+      `[&str]` list never proved); `href_stays_construct_owned` still passes.
+      Docs: §6.5 states the owned list, D-12's note records the wiring, and the
+      `crates/extra` README now describes the triple. Gate green: 753 tests.
 - [ ] **S2-4.2 — Anchor.** Dep: S2-4.1. `§7.2`
       Do: `@` tag claims `[]`/`()`; contract `bracket.bare→inner_text`,
       `paren.bare→href`, `paren.quote→title`; delete external-URL detection

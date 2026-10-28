@@ -84,7 +84,7 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## In progress
 
-- [ ] **Stage 2 — Phases 0–3 done; Phase 4 next (`S2-4.1`).** Docs live in
+- [ ] **Stage 2 — Phases 0–3 done; Phase 4 in progress (`S2-4.1` done).** Docs live in
       [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md).
       **Phase 0 complete 2026-10-28**: D-1…D-17 signed (D-16 = clean total
       replacement: no compat, no warnings, no migration doc, old configs fail
@@ -185,6 +185,15 @@ exactly one `export const headings` line each (no bytes removed), and
       type in the same document keeps every default. Nine plugin READMEs lose the
       copy-pasted (and wrong) "keeps `slug` / `title` / `class` / `id` / `style`"
       sentence in favour of a link to §6.1. Next: Phase 4, `S2-4.1`.
+      `S2-4.1` done — **Phase 4 opens**: `apps/cli/tests/extras_heads_spec.rs` is
+      the universality audit (17 rows: every element head + decorator carries the
+      same five-position head and a `%` marker; two universal checks per row). No
+      element failed. One anomaly recorded for Phase 5: a table **declaration's**
+      `("T")` loses `title` to an extras quote (§6.2 inversion in the layer
+      props). D-12 rule 5 is data now — `ElementHead.owned` (`with_owned` /
+      `owns`) + `owns_field` — with `plugin-anchor` (`href`) and `plugin-wiki`
+      (`href`, `title`) wired; the other elements declare theirs with their
+      contracts. Next: `S2-4.2` (anchor).
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden

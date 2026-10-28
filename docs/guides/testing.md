@@ -33,7 +33,13 @@ project, rendered with the real CLI, and compared byte-for-byte.
 
 ```bash
 cargo test -p pendon --test syntax_spec          # 28 fixtures
+cargo test -p pendon --test extras_heads_spec    # extras on every element head
 ```
+
+`extras_heads_spec` is the **universality** audit (§6.1, D-12): one document per
+element head and decorator, all carrying the same head, so a construct that stops
+reading a specs position — or falls back to literal text — fails there instead of
+in a golden nobody re-read.
 
 A fixture may also freeze the **files** its render writes
 (`docs/spec/golden/NN-name.out/`): an `[[task.<element>.extract]]` block writes

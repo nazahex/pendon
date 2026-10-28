@@ -1,16 +1,18 @@
 //! Preset assignment: where each slot position of a built-in element lands
 //! (`docs/spec/SYNTAX.md` §6.1/§6.5, proposal §7, D-7).
 //!
-//! Every element that contracts a slot head has two pieces of static data:
+//! Every element that contracts a slot head has three pieces of static data:
 //!
 //! * its [`SlotContract`] — which positions it claims (§6.1, ADR-0012);
 //! * its **preset** — which field each of those positions lands in when the
 //!   user configures nothing (`@[Inner Text](href "title")` → `inner_text`,
-//!   `href`, `title`).
+//!   `href`, `title`);
+//! * its **owned** fields — the ones the element writes itself, so a head item
+//!   that spells one is an `Error` (D-12 rule 5).
 //!
-//! Both are data, and both live in the owning plugin's crate
-//! ([`ElementHead`] is just the pair). That is deliberate: the assignment is part
-//! of the element's contract, not of a plugin's private code, so Phase 4 can
+//! All three are data, and all of them live in the owning plugin's crate
+//! ([`ElementHead`] is just the triple). That is deliberate: the assignment is
+//! part of the element's contract, not of a plugin's private code, so Phase 4 can
 //! delete the hand-written `insert("href", …)` calls without moving the truth
 //! (D-16, ADR-0014).
 //!
@@ -65,6 +67,19 @@ pub fn fallback_path(slot: Slot, kind: SlotKind) -> Path {
         .expect("slot and kind names are valid path segments")
 }
 
+/// D-12's last rule, as a predicate: does `key` name a field the construct
+/// writes itself (`href` on an anchor, `src` on an image)?
+///
+/// The list is [`ElementHead::owned`] for an element that contracts slots, and a
+/// plain `const` for one that does not (`plugin-wiki`'s `[[…]]` link). The
+/// collision itself is reported by the element as
+/// [`ExtrasIssue::owned_key`](crate::typed::ExtrasIssue::owned_key) — an `Error`
+/// pointing at `field.override.<key>` (D-4) — because the head must never write a
+/// field the construct owns.
+pub fn owns_field(owned: &[FieldName], key: &str) -> bool {
+    owned.iter().any(|name| name.as_str() == key)
+}
+
 /// An element's declarative head: what it claims, and where each position lands.
 ///
 /// The two halves are declared together because they answer the same question —
@@ -78,12 +93,35 @@ pub struct ElementHead {
     /// The built-in assignment, in declaration order. Empty for an element that
     /// contracts slots without naming any of them (its values stay bare fields).
     pub preset: &'static [Preset],
+    /// The fields the element writes **itself** (D-12 rule 5): a head item that
+    /// spells one of them is an `Error`, and `field.override.<k>` (D-4) is the
+    /// way to publish it under another name.
+    pub owned: &'static [FieldName],
 }
 
 impl ElementHead {
     /// Pairs a contract with its preset table.
+    ///
+    /// The owned list starts empty; an element that writes fields itself adds
+    /// them with [`with_owned`](Self::with_owned), so the collision rule is the
+    /// element's own data rather than a hardcoded `if key == "…"` in the reader.
     pub const fn new(contract: SlotContract, preset: &'static [Preset]) -> Self {
-        Self { contract, preset }
+        Self {
+            contract,
+            preset,
+            owned: &[],
+        }
+    }
+
+    /// Declares the fields the element writes itself (D-12 rule 5).
+    pub const fn with_owned(mut self, owned: &'static [FieldName]) -> Self {
+        self.owned = owned;
+        self
+    }
+
+    /// True when `key` names a field this element writes itself (D-12 rule 5).
+    pub fn owns(&self, key: &str) -> bool {
+        owns_field(self.owned, key)
     }
 
     /// The declared assignment table.
@@ -222,6 +260,25 @@ mod tests {
             tag: SlotTag::None,
         };
         assert!(ElementHead::new(EMPTY, &[]).is_consistent());
+    }
+
+    #[test]
+    fn an_element_declares_the_fields_it_writes_itself() {
+        // D-12 rule 5: an untouched head owns nothing, so no element inherits a
+        // collision rule it did not declare.
+        let bare = ElementHead::new(CONTRACT, PRESET);
+        assert!(bare.owned.is_empty());
+        assert!(!bare.owns("href"));
+
+        const OWNED: &[FieldName] = &[FieldName::new("href")];
+        let pinned = ElementHead::new(CONTRACT, PRESET).with_owned(OWNED);
+        assert!(pinned.owns("href"));
+        assert!(!pinned.owns("inner_text"), "a preset name is not owned");
+        assert!(!pinned.owns("HREF"), "the rule is exact, never case-folded");
+        // The predicate the whole rule rests on, on its own.
+        assert!(owns_field(OWNED, "href"));
+        assert!(!owns_field(OWNED, "src"));
+        assert!(!owns_field(&[], "href"));
     }
 
     #[test]
