@@ -122,8 +122,19 @@ exactly one `export const headings` line each (no bytes removed), and
       content the contract accepts — preset name while the preset is alive, the
       entry's `field.<slot>.<kind>` name once it is void, and the slot-qualified
       bare name (`bracket.quote`, `paren.tick`) for anything unassigned, so D-7's
-      example is asserted row by row. Next: `S2-2.7` (`project(node) -> FieldMap`
-      identity pass; zero golden changes is the proof).
+      example is asserted row by row. `S2-2.7` done: `project(node,
+      Option<&FieldConfig>)` is the identity pass — every attribute becomes one
+      `Path → AttrValue` entry in node order, `__`-prefixed internals never
+      enter the map, a non-field-name key is dropped loudly, and
+      `field.override.<path>` renames a field in place (the only place overrides
+      are read). Both DOM renderers now emit `FieldMap::attrs()` instead of the
+      raw node (Solid `render_attrs` + `{...attrs}`/`{attrs.k}`, HTML
+      `render_attrs_except` + `Link`), `AttrValue` gained `Null` and a total
+      `from_json` so a bound value survives the round trip, and the JSON/AST
+      renderers needed no call site (their `attrs` _is_ the projection). Zero
+      golden bytes moved — that is the proof. Next: `S2-2.8` (delete
+      `backtick_key`/`quote_key`/`bracket_key`/`parentheses_key`; an unknown key
+      becomes a load error).
       No `MIGRATION.md` by policy.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to

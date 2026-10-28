@@ -37,6 +37,11 @@ pub enum AttrValue {
     /// that must be emitted unquoted as `name={expr}` rather than as a string
     /// literal. Transported through [`pendon_core::JSX_ATTR_PREFIX`].
     JsxExpr(String),
+    /// `null` — **not authorable**: §6.3 has no null literal, so the extras head
+    /// never produces this. It exists so the projection is a total bridge back
+    /// to the AST (`crate::project`): `plugin-bind` can resolve a `$var` to
+    /// `null`, and every renderer already renders that value (§19).
+    Null,
 }
 
 impl AttrValue {
@@ -58,6 +63,42 @@ impl AttrValue {
             Self::JsxExpr(expr) => {
                 format!("{}{}", pendon_core::JSX_ATTR_PREFIX, expr)
             }
+            Self::Null => "null".to_string(),
+        }
+    }
+
+    /// Reads an AST value back into the typed form — the half of the bridge the
+    /// projection ([`crate::project`]) uses, the inverse of [`AttrValue::to_json`].
+    ///
+    /// Total on purpose: every JSON value the pipeline can carry has an
+    /// `AttrValue`, so a renderer reading the projection cannot silently lose an
+    /// attribute. The one asymmetry is a `u64` above `i64::MAX`, which keeps its
+    /// literal form (`Raw`) exactly as [`classify_scalar`] keeps an out-of-range
+    /// integer authored in a document — no wrapping, no precision loss, at the
+    /// cost of re-serialising as a string.
+    pub fn from_json(value: &serde_json::Value) -> Self {
+        use serde_json::Value;
+        match value {
+            Value::Null => Self::Null,
+            Value::Bool(flag) => Self::Bool(*flag),
+            Value::Number(number) => match number.as_i64() {
+                Some(integer) => Self::Int(integer),
+                // Neither branch below may round: an integer too large for
+                // `i64` is still an integer, so it is kept as text.
+                None if number.is_u64() => Self::Raw(number.to_string()),
+                None => match number.as_f64() {
+                    Some(decimal) => Self::Float(decimal),
+                    None => Self::Raw(number.to_string()),
+                },
+            },
+            Value::String(text) => Self::Str(text.clone()),
+            Value::Array(items) => Self::Array(items.iter().map(Self::from_json).collect()),
+            Value::Object(entries) => Self::Object(
+                entries
+                    .iter()
+                    .map(|(key, item)| (key.clone(), Self::from_json(item)))
+                    .collect(),
+            ),
         }
     }
 
@@ -84,6 +125,7 @@ impl AttrValue {
             }
             Self::Array(items) => Value::Array(items.iter().map(AttrValue::to_json).collect()),
             Self::JsxExpr(expr) => Value::String(expr.clone()),
+            Self::Null => Value::Null,
         }
     }
 }
@@ -180,5 +222,55 @@ mod tests {
         assert_eq!(AttrValue::Bool(true).literal(), "true");
         assert_eq!(AttrValue::Raw("red".to_string()).literal(), "red");
         assert_eq!(AttrValue::Str("a b".to_string()).literal(), "a b");
+        assert_eq!(AttrValue::Null.literal(), "null");
+    }
+
+    /// The bridge is the projection's (`S2-2.7`): every AST value it reads must
+    /// come back out unchanged, or a renderer would re-emit different bytes.
+    #[test]
+    fn the_json_bridge_is_lossless() {
+        for ast in [
+            serde_json::json!(null),
+            serde_json::json!(true),
+            serde_json::json!(false),
+            serde_json::json!(12),
+            serde_json::json!(-3),
+            serde_json::json!(6.0),
+            serde_json::json!(-2.5),
+            serde_json::json!("text"),
+            // A `JSX_ATTR_PREFIX` payload is a plain string here: the sentinel
+            // rides inside the text, so the renderer still sees it.
+            serde_json::json!(format!("{}valueA", pendon_core::JSX_ATTR_PREFIX)),
+            serde_json::json!([1, "two", [true]]),
+            serde_json::json!({ "b": 1, "a": { "c": null } }),
+        ] {
+            let typed = AttrValue::from_json(&ast);
+            assert_eq!(typed.to_json(), ast, "{ast}");
+        }
+    }
+
+    /// A numeric AST value becomes the narrowest typed form that keeps its
+    /// value: `Int` when it fits, `Float` when it does not, and `Raw` only for
+    /// an integer too large for `i64` (the same fallback `classify_scalar` uses
+    /// for an authored out-of-range integer).
+    #[test]
+    fn json_numbers_pick_their_typed_form() {
+        assert_eq!(
+            AttrValue::from_json(&serde_json::json!(12)),
+            AttrValue::Int(12)
+        );
+        assert_eq!(
+            AttrValue::from_json(&serde_json::json!(6.5)),
+            AttrValue::Float(6.5)
+        );
+        let huge = serde_json::json!(serde_json::Number::from(u64::MAX));
+        assert_eq!(
+            AttrValue::from_json(&huge),
+            AttrValue::Raw(u64::MAX.to_string())
+        );
+        assert_eq!(
+            AttrValue::from_json(&serde_json::json!(null)),
+            AttrValue::Null
+        );
     }
 }

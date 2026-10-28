@@ -337,7 +337,7 @@ present: `#id` > head slug > extras slug.
 enum AttrValue {
     Str(String), Int(i64), Float(f64), Bool(bool), Raw(String),
     Object(Vec<(String, AttrValue)>), Array(Vec<AttrValue>),
-    JsxExpr(String),
+    JsxExpr(String), Null,
 }
 ```
 
@@ -372,6 +372,12 @@ Mapping to the event IR (`Event::Attribute { name, value: String }`):
   `renderer-ast` strips the prefix and re-hydrates a real JSON value, which
   `renderer-solid` spreads as `k={…}`. `crates/extra` MUST NOT emit `U+E001` —
   only `plugin-bind` may (`crates/core/src/event.rs`).
+- **`Null` is not authorable.** No head, slot or decorator can spell `null`, so
+  the value type gains it only so the public field map can carry an AST value
+  the projection reads back verbatim (`crates/extra::project`,
+  [ADR-0014](../decisions/0014-field-model.md)): `plugin-bind` can resolve a
+  `$var` to `null`, and the DOM renderers already print it —
+  `renderer-solid` as `k={null}`, `renderer-html` as `k="null"`.
 
 Renderers:
 

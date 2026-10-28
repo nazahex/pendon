@@ -20,7 +20,9 @@ a pipeline produced without the full AST. For structure, use
 
 Container attributes are **not** dropped: a bare flag reaches JSON as `true` and
 list/blockquote/paragraph/code-fence attributes survive (verified by the §16
-fixture 17/18 test in this crate).
+fixture 17/18 test in this crate). Like the AST renderer, this crate _produces_
+the `attrs` map that `pendon_extra::project` reads (ADR-0014), so it has no
+attribute-emission path of its own to reroute.
 
 A **fragment** value (a bound `mdp` payload,
 [ADR-0007](../../docs/decisions/0007-mdp-subdocuments.md)) is emitted as the node

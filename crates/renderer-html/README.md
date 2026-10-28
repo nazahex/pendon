@@ -31,8 +31,12 @@ structure the AST renderer produces.
 - HTML passthrough is opt-in via `plugin-markdown`'s `allow_html` option.
 - A **`__`-prefixed** attribute (`__layer`, `__plugin_kind`, `__number`) is
   internal transport, never output (§11 rule 3, ADR-0005/ADR-0010). The generic
-  attribute writer drops it, and so does `Link` — which writes `href`/`title`
-  itself and then falls back to the same skip.
+  writers — `render_attrs_except` and `Link`'s tail — read the node's
+  **projection** (`pendon_extra::project(node, None)`, ADR-0014 rule 2), which
+  never contains one, so they have no prefix test of their own. An element that
+  writes a specific field itself (`href`/`title` on `Link`, `level`/`id` on
+  `Heading`, `start` on a list) still reads that field from the node; Phase 4
+  moves each of those to the projection as the element's preset lands.
 
 ## Usage
 

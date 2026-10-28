@@ -34,13 +34,15 @@ for interpreting the parsed properties.
   (`src/decorator.rs`): a standalone extras line binds to the _next_ block node
   through a caller-supplied `target` callback. See
   [`docs/decisions/0002-decorator-binder.md`](../../docs/decisions/0002-decorator-binder.md).
-- **Typed values** — `AttrValue { Str, Int, Float, Bool, Raw, Object, Array }` and
+- **Typed values** — `AttrValue { Str, Int, Float, Bool, Raw, Object, Array, JsxExpr, Null }` and
   `classify_scalar` (§6.3, ADR-0005). Numbers parse as numbers (a component
   receives `12`, not `"12"`) but render back to their authored literal text so
   goldens stay stable (`6.0` stays `6.0`). A nested `{…}`/`[…]` value is parsed
   with a depth-aware, quote-aware item splitter (inner commas never split the
   head) and renders as compact JSON unless `plugin-bind` transports it as a real
-  JS value.
+  JS value. `Null` is the one variant a document cannot spell: it exists so
+  `AttrValue::from_json` is total over the AST (`plugin-bind` can resolve a
+  `$var` to `null`), which is what makes the projection lossless.
 - **Spread transport** — a `...$ref` item inside a nested `{…}` value (§19) is
   collected under `SPREAD_KEY` (`"..."`, `src/value.rs`) as a JSON array of the
   reference strings, in source order. `...` cannot be spelled as a `key`, so the
@@ -58,9 +60,22 @@ for interpreting the parsed properties.
   structural clashes are errors (`FieldMapError`). `FieldConfig` is the config
   side of the same vocabulary — one `custom` entry's `field.<slot>.<kind>` /
   `field.specs.<k>` / `field.override.<path>` keys, with `""` stored as `None`
-  (unassign, OBJ-10) and `is_empty()` as the D-7 preset-voiding trigger.
-  Neither type touches the IR — see
+  (unassign, OBJ-10) and `is_empty()` as the D-7 preset-voiding trigger. The
+  field names never reach the IR — see
   [`docs/decisions/0014-field-model.md`](../../docs/decisions/0014-field-model.md).
+- **The projection** (`project(node, Option<&FieldConfig>) -> FieldMap`,
+  `src/field.rs`) — the **one** function that turns an AST node into public
+  fields, and the only place `field.override.<path>` is read (ADR-0014 rules
+  1–4). Phase 2 is its identity pass: a node's attributes _are_ its public
+  fields, so the map mirrors them key for key, in node order, with the same
+  values — which is why rerouting the renderers through it changed no byte.
+  What it decides: a `__`-prefixed key is internal and never enters the map
+  (§11 rule 3); every other key is a `Path`, so a key that breaks the name rules
+  cannot be a public field (dropped, with a `debug_assert!` that fails the suite
+  rather than leaking a key); an override renames its field **as it is written**,
+  keeping the replaced field's position. `FieldMap::attrs()` is the inverse the
+  renderers emit from — `(dotted name, JSON value)` pairs, flat, in insertion
+  order; `to_value()` nests the same entries for the JSON/AST view).
 - **Preset assignment** (`src/preset.rs`) — each element that contracts a slot
   head declares **two** static pieces of data in its own crate: its
   `SlotContract` and a `preset: &[Preset]` table naming the field each position

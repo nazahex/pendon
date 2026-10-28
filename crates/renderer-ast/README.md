@@ -32,6 +32,15 @@ Extras reach the AST as strings from `Event::Attribute`; bare flags render as
 `{ "name": "k", "kind": "flag" }`. Custom components receive the typed
 `AttrValue` (see [`SYNTAX.md`](../../docs/spec/SYNTAX.md) §6.3).
 
+## Relation to the projection
+
+This crate _produces_ the `attrs` map that `pendon_extra::project` reads
+(ADR-0014): the public field map is the identity projection of these attributes
+minus the `__`-prefixed internals. That is why this renderer has no
+attribute-emission path to reroute — its `attrs` output **is** the projection in
+its AST form, and the identity is asserted in `pendon-extra`
+(`the_projection_is_an_identity_pass_over_public_fields`).
+
 ## Usage
 
 ```bash

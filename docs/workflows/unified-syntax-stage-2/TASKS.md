@@ -273,13 +273,37 @@ is an identity at this point).
       position wins in the map) — a load-time check would belong to
       `components.rs`. Nothing calls `assign` yet (Phase 4 wires it), so
       workspace 721 pass, 0 fail, **zero** golden output changed.
-- [ ] **S2-2.7 — `project(node) -> FieldMap` identity pass.** Dep: S2-2.5.
+- [x] **S2-2.7 — `project(node) -> FieldMap` identity pass.** Dep: S2-2.5.
       Files: `crates/extra/src/field.rs`, `crates/renderer-solid/src/resolve.rs`,
       the HTML/JSON/AST renderers' entry points.
       Do: renderers obtain their attributes from the projection instead of the
       raw node; overrides are read here (D-4) but no override exists yet.
       Exit: `cargo test --workspace` green with **zero** golden changes — this is
       the proof that the refactor is behaviour-free.
+      **Done 2026-10-28** — `project(node, Option<&FieldConfig>)` and
+      `FieldMap::attrs()` (`crates/extra/src/field.rs`). The projection is the
+      identity pass: every attribute of the node becomes one `Path → AttrValue`
+      entry in the node's own order, so `attrs()` (flat `(dotted name, JSON
+      value)` pairs) is the exact inverse and both renderers emit the same bytes
+      as before. What it decides, and the only behaviour it adds: a
+      `__`-prefixed key is internal and never enters the map (§11 rule 3), so
+      `renderer-solid`'s `render_attrs` / `spread` and `renderer-html`'s
+      `render_attrs_except` / `Link` lost their `starts_with("__")` tests; a key
+      that is not a valid field name is dropped (`debug_assert!`, so a plugin
+      emitting one fails the suite rather than leaking it); and
+      `field.override.<path>` renames a field **as it is written**, keeping the
+      replaced field's position (D-4 — the one place overrides are read, per
+      ADR-0014 rule 4). `AttrValue` gained `Null` plus the total `from_json`
+      bridge, without which a `plugin-bind` value could not survive the round
+      trip (`{null}` / `null` in the two DOM renderers; a `u64` above `i64::MAX`
+      keeps its literal form as `Raw`). The JSON and AST renderers have no
+      attribute-emission path to reroute — their `attrs` map _is_ the projection
+      in AST form — so the identity is asserted in `pendon-extra`
+      (`the_projection_is_an_identity_pass_over_public_fields`) and documented in
+      both READMEs. 8 new tests (`from_json` round trip, identity law, empty
+      node, override applies in place / is ignored when the field is absent,
+      typed values through Solid and HTML), workspace 729 pass, 0 fail, **zero**
+      golden and sandbox bytes changed.
 - [ ] **S2-2.8 — Fail fast on unknown/removed keys (D-16).** Dep: S2-2.3.
       Files: `apps/cli/src/config.rs`, `apps/cli/src/components.rs`,
       `docs/spec/SYNTAX.md` §13.

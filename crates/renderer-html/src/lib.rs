@@ -253,4 +253,32 @@ mod tests {
             assert!(output.contains("rel=\"noopener\""), "output = {output}");
         }
     }
+
+    /// ADR-0014 rule 2: attributes come from the node's **projection**, which
+    /// keeps a value's typed form. HTML stays stringly-typed by design (§6.3),
+    /// so a bound number and a bound `null` print their literal text in both
+    /// modes — the projection must not drop or rename them on the way.
+    #[test]
+    fn the_projection_keeps_every_typed_attribute() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Attribute {
+                name: "count".to_string(),
+                value: format!("{}{}", pendon_core::JSON_ATTR_PREFIX, "12"),
+            },
+            Event::Attribute {
+                name: "missing".to_string(),
+                value: format!("{}{}", pendon_core::JSON_ATTR_PREFIX, "null"),
+            },
+            Event::Text("Body".to_string()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        for output in [render_html(&events), render_html_pretty(&events)] {
+            assert!(output.contains("count=\"12\""), "output = {output}");
+            assert!(output.contains("missing=\"null\""), "output = {output}");
+        }
+    }
 }

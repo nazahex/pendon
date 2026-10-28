@@ -1,13 +1,16 @@
 //! Public field names and the field map — the vocabulary the projection emits
 //! (`docs/decisions/0014-field-model.md`, proposal §7).
 //!
-//! Two things live here, and neither touches the IR:
+//! Two things live here, and neither renames an IR attribute:
 //!
 //! * the **name rules** — [`validate_field_name`] and [`Path`], a validated
 //!   dotted name such as `price.details.amount`;
 //! * [`FieldMap`] — the ordered `path → AttrValue` map the projection fills and
 //!   that renderers and `extract` read instead of recomputing a name
-//!   (ADR-0014 rules 1–2).
+//!   (ADR-0014 rules 1–2), plus [`project`], the identity pass that fills it.
+//!
+//! [`project`] is the only function that reads the AST, and it only *reads*: the
+//! node keeps its own attributes, so a plugin's internals stay untouched.
 //!
 //! Names are configuration, so every rejection here is `Severity::Error` at
 //! config load — never a warning and never a silent drop (D-16). The rules are
@@ -369,6 +372,71 @@ impl FieldMap {
         let flattened: Vec<(&Path, &AttrValue)> = self.iter().collect();
         AttrValue::Object(nested(&flattened, 0))
     }
+
+    /// `(name, value)` pairs in insertion order, values in AST (JSON) form —
+    /// what a renderer emits, and the inverse of [`project`].
+    ///
+    /// Flat: a multi-segment path keeps its dotted spelling ([`Path::dotted`]),
+    /// because that is the key a renderer writes; [`FieldMap::to_value`] nests
+    /// the same entries instead.
+    pub fn attrs(&self) -> Vec<(String, serde_json::Value)> {
+        self.entries
+            .iter()
+            .map(|(path, value)| (path.dotted(), value.to_json()))
+            .collect()
+    }
+}
+
+/// The public field map of one AST node — the projection, and the **only** place
+/// overrides are read (ADR-0014 rules 1–4).
+///
+/// Phase 2 is the identity pass: a node's attributes *are* its public fields, so
+/// the map mirrors them key for key, in node order, with the same values — which
+/// is why this step changes no golden byte. Phases 3–4 stop copying the node and
+/// build the map from `specs.*` and each element's preset assignment instead;
+/// the renderers already read whatever the map holds.
+///
+/// What is public:
+///
+/// 1. a `__`-prefixed key is an **internal** marker (`__layer`,
+///    `__plugin_kind`, §11 rule 3) and never reaches the map — which is why the
+///    renderers no longer test the prefix themselves;
+/// 2. every remaining key is a [`Path`]. A key that breaks the name rules cannot
+///    be a public field and is dropped, with a `debug_assert!` so a plugin
+///    emitting one fails the suite instead of leaking it (every key the pipeline
+///    produces today — authored `k: v`, `type`, `name`, `level`, `src`, … —
+///    obeys the rules);
+/// 3. `config`'s `field.override.<path>` renames an entry **as it is written**,
+///    so the renamed field keeps the position of the field it replaced (D-4).
+///    No override exists until Phase 4, so `None` is what every caller passes
+///    today.
+pub fn project(node: &serde_json::Value, config: Option<&FieldConfig>) -> FieldMap {
+    let mut map = FieldMap::new();
+    let Some(attrs) = node.get("attrs").and_then(serde_json::Value::as_object) else {
+        return map;
+    };
+    let overrides = config.map(FieldConfig::overrides);
+    for (key, value) in attrs {
+        if key.starts_with("__") {
+            continue;
+        }
+        let Ok(path) = Path::from_dotted(key) else {
+            debug_assert!(false, "`{key}` is not a public field name");
+            continue;
+        };
+        let target = overrides
+            .and_then(|table| table.get(&path))
+            .cloned()
+            .unwrap_or(path);
+        // One attribute is one entry, so the only structural clash left is an
+        // override renaming onto a path the node already carries. The load-time
+        // checks (`FieldConfig::add_override`) own the user-facing error; a clash
+        // leaves the map untouched instead of panicking a renderer.
+        if let Err(error) = map.insert(target, AttrValue::from_json(value)) {
+            debug_assert!(false, "projecting `{key}` failed: {error}");
+        }
+    }
+    map
 }
 
 /// Groups `entries` (whose paths share their first `depth` segments) one level
@@ -962,5 +1030,96 @@ mod tests {
             assert!(validate_field_name(name.as_str()).is_ok());
         }
         assert_eq!(FieldName::new("href").to_string(), "href");
+    }
+
+    /// The identity law (`S2-2.7` exit): the public fields of a node are exactly
+    /// its attributes, in the AST's own order, with their own values — that is
+    /// what lets both renderers read the map instead of the node without moving
+    /// a byte. Internals (`__`-prefixed, §11 rule 3) are the one exception.
+    #[test]
+    fn the_projection_is_an_identity_pass_over_public_fields() {
+        let node = serde_json::json!({
+            "type": "Heading",
+            "attrs": {
+                "__layer": "heading",
+                "class": "hero",
+                "id": "h01",
+                "level": "2",
+                "number": ["1", "a"],
+                "score": 12,
+                "draft": true,
+            }
+        });
+        let projected = project(&node, None);
+
+        let ast: Vec<(String, serde_json::Value)> = node["attrs"]
+            .as_object()
+            .unwrap()
+            .iter()
+            .filter(|(key, _)| !key.starts_with("__"))
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+        assert_eq!(projected.attrs(), ast);
+
+        // The renderer-facing view is also the JSON/AST renderers' view.
+        assert_eq!(
+            projected.to_value().to_json(),
+            serde_json::json!({
+                "class": "hero",
+                "id": "h01",
+                "level": "2",
+                "number": ["1", "a"],
+                "score": 12,
+                "draft": true,
+            })
+        );
+        assert!(!projected.contains(&path("__layer")));
+    }
+
+    /// A node without attributes projects to an empty map — renderers then emit
+    /// no attributes at all, exactly as before.
+    #[test]
+    fn a_node_without_attrs_projects_to_nothing() {
+        assert!(project(&serde_json::json!({ "type": "ThematicBreak" }), None).is_empty());
+        assert!(project(&serde_json::json!({ "type": "Text", "text": "hi" }), None).is_empty());
+    }
+
+    /// D-4: the override table renames a field *at the projection boundary*, and
+    /// the renamed field keeps the position of the field it replaced — so an
+    /// override cannot reorder the output.
+    #[test]
+    fn an_override_renames_a_field_in_place() {
+        let node = serde_json::json!({
+            "attrs": { "class": "hero", "slug": "s1", "title": "T" }
+        });
+        let mut config = FieldConfig::new();
+        config
+            .add_override(path("slug"), path("heading.anchor"))
+            .unwrap();
+
+        let projected = project(&node, Some(&config));
+        let names: Vec<String> = projected.iter().map(|(path, _)| path.dotted()).collect();
+        assert_eq!(names, ["class", "heading.anchor", "title"]);
+        assert_eq!(
+            projected.get(&path("heading.anchor")),
+            Some(&AttrValue::Str("s1".to_string()))
+        );
+        // The source name is gone: the field was renamed, not duplicated.
+        assert!(!projected.contains(&path("slug")));
+        // Without the config the same node keeps its own name.
+        assert!(project(&node, None).contains(&path("slug")));
+    }
+
+    /// An override naming a field the node does not carry is simply not applied
+    /// (a preset may have left the slot empty — that is not an error).
+    #[test]
+    fn an_override_for_a_missing_field_is_ignored() {
+        let node = serde_json::json!({ "attrs": { "class": "hero" } });
+        let mut config = FieldConfig::new();
+        config.add_override(path("slug"), path("id")).unwrap();
+        assert_eq!(
+            project(&node, Some(&config)).attrs(),
+            [("class".to_string(), serde_json::json!("hero"))]
+        );
     }
 }

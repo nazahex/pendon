@@ -1,4 +1,4 @@
-use serde_json::{Map, Value};
+use serde_json::Value;
 use std::collections::BTreeSet;
 
 use crate::imports::ComponentTemplate;
@@ -6,9 +6,15 @@ use crate::node::{is_jsx_expression_token, to_js_literal};
 use crate::resolve::Ctx;
 use pendon_core::{json_attr_payload, jsx_attr_payload};
 
+/// Renders one component template.
+///
+/// `attrs` is the node's **projection** (`pendon_extra::project`), not its raw
+/// `attrs` map: `{...attrs}` and `{attrs.k}` therefore read public fields only,
+/// which is where `__`-prefixed internals already stopped existing
+/// (ADR-0014 rule 2).
 pub fn render_template(
     template: &ComponentTemplate,
-    attrs: Option<&Map<String, Value>>,
+    attrs: &[(String, Value)],
     children: &str,
     text: Option<&str>,
     ctx: &Ctx,
@@ -47,10 +53,10 @@ pub fn render_template(
             }
             // Handle the spread operator {...attrs} with smart spacing
             if tpl[i..].starts_with("{...attrs}") {
-                let spread_str = if let Some(map) = attrs {
-                    generate_spread_attrs(map, &used_attr_keys, ctx)
-                } else {
+                let spread_str = if attrs.is_empty() {
                     String::new()
+                } else {
+                    generate_spread_attrs(attrs, &used_attr_keys, ctx)
                 };
 
                 if !spread_str.is_empty() {
@@ -144,13 +150,13 @@ fn enclosing_attribute(tpl: &str, attr_start: usize, attr_end: usize) -> Option<
     Some((start, end))
 }
 
-fn get_attr_value(attrs: Option<&Map<String, Value>>, key: &str) -> String {
-    let Some(map) = attrs else {
-        return String::new();
-    };
-    match map.get(key) {
-        Some(Value::String(s)) => s.clone(),
-        Some(v) => v.to_string(),
+/// The value a template's `{attrs.k}` reference resolves to: the field's text,
+/// or the empty string when the projection has no such field (which is what
+/// makes `enclosing_attribute` drop the whole attribute — §6.3).
+fn get_attr_value(attrs: &[(String, Value)], key: &str) -> String {
+    match attrs.iter().find(|(name, _)| name == key) {
+        Some((_, Value::String(text))) => text.clone(),
+        Some((_, value)) => value.to_string(),
         None => String::new(),
     }
 }
@@ -158,14 +164,15 @@ fn get_attr_value(attrs: Option<&Map<String, Value>>, key: &str) -> String {
 /// Generates JSX attributes using curly brace expressions for all values.
 /// Automatically infers type from string values (boolean, number, or string).
 fn generate_spread_attrs(
-    map: &Map<String, Value>,
+    attrs: &[(String, Value)],
     used_keys: &BTreeSet<String>,
     ctx: &Ctx,
 ) -> String {
     let mut parts = Vec::new();
-    for (key, val) in map {
-        // Skip internal/special keys used by the AST renderer
-        if key == "name" || key.starts_with("__") {
+    for (key, val) in attrs {
+        // `name` is the AST node name, not an attribute (internals never reach
+        // the projection, so there is no `__` prefix to check here).
+        if key == "name" {
             continue;
         }
         // Skip keys that are already explicitly bound via {attrs.X} in the template

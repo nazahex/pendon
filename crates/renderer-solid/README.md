@@ -34,9 +34,19 @@ let jsx = render_solid_with_hints(&events, hints);
   `Heading`, `Section`, `CodeFence`, `BulletList` and `OrderedList` all call
   `render_attrs`, so extras reach the fallback element (no silent data loss,
   §12.3). `ListItem` (`<li>`) is the one gap (pending L2/L3, §9.3).
+  `render_attrs` emits the node's **projection** — `pendon_extra::project(node,
+  None).attrs()`, ADR-0014 rule 2 — rather than the raw `attrs` map: Phase 2 is
+  its identity pass, so the bytes are unchanged, and Phases 3–4 will fill the
+  map with `specs.*` and each element's preset assignment. Per-element reads
+  (`level` on a heading, `header` on a cell, the skip lists) still name their own
+  field — Phase 4 moves them as the element's preset lands — while `name` is
+  skipped everywhere because it is the `Element` node's tag, and `__`-prefixed
+  internals never reach the map at all (§11 rule 3).
 - **`template.rs`** — expands a component `template` (`{children}`, `{attrs.x}`,
   `{text}`) and validates it: a non-void element opened without `{children}` or
-  `{text}` is a **hard error** at config load (§11 rule 6).
+  `{text}` is a **hard error** at config load (§11 rule 6). Both `{...attrs}`
+  and `{attrs.k}` read the same projection, so a component sees public fields
+  only.
 - **`imports.rs`** — emits deduplicated import lines from renderer hints, and owns
   the module's `export const` lines (§20): `SolidRenderHints::exports` is an
   ordered list of `DataExport { name, value, source }`; `frontmatter`/`headings`

@@ -253,16 +253,14 @@ fn render_node(v: &Value, out: &mut String, indent: &mut usize) {
                     escape_html(title, out);
                     out.push_str("\"");
                 }
-                if let Some(attrs) = v.get("attrs").and_then(|attrs| attrs.as_object()) {
-                    for (name, value) in attrs {
-                        // `href`/`title` are written above; a `__`-prefixed key
-                        // is an internal marker (`__layer`, `__plugin_kind`) and
-                        // must never reach the output (§11 rule 3).
-                        if matches!(name.as_str(), "href" | "title") || name.starts_with("__") {
-                            continue;
-                        }
-                        render_attr(name, value, out);
+                // `href`/`title` are written above; every other public field
+                // comes from the projection (internals were dropped there, §11
+                // rule 3).
+                for (name, value) in pendon_extra::project(v, None).attrs() {
+                    if matches!(name.as_str(), "href" | "title") {
+                        continue;
                     }
+                    render_attr(&name, &value, out);
                 }
                 out.push('>');
                 out.push('\n');

@@ -16,23 +16,23 @@ pub(crate) fn attr_bool(v: &Value, key: &str) -> bool {
     attr_str(v, key).map(|raw| raw == "1").unwrap_or(false)
 }
 
-/// Emits every attribute except `skip` as HTML: `name="value"`, or a bare `name`
-/// for a flag (§6.3), matching what the JSX renderer emits.
+/// Emits every public field of the node except `skip` as HTML: `name="value"`,
+/// or a bare `name` for a flag (§6.3), matching what the JSX renderer emits.
+///
+/// The fields come from the projection ([`pendon_extra::project`]), not from the
+/// node's raw `attrs` map (ADR-0014 rule 2): Phase 2 is its identity pass, so the
+/// bytes are unchanged, but `__`-prefixed internals are already gone and Phases
+/// 3–4 will fill the map with `specs.*` and each element's preset assignment.
 ///
 /// A fragment (`$fragment`, a nested `mdp` payload) is markup, not data: its node
 /// list is rendered to HTML and escaped into the attribute value, so a bound
 /// `data: $mdp` reads as `<a data="<p>…</p>">` instead of leaking the AST JSON.
 pub(crate) fn render_attrs_except(v: &Value, out: &mut String, skip: &[&str]) {
-    let Some(attrs) = v.get("attrs").and_then(|attrs| attrs.as_object()) else {
-        return;
-    };
-    for (name, value) in attrs {
-        // A `__`-prefixed key is an internal marker (`__plugin_kind`, §11 rule 3)
-        // and must never reach the output, matching the JSX renderer.
-        if name.starts_with("__") || skip.contains(&name.as_str()) {
+    for (name, value) in pendon_extra::project(v, None).attrs() {
+        if skip.contains(&name.as_str()) {
             continue;
         }
-        render_attr(name, value, out);
+        render_attr(&name, &value, out);
     }
 }
 

@@ -408,6 +408,33 @@ mod tests {
         );
     }
 
+    /// §6.3/ADR-0014 rule 2: `render_attrs` emits the node's **projection**, and
+    /// the projection keeps a value's typed form — a `plugin-bind` value that
+    /// resolved to `null` still renders `k={null}` and a number stays a number
+    /// instead of being re-quoted.
+    #[test]
+    fn the_projection_keeps_attribute_types() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Attribute {
+                name: "count".to_string(),
+                value: format!("{}{}", pendon_core::JSON_ATTR_PREFIX, "12"),
+            },
+            Event::Attribute {
+                name: "missing".to_string(),
+                value: format!("{}{}", pendon_core::JSON_ATTR_PREFIX, "null"),
+            },
+            Event::Text("Body".to_string()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let output = render_solid(&events);
+        assert!(output.contains("count={12}"), "output = {output}");
+        assert!(output.contains("missing={null}"), "output = {output}");
+    }
+
     /// The built-in `<h*>` fallback prints `attrs.number` like any other
     /// attribute: numbering is no longer heading-template-only, so a heading
     /// without a custom component would otherwise lose its number (ADR-0010).

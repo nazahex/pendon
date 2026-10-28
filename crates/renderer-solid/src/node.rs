@@ -21,8 +21,9 @@ pub fn render_node(v: &Value, out: &mut String, ctx: &Ctx) {
                     escape_jsx(text, &mut children);
                 }
             }
+            let fields = pendon_extra::project(v, None).attrs();
             out.push_str(&template::render_template(
-                template, attrs, &children, text, ctx,
+                template, &fields, &children, text, ctx,
             ));
             return;
         }
@@ -350,26 +351,26 @@ fn render_text_or_children(v: &Value, out: &mut String, ctx: &Ctx) {
 /// parentheses `name={( … )}`. A rendered fragment (`$fragment`, a nested
 /// `mdp` payload) reaches this branch too, so it emits `name={(<>…</>)}`.
 fn render_attrs(v: &Value, out: &mut String, skipped: &[&str], ctx: &Ctx) {
-    let Some(attrs) = v.get("attrs").and_then(Value::as_object) else {
-        return;
-    };
-
-    for (name, value) in attrs {
-        // `name` is the AST node name, not an attribute, and a `__`-prefixed key
-        // is an internal marker (`__plugin_kind`, §11 rule 3). Neither may reach
-        // the output — the template path already skips them in
-        // `generate_spread_attrs`.
-        if name == "name" || name.starts_with("__") || skipped.contains(&name.as_str()) {
+    // The fields come from the projection, not from the node's own `attrs` map
+    // (ADR-0014 rule 2). Phase 2 is its identity pass, so this emits the same
+    // attributes in the same order as before — but internals (`__`-prefixed,
+    // §11 rule 3) are already gone, and Phase 3/4 will fill the map with
+    // `specs.*` and each element's preset assignment instead of a copy of the
+    // node.
+    for (name, value) in pendon_extra::project(v, None).attrs() {
+        // `name` is the AST node name, not an attribute — the template path
+        // skips it in `generate_spread_attrs` for the same reason.
+        if name == "name" || skipped.contains(&name.as_str()) {
             continue;
         }
         out.push(' ');
-        out.push_str(name);
-        if matches!(value, Value::Bool(true)) {
+        out.push_str(&name);
+        if matches!(&value, Value::Bool(true)) {
             continue;
         }
         // A raw JSX fragment (rendered MDP) reaches Solid as a parenthesised
         // expression so the markup is parsed, not stringified.
-        if let Value::String(text) = value {
+        if let Value::String(text) = &value {
             if let Some(fragment) = pendon_core::jsx_attr_payload(text) {
                 if is_jsx_expression_token(fragment) {
                     // A bare identifier / dotted path is emitted unquoted so it
@@ -385,7 +386,7 @@ fn render_attrs(v: &Value, out: &mut String, skipped: &[&str], ctx: &Ctx) {
                 continue;
             }
         }
-        match value {
+        match &value {
             Value::String(text) => {
                 out.push_str("=\"");
                 escape_jsx(text, out);
@@ -397,7 +398,7 @@ fn render_attrs(v: &Value, out: &mut String, skipped: &[&str], ctx: &Ctx) {
             // node list as JSX.
             Value::Object(_) | Value::Array(_) => {
                 out.push_str("={");
-                out.push_str(&to_js_literal(value, ctx));
+                out.push_str(&to_js_literal(&value, ctx));
                 out.push('}');
             }
             Value::Number(_) => {

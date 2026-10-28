@@ -143,6 +143,17 @@ late.
 **Consequence.** One function (`project(node) -> FieldMap`) is the only place
 overrides are read; both renderers call it. Ownership: Phase 2.
 
+> **Implementation note (S2-2.7).** The function is
+> `project(node, Option<&FieldConfig>)` (`crates/extra/src/field.rs`); `None` is
+> "this element carries no `field.*` config", which is what both DOM renderers
+> pass until Phase 4 threads the matched entry through. The identity pass also
+> settles two things the decision left implicit: a `__`-prefixed key is internal
+> and never enters the map (§11 rule 3 — that is why the renderers no longer test
+> the prefix), and an override renames its field **as the entry is written**, so
+> the renamed field keeps the replaced field's position and cannot reorder the
+> output. A node key that is not a valid field name cannot be public; it is
+> dropped with a `debug_assert!` rather than silently renamed.
+
 ---
 
 ## D-5 — Configuration key taxonomy
