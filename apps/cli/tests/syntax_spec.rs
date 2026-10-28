@@ -211,10 +211,11 @@ fn golden_02_extras_literal() {
     assert_fixture("02-extras-literal");
 }
 
-/// §16.3 fixture 03: `~?!` / `~?!!` + extras + caption (§7.1).
+/// §16.3 fixture 03: `!` tag + preset `alt`/`src`, bare slot fields, the retired
+/// marker run as literal text (§7.1).
 #[test]
-fn golden_03_image_figure() {
-    assert_fixture("03-image-figure");
+fn golden_03_image() {
+    assert_fixture("03-image");
 }
 
 /// §16.3 fixture 04: head `("title")` vs extras `"title"` priority (§7.2).

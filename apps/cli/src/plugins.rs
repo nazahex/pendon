@@ -65,39 +65,37 @@ pub fn build_context_inline_pipeline(
     enabled_plugins: &HashSet<&str>,
 ) -> ContextPipeline<DocumentContext> {
     let mut pipeline = ContextPipeline::new();
-    let mut image_pipeline = ContextPipeline::new();
 
     if enabled_plugins.contains("cite") {
-        image_pipeline.add(|context: &mut DocumentContext, events: Vec<Event>| {
+        pipeline.add(|context: &mut DocumentContext, events: Vec<Event>| {
             context.process_citations(&events)
         });
     }
     if enabled_plugins.contains("wiki") {
         let options = wiki_options.clone();
-        image_pipeline.add(move |_: &mut DocumentContext, events: Vec<Event>| {
+        pipeline.add(move |_: &mut DocumentContext, events: Vec<Event>| {
             pendon_plugin_wiki::process_with_options(&events, options.clone())
         });
     }
     if enabled_plugins.contains("anchor") {
         let options = anchor_options.clone();
-        image_pipeline.add(move |_: &mut DocumentContext, events: Vec<Event>| {
+        pipeline.add(move |_: &mut DocumentContext, events: Vec<Event>| {
             pendon_plugin_anchor::process(&events, &options)
         });
     }
     if let Some(options) = latex_options {
-        image_pipeline.add_after_markdown(move |_: &mut DocumentContext, events: Vec<Event>| {
+        pipeline.add_after_markdown(move |_: &mut DocumentContext, events: Vec<Event>| {
             pendon_plugin_latex::process_with_options(&events, &options)
         });
     }
 
     if enabled_plugins.contains("image") {
-        pipeline.add(move |context: &mut DocumentContext, events: Vec<Event>| {
-            pendon_plugin_image::process_with_context(
-                &events,
-                &image_options,
-                &image_pipeline,
-                context,
-            )
+        // §7.1 has no children any more: the caption that used to run through an
+        // inline pipeline is retired (§14), so the image reads no pipeline — the
+        // step stays here so an image inside a table cell is still claimed.
+        let options = image_options.clone();
+        pipeline.add(move |_: &mut DocumentContext, events: Vec<Event>| {
+            pendon_plugin_image::process(&events, &options)
         });
     }
     if enabled_plugins.contains("cite") {
@@ -505,21 +503,16 @@ pub fn build_image_options(config: Option<&ImageTaskConfig>) -> Result<ImageOpti
     let wired = pendon_plugin_image::layers();
     let loaded = load_custom("image", IMG_LAYER, config.custom.as_ref())?;
     check_layers("image", loaded.as_ref(), &wired)?;
-    let make = |layer: &'static str| {
-        move |entry: &crate::components::ComponentEntry| {
-            Ok::<_, String>(ImageCustomNode {
-                name: require(entry.name.as_ref(), &format!("image.custom.{layer}.name"))?,
-                template: require(
-                    entry.template.as_ref(),
-                    &format!("image.custom.{layer}.template"),
-                )?,
-                imports: entry.imports.clone(),
-            })
-        }
-    };
-    let img = layer_set(loaded.as_ref(), "img", make("img"))?;
-    let figure = layer_set(loaded.as_ref(), "figure", make("figure"))?;
-    Ok(ImageOptions { img, figure })
+    // §7.1: `img` is the only layer there is — the `figure` container is retired
+    // with the rest of the marker run (§14), so its block no longer loads.
+    let img = layer_set(loaded.as_ref(), IMG_LAYER, |entry| {
+        Ok::<_, String>(ImageCustomNode {
+            name: require(entry.name.as_ref(), "image.custom.img.name")?,
+            template: require(entry.template.as_ref(), "image.custom.img.template")?,
+            imports: entry.imports.clone(),
+        })
+    })?;
+    Ok(ImageOptions { img })
 }
 
 pub fn build_heading_options(config: Option<&HeadingTaskConfig>) -> Result<HeadingOptions, String> {
@@ -688,7 +681,7 @@ pub fn build_section_options(config: Option<&SectionTaskConfig>) -> Result<Secti
 
 /// The element plugins whose nodes can be numbered, in the order their blocks
 /// are registered. A block's `element` is the plugin token, so
-/// `[[task.image.number]]` numbers both the `img` and the `figure` layers.
+/// `[[task.image.number]]` numbers the `img` layer (§7.1 has one layer).
 pub const NUMBER_ELEMENTS: [&str; 10] = [
     "heading",
     "anchor",
@@ -1178,9 +1171,9 @@ names = ["TableHead"]
     #[test]
     fn img_and_heading_require_name_and_template() {
         let cfg: ImageTaskConfig =
-            toml::from_str("[custom.figure]\nname = \"Figure\"\n").expect("valid img config");
+            toml::from_str("[custom.img]\nname = \"Thumb\"\n").expect("valid img config");
         let err = build_image_options(Some(&cfg)).expect_err("template is required");
-        assert!(err.contains("image.custom.figure.template"), "{err}");
+        assert!(err.contains("image.custom.img.template"), "{err}");
 
         let cfg: HeadingTaskConfig =
             toml::from_str("[custom.heading]\ntemplate = \"<H>{children}</H>\"\n")
@@ -1193,7 +1186,7 @@ names = ["TableHead"]
     fn img_and_heading_share_the_import_syntax() {
         let cfg: ImageTaskConfig = toml::from_str(
             r#"
-[custom.figure]
+[custom.img]
 name = "Figure"
 template = "<Figure>{children}</Figure>"
 imports = ["import Figure from '@/components/Figure';"]
@@ -1201,10 +1194,7 @@ imports = ["import Figure from '@/components/Figure';"]
         )
         .expect("valid img config");
         let options = build_image_options(Some(&cfg)).expect("valid img options");
-        let node = options
-            .figure
-            .default_component()
-            .expect("figure component");
+        let node = options.img.default_component().expect("img component");
         assert_eq!(node.name, "Figure");
         assert!(matches!(&node.imports[0], ImportEntry::Raw(line) if line.contains("Figure")));
 
@@ -1503,10 +1493,31 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
         assert!(err.contains("cited") && err.contains("all"), "{err}");
     }
 
-    /// `image` reads the `figure` layer (the outermost node) and the `img` layer
-    /// (the element it contains), and reports unknown layers.
+    /// `image` reads its one `img` layer and rejects the retired `figure` layer
+    /// as an unknown one (§7.1, §14).
     #[test]
-    fn img_reads_the_figure_layer() {
+    fn img_reads_the_img_layer() {
+        let cfg: ImageTaskConfig = toml::from_str(
+            r#"
+[custom.img]
+name = "Thumb"
+template = "<img />"
+"#,
+        )
+        .expect("valid img config");
+        let options = build_image_options(Some(&cfg)).expect("valid img options");
+        assert_eq!(
+            options.img.default_component().expect("img component").name,
+            "Thumb"
+        );
+
+        let cfg: ImageTaskConfig =
+            toml::from_str("[custom.img]\nname = \"Thumb\"\n").expect("valid img config");
+        let err = build_image_options(Some(&cfg)).expect_err("template required");
+        assert!(err.contains("image.custom.img.template"), "{err}");
+
+        // The `figure` container is retired with the marker run, so a config that
+        // still declares it names a layer no plugin wires (§13: load error).
         let cfg: ImageTaskConfig = toml::from_str(
             r#"
 [custom.figure]
@@ -1515,31 +1526,8 @@ template = "<Figure>{children}</Figure>"
 "#,
         )
         .expect("valid img config");
-        let options = build_image_options(Some(&cfg)).expect("valid img options");
-        assert_eq!(
-            options
-                .figure
-                .default_component()
-                .expect("figure component")
-                .name,
-            "Figure"
-        );
-
-        let cfg: ImageTaskConfig =
-            toml::from_str("[custom.figure]\nname = \"Figure\"\n").expect("valid img config");
-        let err = build_image_options(Some(&cfg)).expect_err("template required");
-        assert!(err.contains("image.custom.figure.template"), "{err}");
-
-        // The `img` layer is wired: it renders the `<img>` element of a figure
-        // or the whole component of a plain image (§7.1).
-        let cfg: ImageTaskConfig =
-            toml::from_str("[custom.img]\nname = \"Thumb\"\ntemplate = \"<img />\"\n")
-                .expect("valid img config");
-        let options = build_image_options(Some(&cfg)).expect("img layer wired");
-        assert_eq!(
-            options.img.default_component().expect("img component").name,
-            "Thumb"
-        );
+        let err = build_image_options(Some(&cfg)).expect_err("figure is not a layer");
+        assert!(err.contains("figure"), "{err}");
     }
 
     /// `heading` and `cite` read their primary layer; the citation leaf keeps its

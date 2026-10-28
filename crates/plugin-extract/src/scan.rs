@@ -130,7 +130,7 @@ pub fn scan(events: &[Event]) -> Vec<ElementNode> {
 
 /// The element the node starting at `index` belongs to.
 ///
-/// `__layer` is authoritative (a `figure` and its inner `img` are both `image`);
+/// `__layer` is authoritative (an `img` is `image`);
 /// a bare `Heading` node with no layer is a heading too, because the heading
 /// plugin owns that node kind outright.
 fn element_at(events: &[Event], index: usize, kind: &NodeKind) -> Option<&'static str> {

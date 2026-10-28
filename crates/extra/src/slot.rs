@@ -126,8 +126,8 @@ pub enum SlotTag {
     /// `[^ref]` — `plugin-cite` (§7.3). One caret: `crates/core` has no footnote
     /// extension, so `[^ref]` is never claimed before us (OBJ-1).
     Cite,
-    /// `![alt](src)` — `plugin-image` (§7.1). The `!!` figure marker is that
-    /// element's own concern, not a second tag.
+    /// `![alt](src)` — `plugin-image` (§7.1). The tag is the `!` that touches the
+    /// bracket, so a second `!` in front of it is that element's own text.
     Image,
     /// `#[slug](title)` — `plugin-heading` (§7.4), and only when `[` follows at
     /// once, so `# Word` stays an ATX heading.
@@ -888,7 +888,7 @@ mod tests {
         absent("# Word"); // an ATX heading, not a slot (§7.4)
         absent("@(x)");
         absent("#");
-        absent("!![a](b)"); // `!!` is the figure marker, not two tags
+        absent("!![a](b)"); // two `!`: only the one touching `[` is a tag
     }
 
     #[test]

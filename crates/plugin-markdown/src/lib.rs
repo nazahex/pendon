@@ -441,13 +441,22 @@ mod tests {
     }
 
     #[test]
-    fn preserves_double_bang_for_advanced_image_plugin() {
+    fn a_leading_bang_is_text_before_an_image() {
+        // §7.1 retired the `!!` figure marker (§14), so markdown no longer holds a
+        // double bang back: the `!` that touches `[` is the image tag and the first
+        // one is ordinary text.
         let opts = MarkdownOptions::default();
         let events = run_markdown("!![Alt](https://example.com/a.webp)\n", opts);
 
-        assert!(!events
+        assert!(events
             .iter()
             .any(|e| matches!(e, Event::StartNode(NodeKind::Image))));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Event::Text(text) if text.contains('!'))),
+            "the first `!` stays text: {events:?}"
+        );
     }
 
     #[test]

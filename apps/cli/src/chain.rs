@@ -351,12 +351,7 @@ fn run_chain(
             }
             "image" => {
                 let image_opts = &config.image;
-                let result = pendon_plugin_image::process_with_context(
-                    &events,
-                    image_opts,
-                    &state.pipeline,
-                    &mut state.context,
-                );
+                let result = pendon_plugin_image::process(&events, image_opts);
                 if let Some(hints) = pendon_plugin_image::solid_hints(image_opts) {
                     state.hints.push(hints);
                 }

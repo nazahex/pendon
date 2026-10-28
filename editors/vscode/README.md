@@ -185,6 +185,13 @@ and duplicate the symbols.
   Colouring never depends on the depth, so this is cosmetic — the scanner reports
   what the `#` run says.
 - **URLs** nest parentheses two levels deep; deeper nesting is not matched.
+- **Image rules still describe the retired marker run.** `#figure` and
+  `#advancedImage` colour a `!!` / `?~w300` run and the caption after it, but
+  §7.1 deleted all of that (D-16): the head is `![alt](src)` + extras and the
+  text after it is paragraph content. Colouring is therefore wider than the
+  syntax — a `~?!!` line still lights up as a figure even though the plugin now
+  renders it literally. The rewrite waits for the grammar pass that follows the
+  Stage-2 head work, like the heading leniency above.
 - **Image container prefixes.** `p!…` / `d!…` only ever tag the marker from its
   `!`, so the prefix letter stays plain.
 - **Display math is line-bounded.** `plugin-latex` renders `$$…$$` across lines

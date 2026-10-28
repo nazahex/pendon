@@ -25,15 +25,17 @@ fn latex_renders_in_paragraph_and_escapes_literal_braces() {
 }
 
 #[test]
-fn latex_renders_inside_figure_caption() {
-    let input = "!![Alt](https://x.test/a.webp)[.foo]{con: jux} Et {foo} labore $x^2$ qui.\n";
+fn latex_renders_beside_an_image() {
+    // §7.1's head has no children (§14), so the text after it is ordinary
+    // paragraph content: math and literal braces are still handled there.
+    let input = "![Alt](https://x.test/a.webp) Et {foo} labore $x^2$ qui.\n";
     let (_code, out, _err) = run_cli(
         input,
         &["--plugin", "image,markdown,latex", "--format", "solid"],
     );
 
-    assert!(contains("<figcaption>").eval(&out));
-    // Math inside the caption is rendered by the nested inline pipeline...
+    assert!(contains("<img alt=\"Alt\"").eval(&out), "{out}");
+    // Math beside the image is rendered by the nested inline pipeline...
     assert!(contains("latex latex-inline").eval(&out));
     // ...and literal braces are escaped as entities.
     assert!(contains("&#123;foo&#125;").eval(&out));

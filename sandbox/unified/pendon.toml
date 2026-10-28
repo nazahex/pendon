@@ -48,18 +48,13 @@ imports = "import { HeadingDefault } from '@comp/Heading'"
 template = "<HeadingDefault {...attrs}>{children}</HeadingDefault>"
 
 # === IMAGE (§7.1) ==========================================================
-# `img` is the `<img>` element, `figure` its container; a `~?!!` figure uses
-# both (the container wraps the element), a plain image uses `img` alone.
+# One layer, `img`: `![alt](src)` is the whole head and the extras decorate the
+# same element. The `figure` container is retired with the marker run (§14).
 
 [task.image.custom.img]
 name = "AdvancedImage"
 imports = "import AdvancedImage from '@comp/AdvancedImage'"
-template = "<AdvancedImage {...attrs}>{children}</AdvancedImage>"
-
-[task.image.custom.figure]
-name = "Figure"
-imports = "import Figure from '@comp/Figure'"
-template = "<Figure {...attrs}>{children}</Figure>"
+template = "<AdvancedImage {...attrs} />"
 
 # === CITE (§7.3) ===========================================================
 

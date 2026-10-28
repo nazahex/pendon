@@ -222,7 +222,7 @@ fn element_token(kind: &NodeKind, attrs: &BTreeMap<String, String>) -> Option<&'
         return Some(match layer {
             "heading" => "heading",
             "anchor" => "anchor",
-            "img" | "figure" => "image",
+            "img" => "image",
             "table" => "table",
             "marker" => "marker",
             "blockquote" => "blockquote",

@@ -58,12 +58,12 @@ built-in keys.
   emitting plugin writes first (`plugin-custom`, `plugin-directive`,
   `plugin-table`). `block` / `codefence` / `blockquote` re-lexes the body as block
   content, `inline` as inline content, and `element` — or no attribute at all —
-  passes the subtree through verbatim (the pre-rendered `figure` / `table`
-  containers of `plugin-image` and `plugin-table`). This is why an unclaimed block
+  passes the subtree through verbatim (the pre-rendered `table` containers of
+  `plugin-table`, and every `plugin-image` `<img>`). This is why an unclaimed block
   directive (`<div>`) renders the lists and emphasis inside its body instead of
   leaking the raw Markdown. A node placed `element` also continues the current
   line — it sits where its marker was — so the text after it keeps its leading
-  space (`<img … /> Caption`, not `<img … />Caption`).
+  space (`<img … /> text`, not `<img … />text`).
 - §9.3/§9.4 (list container merge): a node that declares `unordered` or `ordered`
   is a container wrapper from `plugin-list`. Its body is re-lexed as blocks and
   the list it decorates is built **inside** that node instead of in a `<ul>`/`<ol>`

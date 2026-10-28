@@ -65,7 +65,7 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | -- | ------------------ | ------------------------------------------------------------- |
 | 01 | `extras-head`      | all item kinds, ordering, duplicates, escaping                |
 | 02 | `extras-literal`   | malformed heads → literal text, adjacency failures            |
-| 03 | `image-figure`     | `~?!` / `~?!!` + extras + caption                             |
+| 03 | `image`            | `!` tag + preset `alt`/`src`, bare slot fields, retired marker run |
 | 04 | `anchor`           | `@` tag vs untagged, six positions → preset, removed modifiers/external defaults |
 | 05 | `cite`             | `[^^](ref "loc")` + extras, retired forms stay literal        |
 | 06 | `heading`          | `[slug]` + `("title")` + extras, an authored `number:` passes through (numbering is `plugin-number`) |

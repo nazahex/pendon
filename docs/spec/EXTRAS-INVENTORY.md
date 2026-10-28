@@ -137,31 +137,28 @@ Source: §7.4/§11 · `crates/plugin-heading` · golden `06-heading`.
 `number: "auto"` is a diagnostic there, and the only `number` an extract sees is
 the array.
 
-## 7. `image` — `__layer = "img"` or `"figure"`
+## 7. `image` — `__layer = "img"`
 
-Source: §7.1 · `crates/plugin-image` · golden `03-image-figure`.
+Source: §7.1 · `crates/plugin-image` · golden `03-image`.
 
-A figure is **two nodes**: the outer `figure` layer carries the extras, the inner
-`img` layer carries the source. Both report as `image`, so a block sees one row
-per layer; `container` tells them apart.
+An image is **one node**: `![alt](src)` is the whole head, the extras decorate the
+same `<img>`, and every position the head carries beyond the preset stays a bare
+slot field. There is no `figure` layer and no caption any more (§14).
 
-| field            | type   | recommended | layer    | notes                                      |
-| ---------------- | ------ | ----------- | -------- | ------------------------------------------ |
-| `src`            | string | yes         | `img`    | the resolved URL; never overridable        |
-| `alt`            | string | yes         | `img`    | from the construct head                    |
-| `width`          | number | yes         | `img`    | `w` in the construct                       |
-| `height`         | number | yes         | `img`    | `h` in the construct                       |
-| `type`           | string | yes         | both     | the `@@type` marker                        |
-| `id`             | string | yes         | `figure` | `#id` / slug of the figure (§6.2)          |
-| `container`      | string | no          | both     | `figure` / `img`; the layer discriminator  |
-| `class`          | string | no          | both     | extras only                                |
-| `style`          | string | no          | both     | extras only (CSS custom properties, §10.3) |
-| `lazy`           | number | no          | `img`    | `1` when the image is lazy                 |
-| `async_decoding` | number | no          | `img`    | `1` when decoding is async                 |
-| `isLazy`         | flag   | no          | `figure` | figure-level lazy flag                     |
-| `inner_text`     | text   | no          | `figure` | the caption (figure only)                  |
-
-| `id` | string | yes | head `[bracket]` (§10.4) |
+| field           | type   | recommended | notes                                              |
+| --------------- | ------ | ----------- | -------------------------------------------------- |
+| `src`           | string | yes         | `paren.bare`; owned by the construct (D-12 rule 5) |
+| `alt`           | string | yes         | `bracket.bare`; owned by the construct (D-12)      |
+| `width`         | number | yes         | an extras `width:` (the `w` modifier is gone)      |
+| `height`        | number | yes         | an extras `height:` (the `h` modifier is gone)     |
+| `type`          | string | yes         | the `@@type` marker                                |
+| `id`            | string | yes         | `#id` / extras `` `slug` `` (§6.2)                 |
+| `class`         | string | no          | extras only, accumulates (§6.4)                    |
+| `style`         | string | no          | extras only; `--x:` folds in (§6.3)                |
+| `loading`       | string | no          | an extras `loading:` (the `?` modifier is gone)    |
+| `decoding`      | string | no          | an extras `decoding:` (the `~` modifier is gone)   |
+| `bracket.quote` | text   | no          | a claimed position the preset does not name (D-7)  |
+| `inner_text`    | —      | no          | **none**: the head owns no children (§14)          |
 
 ## 8. `list` — `__layer = "list"` (item), `"unordered"` / `"ordered"` (container)
 

@@ -1,0 +1,25 @@
+An image is **one head** (§7.1): `!` is the tag, the bracket is the preset's
+`alt`, the paren its `src`. A head alone on its line is a block:
+
+![Alt text](https://res.cloudinary.com/x/upload/img.webp)@@imageX{.thumb, foo: "bar"}
+
+Every other position the head carries stays a bare field, so nothing is dropped
+(D-7): the quote and the tick keep their slot-qualified path.
+
+![Alt text "bracket quote" `bracket tick`](https://x.test/src.webp "paren quote" `paren tick`)
+
+A head that shares its line with text stays inline, and the text after it is
+paragraph content, not a caption (§14 retired `<figure>`):
+
+Ad ex tempor ![Alt text](https://x.test/lazy.webp)@@imageX{con: "jux", .foo} consectetur.
+
+The retired marker run is literal text: `?`, `~`, `w<n>`, `h<n>`, `!!`, `p!` and
+`d!` are gone (§14), so only the `!` that touches `[` claims anything — here the
+run stays as written and the empty-alt head behind it is still an image.
+
+~?!![](https://x.test/old.webp)
+
+`alt` and `src` are built-in (D-12 rule 5), so an extras item that spells one is
+an error — and the head still wins it.
+
+![Alt text](https://x.test/own.webp){alt: "other", .wide}

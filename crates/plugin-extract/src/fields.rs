@@ -32,7 +32,7 @@ pub fn element_of_layer(layer: &str) -> Option<&'static str> {
     Some(match layer {
         "heading" => "heading",
         "anchor" => "anchor",
-        "img" | "figure" => "image",
+        "img" => "image",
         "table" => "table",
         "marker" => "marker",
         "blockquote" => "blockquote",
@@ -203,7 +203,6 @@ mod tests {
             "heading",
             "anchor",
             "img",
-            "figure",
             "table",
             "marker",
             "blockquote",

@@ -80,18 +80,16 @@ head's `[slug]` wins and `("title")` is a separate attribute, never the text.
 
 ###[heading-plain] A plain heading without extras
 
-##[image] Image and figure
+##[image] Image
 
-`~?!!` declares a figure: the extras attach to the outermost node (`<figure>`),
-the `w`/`h` marker stays on the inner `<img>` and the trailing text is the
-caption.
+`![alt](src)` is the whole head (§7.1); the extras decorate the same `<img>`,
+and a dimension or a lazy flag is an ordinary extras key now.
 
-~?!!h300w800[Alt text](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp)@@figureX{.wide, #fig-1, --rotate: "5deg", isLazy} A figure caption with **markup**.
+![Alt text](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp)@@figureX{.wide, #fig-1, --rotate: "5deg", isLazy, width: "800", height: "300"}
 
-A plain image uses the `img` layer alone. The `!` marker (lazy) keeps the line
-from being read as a Markdown link before the plugin sees it:
+The text after the head is ordinary paragraph content, not a caption:
 
-~!w800[Alt text](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp)@@imageX{.thumb, foo: "bar"}
+Ad ex tempor ![Alt text](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp)@@imageX{.thumb, foo: "bar", loading: "lazy"} consectetur.
 
 ##[cite] Cite
 

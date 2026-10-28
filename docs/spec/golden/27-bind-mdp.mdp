@@ -17,7 +17,10 @@ carry a node list (Solid: `(<>{…}</>)`).
 A [[Nested Wiki]] link, a citation [^book "hlm. 45"] and inline math $x^2$
 all resolve against the page's own state.
 
-~?!!w400[Chart](https://example.com/chart.png)@@figureX{.wide} A caption from the payload.
+The image head is one node now (§7.1): the extras carry what the retired marker
+run used to (`width`, `loading`), and the text after it is content.
+
+![Chart](https://example.com/chart.png)@@figureX{.wide, width: "400", loading: "lazy"} A caption from the payload.
 
 | Name | Value |
 | ---- | ----: |

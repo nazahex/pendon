@@ -1,0 +1,6 @@
+[[task]]
+name = "Golden 03"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,image,markdown"
+format = "solid"

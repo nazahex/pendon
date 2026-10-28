@@ -583,27 +583,48 @@ nothing, so a construct never inherits a collision rule it did not ask for.
 
 Notation: `head?` = optional, `extras?` = optional `@@type{…}`, `∘` = no space.
 
-### 7.1 Image and figure (`plugin-image`)
+### 7.1 Image (`plugin-image`)
 
 ```ebnf
-image    = marker "[" alt "]" "(" url ")" extras? caption?
-marker   = container? marker-body               # container: `p` = <p>, `d` = <div>
-marker-body = 1*( "!" | modifier )              # MUST contain >= 1 "!"; "!!" => figure
-modifier = "?" | "~" | ( "w" | "h" ) DIGIT+
-caption  = text
-extras   = §5 extras-head                       # the shared {…} / @@type{…} head
+image     = tag slot-pair extras?
+tag       = "!"                                    # mandatory (§5.3, D-11)
+slot-pair = "[" contents "]" [ "(" contents ")" ]  # §5.2, paren attached
+extras    = §5 extras-head                         # the shared {…} / @@type{…} head
 ```
 
-- Markers must contain at least one `!`; `!!` enables figure mode. A leading `p`
-  wraps in `<p>` and `d` wraps in `<div>` (container); a container prefix and `!!`
-  are mutually exclusive (e.g. `p!!`, `d!!` are rejected and the line is skipped
-  without error).
-- Bare `!` requires at least one modifier (`?`, `~`, `w<digits>`, or `h<digits>`); otherwise the line is left for `plugin-markdown`.
-- Modifiers are order-independent: `?` adds `loading="lazy"`, `~` adds `decoding="async"`, `w<digits>`/`h<digits>` set explicit dimensions on the inner `<image>`.
-- Invalid marker combinations (e.g., `p!!`, `d!!`) are rejected and the line is skipped without error.
-- Extras attach to the outermost node (`Figure` when `!!`, else `Image`); dimensions from modifiers always apply to the inner `<image>`.
-- Trailing caption text is permitted only in figure mode (`!!`); non-figure markers ignore trailing text.
-- Caption content is processed through the shared inline pipeline (wiki, cite, anchor, markdown) before rendering.
+| position       | preset name | meaning              |
+| -------------- | ----------- | -------------------- |
+| `bracket.bare` | `alt`       | the alternative text |
+| `paren.bare`   | `src`       | the image source     |
+
+- The tag is **mandatory**, and `![alt](src)` is the whole minimum: the `!` is
+  the tag, the bracket is the preset's `alt` and the paren its `src`. A `!` with
+  no bracket is literal text, and only the `!` that **touches** `[` claims a head
+  — `!![](src)` is the text `!` followed by an image.
+- Those two rows are the whole preset (§6.5). `bracket.quote`, `bracket.tick`,
+  `paren.quote` and `paren.tick` are read as bare fields under their
+  slot-qualified names, so no content of a claimed head is dropped (D-7): an
+  image headline goes in a quote, not out of the document.
+- `alt` and `src` are **built-in** fields: an extras `alt:` / `src:` is
+  `Severity::Error` naming `field.override.alt` / `field.override.src` (§13,
+  D-12 rule 5) — `field.override` is the way to publish one under another name.
+  `alt` renders even when the bracket is empty, because an empty `alt=""` is the
+  one meaningful empty value (§6.3): `![](src)` is a decorative image.
+- Extras attach to the `<img>` **itself** — there is no second node — and the
+  construct head wins over a same-named extras item (§6.2). An extras
+  `` `slug` `` is the `id` fallback when neither `#id` nor a head-supplied id
+  exists; `--x: v` folds into `style` like everywhere else.
+- The head is **one node**: a line whose whole content is a head is a block image
+  (the `<img>` replaces its paragraph), while a head that shares its line with
+  text stays inline inside that paragraph. Text after the head is ordinary
+  content and is processed by the rest of the chain — it is never a caption.
+- Everything the retired marker run used to do is an ordinary extras key (§14,
+  D-16): `loading: "lazy"`, `decoding: "async"`, `width: "400"`,
+  `height: "300"`. A wrapper (`<figure>`, `<div>`, `<p>`, a caption element) is a
+  component's own business: configure `[task.image.custom.img]` (§11) and render
+  whatever the site needs.
+- §11 has exactly one layer, `img`. `[task.image.custom.figure]` no longer loads
+  (§13): the two-node figure is gone with the marker that produced it.
 
 ### 7.2 Anchor (`plugin-anchor`)
 
@@ -1081,8 +1102,10 @@ number-system = "decimal" | "lower-roman"  | "upper-roman"
   and precede `markdown`; the CLI rejects any other position with a config error
   naming both plugins.
 - A construct that owns the rest of its line is required for a marker to attach:
-  `![alt](/a.png)%%numberA` numbers the image, while `![alt](/a.png)%%numberA x`
-  leaves `%%numberA` as text (§7.1). Citation numbering stays in `plugin-cite`.
+  `![alt](/a.png)%%numberA` numbers the image (a head alone on its line is a
+  block), and `![alt](/a.png)%%numberA x` numbers the same image written inline,
+  with `x` as ordinary paragraph text (§7.1). Citation numbering stays in
+  `plugin-cite`.
 - Frozen by golden `30-number-heading` (element numbering) and
   `31-number-custom` (`%%` markers across heading/anchor/image).
 
@@ -1117,7 +1140,6 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
 [task.list.custom.ordered] # <ol> container
 
 [task.image.custom.img] # <img>
-[task.image.custom.figure] # <figure>
 [task.wiki.custom.anchor] # <a> produced by plugin-wiki
 [task.wiki.custom.infobox] # infobox (deleted in the next workflow)
 ```
@@ -1305,6 +1327,9 @@ Config-load errors MUST abort the build before any file is processed.
 | `[task.<plugin>.custom_node]`                                           | `[task.<plugin>.custom.<layer>]`                                                     | **removed**: `custom.<layer>` is read for `anchor`, `image` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`); every sandbox/fixture config is migrated. The stale key fails the build with a migration message. Unwired layers (`task.image.custom.img`) are config errors. |
 | `[task.heading]` `auto_number` / `number_style`                         | `[[task.heading.number]]`                                                            | **removed** (ADR-0010): both keys are read only to raise the §14 migration error. Numbering is `plugin-number` (§10.5), which writes `attrs.number` as an array and never prefixes the text.                                                                                                                      |
 | anchor URL-suffix modifiers (`^`, `~`, `!`, `$`, `;;`, `--`)            | —                                                                                    | **not syntax** (D-16, §7.2): deleted, not replaced. A modifier-shaped tail is now part of the URL, and the `target` / `rel` tokens they produced are ordinary extras keys; the `^`/`~` conflict warning went with them. Slot modifiers are §5.4's, and Pendon ships none.                                         |
+| image marker run (`?`, `~`, `w<n>`, `h<n>`)                             | extras keys `loading:` / `decoding:` / `width:` / `height:`                          | **removed** (D-16, §7.1): `~?!![](src)` is the text `~?!` followed by an empty-alt image. A flag was never a field name, so the marker is not another spelling of one.                                                                                                                                            |
+| image `!!` figure, trailing caption, `<figure>` / `<figcaption>`        | the text after the head / a `[task.image.custom.img]` component                      | **removed** (D-16, §7.1): the head is one `<img>` node, so a caption is ordinary paragraph content and a wrapper is the component's own markup. `[task.image.custom.figure]` no longer loads (§13).                                                                                                               |
+| image container prefixes `p!` / `d!`                                    | a component on the `img` layer                                                       | **removed** (D-16, §7.1): the prefix spelled an element name, which is config, not syntax — `p![alt](src)` now renders `p` and an image.                                                                                                                                                                          |
 | automatic external-URL `target="_blank"` / `rel="noopener"`             | —                                                                                    | **not syntax** (D-16, §7.2): the anchor no longer classifies URLs, and no config key restores it — write `target` / `rel` in the extras when a link needs them.                                                                                                                                                   |
 | untagged `[text](url)` anchor                                           | `@[text](url)`                                                                       | **not syntax** (D-16, §7.2): the slot tag is mandatory, because the bracket and paren are universal (§5.2). Without it the text is an ordinary CommonMark link and a trailing extras head stays literal text.                                                                                                     |
 | blockquote inner head (`> @@type{…} content`)                           | decorator line above the quote                                                       | **not syntax** (D-16, §9.2): a quote has no head, so everything inside `>` is content and `@@type{…}` written there is literal text. The decorator line (§9.1) is the only way to configure a quote.                                                                                                              |

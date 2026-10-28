@@ -293,6 +293,21 @@ exactly one `export const headings` line each (no bytes removed), and
       `32` gained a headed `Foo Bar` because a headless row is now only
       `depth`+`inner_text`. §7.4 rewritten, `plugin-heading` README and the
       inventory's heading table/preset migrated. 776 tests.
+      **`S2-4.7` done — image is one node.** `![alt](src)` is the whole head
+      (`parse_slots` + `parse_extras` + `HEAD.assign`), so a bare `!` finally
+      _is_ an image; the preset is `bracket.bare → alt` / `paren.bare → src` and
+      every other claimed position survives as a bare field (`bracket.quote`,
+      `paren.tick`, …). `alt`/`src` are now `.with_owned` (D-12 rule 5), so an
+      extras item spelling one is an `Error` — but only while the preset wrote it,
+      so a `field.*`-voided preset leaves the key free. The whole marker run is
+      deleted (D-16): `?`/`~`/`w<n>`/`h<n>` → ordinary extras keys, `!!` figure +
+      caption + `<figure>`/`<figcaption>` → text after the head (or a component),
+      `p!`/`d!` → a component's own wrapper, `[task.image.custom.figure]` → a load
+      error. `ImageOptions` has one layer, the caption pipeline and the crate's
+      `plugin-markdown`/`plugin-latex` deps are gone, and a head written inside a
+      **code span** is no longer claimed (markdown would print `<img>` inside
+      backticks). Fixtures: `03-image-figure` → `03-image` (rewritten), `27-bind-mdp`
+      (payload line + `img` layer), `31-number-custom` byte-identical. 776 tests.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden
@@ -404,3 +419,9 @@ exactly one `export const headings` line each (no bytes removed), and
   `27-bind-mdp` and `33-extract-scopes` (its `.cite.json` / `.cite.yaml` side
   files too) — all by the field rename `ref_id`/`loc` → `reference_id`/`locator`
   and the loss of `instance_index`; `35-cite-fields` is new.
+- `S2-4.7` renamed `03-image-figure` → `03-image` and rewrote it (one `<img>`
+  node: bare head, bare slot fields, the retired marker run as literal text, an
+  `alt:` extra erroring) and moved `27-bind-mdp` again (its payload image is a
+  `[task.image.custom.img]` entry now). `31-number-custom` did **not** move: a
+  `%%numberType` marker is an extras item, so those images were already the
+  plugin's and the block shape is unchanged.

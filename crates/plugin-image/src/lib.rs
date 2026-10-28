@@ -1,21 +1,33 @@
-use pendon_core::{
-    element_close, element_open, parse, raw_inline, Event, InlinePipeline, NodeKind, Options,
-    Pipeline,
-};
+//! `plugin-image` — the `!` construct (§7.1).
+//!
+//! `![alt](src)` is **one head**: `!` is the tag that claims it (D-11), the
+//! bracket is the preset's `alt`, the paren its `src`, and every other claimed
+//! position survives as a bare field (D-7). The extras head decorates the same
+//! `<img>` node, because there is no second node any more: the marker run
+//! (`?`, `~`, `w<n>`, `h<n>`, `!!`, `p!`, `d!`), the trailing caption and the
+//! `<figure>`/`<figcaption>` pair are retired (§14, D-16).
+
+use pendon_core::{element_close, element_open, raw_inline, Event, NodeKind, Severity};
 use pendon_extra::{
-    issue_event, scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
-    ExtrasIssue, FieldName, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag, Specs,
-    SpecsKey,
+    issue_event, parse_extras, parse_slots, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
+    ExtrasIssue, ExtrasMatch, FieldConfig, FieldName, Preset, Slot, SlotContract, SlotError,
+    SlotKind, SlotMatch, SlotPair, SlotPos, SlotTag, SpecsKey,
 };
-use pendon_plugin_markdown::process as process_markdown;
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
-use serde::{Deserialize, Serialize};
 
 // --- Slot head (§7.1, §6.1) ---
 
-/// Every position image claims: `![alt "bracket quote" `bracket tick`](src "paren quote" …)`
-/// — a claimed head is read whole, so an unnamed content becomes a bare field
-/// (`paren.tick`, …) rather than being dropped (D-7).
+/// The tag that claims this element's head (§5.3, D-11).
+///
+/// `![…](…)` without a bracket is an ordinary CommonMark image: the bracket and
+/// paren belong to whoever contracts them, and `plugin-markdown` handles it.
+const TAG: char = '!';
+
+/// Every position image claims: `![alt "bracket quote" `bracket tick`](src
+/// "paren quote" `paren tick`)`.
+///
+/// A claimed head is read whole (§6.1): a content the preset does not name is
+/// not dropped, it becomes a bare field under its slot-qualified path (D-7).
 const SLOTS: &[SlotPos] = &[
     (Slot::Bracket, SlotKind::Bare),
     (Slot::Bracket, SlotKind::Quote),
@@ -27,117 +39,111 @@ const SLOTS: &[SlotPos] = &[
 
 /// §7.1's preset assignment: `bracket.bare` → `alt`, `paren.bare` → `src`.
 ///
-/// Both are optional; validating them is the user's job (D-2: no element may
-/// refuse a head for looking incomplete).
+/// Both are optional (D-2: no element may refuse a head for looking
+/// incomplete), so `![alt]` and `![]()` are images too — what they mean is the
+/// document's business, not the parser's.
 const PRESET: &[Preset] = &[
     Preset::new(Slot::Bracket, SlotKind::Bare, FieldName::new("alt")),
     Preset::new(Slot::Paren, SlotKind::Bare, FieldName::new("src")),
 ];
 
-/// The tag that claims image's head (D-11), the positions it claims, and their
-/// fallback-to-preset assignment (§6.1, §6.5, D-7).
+/// D-12 rule 5: the two fields `<img>` writes itself, so an extras item that
+/// spells one is an `Error` (`field.override.alt` publishes it under another
+/// name). Everything else is an ordinary extras key.
+const OWNED: &[FieldName] = &[FieldName::new("alt"), FieldName::new("src")];
+
+/// The tag that claims image's head (D-11), the positions it claims, and where
+/// each lands when the user configures nothing (§6.1, §6.5, D-7).
 pub const HEAD: ElementHead = ElementHead::new(
     SlotContract {
         accepted: SLOTS,
         tag: SlotTag::Image,
     },
     PRESET,
-);
+)
+.with_owned(OWNED);
 
-// --- Configuration & Types ---
+/// The extras positions this element reads as a DOM field of its own (§6.3): an
+/// extras `"quote"` is the `<img>`'s `title`, while `class` / `id` / `style` are
+/// the universal ones. Every other extras path is already a field of its own.
+const ELEMENT_READS: &[(SpecsKey, &str)] = &[(SpecsKey::Quote, "title")];
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+// --- Configuration ---
+
+#[derive(Clone, Debug, Default)]
 pub struct ImageOptions {
-    /// §11 `img` layer: the `<img>` element itself.
+    /// §11 `img` layer: the `<img>` element itself, and the only layer there is
+    /// (the `figure` container is retired, §14).
     pub img: ComponentSet<ImageCustomNode>,
-    /// §11 `figure` layer: the `<figure>` container of `~?!!`.
-    pub figure: ComponentSet<ImageCustomNode>,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default)]
 pub struct ImageCustomNode {
     pub name: String,
     pub template: String,
-    #[serde(default)]
     pub imports: Vec<ImportEntry>,
 }
 
-// --- Parsed Image Data (shared between HTML and Custom rendering) ---
+// --- §11 layers (ADR-0008 `D-3a`) ---
 
-#[derive(Debug, Clone)]
-struct ParsedImage {
-    alt: String,
-    src: String,
-    caption: Option<String>,
-    container: Option<ContainerKind>,
-    attrs: ImageAttrs,
-    marker: ImageMarker,
-    /// Bare flags of the §7.1 extras head (§6.3), emitted on the outermost node.
-    flags: Vec<String>,
-    /// §13 diagnostics raised while resolving the head and extras.
-    issues: Vec<ExtrasIssue>,
+/// §11 primary layer of `plugin-image`: the `<img>` element itself.
+const IMG_LAYER: &str = "img";
+
+/// The layer key `[[task.image.custom]]` addresses (always the primary).
+pub fn primary_layer() -> &'static str {
+    IMG_LAYER
 }
 
-/// The attributes of one image, assembled from its §7.1 extras head (§6).
-///
-/// The pre-§11 `[.c,#id]{k:v}` block is retired (§14), so extras are the only
-/// source and the construct's own `src`/`alt` are emitted separately.
-#[derive(Debug, Clone, Default)]
-struct ImageAttrs {
-    id: Option<String>,
-    classes: Vec<String>,
-    properties: Vec<(String, String)>,
+/// Every §11 layer this plugin emits, in the order a config may name them.
+pub fn layers() -> [&'static str; 1] {
+    [IMG_LAYER]
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-struct ImageMarker {
-    container: Option<ContainerKind>,
-    lazy: bool,
-    async_decoding: bool,
-    width: Option<usize>,
-    height: Option<usize>,
+/// Whether the `img` layer has a component, i.e. whether the node keeps its
+/// fields verbatim (`AdvancedImage`) or is written as a plain `<img>` whose
+/// extras props carry the `data-` prefix.
+fn img_props(options: &ImageOptions) -> bool {
+    !options.img.is_empty()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ContainerKind {
-    Figure,
-    Paragraph,
-    Division,
+/// Tags a node with the §11 layer that owns it (§11 rule 3, `D-3a`).
+fn push_layer(out: &mut Vec<Event>) {
+    out.push(Event::Attribute {
+        name: "__layer".to_string(),
+        value: IMG_LAYER.to_string(),
+    });
 }
 
-impl ImageMarker {
-    fn has_modifiers(self) -> bool {
-        self.lazy || self.async_decoding || self.width.is_some() || self.height.is_some()
+// --- Solid Hints Integration ---
+
+/// Builds SolidRenderHints for the configured image component (the `img` layer,
+/// §11). Returns None when the layer is not configured, letting the renderer fall
+/// back to its built-in handler.
+pub fn solid_hints(options: &ImageOptions) -> Option<SolidRenderHints> {
+    if options.img.is_empty() {
+        return None;
     }
+    // §11 rule 3 / D-3a: one template per entry, tagged with its own layer; the
+    // renderer decides per document which entry answers which `type`.
+    let payload = |custom: &ImageCustomNode| (custom.template.clone(), custom.imports.clone());
+    let mut hints = SolidRenderHints::default();
+    hints
+        .templates
+        .extend(layer_templates(IMG_LAYER, &options.img, payload));
+    Some(hints)
 }
 
 // --- Main Processor ---
 
-pub fn process(events: &[Event], options: &ImageOptions, inline_pipeline: &Pipeline) -> Vec<Event> {
-    process_inner(events, options, inline_pipeline, &mut ())
-}
-
-pub fn process_with_context<C, P>(
-    events: &[Event],
-    options: &ImageOptions,
-    inline_pipeline: &P,
-    context: &mut C,
-) -> Vec<Event>
-where
-    P: InlinePipeline<C>,
-{
-    process_inner(events, options, inline_pipeline, context)
-}
-
-fn process_inner<C, P>(
-    events: &[Event],
-    options: &ImageOptions,
-    inline_pipeline: &P,
-    context: &mut C,
-) -> Vec<Event>
-where
-    P: InlinePipeline<C>,
-{
+/// Replaces every claimed image head (§7.1) with its `<img>` element.
+///
+/// A paragraph whose whole content is one head becomes a **block** image: the
+/// `<img>` replaces the paragraph (the newline is the block separator the old
+/// `HtmlBlock` rendering carried). A head that shares its line with text stays
+/// **inline**, inside the paragraph, and the text around it is untouched — there
+/// is no caption any more, so `![alt](src) Caption` is an image followed by an
+/// ordinary word.
+pub fn process(events: &[Event], options: &ImageOptions) -> Vec<Event> {
     let mut out: Vec<Event> = Vec::with_capacity(events.len());
     let mut i = 0usize;
 
@@ -145,29 +151,20 @@ where
         if matches!(events.get(i), Some(Event::StartNode(NodeKind::Paragraph))) {
             if let Some(end) = find_matching_end(events, i, NodeKind::Paragraph) {
                 let block = &events[i + 1..end];
-                if let Some(parsed) = maybe_parse_advanced_image(block, options) {
-                    emit_image(&parsed, options, inline_pipeline, context, &mut out);
-                    // Block level images own their line (the old HtmlBlock
-                    // rendering appended a newline after the markup).
+                if let Some(parts) = block_image(block, options) {
+                    emit_image(&parts, options, &mut out);
                     out.extend(raw_inline("\n"));
                     i = end + 1;
                     continue;
                 }
-                // Advanced images may also be embedded inline inside a paragraph
-                // alongside other text (e.g. "foo !?~[alt](src)[.c] bar").
+                // A paragraph that is pure text is scanned for inline heads; one
+                // that already carries nodes is left to whoever produced them.
                 if !block.is_empty() && block.iter().all(|ev| matches!(ev, Event::Text(_))) {
                     out.push(events[i].clone());
                     for ev in block {
-                        if let Event::Text(text) = ev {
-                            emit_text_with_inline_images(
-                                text,
-                                options,
-                                inline_pipeline,
-                                context,
-                                &mut out,
-                            );
-                        } else {
-                            out.push(ev.clone());
+                        match ev {
+                            Event::Text(text) => emit_text_with_images(text, options, &mut out),
+                            other => out.push(other.clone()),
                         }
                     }
                     out.push(events[end].clone());
@@ -187,772 +184,378 @@ where
     out
 }
 
-// --- §11 layers (ADR-0008 `D-3a`) ------------------------------------------
-
-/// §11 primary layer of `plugin-image`: the `<img>` element itself.
-const IMG_LAYER: &str = "img";
-/// §11 layer of the `<figure>` container a `~?!!` marker emits.
-const FIGURE_LAYER: &str = "figure";
-
-/// The layer key `[[task.image.custom]]` addresses (always the primary).
-pub fn primary_layer() -> &'static str {
-    IMG_LAYER
-}
-
-/// Every §11 layer this plugin emits, in the order a config may name them.
-pub fn layers() -> [&'static str; 2] {
-    [IMG_LAYER, FIGURE_LAYER]
-}
-
-/// §11 rule 3 / ADR-0008 `D-3a`: the plugin no longer picks a component. Every
-/// node it emits keeps its built-in kind, is tagged with the layer that owns it
-/// (`__layer`) and keeps its `type` marker; the renderer resolves the two
-/// against the whole document.
+/// The head of a paragraph that carries nothing else, i.e. a **block** image.
 ///
-/// A layer with **no** component can never answer anything, so for that layer
-/// the plugin emits the plain HTML shape (the built-in element, `data-`-prefixed
-/// props, `<figcaption>` around the caption). That decision is per document and
-/// per layer, never per element, so a `_` / `*` selector still sees one shape.
-fn figure_props(options: &ImageOptions) -> bool {
-    !options.figure.is_empty()
-}
-
-fn img_props(options: &ImageOptions) -> bool {
-    !options.img.is_empty()
-}
-
-/// Tags a node with the §11 layer that owns it (§11 rule 3, `D-3a`).
-fn push_layer(out: &mut Vec<Event>, layer: &str) {
-    out.push(Event::Attribute {
-        name: "__layer".to_string(),
-        value: layer.to_string(),
-    });
-}
-
-/// Marks a node whose children are already rendered events (`plugin-markdown`
-/// then passes them through verbatim). Without the marker it re-lexed the
-/// caption and dropped its whitespace-only chunks, which glued the words of
-/// every multi-word caption together (`Afigurecaptionwith<strong>markup</strong>`).
-fn push_pre_rendered(out: &mut Vec<Event>) {
-    out.push(Event::Attribute {
-        name: "__plugin_kind".to_string(),
-        value: "element".to_string(),
-    });
-}
-
-// --- Solid Hints Integration ---
-
-/// Builds SolidRenderHints for the configured image components (the `img` and
-/// `figure` layers, §11). Returns None when neither layer is configured, letting
-/// the renderer fall back to its built-in handler.
-pub fn solid_hints(options: &ImageOptions) -> Option<SolidRenderHints> {
-    let sets = [&options.img, &options.figure];
-    if sets.iter().all(|set| set.is_empty()) {
-        return None;
-    }
-    // §11 rule 3 / D-3a: one template per entry, tagged with its own layer; the
-    // renderer decides per document which entry answers which `type`.
-    let payload = |custom: &ImageCustomNode| (custom.template.clone(), custom.imports.clone());
-    let mut hints = SolidRenderHints::default();
-    hints
-        .templates
-        .extend(layer_templates(IMG_LAYER, &options.img, payload));
-    hints
-        .templates
-        .extend(layer_templates(FIGURE_LAYER, &options.figure, payload));
-    Some(hints)
-}
-
-// --- Unified Parsing (extracts structured data from paragraph text) ---
-
-fn maybe_parse_advanced_image(
-    block_events: &[Event],
-    options: &ImageOptions,
-) -> Option<ParsedImage> {
-    let raw = collect_text_only(block_events)?;
-    let line = raw.trim();
-    if line.is_empty() || line.contains('\n') {
-        return None;
-    }
-
-    parse_figure_syntax(line, options).or_else(|| parse_decorated_image_syntax(line, options))
-}
-
-fn parse_figure_syntax(line: &str, options: &ImageOptions) -> Option<ParsedImage> {
-    let core = parse_image_core(line)?;
-    if core.marker.container != Some(ContainerKind::Figure) {
-        return None;
-    }
-    let blocks = parse_attached_blocks(core.rest);
-    let caption = blocks.rest.trim();
-    let caption = if caption.is_empty() {
-        None
-    } else {
-        Some(caption.to_string())
-    };
-
-    Some(build_parsed_image(
-        core,
-        Some(ContainerKind::Figure),
-        caption,
-        blocks,
-        options,
-    ))
-}
-
-fn parse_decorated_image_syntax(line: &str, options: &ImageOptions) -> Option<ParsedImage> {
-    let core = parse_image_core(line)?;
-    if core.marker.container == Some(ContainerKind::Figure) {
-        return None;
-    }
-
-    if let Some(container) = core.marker.container {
-        let blocks = parse_attached_blocks(core.rest);
-        if !blocks.rest.trim().is_empty() {
-            return None;
-        }
-        return Some(build_parsed_image(
-            core,
-            Some(container),
-            None,
-            blocks,
-            options,
-        ));
-    }
-
-    let blocks = parse_attached_blocks(core.rest);
-    // §7.1: an extras head alone makes the image advanced.
-    let has_attrs = blocks.extras.is_some();
-    let has_marker_mod = core.marker.has_modifiers();
-    if !has_marker_mod && (!has_attrs || !blocks.rest.trim().is_empty()) {
-        return None;
-    }
-    if has_marker_mod && !blocks.rest.trim().is_empty() {
-        return None;
-    }
-
-    Some(build_parsed_image(core, None, None, blocks, options))
-}
-
-/// Emits `id`/`class`/props/`style`/flags of a node whose layer has components:
-/// they receive the keys verbatim (`type` included), unlike the HTML fallback
-/// which prefixes extra props with `data-`.
-fn push_custom_extra_attrs(parsed: &ParsedImage, out: &mut Vec<Event>) {
-    if let Some(id) = &parsed.attrs.id {
-        attribute(out, "id", id);
-    }
-    if !parsed.attrs.classes.is_empty() {
-        attribute(out, "class", &parsed.attrs.classes.join(" "));
-    }
-    for (k, v) in &parsed.attrs.properties {
-        if !k.starts_with("--") && k != "style" {
-            attribute(out, k, v);
-        }
-    }
-    let style_str = image_style(&parsed.attrs);
-    if !style_str.is_empty() {
-        attribute(out, "style", &style_str);
-    }
-    // §6.3: a bare flag stays a bare attribute, also on a custom component.
-    for name in &parsed.flags {
-        out.push(Event::AttributeFlag { name: name.clone() });
-    }
-}
-
-/// The `container` attribute, when the marker asked for one.
-fn push_container_attribute(parsed: &ParsedImage, out: &mut Vec<Event>) {
-    if let Some(container) = parsed.container.or(parsed.marker.container) {
-        let value = match container {
-            ContainerKind::Figure => "figure",
-            ContainerKind::Paragraph => "p",
-            ContainerKind::Division => "div",
-        };
-        attribute(out, "container", value);
-    }
-}
-
-/// `alt`/`src` plus the `w`/`h` and lazy/async marker attributes: the payload of
-/// the `<img>` element itself, which stays on the element node (§7.1).
-fn push_image_element_attrs(parsed: &ParsedImage, out: &mut Vec<Event>) {
-    attribute(out, "alt", &parsed.alt);
-    attribute(out, "src", &parsed.src);
-    if parsed.marker.lazy {
-        attribute(out, "lazy", "1");
-    }
-    if parsed.marker.async_decoding {
-        attribute(out, "async_decoding", "1");
-    }
-    if let Some(width) = parsed.marker.width {
-        attribute(out, "width", &width.to_string());
-    }
-    if let Some(height) = parsed.marker.height {
-        attribute(out, "height", &height.to_string());
-    }
-}
-
-// --- Structured Element Emission (§11 rule 3 / `D-3a`) ---
-
-/// Emits the image as structured [`NodeKind::Element`] events, one node per HTML
-/// element, each tagged with the §11 layer that owns it.
-///
-/// Emitting real events (instead of one raw HTML string) keeps custom components
-/// alive inside `<figcaption>`: citations, custom inline plugins and custom
-/// anchors all nest correctly in every renderer.
-fn emit_image<C, P>(
-    parsed: &ParsedImage,
-    options: &ImageOptions,
-    inline_pipeline: &P,
-    context: &mut C,
-    out: &mut Vec<Event>,
-) where
-    P: InlinePipeline<C>,
-{
-    push_image_warnings(parsed, out);
-    let container = parsed.container.or(parsed.marker.container);
-
-    match container {
-        Some(ContainerKind::Figure) => {
-            // §7.1: the extras belong to the outermost node (here the `<figure>`),
-            // its caption stays a child and the `<img>` element nests inside
-            // (§11). A component on the `figure` layer replaces this node, so it
-            // receives the extras verbatim and the caption as children.
-            let props = figure_props(options);
-            out.extend(element_open("figure"));
-            push_pre_rendered(out);
-            push_layer(out, FIGURE_LAYER);
-            if props {
-                push_container_attribute(parsed, out);
-                push_custom_extra_attrs(parsed, out);
-            } else {
-                push_common_attrs(out, &parsed.attrs, &parsed.flags);
-            }
-            push_img_element(parsed, img_props(options), out);
-
-            if let Some(caption) = &parsed.caption {
-                let caption_events = render_caption_events(caption, inline_pipeline, context);
-                if !caption_events.is_empty() {
-                    if props {
-                        // A component renders its own caption wrapper (§7.1);
-                        // the child list is the pre-rendered inline AST.
-                        out.extend(caption_events);
-                    } else {
-                        out.extend(element_open("figcaption"));
-                        out.extend(caption_events);
-                        out.push(element_close("figcaption"));
-                    }
-                }
-            }
-
-            out.push(element_close("figure"));
-        }
-        Some(ContainerKind::Paragraph) | Some(ContainerKind::Division) => {
-            let (tag, value) = match container {
-                Some(ContainerKind::Division) => ("div", "div"),
-                _ => ("p", "p"),
-            };
-            if img_props(options) {
-                // The `<img>` layer replaces the element and renders its own
-                // wrapper from `{attrs.container}`, so no built-in wrapper is
-                // emitted around it.
-                out.extend(element_open("img"));
-                push_layer(out, IMG_LAYER);
-                push_image_element_attrs(parsed, out);
-                attribute(out, "container", value);
-                push_custom_extra_attrs(parsed, out);
-                out.push(element_close("img"));
-            } else {
-                out.extend(element_open(tag));
-                push_common_attrs(out, &parsed.attrs, &parsed.flags);
-                push_img_element(parsed, false, out);
-                out.push(element_close(tag));
-            }
-        }
-        None => {
-            // A bare image is the `<img>` element itself: the `img` layer owns
-            // it, so the extras land on the same node.
-            out.extend(element_open("img"));
-            push_layer(out, IMG_LAYER);
-            if img_props(options) {
-                push_image_element_attrs(parsed, out);
-                push_custom_extra_attrs(parsed, out);
-            } else {
-                push_image_marker_attrs(out, &parsed.marker);
-                attribute(out, "alt", &parsed.alt);
-                push_common_attrs(out, &parsed.attrs, &parsed.flags);
-                attribute(out, "src", &parsed.src);
-            }
-            out.push(element_close("img"));
-        }
-    }
-}
-
-/// Emits the `<img … />` element itself, tagged with the `img` layer.
-///
-/// `props` selects the component shape of the marker attributes
-/// (`lazy`/`async_decoding` as props) over the built-in HTML one
-/// (`loading`/`decoding`); see [`img_props`].
-fn push_img_element(parsed: &ParsedImage, props: bool, out: &mut Vec<Event>) {
-    out.extend(element_open("img"));
-    push_layer(out, IMG_LAYER);
-    if props {
-        push_image_element_attrs(parsed, out);
-    } else {
-        push_image_marker_attrs(out, &parsed.marker);
-        attribute(out, "alt", &parsed.alt);
-        attribute(out, "src", &parsed.src);
-    }
-    out.push(element_close("img"));
-}
-
-// --- Low-Level Parsing Helpers ---
-
-#[derive(Debug, Clone)]
-struct ImageCore<'a> {
-    alt: String,
-    src: String,
-    rest: &'a str,
-    marker: ImageMarker,
-}
-
-fn parse_image_core<'a>(line: &'a str) -> Option<ImageCore<'a>> {
-    let open_br = line.find('[')?;
-    let marker_raw = line[..open_br].trim();
-    let marker = parse_marker(marker_raw)?;
-
-    let mut idx = open_br;
-    if line.get(idx..=idx)? != "[" {
-        return None;
-    }
-    let close_br_rel = line[idx + 1..].find(']')?;
-    let close_br = idx + 1 + close_br_rel;
-    let alt = line[idx + 1..close_br].to_string();
-
-    idx = close_br + 1;
-    if line.get(idx..=idx)? != "(" {
-        return None;
-    }
-    let close_par_rel = line[idx + 1..].find(')')?;
-    let close_par = idx + 1 + close_par_rel;
-    let src = line[idx + 1..close_par].to_string();
-
-    let rest = line.get(close_par + 1..).unwrap_or("");
-    Some(ImageCore {
-        alt,
-        src,
-        rest,
-        marker,
-    })
-}
-
-fn parse_marker(raw: &str) -> Option<ImageMarker> {
-    let (explicit_container, marker_raw) = if let Some(rest) = raw.strip_prefix('p') {
-        (Some(ContainerKind::Paragraph), rest)
-    } else if let Some(rest) = raw.strip_prefix('d') {
-        (Some(ContainerKind::Division), rest)
-    } else {
-        (None, raw)
-    };
-
-    if marker_raw.is_empty() || !marker_raw.contains('!') {
-        return None;
-    }
-
-    let is_figure = marker_raw.contains("!!");
-    if explicit_container.is_some() && is_figure {
-        return None;
-    }
-
-    let mut marker = ImageMarker {
-        container: if is_figure {
-            Some(ContainerKind::Figure)
-        } else {
-            explicit_container
-        },
-        lazy: marker_raw.contains('?'),
-        async_decoding: marker_raw.contains('~'),
-        width: None,
-        height: None,
-    };
-
-    let bytes = marker_raw.as_bytes();
-    let mut i = 0usize;
-    while i < bytes.len() {
-        match bytes[i] as char {
-            '!' | '?' | '~' => {
-                i += 1;
-            }
-            'w' | 'h' => {
-                let key = bytes[i] as char;
-                i += 1;
-                let start = i;
-                while i < bytes.len() && (bytes[i] as char).is_ascii_digit() {
-                    i += 1;
-                }
-                if i == start {
-                    return None;
-                }
-                let num = marker_raw[start..i].parse::<usize>().ok()?;
-                if key == 'w' {
-                    marker.width = Some(num);
-                } else {
-                    marker.height = Some(num);
-                }
-            }
+/// `None` when the block is not one line, when the line does not start with the
+/// tag, or when text follows the head and its extras — then the line is running
+/// text and the image is inline.
+fn block_image(block: &[Event], options: &ImageOptions) -> Option<ImageParts> {
+    let mut line = String::new();
+    for event in block {
+        match event {
+            Event::Text(text) => line.push_str(text),
             _ => return None,
         }
     }
-
-    Some(marker)
-}
-
-/// The §11 extras head attached after an image's `(url)` head (§7.1). It
-/// attaches to the outermost node of the construct; the retired
-/// `[.class,#id]{key: value}` block is literal text (§14).
-struct AttachedBlocks<'a> {
-    extras: Option<ExtrasHead>,
-    /// Text left after the head: the figure caption or trailing text.
-    rest: &'a str,
-}
-
-impl<'a> AttachedBlocks<'a> {
-    fn empty(rest: &'a str) -> Self {
-        Self { extras: None, rest }
+    let line = line.trim();
+    if line.is_empty() || line.contains('\n') || !line.starts_with(TAG) {
+        return None;
+    }
+    match read_head(line, options) {
+        Read::Image { parts, consumed } if line[consumed..].trim().is_empty() => Some(parts),
+        _ => None,
     }
 }
 
-/// Parses the extras head attached to an image.
-///
-/// §4.1: the head must touch the closing `)` of the `(url)` block, so it is
-/// scanned at the exact cursor position.
-fn parse_attached_blocks(input: &str) -> AttachedBlocks<'_> {
-    let chars: Vec<char> = input.chars().collect();
-    match scan_extras_chars(&chars, 0) {
-        Some((head, next)) => {
-            let bytes: usize = chars[..next].iter().map(|ch| ch.len_utf8()).sum();
-            AttachedBlocks {
-                extras: Some(head),
-                rest: &input[bytes..],
-            }
-        }
-        None => AttachedBlocks::empty(input),
-    }
+/// What one `!` in the text turned out to be (§7.1).
+enum Read {
+    /// Not an image head — a lone `!`, or a bracket another tag claims.
+    Literal,
+    /// Slot-shaped but illegal (§4.3, D-2): `Error` plus literal text.
+    Malformed(SlotError),
+    /// A complete head: the fields the `<img>` carries and the bytes it used.
+    Image { parts: ImageParts, consumed: usize },
 }
 
-/// Assembles a parsed image: merges the attached blocks into the attributes and
-/// keeps the flags and warnings the merge resolved.
-fn build_parsed_image(
-    core: ImageCore<'_>,
-    container: Option<ContainerKind>,
-    caption: Option<String>,
-    blocks: AttachedBlocks<'_>,
-    options: &ImageOptions,
-) -> ParsedImage {
-    let AttachedBlocks { extras, .. } = blocks;
-    let mut flags = Vec::new();
-    let mut issues = Vec::new();
-    let type_marker = extras.as_ref().and_then(|head| head.type_marker.clone());
-    let mut attrs = match extras.as_ref() {
-        Some(head) => {
-            // §6.1/§11 rule 5: the entry answering this marker names the extras
-            // specs, across the `img` and `figure` layers.
-            let specs = options
-                .img
-                .specs_for_opt(head.type_marker.as_deref())
-                .or_else(|| options.figure.specs_for_opt(head.type_marker.as_deref()))
-                .unwrap_or_default();
-            image_attrs_from_head(head, &mut flags, &mut issues, &specs)
+/// Reads one image head at the cursor: the tagged slots plus the extras head
+/// that must touch the closing `)` (§4.1).
+fn read_head(rest: &str, options: &ImageOptions) -> Read {
+    debug_assert!(rest.starts_with(TAG), "the cursor sits on the tag");
+
+    let (pair, mut consumed) = match parse_slots(rest) {
+        SlotMatch::Slots { pair, rest: after } if pair.tag == SlotTag::Image => {
+            (pair, rest.len() - after.len())
         }
-        None => ImageAttrs::default(),
+        // Only a **tagged** head is ours to complain about: an untagged malformed
+        // bracket belongs to whoever else wants it (§4.3).
+        SlotMatch::Malformed { error, .. } if rest.starts_with(TAG) => {
+            return Read::Malformed(error)
+        }
+        _ => return Read::Literal,
     };
-    // §11 rule 3: the marker is the routing key of the instance; it is carried
-    // as a `type` attribute so a `{attrs.type}` template can read it back. An
-    // explicit `type:` prop keeps its own value.
-    if let Some(marker) = &type_marker {
-        if !has_attribute(&attrs, "type") {
-            attrs
-                .properties
-                .insert(0, ("type".to_string(), marker.clone()));
+
+    // §4.1: the extras head must touch the closing `)`.
+    let extras = match parse_extras(&rest[consumed..]) {
+        ExtrasMatch::Head { head, rest: after } => {
+            consumed = rest.len() - after.len();
+            Some(head)
+        }
+        ExtrasMatch::Absent { .. } | ExtrasMatch::Malformed { .. } => None,
+    };
+
+    Read::Image {
+        parts: build_parts(&pair, extras.as_ref(), options, consumed),
+        consumed,
+    }
+}
+
+// --- Fields (§6.2, §6.3) ---
+
+/// What one `<img>` carries: its fields in head-then-extras order (§6.2/§6.4),
+/// the names the construct head produced, and the bare flags of the extras head.
+///
+/// The construct writes no other field: `alt` and `src` come from the preset, and
+/// every other position keeps its slot-qualified path, so a claimed head never
+/// drops a content (D-7).
+#[derive(Debug, Default)]
+struct ImageParts {
+    /// `alt`, `src`, the bare slot fields and every extras key, in order.
+    values: Vec<(String, String)>,
+    /// The names the construct head produced: they win over the extras (§6.2).
+    head_keys: Vec<String>,
+    /// §6.3: a bare flag stays a bare attribute (`<img isLazy>`).
+    flags: Vec<String>,
+    /// §13 diagnostics raised while resolving the head and the extras.
+    issues: Vec<ExtrasIssue>,
+    /// The bytes the whole head used, extras included.
+    consumed: usize,
+}
+
+impl ImageParts {
+    fn set(&mut self, name: &str, value: String) {
+        match self.values.iter_mut().find(|(key, _)| key == name) {
+            Some((_, slot)) => *slot = value,
+            None => self.values.push((name.to_string(), value)),
         }
     }
 
-    ParsedImage {
-        alt: core.alt,
-        src: core.src,
-        caption,
-        container,
-        attrs,
-        marker: core.marker,
-        flags,
-        issues,
+    fn get(&self, name: &str) -> Option<&str> {
+        self.values
+            .iter()
+            .find_map(|(key, value)| (key == name).then_some(value.as_str()))
+    }
+
+    fn has(&self, name: &str) -> bool {
+        self.get(name).is_some()
     }
 }
 
-/// Whether the image head already sets `key`.
-fn has_attribute(attrs: &ImageAttrs, key: &str) -> bool {
-    match key {
-        "id" => attrs.id.is_some(),
-        "class" => !attrs.classes.is_empty(),
-        _ => attrs.properties.iter().any(|(name, _)| name == key),
-    }
-}
-
-/// Assembles the image attributes from a §7.1 extras head (§6).
+/// Turns the two slots and the extras head into the fields the `<img>` exposes
+/// (§6.5 preset, §6.2 priority, §6.3 projection).
 ///
-/// `class` accumulates (§6.4), `slug` fills `id` when no `#id` is present
-/// (§6.2) and bare flags stay bare attributes (§6.3).
-fn image_attrs_from_head(
-    head: &ExtrasHead,
-    flags: &mut Vec<String>,
-    issues: &mut Vec<ExtrasIssue>,
-    specs: &Specs,
-) -> ImageAttrs {
-    let parsed = to_attributes(head, specs);
-    issues.extend(parsed.issues.iter().cloned());
+/// `field` is the **matched** entry's `field.*` (D-7): when it configures one,
+/// every preset row is void for this element and each position keeps its
+/// slot-qualified name, which the image writes as an attribute rather than
+/// dropping.
+fn build_parts(
+    pair: &SlotPair,
+    extras: Option<&ExtrasHead>,
+    options: &ImageOptions,
+    consumed: usize,
+) -> ImageParts {
+    let mut parts = ImageParts::default();
 
-    let mut attrs = ImageAttrs::default();
-    // §6.3: the image's own positions — `class` / `id` / `style` are the
-    // universal DOM fields and an extras `"title"` is the `title`. A position a
-    // `field.specs.*` assignment moved is a field of the author's own, so the
-    // image neither renames it nor reads it (§6.2).
+    // §6.5 / D-7: the preset is voided by the **matched** entry, never by another
+    // entry's `field.*`. No extras head means no `type` marker, which is exactly
+    // the entry the renderer picks (the layer default) — so a layer default's
+    // `field.*` voids the preset for every untagged image on the page.
+    let marker = extras.and_then(|head| head.type_marker.as_deref());
+    let matched = options.img.field_for(marker);
+    let fields = HEAD.assign(pair, matched).unwrap_or_else(|error| {
+        // The entry's assignments contradict each other (one path is a prefix of
+        // another), so they cannot all be published. A config clash is the
+        // author's bug: say so and keep the preset.
+        parts.issues.push(ExtrasIssue::error(format!(
+            "the matched entry's `field.*` assignments clash ({error}); the preset is kept"
+        )));
+        HEAD.assign(pair, None)
+            .expect("an untouched preset cannot clash")
+    });
+    // §7.1's preset names, and only those: a moved or renamed position
+    // (`field.bracket.bare = "label"`) publishes a field of the author's own,
+    // which the image neither renames nor reads (D-4, §6.1).
+    for (path, value) in fields.iter() {
+        let name = path.dotted();
+        parts.head_keys.push(name.clone());
+        parts.set(&name, value.literal());
+    }
+
+    if let Some(extras) = extras {
+        merge_extras(&mut parts, extras, options);
+    }
+
+    // §6.3: an empty `alt=""` is meaningful — it marks a decorative image — so the
+    // preset position renders even when the bracket is empty. A preset the entry
+    // voided writes no `alt` at all: the author moved the position.
+    if matched.is_none_or(FieldConfig::is_empty_slots) && !parts.has("alt") {
+        parts.set("alt", String::new());
+    }
+    parts.consumed = consumed;
+    parts
+}
+
+/// Merges a §7.1 extras head into the image's fields.
+///
+/// The construct side wins (§6.2): an item that spells a name the head produced
+/// is dropped with a warning, `alt`/`src` are owned so an item spelling one is an
+/// `Error` (D-12 rule 5), `class` accumulates (§6.4) and a bare flag stays a bare
+/// attribute (§6.3).
+fn merge_extras(parts: &mut ImageParts, extras: &ExtrasHead, options: &ImageOptions) {
+    // §6.1/§11 rule 5: the entry answering this marker names the extras specs.
+    let specs = options.img.specs_for(extras.type_marker.as_deref());
+    let parsed = to_attributes(extras, &specs);
+    parts.issues.extend(parsed.issues.iter().cloned());
+
+    // §6.2/§6.3: the tick position feeds the id fallback **while it keeps its
+    // default path**; `field.specs.tick = "x"` moves it to a field of the
+    // author's own, which the image then does not read.
     let tick = specs.element_path(SpecsKey::Tick);
-    for (key, value) in specs.dom_fields(&parsed.items, &[(SpecsKey::Quote, "title")]) {
-        if key == "id" || tick == Some(key) {
+    let specs_id = tick
+        .and_then(|path| parsed.value(path))
+        .map(|value| value.literal());
+
+    for (key, value) in specs.dom_fields(&parsed.items, ELEMENT_READS) {
+        if tick == Some(key) {
             continue;
         }
-        match (key, value) {
-            ("class", ExtrasAttr::Value(value)) => attrs
-                .classes
-                .extend(value.literal().split_whitespace().map(str::to_string)),
-            (name, ExtrasAttr::Flag) => flags.push(name.to_string()),
-            (name, ExtrasAttr::Value(value)) => {
-                attrs.properties.push((name.to_string(), value.literal()))
+        if HEAD.owns(key) && parts.has(key) {
+            // D-12's built-in collision: `<img>` writes `alt`/`src` itself, so an
+            // extras item that spells one is an `Error`, and `field.override.alt`
+            // is the way to publish it under another name. A preset the entry
+            // voided writes neither, so the key is an ordinary prop again.
+            parts.issues.push(ExtrasIssue::owned_key(key));
+            continue;
+        }
+        match value {
+            ExtrasAttr::Flag => {
+                if parts.has(key) {
+                    parts.issues.push(ExtrasIssue::overridden(key));
+                } else {
+                    parts.flags.push(key.to_string());
+                }
+            }
+            ExtrasAttr::Value(value) => {
+                let text = value.literal();
+                // §6.4: `class` accumulates into the one `class` attribute.
+                if key == "class" {
+                    let merged = match parts.get("class") {
+                        Some(existing) => format!("{existing} {text}"),
+                        None => text,
+                    };
+                    parts.set("class", merged);
+                    continue;
+                }
+                if parts.has(key) {
+                    parts.issues.push(ExtrasIssue::overridden(key));
+                    continue;
+                }
+                parts.set(key, text);
             }
         }
     }
 
     // §6.2: `#id` beats the extras `slug` (the tick position, at its default path).
-    attrs.id = specs
-        .element_path(SpecsKey::Id)
-        .and_then(|path| parsed.value(path))
-        .or_else(|| tick.and_then(|path| parsed.value(path)))
-        .map(|value| value.literal());
-    attrs
-}
-
-fn is_inline_marker_char(ch: char) -> bool {
-    matches!(ch, '!' | '?' | '~' | 'w' | 'h') || ch.is_ascii_digit()
-}
-
-fn find_char_index(chars: &[char], mut index: usize, wanted: char) -> Option<usize> {
-    while index < chars.len() {
-        if chars[index] == wanted {
-            return Some(index);
+    if let Some(id) = specs_id {
+        if parts.has("id") {
+            parts.issues.push(ExtrasIssue::warning(
+                "extras `slug` was dropped because the element already has an id",
+            ));
+        } else {
+            parts.set("id", id);
         }
-        index += 1;
     }
-    None
+
+    // §11 rule 3: the `@@type{…}` marker is the routing key of the instance, so a
+    // `{attrs.type}` template can read it back; an explicit `type:` prop keeps
+    // its own value.
+    if let Some(marker) = extras.type_marker.as_deref() {
+        if !parts.has("type") {
+            parts.set("type", marker.to_string());
+        }
+    }
 }
 
-/// Parses the attribute blocks attached to an inline image, returning them and
-/// the number of consumed characters (0 when nothing valid was attached).
-fn parse_inline_blocks(input: &str) -> (AttachedBlocks<'_>, usize) {
-    if !input.starts_with('{') && !input.starts_with("@@") {
-        return (AttachedBlocks::empty(input), 0);
+// --- Emission (§11 rule 3 / `D-3a`) ---
+
+/// Emits the image as one `<img>` element, tagged with the `img` layer.
+///
+/// A component receives every field verbatim; the built-in `<img>` keeps the
+/// `data-` prefix for an extras prop it has no attribute for (§6.3), so an
+/// unknown key never lands on the element as a fake attribute.
+fn emit_image(parts: &ImageParts, options: &ImageOptions, out: &mut Vec<Event>) {
+    for issue in &parts.issues {
+        out.push(issue_event("img", issue));
     }
 
-    let blocks = parse_attached_blocks(input);
-    if blocks.extras.is_none() {
-        return (AttachedBlocks::empty(input), 0);
+    out.extend(element_open("img"));
+    push_layer(out);
+    let props = img_props(options);
+    for (name, value) in &parts.values {
+        // §6.3: `style` is a declaration list, so a value that came from `--x:` /
+        // `style:` ends with the terminator the attribute spelling expects.
+        let mut value = value.clone();
+        if name == "style" && !value.ends_with(';') {
+            value.push(';');
+        }
+        if props || is_verbatim(name, &parts.head_keys) {
+            attribute(out, name, &value);
+        } else {
+            attribute(out, &format!("data-{name}"), &value);
+        }
     }
-
-    let consumed_bytes = input.len().saturating_sub(blocks.rest.len());
-    (blocks, input[..consumed_bytes].chars().count())
+    // §6.3: a bare flag stays a bare attribute (`<img isLazy>`), it never becomes
+    // `isLazy="isLazy"`.
+    for name in &parts.flags {
+        out.push(Event::AttributeFlag { name: name.clone() });
+    }
+    out.push(element_close("img"));
 }
 
-/// Attempts to parse an advanced image starting at `start` (the first marker
-/// character). Returns the exclusive end index and the parsed image when the
-/// marker describes an inline (non-figure, non-container) image, i.e. a bare
-/// `<img>` that is only considered "advanced" when it carries marker modifiers
-/// or an attached attribute block.
-fn parse_inline_image_at(
-    chars: &[char],
-    start: usize,
-    options: &ImageOptions,
-) -> Option<(usize, ParsedImage)> {
-    if !is_inline_marker_char(*chars.get(start)?) {
-        return None;
-    }
-
-    let mut marker_end = start;
-    while marker_end < chars.len() && is_inline_marker_char(chars[marker_end]) {
-        marker_end += 1;
-    }
-    let marker_raw: String = chars[start..marker_end].iter().collect();
-    let marker = parse_marker(&marker_raw)?;
-    if marker.container.is_some() {
-        return None;
-    }
-
-    if chars.get(marker_end) != Some(&'[') {
-        return None;
-    }
-    let close_br = find_char_index(chars, marker_end + 1, ']')?;
-    if chars.get(close_br + 1) != Some(&'(') {
-        return None;
-    }
-    let close_par = find_char_index(chars, close_br + 2, ')')?;
-
-    let alt: String = chars[marker_end + 1..close_br].iter().collect();
-    let src: String = chars[close_br + 2..close_par].iter().collect();
-
-    let rest_source: String = chars[close_par + 1..].iter().collect();
-    let (blocks, consumed) = parse_inline_blocks(&rest_source);
-
-    if !marker.has_modifiers() && consumed == 0 {
-        return None;
-    }
-
-    let end = close_par + 1 + consumed;
-    let core = ImageCore {
-        alt,
-        src,
-        rest: "",
-        marker,
-    };
-    Some((end, build_parsed_image(core, None, None, blocks, options)))
+/// The names the `<img>` writes as they are, whatever the layer: the construct's
+/// own fields (§7.1's preset and the bare slot fields), the universal DOM fields
+/// and the §11/§6.3 routing keys. Everything else is an extras prop, which the
+/// built-in `<img>` carries under the `data-` prefix (the fallback's own
+/// convention, unchanged by the rework).
+fn is_verbatim(name: &str, head_keys: &[String]) -> bool {
+    head_keys.iter().any(|key| key == name)
+        // §7.1's preset names are the element's own fields even when the head left
+        // the position empty: `alt=""` is a decorative image, never `data-alt`.
+        || matches!(name, "alt" | "src" | "id" | "class" | "style" | "type")
+        || name.starts_with("__")
 }
 
-/// Emits `text` while replacing any inline advanced image patterns with their
-/// rendered representation (raw HTML or a custom component node).
-fn emit_text_with_inline_images<C, P>(
-    text: &str,
-    options: &ImageOptions,
-    inline_pipeline: &P,
-    context: &mut C,
-    out: &mut Vec<Event>,
-) where
-    P: InlinePipeline<C>,
-{
-    let chars: Vec<char> = text.chars().collect();
-    let mut cursor = 0usize;
+/// Emits `text` with every claimed image head (§7.1) replaced by its `<img>`.
+///
+/// A `!` that is not a head — the second `!` of the retired `!!`, the `!` of a
+/// cite's `[^…]`, a lone `!` — stays exactly as written.
+fn emit_text_with_images(text: &str, options: &ImageOptions, out: &mut Vec<Event>) {
     let mut normal = String::new();
+    let mut cursor = 0usize;
 
-    while cursor < chars.len() {
-        if is_inline_marker_char(chars[cursor]) {
-            if let Some((end, parsed)) = parse_inline_image_at(&chars, cursor, options) {
-                if !normal.is_empty() {
-                    out.push(Event::Text(std::mem::take(&mut normal)));
-                }
-                emit_inline_image(&parsed, options, inline_pipeline, context, out);
-                cursor = end;
+    while cursor < text.len() {
+        let rest = &text[cursor..];
+        // A code span is never an image: markdown renders its content verbatim, so
+        // a head written inside backticks has to survive (`a `![a](b)` b`). A run
+        // of n backticks closes at the next run of exactly n (CommonMark's rule).
+        if rest.starts_with('`') {
+            let run = rest.chars().take_while(|ch| *ch == '`').count();
+            if let Some(close) = find_code_span_end(&rest[run..], run) {
+                let end = run + close;
+                normal.push_str(&rest[..end]);
+                cursor += end;
                 continue;
             }
         }
-        normal.push(chars[cursor]);
-        cursor += 1;
+        if rest.starts_with(TAG) {
+            match read_head(rest, options) {
+                Read::Image { parts, consumed } => {
+                    flush_text(&mut normal, out);
+                    emit_image(&parts, options, out);
+                    cursor += consumed;
+                    continue;
+                }
+                // §4.3 / D-2: slot-shaped but illegal — an `Error`, and the text
+                // stays exactly as it was written.
+                Read::Malformed(error) => {
+                    flush_text(&mut normal, out);
+                    out.push(Event::Diagnostic {
+                        severity: Severity::Error,
+                        message: format!("[img] {error}"),
+                        span: None,
+                    });
+                    normal.push(TAG);
+                    cursor += TAG.len_utf8();
+                    continue;
+                }
+                Read::Literal => {}
+            }
+        }
+        let ch = rest.chars().next().expect("cursor is in bounds");
+        normal.push(ch);
+        cursor += ch.len_utf8();
     }
 
+    flush_text(&mut normal, out);
+}
+
+fn flush_text(normal: &mut String, out: &mut Vec<Event>) {
     if !normal.is_empty() {
-        out.push(Event::Text(normal));
+        out.push(Event::Text(std::mem::take(normal)));
     }
 }
 
-fn emit_inline_image<C, P>(
-    parsed: &ParsedImage,
-    options: &ImageOptions,
-    inline_pipeline: &P,
-    context: &mut C,
-    out: &mut Vec<Event>,
-) where
-    P: InlinePipeline<C>,
-{
-    emit_image(parsed, options, inline_pipeline, context, out);
-}
-
-fn push_common_attrs(out: &mut Vec<Event>, attrs: &ImageAttrs, flags: &[String]) {
-    if let Some(id) = attrs.id.as_deref() {
-        attribute(out, "id", id);
-    }
-
-    if !attrs.classes.is_empty() {
-        attribute(out, "class", &attrs.classes.join(" "));
-    }
-
-    // HTML elements keep the `data-` prefix (custom components receive the
-    // keys verbatim, see `push_custom_extra_attrs`), except the §11 routing key
-    // `type`, which stays a plain attribute (§11 rule 3). The `style` value is
-    // emitted as the `style` attribute itself (§6.3).
-    for (k, v) in &attrs.properties {
-        if k.starts_with("--") || k == "style" {
-            continue;
-        }
-        if k == "type" {
-            attribute(out, "type", v);
-            continue;
-        }
-        // `D-9`: a double-underscore key is internal transport (`__number`), not
-        // an extra prop; the renderers strip it, so it must not be `data-`-prefixed.
-        if k.starts_with("__") {
-            attribute(out, k, v);
-            continue;
-        }
-        attribute(out, &format!("data-{}", k), v);
-    }
-
-    let styles = image_style(attrs);
-    if !styles.is_empty() {
-        attribute(out, "style", &styles);
-    }
-
-    // §6.3: a bare flag stays a bare attribute (`<figure isFoo>`).
-    for name in flags {
-        out.push(Event::AttributeFlag { name: name.clone() });
-    }
-}
-
-/// The `style` value of an image (§6.3).
-fn image_style(attrs: &ImageAttrs) -> String {
-    let mut styles: String = attrs
-        .properties
-        .iter()
-        .filter(|(k, _)| k.starts_with("--"))
-        .map(|(k, v)| format!("{}:{};", k, v))
-        .collect();
-    for (key, value) in &attrs.properties {
-        if key != "style" {
-            continue;
-        }
-        if !styles.is_empty() {
-            styles.push(' ');
-        }
-        styles.push_str(value);
-        if !styles.ends_with(';') {
-            styles.push(';');
+/// The byte offset just past the closing run of exactly `run` backticks, relative
+/// to `text` (which starts immediately after the opening run).
+///
+/// `None` when the span never closes: an unclosed run is literal text, exactly as
+/// markdown reads it.
+fn find_code_span_end(text: &str, run: usize) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let mut cursor = 0usize;
+    while cursor < bytes.len() {
+        if bytes[cursor] == b'`' {
+            let start = cursor;
+            while cursor < bytes.len() && bytes[cursor] == b'`' {
+                cursor += 1;
+            }
+            if cursor - start == run {
+                return Some(cursor);
+            }
+        } else {
+            cursor += 1;
         }
     }
-    styles
-}
-
-/// §13 diagnostics raised while parsing and merging an image head.
-fn push_image_warnings(parsed: &ParsedImage, out: &mut Vec<Event>) {
-    for issue in &parsed.issues {
-        out.push(issue_event("img", issue));
-    }
-}
-
-fn push_image_marker_attrs(out: &mut Vec<Event>, marker: &ImageMarker) {
-    if let Some(width) = marker.width {
-        attribute(out, "width", &width.to_string());
-    }
-    if let Some(height) = marker.height {
-        attribute(out, "height", &height.to_string());
-    }
-    if marker.async_decoding {
-        attribute(out, "decoding", "async");
-    }
-    if marker.lazy {
-        attribute(out, "loading", "lazy");
-    }
+    None
 }
 
 fn attribute(out: &mut Vec<Event>, name: &str, value: &str) {
@@ -960,52 +563,6 @@ fn attribute(out: &mut Vec<Event>, name: &str, value: &str) {
         name: name.to_string(),
         value: value.to_string(),
     });
-}
-
-/// Renders caption markdown into inline AST events for custom node children.
-/// Inline plugins (anchor, cite, wiki) run BEFORE markdown so they can process
-/// raw text patterns like [text](url) and [[wiki links]].
-fn render_caption_events<C, P>(input: &str, inline_pipeline: &P, context: &mut C) -> Vec<Event>
-where
-    P: InlinePipeline<C>,
-{
-    if input.trim().is_empty() {
-        return Vec::new();
-    }
-    // Whitespace around a caption/figcaption content is insignificant.
-    let parsed = parse(input.trim(), &Options::default());
-
-    // Run inline plugins FIRST on raw text events
-    let processed = inline_pipeline.run_with(context, parsed);
-
-    // THEN run markdown to convert remaining patterns to AST nodes
-    let processed = process_markdown(&processed);
-
-    // FINALLY run processors that must see markdown-expanded nodes (math),
-    // so a `$` inside a link destination is not mistaken for inline math.
-    let processed = inline_pipeline.run_after_markdown(context, processed);
-
-    // Strip Document and Paragraph wrappers so only inline nodes remain
-    let mut out = Vec::new();
-    for ev in processed {
-        match &ev {
-            Event::StartNode(NodeKind::Document) | Event::EndNode(NodeKind::Document) => {}
-            Event::StartNode(NodeKind::Paragraph) | Event::EndNode(NodeKind::Paragraph) => {}
-            _ => out.push(ev),
-        }
-    }
-    out
-}
-
-fn collect_text_only(events: &[Event]) -> Option<String> {
-    let mut out = String::new();
-    for ev in events {
-        match ev {
-            Event::Text(t) => out.push_str(t),
-            _ => return None,
-        }
-    }
-    Some(out)
 }
 
 fn find_matching_end(events: &[Event], start_idx: usize, kind: NodeKind) -> Option<usize> {
@@ -1028,10 +585,11 @@ fn find_matching_end(events: &[Event], start_idx: usize, kind: NodeKind) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pendon_core::ContextPipeline;
+    use pendon_extra::{FieldConfig, Path};
+    use pendon_renderer_solid::TypedComponent;
 
-    /// §7.1's preset, position by position (S2-2.5). `alt` and `src` are the only
-    /// slot-derived fields; `caption`/figure did not survive the rework (§14).
+    /// §7.1's preset, position by position. This is the element's contract as
+    /// data: a change here changes the syntax, not the plumbing.
     #[test]
     fn the_head_declares_the_spec_preset() {
         assert_eq!(HEAD.contract.tag, SlotTag::Image);
@@ -1039,6 +597,17 @@ mod tests {
             HEAD.is_consistent(),
             "a preset must sit on a claimed position"
         );
+        // Every position of the head is claimed; the preset names two of them.
+        for slot in Slot::ALL {
+            for kind in SlotKind::ALL {
+                assert!(
+                    HEAD.contract.accepts(slot, kind),
+                    "image drops {}.{}",
+                    slot.name(),
+                    kind.name()
+                );
+            }
+        }
         let got: Vec<String> = HEAD
             .presets()
             .iter()
@@ -1052,11 +621,11 @@ mod tests {
             })
             .collect();
         assert_eq!(got, ["bracket.bare -> alt", "paren.bare -> src"]);
-        // `("title")` is claimed but unpreset: it stays `paren.quote` (D-7).
-        assert!(HEAD.contract.accepts(Slot::Paren, SlotKind::Quote));
-        assert_eq!(HEAD.preset_for(Slot::Paren, SlotKind::Quote), None);
+        // D-12 rule 5: `<img>` writes these itself, so extras may not spell them.
+        assert!(HEAD.owns("alt"));
+        assert!(HEAD.owns("src"));
+        assert!(!HEAD.owns("title"));
     }
-    use pendon_renderer_solid::TypedComponent;
 
     fn paragraph_events(text: &str) -> Vec<Event> {
         vec![
@@ -1068,158 +637,232 @@ mod tests {
         ]
     }
 
-    /// Collects the events nested directly inside the first `tag` element.
-    fn element_children(events: &[Event], tag: &str) -> Vec<Event> {
-        let mut children = Vec::new();
-        let mut depth = 0usize;
+    /// The attributes of the first `<img>` element, in emission order.
+    fn img_attrs(events: &[Event]) -> Vec<(String, String)> {
+        let mut attrs = Vec::new();
         let mut inside = false;
-
         for event in events {
             match event {
-                Event::StartNode(NodeKind::Element(name)) => {
-                    if inside {
-                        depth += 1;
-                    } else if name == tag {
-                        inside = true;
-                        continue;
-                    }
+                Event::StartNode(NodeKind::Element(name)) if name == "img" && !inside => {
+                    inside = true;
                 }
-                Event::EndNode(NodeKind::Element(_)) if inside => {
-                    if depth == 0 {
-                        break;
-                    }
-                    depth -= 1;
+                Event::EndNode(NodeKind::Element(name)) if name == "img" && inside => return attrs,
+                Event::Attribute { name, value } if inside => {
+                    attrs.push((name.clone(), value.clone()));
                 }
                 _ => {}
             }
-
-            if inside {
-                children.push(event.clone());
-            }
         }
+        attrs
+    }
 
-        children
+    fn attr_value(events: &[Event], name: &str) -> Option<String> {
+        img_attrs(events)
+            .into_iter()
+            .find_map(|(key, value)| (key == name).then_some(value))
     }
 
     fn has_attribute(events: &[Event], name: &str, value: &str) -> bool {
-        events.iter().any(|event| {
-            matches!(event, Event::Attribute { name: n, value: v } if n == name && v == value)
-        })
+        attr_value(events, name).as_deref() == Some(value)
     }
 
     /// Text is emitted as many small chunks (sometimes one per character), so
     /// concatenate before searching.
-    fn has_text(events: &[Event], needle: &str) -> bool {
+    fn text_of(events: &[Event]) -> String {
         let mut text = String::new();
         for event in events {
             if let Event::Text(chunk) = event {
                 text.push_str(chunk);
             }
         }
-        text.contains(needle)
+        text
     }
 
-    /// Stand-in for an inline custom plugin (like `cite`): rewrites `{{cite}}`
-    /// text into a custom component node.
-    fn custom_component_pipeline() -> ContextPipeline<()> {
-        let mut pipeline = ContextPipeline::new();
-        pipeline.add(|_: &mut (), events: Vec<Event>| {
-            let mut out = Vec::new();
-            for event in events {
-                match event {
-                    Event::Text(text) => {
-                        for (index, part) in text.split("{{cite}}").enumerate() {
-                            if index > 0 {
-                                out.push(Event::StartNode(NodeKind::Custom("Cite".into())));
-                                out.push(Event::Attribute {
-                                    name: "id".into(),
-                                    value: "book".into(),
-                                });
-                                out.push(Event::EndNode(NodeKind::Custom("Cite".into())));
-                            }
-                            if !part.is_empty() {
-                                out.push(Event::Text(part.to_string()));
-                            }
-                        }
-                    }
-                    other => out.push(other),
-                }
-            }
-            out
-        });
-        pipeline
+    fn has_text(events: &[Event], needle: &str) -> bool {
+        text_of(events).contains(needle)
+    }
+
+    fn has_element(events: &[Event], tag: &str) -> bool {
+        events
+            .iter()
+            .any(|event| matches!(event, Event::StartNode(NodeKind::Element(name)) if name == tag))
     }
 
     #[test]
-    fn renders_figure_with_markdown_caption() {
-        let pipeline = Pipeline::default();
-        let events = paragraph_events("!![Alt](https://x.test/a.webp) Caption **bold** [link](/x)");
-        let out = process(&events, &ImageOptions::default(), &pipeline);
+    fn a_bare_image_is_an_image() {
+        // §7.1's new minimum: `![alt](src)` needs nothing else. It used to need a
+        // marker modifier, so this line reached `plugin-markdown` untouched.
+        let events = paragraph_events("![Alt](https://x.test/a.webp)");
+        let out = process(&events, &ImageOptions::default());
 
-        assert!(out.iter().any(|event| matches!(
-            event,
-            Event::StartNode(NodeKind::Element(name)) if name == "figure"
-        )));
         assert!(has_attribute(&out, "alt", "Alt"));
         assert!(has_attribute(&out, "src", "https://x.test/a.webp"));
-
-        // The caption is a real element whose children are inline AST nodes
-        // (not one escaped HTML string), so custom components survive inside it.
-        let caption = element_children(&out, "figcaption");
-        assert!(caption
+        assert!(has_attribute(&out, "__layer", "img"));
+        // A block image: the paragraph is gone, and a newline separates the block.
+        assert!(!out
             .iter()
-            .any(|event| matches!(event, Event::StartNode(NodeKind::Strong))));
-        assert!(caption
-            .iter()
-            .any(|event| matches!(event, Event::StartNode(NodeKind::Link))));
-        assert!(has_attribute(&caption, "href", "/x"));
-        assert!(has_text(&caption, "Caption "));
-        assert!(has_text(&caption, "bold"));
+            .any(|event| matches!(event, Event::StartNode(NodeKind::Paragraph))));
+        assert!(has_text(&out, "\n"));
     }
 
     #[test]
-    fn nests_custom_components_inside_figcaption() {
-        let pipeline = custom_component_pipeline();
-        let events = paragraph_events("!![Alt](https://x.test/a.webp) See {{cite}} for details.");
-        let out = process_with_context(&events, &ImageOptions::default(), &pipeline, &mut ());
-
-        let caption = element_children(&out, "figcaption");
-        assert!(caption.iter().any(|event| matches!(
-            event,
-            Event::StartNode(NodeKind::Custom(name)) if name == "Cite"
-        )));
-        assert!(has_attribute(&caption, "id", "book"));
-        assert!(has_text(&caption, "See "));
-        assert!(has_text(&caption, " for details."));
-
-        // <img> and <figcaption> are both children of the <figure> element.
-        let figure = element_children(&out, "figure");
-        assert!(figure.iter().any(|event| matches!(
-            event,
-            Event::StartNode(NodeKind::Element(name)) if name == "img"
-        )));
-        assert!(figure.iter().any(|event| matches!(
-            event,
-            Event::StartNode(NodeKind::Element(name)) if name == "figcaption"
-        )));
-    }
-
-    #[test]
-    fn renders_decorated_image_attributes() {
-        let pipeline = Pipeline::default();
-        let events = paragraph_events(
-            "![Alt](https://x.test/a.webp){.x, #hero, foo: \"bar\", --r: \"5deg\"}",
+    fn a_shared_line_stays_inside_its_paragraph() {
+        let out = process(
+            &paragraph_events("Ad ex tempor ![Alt](https://x.test/a.webp) consectetur."),
+            &ImageOptions::default(),
         );
-        let out = process(&events, &ImageOptions::default(), &pipeline);
+
+        assert!(out
+            .iter()
+            .any(|event| matches!(event, Event::StartNode(NodeKind::Paragraph))));
+        assert!(has_attribute(&out, "alt", "Alt"));
+        assert!(has_text(&out, "Ad ex tempor "));
+        assert!(has_text(&out, " consectetur."));
+    }
+
+    #[test]
+    fn trailing_text_is_not_a_caption() {
+        // The caption belonged to the retired figure syntax (§14): text after the
+        // head is ordinary paragraph content, and the image stays inline.
+        let out = process(
+            &paragraph_events("![Alt](https://x.test/a.webp) A caption with **markup**."),
+            &ImageOptions::default(),
+        );
+
+        assert!(has_attribute(&out, "alt", "Alt"));
+        assert!(has_text(&out, " A caption with **markup**."));
+        assert!(!has_element(&out, "figure"));
+        assert!(!has_element(&out, "figcaption"));
+    }
+
+    #[test]
+    fn the_retired_marker_run_is_literal_text() {
+        // `~?!![](src)` used to be a lazy, async figure with explicit dimensions.
+        // The run is gone (D-16), so only the `![…](…)` part is a head and the
+        // symbols stay exactly as written.
+        let out = process(
+            &paragraph_events("~?!![](https://x.test/a.webp)"),
+            &ImageOptions::default(),
+        );
+
+        assert!(has_text(&out, "~?!"), "{}", text_of(&out));
+        assert!(has_attribute(&out, "src", "https://x.test/a.webp"));
+        assert!(attr_value(&out, "loading").is_none());
+        assert!(attr_value(&out, "width").is_none());
+        assert!(!has_element(&out, "figure"));
+    }
+
+    #[test]
+    fn the_retired_container_prefixes_are_literal_text() {
+        // `p!` / `d!` wrapped the image in `<p>` / `<div>`; a component renders its
+        // own wrapper now, so the letter is ordinary text.
+        let out = process(
+            &paragraph_events("p![Alt](https://x.test/a.webp)"),
+            &ImageOptions::default(),
+        );
+
+        assert!(has_text(&out, "p"), "{}", text_of(&out));
+        assert!(has_attribute(&out, "alt", "Alt"));
+        assert!(attr_value(&out, "container").is_none());
+        assert!(!has_element(&out, "div"));
+    }
+
+    #[test]
+    fn bare_slot_fields_keep_their_paths() {
+        // D-7: a claimed head is read whole, so a content the preset does not name
+        // is a field of its own rather than dropped.
+        let out = process(
+            &paragraph_events(
+                "![Alt \"bracket quote\" `bracket tick`](src \"paren quote\" `paren tick`)",
+            ),
+            &ImageOptions::default(),
+        );
+
+        assert!(has_attribute(&out, "alt", "Alt"));
+        assert!(has_attribute(&out, "src", "src"));
+        assert!(has_attribute(&out, "bracket.quote", "bracket quote"));
+        assert!(has_attribute(&out, "bracket.tick", "bracket tick"));
+        assert!(has_attribute(&out, "paren.quote", "paren quote"));
+        assert!(has_attribute(&out, "paren.tick", "paren tick"));
+    }
+
+    #[test]
+    fn an_extras_alt_is_an_error() {
+        // D-12 rule 5: `<img>` writes `alt` and `src` itself.
+        let out = process(
+            &paragraph_events("![Alt](https://x.test/a.webp){alt: \"other\", .x}"),
+            &ImageOptions::default(),
+        );
 
         assert!(out.iter().any(|event| matches!(
             event,
-            Event::StartNode(NodeKind::Element(name)) if name == "img"
+            Event::Diagnostic { severity: Severity::Error, message, .. }
+                if message.contains("`alt` is owned by the construct")
         )));
+        assert!(has_attribute(&out, "alt", "Alt"));
+        assert_eq!(
+            img_attrs(&out)
+                .iter()
+                .filter(|(name, _)| name == "alt")
+                .count(),
+            1
+        );
+        // The rest of the extras head still decorates the element.
+        assert!(has_attribute(&out, "class", "x"));
+    }
+
+    #[test]
+    fn extras_decorate_the_same_node() {
+        let out = process(
+            &paragraph_events(
+                "![Alt](https://x.test/a.webp){.x, #hero, foo: \"bar\", --r: \"5deg\"}",
+            ),
+            &ImageOptions::default(),
+        );
+
         assert!(has_attribute(&out, "id", "hero"));
         assert!(has_attribute(&out, "class", "x"));
+        // §6.3: an unknown key never lands on `<img>` as a fake attribute.
         assert!(has_attribute(&out, "data-foo", "bar"));
+        assert!(attr_value(&out, "foo").is_none());
+        // §6.3: `--r: …` folds into `style`.
         assert!(has_attribute(&out, "style", "--r: 5deg;"));
+    }
+
+    #[test]
+    fn extras_class_accumulates() {
+        let Read::Image { parts, .. } = read_head(
+            "![Alt](https://x.test/a.webp){.head, .extra, class: \"tail\"}",
+            &ImageOptions::default(),
+        ) else {
+            panic!("a head");
+        };
+        // §6.4: `class` accumulates.
+        assert_eq!(parts.get("class"), Some("head extra tail"));
+    }
+
+    #[test]
+    fn extras_slug_fills_the_id_when_no_id_is_present() {
+        let Read::Image { parts, .. } = read_head(
+            "![Alt](https://x.test/a.webp){`the-image`}",
+            &ImageOptions::default(),
+        ) else {
+            panic!("a head");
+        };
+        // §6.2: `#id` > extras slug.
+        assert_eq!(parts.get("id"), Some("the-image"));
+    }
+
+    #[test]
+    fn bare_flags_stay_bare_attributes() {
+        let out = process(
+            &paragraph_events("![Alt](https://x.test/a.webp){isFoo}"),
+            &ImageOptions::default(),
+        );
+
+        assert!(out
+            .iter()
+            .any(|event| matches!(event, Event::AttributeFlag { name } if name == "isFoo")));
     }
 
     /// ADR-0010 `D-9`: `__number` is internal transport, not an extra prop, so the
@@ -1227,9 +870,10 @@ mod tests {
     /// renderers strip it; `plugin-number` reads it).
     #[test]
     fn internal_number_attribute_is_not_prefixed() {
-        let pipeline = Pipeline::default();
-        let events = paragraph_events("![Alt](https://x.test/a.webp)%%numberA");
-        let out = process(&events, &ImageOptions::default(), &pipeline);
+        let out = process(
+            &paragraph_events("![Alt](https://x.test/a.webp)%%numberA"),
+            &ImageOptions::default(),
+        );
 
         assert!(has_attribute(&out, "__layer", "img"));
         assert!(has_attribute(
@@ -1237,293 +881,144 @@ mod tests {
             "__number",
             r#"{"depth":1,"type":"numberA"}"#
         ));
-        assert!(!out.iter().any(
-            |event| matches!(event, Event::Attribute { name, .. } if name == "data-__number")
-        ));
-    }
-
-    #[test]
-    fn renders_inline_advanced_image_inside_paragraph() {
-        let pipeline = Pipeline::default();
-        let events = paragraph_events(
-            "Ad ex tempor !?~[Alt](https://x.test/a.webp){.foo, con: \"jux\"} consectetur.",
-        );
-        let out = process(&events, &ImageOptions::default(), &pipeline);
-
-        // The paragraph stays open: the image is an inline element inside it.
-        assert!(out
-            .iter()
-            .any(|event| matches!(event, Event::StartNode(NodeKind::Paragraph))));
-        assert!(out.iter().any(|event| matches!(
-            event,
-            Event::StartNode(NodeKind::Element(name)) if name == "img"
-        )));
-        assert!(has_attribute(&out, "decoding", "async"));
-        assert!(has_attribute(&out, "loading", "lazy"));
-        assert!(has_attribute(&out, "alt", "Alt"));
-        assert!(has_attribute(&out, "class", "foo"));
-        assert!(has_attribute(&out, "data-con", "jux"));
-        assert!(has_text(&out, "consectetur."));
-    }
-
-    #[test]
-    fn leaves_vanilla_inline_image_for_markdown() {
-        let pipeline = Pipeline::default();
-        let events = paragraph_events("Ad ex tempor ![Alt](https://x.test/a.webp) consectetur.");
-        let out = process(&events, &ImageOptions::default(), &pipeline);
-
+        assert!(attr_value(&out, "data-__number").is_none());
+        // The numbering marker is part of the head, so the line is still a block.
         assert!(!out
             .iter()
-            .any(|e| matches!(e, Event::StartNode(NodeKind::HtmlInline))));
-        assert!(out
-            .iter()
-            .any(|e| matches!(e, Event::Text(t) if t.contains("![Alt](https://x.test/a.webp)"))));
-    }
-
-    /// §11 rule 3 / `D-3a`: the figure keeps its built-in kind and names the
-    /// layer it belongs to; the renderer picks the component document-wide. The
-    /// extras of the outermost node reach it verbatim (no `data-` prefix).
-    #[test]
-    fn figure_layer_keeps_its_extras_verbatim() {
-        let pipeline = Pipeline::default();
-        let options = ImageOptions {
-            img: ComponentSet::new(),
-            figure: ComponentSet::from_entries([TypedComponent::default_component(
-                ImageCustomNode {
-                    name: "AdvancedImage".into(),
-                    template: "<AdvancedImage />".into(),
-                    imports: Vec::new(),
-                },
-            )]),
-        };
-        let events =
-            paragraph_events("!![Alt](https://x.test/a.webp){.hero, foo: \"bar\"} A caption");
-        let out = process(&events, &options, &pipeline);
-
-        assert!(out.iter().any(|e| matches!(
-            e,
-            Event::StartNode(NodeKind::Element(name)) if name == "figure"
-        )));
-        assert!(has_attribute(&out, "__layer", "figure"));
-        assert!(out.iter().any(|e| matches!(
-            e,
-            Event::Attribute { name, value } if name == "src" && value == "https://x.test/a.webp"
-        )));
-        assert!(out.iter().any(|e| matches!(
-            e,
-            Event::Attribute { name, value } if name == "class" && value == "hero"
-        )));
-        assert!(out.iter().any(|e| matches!(
-            e,
-            Event::Attribute { name, value } if name == "foo" && value == "bar"
-        )));
-    }
-
-    /// Custom components are pre-rendered here (inner `<img>` plus caption), so
-    /// they must carry `__plugin_kind = element` (§11 rule 3). Without the marker
-    /// the Markdown pass re-lexed the caption and dropped its whitespace-only
-    /// chunks, gluing the words together (`Afigurecaptionwith<strong>…`).
-    #[test]
-    fn custom_components_are_marked_as_pre_rendered_elements() {
-        let pipeline = Pipeline::default();
-        let component = |name: &str| {
-            ComponentSet::from_entries([TypedComponent::default_component(ImageCustomNode {
-                name: name.into(),
-                template: format!("<{name}>{{children}}</{name}>"),
-                imports: Vec::new(),
-            })])
-        };
-        let options = ImageOptions {
-            img: component("AdvancedImage"),
-            figure: component("Figure"),
-        };
-        let events =
-            paragraph_events("~?!![Alt](https://x.test/a.webp) A figure caption with **markup**.");
-        let out = process(&events, &options, &pipeline);
-
-        assert!(has_attribute(&out, "__plugin_kind", "element"));
-        // The caption keeps the spaces between its words.
-        assert!(
-            has_text(&out, "A figure caption with markup."),
-            "caption words must not be glued: {out:?}"
-        );
-    }
-
-    #[test]
-    fn parses_marker_with_width_height_and_flags() {
-        let marker = parse_marker("~?!!w300h800").unwrap();
-        assert_eq!(marker.container, Some(ContainerKind::Figure));
-        assert!(marker.lazy);
-        assert!(marker.async_decoding);
-        assert_eq!(marker.width, Some(300));
-        assert_eq!(marker.height, Some(800));
-    }
-
-    #[test]
-    fn extras_attach_to_the_outermost_figure() {
-        let pipeline = Pipeline::default();
-        let events = paragraph_events(
-            "~?!!h300w800[Alt](https://x.test/a.webp)@@figure{.wide, #fig, foo: \"bar\"} Caption",
-        );
-        let out = process(&events, &ImageOptions::default(), &pipeline);
-
-        // §7.1: extras go to the outer `<figure>`, the `w`/`h` marker stays on
-        // the inner `<img>`.
-        let figure = element_children(&out, "figure");
-        assert!(has_attribute(&figure, "id", "fig"));
-        assert!(has_attribute(&figure, "class", "wide"));
-        assert!(has_attribute(&figure, "data-foo", "bar"));
-        let img = element_children(&figure, "img");
-        assert!(has_attribute(&img, "width", "800"));
-        assert!(has_attribute(&img, "height", "300"));
-        assert!(!has_attribute(&img, "class", "wide"));
-
-        // The whitespace after the head does not leak into the caption.
-        let caption = element_children(&out, "figcaption");
-        assert!(has_text(&caption, "Caption"));
-        assert!(!has_text(&caption, "@@figure"));
-    }
-
-    #[test]
-    fn extras_attach_to_an_inline_image() {
-        let pipeline = Pipeline::default();
-        let events = paragraph_events(
-            "Ad ex tempor !?~[Alt](https://x.test/a.webp)@@img{con: \"jux\", .foo} consectetur.",
-        );
-        let out = process(&events, &ImageOptions::default(), &pipeline);
-
-        assert!(out
-            .iter()
             .any(|event| matches!(event, Event::StartNode(NodeKind::Paragraph))));
-        assert!(has_attribute(&out, "class", "foo"));
-        assert!(has_attribute(&out, "data-con", "jux"));
-        assert!(has_attribute(&out, "loading", "lazy"));
-        assert!(has_text(&out, "consectetur."));
-        assert!(!has_text(&out, "@@img"));
     }
 
     #[test]
-    fn extras_class_accumulates() {
-        let parsed = parse_figure_syntax(
-            "!![Alt](https://x.test/a.webp)@@figure{.head, .extra}",
+    fn a_slot_quote_is_a_bare_field() {
+        // D-7: only the preset's two rows are `alt`/`src`; a quote in the bracket
+        // is `bracket.quote` and a quote in the paren is `paren.quote`.
+        let out = process(
+            &paragraph_events("![\"the quote\"](https://x.test/a.webp \"paren quote\")"),
             &ImageOptions::default(),
-        )
-        .expect("figure");
-        // §6.4: class accumulates.
-        assert_eq!(parsed.attrs.classes, vec!["head", "extra"]);
-    }
+        );
 
-    /// §14/D3: the retired `[.class,#id]{k:v}` block is literal text.
-    #[test]
-    fn the_retired_legacy_block_is_literal_text() {
-        let pipeline = Pipeline::default();
-        let events = paragraph_events("!![Alt](https://x.test/a.webp)[#hero]{k: \"v\"} Cap");
-        let out = process(&events, &ImageOptions::default(), &pipeline);
-
-        assert!(!has_attribute(&out, "id", "hero"));
-        assert!(!out.iter().any(|event| matches!(
-            event,
-            Event::Diagnostic { message, .. } if message.contains("deprecated")
-        )));
+        assert!(has_attribute(&out, "src", "https://x.test/a.webp"));
+        assert!(has_attribute(&out, "bracket.quote", "the quote"));
+        assert!(has_attribute(&out, "paren.quote", "paren quote"));
+        // §6.3: an empty preset position still renders, so this is a decorative
+        // image rather than one with a missing `alt`.
+        assert!(has_attribute(&out, "alt", ""));
     }
 
     #[test]
-    fn extras_slug_fills_the_id_when_no_id_is_present() {
-        let parsed = parse_figure_syntax(
-            "!![Alt](https://x.test/a.webp)@@figure{`the-figure`}",
-            &ImageOptions::default(),
-        )
-        .expect("figure");
-        // §6.2: `#id` > head slug > extras slug.
-        assert_eq!(parsed.attrs.id.as_deref(), Some("the-figure"));
-    }
+    fn an_empty_head_is_still_an_image() {
+        // D-2: no element refuses a head for looking incomplete — the document
+        // decides what a sourceless image means.
+        let out = process(&paragraph_events("![]()"), &ImageOptions::default());
 
-    #[test]
-    fn bare_flags_stay_bare_attributes() {
-        let pipeline = Pipeline::default();
-        let events = paragraph_events("!![Alt](https://x.test/a.webp)@@figure{isFoo} Cap");
-        let out = process(&events, &ImageOptions::default(), &pipeline);
-
-        let figure = element_children(&out, "figure");
-        assert!(figure
+        assert!(has_element(&out, "img"));
+        // §6.3: the decorative image keeps its empty `alt`.
+        assert!(has_attribute(&out, "alt", ""));
+        assert!(attr_value(&out, "src").is_none());
+        assert!(!out
             .iter()
-            .any(|event| matches!(event, Event::AttributeFlag { name } if name == "isFoo")));
+            .any(|event| matches!(event, Event::Diagnostic { .. })));
     }
 
     #[test]
-    fn extras_style_merges_into_the_style_attribute() {
-        let pipeline = Pipeline::default();
-        let events = paragraph_events("![Alt](https://x.test/a.webp)@@img{--r: \"5deg\"}");
-        let out = process(&events, &ImageOptions::default(), &pipeline);
+    fn a_component_receives_every_field_verbatim() {
+        let options = ImageOptions {
+            img: ComponentSet::from_entries([TypedComponent::default_component(ImageCustomNode {
+                name: "AdvancedImage".into(),
+                template: "<AdvancedImage {...attrs} />".into(),
+                imports: Vec::new(),
+            })]),
+        };
+        let events = paragraph_events("![Alt](https://x.test/a.webp)@@imageX{foo: \"bar\", .hero}");
 
-        assert!(has_attribute(&out, "style", "--r: 5deg;"));
-        assert!(!out.iter().any(|event| matches!(
-            event,
-            Event::Attribute { name, .. } if name == "data-style"
-        )));
+        // The plain document (no entry) keeps the `data-` prefix…
+        let out = process(&events, &ImageOptions::default());
+        assert!(has_attribute(&out, "data-foo", "bar"));
+
+        // …a configured layer passes every key through, `type` included.
+        let out = process(&events, &options);
+        assert!(has_attribute(&out, "foo", "bar"));
+        assert!(has_attribute(&out, "class", "hero"));
+        assert!(has_attribute(&out, "type", "imageX"));
+        assert!(has_attribute(&out, "__layer", "img"));
+    }
+
+    #[test]
+    fn a_moved_slot_is_a_field_of_the_author() {
+        // D-7/D-4: one `field.<slot>.<kind>` assignment voids the whole preset for
+        // this entry, so every position keeps its slot-qualified name.
+        let mut field = FieldConfig::new();
+        field.assign_slot(
+            Slot::Bracket,
+            SlotKind::Bare,
+            Some(Path::from_dotted("label").expect("a path")),
+        );
+        let options = ImageOptions {
+            img: ComponentSet::from_entries([TypedComponent::default_component(ImageCustomNode {
+                name: "AdvancedImage".into(),
+                template: "<AdvancedImage {...attrs} />".into(),
+                imports: Vec::new(),
+            })
+            .with_field(field)]),
+        };
+        let out = process(&paragraph_events("![Alt](https://x.test/a.webp)"), &options);
+
+        assert!(has_attribute(&out, "label", "Alt"));
+        // The paren keeps its slot-qualified name: the preset is void as a whole
+        // (§6.1), so nothing is called `src` any more.
+        assert!(has_attribute(&out, "paren.bare", "https://x.test/a.webp"));
+        assert!(attr_value(&out, "alt").is_none());
+        assert!(attr_value(&out, "src").is_none());
+        assert!(!out
+            .iter()
+            .any(|event| matches!(event, Event::Diagnostic { .. })));
     }
 
     #[test]
     fn malformed_extras_stay_literal_text() {
-        let pipeline = Pipeline::default();
-        let events = paragraph_events("Ad ex tempor ![Alt](https://x.test/a.webp)@@figure{.a ex.");
-        let out = process(&events, &ImageOptions::default(), &pipeline);
-
-        assert!(!out.iter().any(
-            |event| matches!(event, Event::StartNode(NodeKind::Element(name)) if name == "img")
-        ));
-        assert!(has_text(&out, "@@figure{.a"));
-    }
-
-    #[test]
-    fn custom_component_receives_extras_props() {
-        let pipeline = Pipeline::default();
-        let options = ImageOptions {
-            img: ComponentSet::new(),
-            figure: ComponentSet::from_entries([TypedComponent::default_component(
-                ImageCustomNode {
-                    name: "AdvancedImage".into(),
-                    template: "<AdvancedImage />".into(),
-                    imports: Vec::new(),
-                },
-            )]),
-        };
-        let events = paragraph_events(
-            "!![Alt](https://x.test/a.webp)@@figure{.hero, foo: \"bar\"} A caption",
+        let out = process(
+            &paragraph_events("Ad ex tempor ![Alt](https://x.test/a.webp)@@figure{.a ex."),
+            &ImageOptions::default(),
         );
-        let out = process(&events, &options, &pipeline);
 
-        assert!(out.iter().any(|e| matches!(
-            e,
-            Event::StartNode(NodeKind::Element(name)) if name == "figure"
-        )));
-        assert!(has_attribute(&out, "__layer", "figure"));
-        assert!(out.iter().any(|e| matches!(
-            e,
-            Event::Attribute { name, value } if name == "class" && value == "hero"
-        )));
-        assert!(out.iter().any(|e| matches!(
-            e,
-            Event::Attribute { name, value } if name == "foo" && value == "bar"
-        )));
-        assert!(has_text(&out, "A caption"));
+        // The head itself is complete, so the image is emitted…
+        assert!(has_attribute(&out, "alt", "Alt"));
+        // …and the unterminated extras stay what they were.
+        assert!(has_text(&out, "@@figure{.a ex."));
     }
 
     #[test]
-    fn supports_borrowed_context_for_caption_pipeline() {
-        let mut pipeline = ContextPipeline::new();
-        pipeline.add(|count: &mut usize, events| {
-            *count += 1;
-            events
-        });
+    fn a_head_inside_a_code_span_stays_text() {
+        // A code span is verbatim by definition, and the plugin runs before
+        // markdown: writing the syntax down must not produce an image.
+        let out = process(
+            &paragraph_events("Write `![a](b)` to embed, then ![c](d) really."),
+            &ImageOptions::default(),
+        );
 
-        let mut count = 0;
-        let events = paragraph_events("!![Alt](https://x.test/a.webp) Caption");
-        let out = process_with_context(&events, &ImageOptions::default(), &pipeline, &mut count);
+        assert!(has_text(&out, "`![a](b)`"), "{}", text_of(&out));
+        assert_eq!(
+            img_attrs(&out)
+                .iter()
+                .filter(|(name, _)| name == "src")
+                .count(),
+            1
+        );
+        assert!(has_attribute(&out, "src", "d"));
+    }
 
-        // A borrowed (&mut) context works with the caption inline pipeline.
-        assert!(count > 0, "caption pipeline did not run");
-        let caption = element_children(&out, "figcaption");
-        assert!(has_text(&caption, "Caption"));
+    #[test]
+    fn a_malformed_head_is_an_error_and_stays_literal() {
+        let out = process(
+            &paragraph_events("Ad ex tempor ![Alt](/a \"b.webp) consectetur."),
+            &ImageOptions::default(),
+        );
+
+        assert!(out.iter().any(|event| matches!(
+            event,
+            Event::Diagnostic { severity: Severity::Error, message, .. } if message.starts_with("[img]")
+        )));
+        assert!(!has_element(&out, "img"));
+        assert!(has_text(&out, "![Alt](/a \"b.webp)"));
     }
 }

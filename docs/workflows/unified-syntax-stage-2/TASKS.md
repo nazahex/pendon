@@ -697,7 +697,7 @@ README. If an element has nothing to delete, say so in the commit message.
       `22`, `27`, `28`, `30`, `31`, `32` re-frozen; `21` unchanged (the extras
       tick still becomes the slug); `31` re-sourced to keep its prose depths.
       776 tests.
-- [ ] **S2-4.7 — Image.** Dep: S2-4.2. `§7.1`
+- [x] **S2-4.7 — Image.** Dep: S2-4.2. `§7.1`
       Do: `!` tag; `bracket.bare→alt`, `paren.bare→src`; delete the marker-
       modifier run (`?`, `~`, `w<digits>`, `h<digits>`) and the `!!` figure
       doubling, with figure/figcaption and their `[task.image.custom.figure]`
@@ -706,6 +706,28 @@ README. If an element has nothing to delete, say so in the commit message.
       G: image fixture; `~?!![](src)` renders as literal text.
       Exit: preset assignment = `src`, `alt`; no `figure`/`figcaption` in any
       fixture output.
+      **Done 2026-10-29.** The head is `parse_slots` + `parse_extras` +
+      `HEAD.assign`: `![alt](src)` **is** the minimum (a bare `!` used to need a
+      marker), the preset is `bracket.bare → alt` / `paren.bare → src`, and every
+      other claimed position is a bare field (`bracket.quote`, `paren.tick`, …).
+      `alt`/`src` joined `.with_owned(...)` (D-12 rule 5) — an extras item
+      spelling one is now an `Error`; that needed a `HEAD.owns(k) && has(k)`
+      check so a preset a `field.*` voided leaves the key free. The whole marker
+      run is deleted, so `~?!![](src)` renders `~?!` plus an empty-`alt` image
+      (D-11: only the `!` that touches `[` is a tag) — the fixture pins exactly
+      that, and `~?!!h300w800[Alt](…)` no longer produces a figure, a caption or
+      a `w`/`h` attribute. `ImageOptions` lost `figure`; `emit_image` writes one
+      `<img>` node (`__layer="img"`), block when the head owns its line and
+      inline otherwise; the caption went with `process_with_context`, so the
+      crate no longer depends on `plugin-markdown`/`plugin-latex` and the CLI
+      drops its second pipeline. Cascade: `plugin-number` + `plugin-extract`
+      (`img` only), `plugin-markdown`'s `!!` reservation, `[task.image.custom.
+      figure]` is now a load error (§13). Fixture `03-image-figure` →
+      `03-image` (rewritten), `27-bind-mdp` (payload line + `img` layer),
+      `31-number-custom` byte-identical. Added while rendering the sandbox: a
+      head inside a **code span** is no longer claimed (markdown would otherwise
+      print `<img>` inside backticks), which is what makes `§7.1` quotable.
+      776 tests.
 - [x] **S2-4.8 — List.** Dep: S2-4.1. `§9.3–§9.4`
       Do: no slot contract; decorator only (wired in Phase 5); preset
       assignment empty

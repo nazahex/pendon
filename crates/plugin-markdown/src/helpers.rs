@@ -124,34 +124,33 @@ pub fn emit_inline(s: &str, out: &mut Vec<Event>, opts: MarkdownOptions) {
             continue;
         }
         if bytes[i] == '!' && i + 1 < bytes.len() && bytes[i + 1] == '[' {
-            // Keep !![...](...) reserved for plugin-image advanced figure syntax.
-            if i == 0 || bytes[i.saturating_sub(1)] != '!' {
-                if let Some(close_br) = find_next(&bytes, i + 2, ']') {
-                    if close_br + 1 < bytes.len() && bytes[close_br + 1] == '(' {
-                        if let Some(close_par) = find_next(&bytes, close_br + 2, ')') {
-                            let alt: String = bytes[i + 2..close_br].iter().collect();
-                            let raw_target: String =
-                                bytes[close_br + 2..close_par].iter().collect();
-                            let (src, title) = parse_target_and_title(&raw_target);
-                            out.push(Event::StartNode(NodeKind::Image));
+            // A CommonMark image. `plugin-image` claims `![…](…)` before this
+            // runs; when it is not enabled the text is still an image (§7.1 made
+            // a bare `!` the tag, so a leading `!` is simply a second one).
+            if let Some(close_br) = find_next(&bytes, i + 2, ']') {
+                if close_br + 1 < bytes.len() && bytes[close_br + 1] == '(' {
+                    if let Some(close_par) = find_next(&bytes, close_br + 2, ')') {
+                        let alt: String = bytes[i + 2..close_br].iter().collect();
+                        let raw_target: String = bytes[close_br + 2..close_par].iter().collect();
+                        let (src, title) = parse_target_and_title(&raw_target);
+                        out.push(Event::StartNode(NodeKind::Image));
+                        out.push(Event::Attribute {
+                            name: "alt".to_string(),
+                            value: alt,
+                        });
+                        out.push(Event::Attribute {
+                            name: "src".to_string(),
+                            value: src,
+                        });
+                        if let Some(title) = title {
                             out.push(Event::Attribute {
-                                name: "alt".to_string(),
-                                value: alt,
+                                name: "title".to_string(),
+                                value: title,
                             });
-                            out.push(Event::Attribute {
-                                name: "src".to_string(),
-                                value: src,
-                            });
-                            if let Some(title) = title {
-                                out.push(Event::Attribute {
-                                    name: "title".to_string(),
-                                    value: title,
-                                });
-                            }
-                            out.push(Event::EndNode(NodeKind::Image));
-                            i = close_par + 1;
-                            continue;
                         }
+                        out.push(Event::EndNode(NodeKind::Image));
+                        i = close_par + 1;
+                        continue;
                     }
                 }
             }

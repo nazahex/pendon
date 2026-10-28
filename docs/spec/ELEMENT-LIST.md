@@ -20,7 +20,7 @@ Ini adalah dokumen yang berisi daftar singkat elemen yang sah dan didukung penuh
 - codefence
 - directive (`==`)
 - heading
-- image (figure)
+- image (img)
 - marker
 - latex (`$$`)
 - list

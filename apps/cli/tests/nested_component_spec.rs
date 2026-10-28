@@ -26,7 +26,7 @@ path = "epis.toml"
 enabled = true
 "#;
 
-const SOURCE: &str = "!![Alt](https://x.test/a.webp) Caption with ::[ep1] caption reason:: end.\n\n| Produk | Stok |\n| --- | --- |\n| ::[ep2] cell reason:: | 15 |\n";
+const SOURCE: &str = "![Alt](https://x.test/a.webp) Caption with ::[ep1] caption reason:: end.\n\n| Produk | Stok |\n| --- | --- |\n| ::[ep2] cell reason:: | 15 |\n";
 
 fn write_project(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("pendon-nested-component-{name}"));
@@ -62,19 +62,23 @@ fn between(haystack: &str, open: &str, close: &str, needle: &str) -> bool {
 }
 
 #[test]
-fn custom_inline_component_nests_inside_figure_caption() {
-    let dir = write_project("figure-caption");
+fn text_after_an_image_is_ordinary_paragraph_content() {
+    // §7.1 retired the caption (§14): the text after a head belongs to the
+    // paragraph, so the inline plugins still run over it — a custom component
+    // nests beside the `<img>` instead of inside a `<figcaption>`.
+    let dir = write_project("image-paragraph");
     run_task(&dir);
     let out = fs::read_to_string(dir.join("out/demo.jsx")).expect("output file");
 
-    assert!(contains("<figure").eval(&out), "figure emitted: {out}");
     assert!(
-        contains("<figcaption>").eval(&out),
-        "figcaption emitted: {out}"
+        contains("<img alt=\"Alt\"").eval(&out),
+        "image emitted: {out}"
     );
+    assert!(!out.contains("<figure"), "no figure any more: {out}");
+    assert!(!out.contains("<figcaption>"), "no caption any more: {out}");
     assert!(
-        between(&out, "<figcaption>", "</figcaption>", "<Epis"),
-        "custom component must nest inside <figcaption>: {out}"
+        between(&out, "<p>", "</p>", "<Epis"),
+        "custom component must nest inside the paragraph: {out}"
     );
     assert!(
         !out.contains("::[ep1]"),

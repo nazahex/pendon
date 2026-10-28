@@ -106,7 +106,7 @@ name = "HeadingDefault"
 imports = "import { HeadingDefault } from '@comp/Heading'"
 template = "<HeadingDefault {...attrs}>{children}</HeadingDefault>"
 
-# --- IMAGE: typed + default for both img and figure -------------------------
+# --- IMAGE: typed + default (the `figure` layer is retired, §14) -----------
 
 [[task.image.custom.img]]
 type = ["imageX", "thumb"]
@@ -118,17 +118,6 @@ template = "<ImageThumb type={\"{attrs.type}\"} {...attrs}>{children}</ImageThum
 name = "AdvancedImage"
 imports = "import AdvancedImage from '@comp/AdvancedImage'"
 template = "<AdvancedImage {...attrs}>{children}</AdvancedImage>"
-
-[[task.image.custom.figure]]
-type = ["figureX"]
-name = "FigureX"
-imports = "import { FigureX } from '@comp/Figure'"
-template = "<FigureX {...attrs}>{children}</FigureX>"
-
-[[task.image.custom.figure]]
-name = "Figure"
-imports = "import Figure from '@comp/Figure'"
-template = "<Figure {...attrs}>{children}</Figure>"
 
 # --- CITE: typed + default --------------------------------------------------
 
