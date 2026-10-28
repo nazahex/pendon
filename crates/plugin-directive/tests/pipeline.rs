@@ -261,3 +261,32 @@ fn cpp_scope_resolution_stays_literal() {
         text_content(&out)
     );
 }
+
+/// S2-4.5: `type` is the directive's own field — it comes from the `::type` /
+/// `==type` head, never from an extras head — so a decorator naming another type
+/// above the block cannot take it over.
+///
+/// Phase 5 (`S2-5.3`) makes a directive *reject* a decorator outright; until then
+/// the line binds to the first block of the body, and the invariant this test
+/// pins is the one that must survive that change: the directive keeps its `type`
+/// and its own extras.
+#[test]
+fn a_decorator_never_overrides_the_directive_type() {
+    let events = pipeline("@@other{.from-decorator}\n\n==note{.own} body\n==\n");
+    let jsx = render_solid_with_hints(&events, solid_hints(&options()).as_ref());
+    assert!(jsx.contains("<Note"), "{jsx}");
+    assert!(jsx.contains("type=\"note\""), "{jsx}");
+    assert!(jsx.contains("class=\"own\""), "{jsx}");
+    assert!(
+        !jsx.contains("<Note class=\"from-decorator\""),
+        "the decorator moved onto the directive: {jsx}"
+    );
+
+    // The inline form keeps its own `type` too (§10.2).
+    let events = pipeline("@@other{.d}\n\nText with ::note{.inline} body:: here.\n");
+    let jsx = render_solid_with_hints(&events, solid_hints(&options()).as_ref());
+    assert!(
+        jsx.contains("<Note class=\"inline\" type=\"note\""),
+        "{jsx}"
+    );
+}

@@ -950,6 +950,10 @@ A directive whose type no component claims — including a layer with no default
 falls back to `<span>` / `<div>` with the instance's `type` and extras, exactly
 like a marker (§11 rule 3). The node is never rendered as a bare child container.
 
+In both forms `type` is the directive head's own field: it is never extras-derived
+and is not a slot position, so an extras head cannot set it and a decorator naming
+another type cannot replace it.
+
 ### 10.4 Priority summary
 
 | Slot                     | Winner                                                      |

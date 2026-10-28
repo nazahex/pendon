@@ -220,6 +220,12 @@ exactly one `export const headings` line each (no bytes removed), and
       read); §14 gained the removal, §4.1's adjacency exception now names the list
       item only. Gate: fmt + dprint clean, clippy at baseline, 759 tests. Next:
       `S2-4.4` (cite).
+      `S2-4.5` done — verified "no change": `::type` / `==type` still read their
+      own head, `type` is never extras-derived (`plugin-extract`'s `directive`
+      table keeps it), and the audit rows cover both heads. Added the missing
+      regression test (`a_decorator_never_overrides_the_directive_type`: a
+      `@@other{…}` line cannot change a block or inline directive's `type`) and
+      one §10.3 sentence. 760 tests. Next: `S2-4.4` (cite).
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden

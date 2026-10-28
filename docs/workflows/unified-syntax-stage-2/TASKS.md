@@ -594,12 +594,25 @@ README. If an element has nothing to delete, say so in the commit message.
       Exit: preset assignment = `reference_id`, `locator`, `citation_number`;
       overrides
       (`ref_id`, `no`, `loc`) work without breaking numbering.
-- [ ] **S2-4.5 — Directive: verify "no change".** Dep: S2-4.1. `§10.2–§10.3`
+- [x] **S2-4.5 — Directive: verify "no change".** Dep: S2-4.1. `§10.2–§10.3`
       Do: confirm `::type` / `==type` are untouched and `type` stays in the
       directive preset (it does not come from extras). Add the missing regression
       test if absent.
       Exit: an explicit test asserting directive `type` survives a decorator
       with `@@other`.
+      **Done 2026-10-28 — no code change, as expected.** Verified: the inline and
+      block forms still read their head through `resolve_head`, `type` comes from
+      the directive head (`head.type_marker`, `ParsedDirective::type_name`), never
+      from the extras items, and `plugin-extract`'s `directive` field table still
+      lists `type` alongside `id` / `level` / `summary` / `inner_text`. The audit
+      row (`extras_heads_spec`) already covers both heads. The missing test is
+      `a_decorator_never_overrides_the_directive_type`
+      (`crates/plugin-directive/tests/pipeline.rs`): a `@@other{.…}` line above a
+      block directive leaves it `type="note"` with its own class, and the inline
+      form keeps its type too. Recorded, not fixed: until `S2-5.3` makes a
+      directive _reject_ a decorator, the line binds to the first block of the
+      body — the invariant the test pins is the one that must survive that change.
+      §10.3 gained one sentence stating that `type` is the head's, not extras'.
 - [ ] **S2-4.6 — Heading.** Dep: S2-4.2. `§7.4`
       Do: `#` tag (the `#` immediately before `[` is the tag; the rest is depth,
       so today's `##[…]` becomes depth 1 — state this in §7.4);
