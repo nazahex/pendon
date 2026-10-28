@@ -1,5 +1,24 @@
 export default function PendonView() { return (<>
-<p>The construct head wins over the extras; the extras value is dropped (§6.2).
+<p>The head is <strong>tagged</strong> (§5.3, §7.2). Without the tag the text is not an anchor at
+all — <code>plugin-markdown</code> links it and the extras head stays literal (§14): no
+<code>type</code>, no <code>class</code>.
+</p>
+<pre lang="text"><code>@[Inner text](/docs &quot;Head title&quot;)@@anchorA&#123;.hero&#125;
+</code></pre>
+<p><a href="/docs">Tagged</a>
+<a href="/docs">Untagged</a>@@anchorA&#123;.hero&#125;
+</p>
+<p>§6.5: the preset assigns <code>bracket.bare → inner_text</code>, <code>paren.bare → href</code> and
+<code>paren.quote → title</code>. The other three positions of the same head are bare fields
+under their slot-qualified names — kept, never dropped (D-7).
+</p>
+<p><a {...{ "bracket.quote": "Head quote" }} {...{ "bracket.tick": "Head tick" }} href="/docs" {...{ "paren.tick": "Paren tick" }} title="Head title">Inner</a>
+</p>
+<p>The tag is read wherever a head starts, because an anchor is inline by nature:
+</p>
+<p>Inline: see <a href="/docs">the docs</a> for details.
+</p>
+<p>§6.2: the construct head wins over the extras, and the extras value is dropped.
 </p>
 <p><a href="/docs" title="Head title" type="anchorA">Head title wins</a>
 </p>
@@ -10,19 +29,21 @@ did (§6.2).
 </p>
 <p><a href="/docs" id="slug-only" type="anchorA">Slug only</a>
 </p>
-<p><code>href</code> is owned by the link; the extras value is ignored (§7.2).
+<p><code>href</code> is owned by the link; the extras value is an <code>Error</code> that names
+<code>field.override.href</code> (§13, D-12 rule 5).
 </p>
 <p><a href="/docs" type="anchorA">Href is owned</a>
 </p>
-<p>URL modifiers are parsed before the head and win over <code>target:</code>:
+<p>§14 (D-16): automatic external-link attributes and the URL-suffix modifiers are
+gone. A URL is a URL — no <code>target</code>, no <code>rel</code> — and <code>^</code>, <code>!</code>, <code>$</code>, <code>;;</code>, <code>--</code> are
+ordinary characters now:
 </p>
-<p><a href="/docs" rel="noopener" target="_blank" type="anchorA">Modifier wins</a>
+<p><a href="https://example.com/bar">No external defaults</a>
+<a href="/docs^!$;;--">Suffix is text</a>
 </p>
-<p><a href="https://example.com/bar" rel="noopener" target="_self" type="anchorA">No modifier</a>
+<p><code>target</code> and <code>rel</code> are ordinary extras keys now (§6.3):
 </p>
-<p><code>rel:</code> merges with the modifier result instead of replacing it:
-</p>
-<p><a href="https://example.com/bar" hreflang="en" rel="noopener nofollow prefetch" target="_blank" type="anchorA">Rel merge</a>
+<p><a href="https://example.com/bar" hreflang="en" rel="prefetch" target="_self" type="anchorA">Extras attributes</a>
 </p>
 <p>A marker with no configured entry keeps the built-in <code>&lt;a&gt;</code> element and carries
 the marker as its <code>type</code> attribute (§11 rule 3):

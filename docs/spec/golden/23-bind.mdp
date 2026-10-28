@@ -12,11 +12,11 @@ binds the parsed value as a real JavaScript prop (RFC §2).
 
 The whole object becomes one prop:
 
-[Card](/docs)@@anchorA{data: $card}
+@[Card](/docs)@@anchorA{data: $card}
 
 A nested extras value binds a leaf; a block may be declared after its use:
 
-[Rows](/docs)@@anchorA{meta: {rows: $rows, n: 2}}
+@[Rows](/docs)@@anchorA{meta: {rows: $rows, n: 2}}
 
 {{{csv[rows]
 id,nama,aktif
@@ -49,11 +49,11 @@ release = true
 targets = ["aarch64", "x86_64"]
 }}}
 
-[Typed](/docs)@@anchorA{theme: $theme, env: $env, build: $build}
+@[Typed](/docs)@@anchorA{theme: $theme, env: $env, build: $build}
 
 An undefined `$ghost` warns and stays literal text:
 
-[Ghost](/docs)@@anchorA{data: $ghost}
+@[Ghost](/docs)@@anchorA{data: $ghost}
 
 
 `mdp` (Pendon Markdown) binds a **sub-document**: the payload runs through the
@@ -67,9 +67,9 @@ This is **block** mdp *mode* with `code` and a [link](https://example.com).
 
 {{{mdp[inline-mdp] This is **inline** mdp *mode* with `code` and a [link](https://example.com). }}}
 
-[BlockMdp](/docs)@@anchorA{data: $block-mdp}
-[InlineMdp](/docs)@@anchorA{data: $inline-mdp}
+@[BlockMdp](/docs)@@anchorA{data: $block-mdp}
+@[InlineMdp](/docs)@@anchorA{data: $inline-mdp}
 
 An undefined `$missing-mdp` warns and stays literal text:
 
-[MissingMdp](/docs)@@anchorA{data: $missing-mdp}
+@[MissingMdp](/docs)@@anchorA{data: $missing-mdp}

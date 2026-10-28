@@ -1,25 +1,25 @@
 Every item kind of §5 in one head. `class` accumulates, and bare flags stay bare
 attributes (§6.3).
 
-[All item kinds](/docs/bar "Head title")@@anchorA{`slug-foo`, "Extras title", .extra, .class, #id, foo: "bar", bar: 12, isFoo: true, --style-var: "2rem", isBar}
+@[All item kinds](/docs/bar "Head title")@@anchorA{`slug-foo`, "Extras title", .extra, .class, #id, foo: "bar", bar: 12, isFoo: true, --style-var: "2rem", isBar}
 
 The worked example of §5.1 in full:
 
-[Worked](/docs)@@anchorB{`slug-foo`, "Title Foo", .extra, .class, #id, foo: "bar", bar: 12, isFoo: true, --style-var: "2rem", isBar}
+@[Worked](/docs)@@anchorB{`slug-foo`, "Title Foo", .extra, .class, #id, foo: "bar", bar: 12, isFoo: true, --style-var: "2rem", isBar}
 
 Duplicates are an error, not a merge: the first occurrence keeps both its
 position and its value (§6.4, D-12).
 
-[Duplicates](/docs)@@anchorB{.first, .second, #dup, #other, foo: "one", foo: "two", isFlag, other}
+@[Duplicates](/docs)@@anchorB{.first, .second, #dup, #other, foo: "one", foo: "two", isFlag, other}
 
 The same holds for the positional items, whatever the spelling.
 
-[Dup positional](/docs)@@anchorA{`one`, `two`, "a", "b"}
+@[Dup positional](/docs)@@anchorA{`one`, `two`, "a", "b"}
 
 Escapes inside values: a comma, a quote and a backslash all survive.
 
-[Escaping](/docs)@@anchorA{csv: "a\,b", quote: "say \"hi\"", path: "dir\\file"}
+@[Escaping](/docs)@@anchorA{csv: "a\,b", quote: "say \"hi\"", path: "dir\\file"}
 
 A `class:` prop accumulates exactly like a `.x` item, head items first (§6.4).
 
-[Class prop](/docs)@@anchorA{.head, class: "tail"}
+@[Class prop](/docs)@@anchorA{.head, class: "tail"}

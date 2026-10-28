@@ -568,10 +568,12 @@ impl FieldConfig {
         Self::default()
     }
 
-    /// True when no `field.*` key was configured.
+    /// True when no `field.*` key was configured at all.
     ///
-    /// This is the D-7 trigger: **any** assignment voids every preset
-    /// assignment for the element, for this entry only.
+    /// Not the D-7 trigger — that is [`is_empty_slots`](Self::is_empty_slots),
+    /// because the preset assigns slot positions. This predicate answers the
+    /// coarser question "was this entry configured at all", which is what the
+    /// loader's duplicate-config check wants.
     pub fn is_empty(&self) -> bool {
         self.slot.is_empty() && self.specs.is_empty() && self.overrides.is_empty()
     }
@@ -581,6 +583,17 @@ impl FieldConfig {
     /// `None` for a kind means the position was explicitly unassigned.
     pub fn slots(&self) -> &BTreeMap<Slot, BTreeMap<SlotKind, Option<Path>>> {
         &self.slot
+    }
+
+    /// True when no `field.<slot>.<kind>` key was configured.
+    ///
+    /// This is the D-7 trigger: the preset assigns **slot positions**, so a slot
+    /// assignment is what voids it — for this entry only, and as a whole. A
+    /// `field.specs.*` or `field.override.*` key defines a field for an extras
+    /// item, not a new home for a slot, so it leaves the preset alone
+    /// (`S2-4.2`; fixture `34-specs-assignment` is the evidence).
+    pub fn is_empty_slots(&self) -> bool {
+        self.slot.is_empty()
     }
 
     /// One position's assignment: `None` = not configured, `Some(None)` =

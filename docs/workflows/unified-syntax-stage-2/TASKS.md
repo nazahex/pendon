@@ -524,7 +524,7 @@ README. If an element has nothing to delete, say so in the commit message.
       `[&str]` list never proved); `href_stays_construct_owned` still passes.
       Docs: §6.5 states the owned list, D-12's note records the wiring, and the
       `crates/extra` README now describes the triple. Gate green: 753 tests.
-- [ ] **S2-4.2 — Anchor.** Dep: S2-4.1. `§7.2`
+- [x] **S2-4.2 — Anchor.** Dep: S2-4.1. `§7.2`
       Do: `@` tag claims `[]`/`()`; contract `bracket.bare→inner_text`,
       `paren.bare→href`, `paren.quote→title`; delete external-URL detection
       (`target="_blank"`, `rel="noopener"`), URL-suffix modifiers, and the
@@ -533,6 +533,31 @@ README. If an element has nothing to delete, say so in the commit message.
       G: anchor fixture (all six positions, + removed behaviour as literal text).
       Exit: preset assignment = `inner_text`, `href`, `title`; removals covered
       by fixtures.
+      **Done 2026-10-28.** The head is read by the shared grammar now:
+      `parse_slots` + `parse_extras` on byte offsets replaced `parse_link` /
+      `split_target_title` / `find_char` / `find_matching_paren`, so all six
+      positions are parsed and the tag is enforced (`SlotTag::Anchor`; an
+      untagged `[x](y)` is nobody's head and reaches `plugin-markdown`).
+      `HEAD.assign(pair, matched entry's field)` is the projection — `inner_text`
+      becomes the text the `<a>` wraps, `href` / `title` are attributes, and
+      `bracket.quote` / `bracket.tick` / `paren.tick` are published under their
+      slot-qualified names (D-7). Deleted: `strip_url_modifiers`, `is_external`,
+      `add_rel`, the `^`/`~` conflict warning, and the `rel`/`target`
+      special-casing (they are ordinary extras keys). New plumbing:
+      `ComponentSet::field_for` (the matched entry's `FieldConfig`, one resolution
+      rule shared with `specs_for_opt`) and `impl Display for SlotError`.
+      **Finding — D-7's voiding trigger narrowed to slot keys** (dated note on
+      D-7): reading "any `field.*` key" literally would strip `href` from every
+      anchor whose entry renames a _specs_ position (fixture 34's `moveA`), so
+      `ElementHead::assign` now asks `FieldConfig::is_empty_slots()`
+      (`a_specs_or_override_assignment_keeps_the_preset`).
+      Fixture `04-anchor` rewritten (tag vs untagged, six positions, inline tag,
+      no external defaults, `^!$;;--` as URL text, `target`/`rel` as extras) and
+      re-frozen; the nine fixtures that use the element gained their `@`
+      (`01`, `02`, `04`, `21`, `23`, `24`, `27`, `31`, `34`), and only `04` and
+      `23` moved a byte — the removal visible in `23` is the markdown link inside
+      an `mdp` payload losing `target`/`rel`. Gate green: fmt + dprint clean,
+      clippy at baseline, 759 tests.
 - [ ] **S2-4.3 — Blockquote.** Dep: S2-4.1. `§9.2`
       Do: remove slots/extras _inside_ `>`; only the decorator configures a
       blockquote; `/`-content keeps its own slots. No built-in fields.
@@ -671,6 +696,10 @@ through config, merge per D-9, and the legacy modifier code is gone.
       no replacement column, D-16).
       G: fixtures where the old symbols now render literally.
       Exit: `grep` finds no old modifier parsing in any plugin.
+      Note (2026-10-28): the anchor half is already in — `S2-4.2` deleted both the
+      URL-suffix modifiers and the external-URL defaults and wrote their §14 rows
+      — and `S2-4.7` deletes the image marker run, so what is left here is the
+      `grep` that proves neither parser survives.
 - [ ] **S2-6.4 — Modifier visibility in extraction.** Dep: S2-6.2 (and S2-8.2).
       Do: modifier-produced fields are extractable (`preset = "all"`, `include`,
       `only`) and appear in the inventory as _user_ fields, never in the preset.

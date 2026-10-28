@@ -30,11 +30,11 @@ A file payload binds exactly like a body payload:
 A path reaches one leaf. A miss stays literal with a warning, and a price is never
 a reference at all — a `var` starts with a letter:
 
-[Card](/docs)@@anchorA{db: $config.db.host, port: $config.db.port, first: $rows[0].nama, max: $config.limits["max-rows"], miss: $rows[9].nama, price: $100}
+@[Card](/docs)@@anchorA{db: $config.db.host, port: $config.db.port, first: $rows[0].nama, max: $config.limits["max-rows"], miss: $rows[9].nama, price: $100}
 
 A spread supplies defaults, and the key written in the head wins over it:
 
-[Theme](/docs)@@anchorA{theme: {...$brand, scale: 1.2}}
+@[Theme](/docs)@@anchorA{theme: {...$brand, scale: 1.2}}
 
 A spread item is **copied, never walked**: a `$…`-looking string inside the bound
 object stays exactly as it is.
@@ -46,4 +46,4 @@ object stays exactly as it is.
 }
 }}}
 
-[Copy](/docs)@@anchorA{copy: {...$copy, n: 2}}
+@[Copy](/docs)@@anchorA{copy: {...$copy, n: 2}}

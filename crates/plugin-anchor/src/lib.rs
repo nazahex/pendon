@@ -2,13 +2,25 @@ use std::collections::BTreeMap;
 
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
-    issue_event, scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
-    ExtrasIssue, FieldName, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag, SpecsKey,
-    SpecsResolver,
+    issue_event, parse_extras, parse_slots, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
+    ExtrasIssue, ExtrasMatch, FieldConfig, FieldName, Preset, Slot, SlotContract, SlotError,
+    SlotKind, SlotMatch, SlotPair, SlotPos, SlotTag, SpecsKey, SpecsResolver,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 
 // --- Slot head (§7.2, §6.1) ---
+
+/// The tag that claims this element's head (§5.3, D-11).
+///
+/// A slot that stands alone needs its tag, and the anchor is exactly the element
+/// that used to own the untagged `[text](url)` (§14): the bracket and paren now
+/// belong to whoever contracts them, so without `@` the text is not ours and
+/// goes on to `plugin-markdown`.
+const TAG: char = '@';
+
+/// The one preset name the link does not write as an attribute: `bracket.bare`
+/// is the text the `<a>` wraps (§6.5).
+const INNER_TEXT: &str = "inner_text";
 
 /// Every position anchor claims.
 ///
@@ -27,8 +39,9 @@ const SLOTS: &[SlotPos] = &[
 /// §7.2's preset assignment, from
 /// `@[inner_text "bracket quote" `bracket tick`](href "title" `paren tick`)`.
 ///
-/// Any `field.*` key in the matched `custom` entry voids the whole table for that
-/// entry (D-7); the values then stay under their slot-qualified bare names.
+/// Any `field.<slot>.<kind>` key in the matched `custom` entry voids the whole
+/// table for that entry (D-7); the values then stay under their slot-qualified
+/// bare names. A `field.specs.*` / `field.override.*` key does not void it.
 const PRESET: &[Preset] = &[
     Preset::new(Slot::Bracket, SlotKind::Bare, FieldName::new("inner_text")),
     Preset::new(Slot::Paren, SlotKind::Bare, FieldName::new("href")),
@@ -124,184 +137,151 @@ pub fn solid_hints(options: &AnchorOptions) -> Option<SolidRenderHints> {
 }
 
 fn emit_text(text: &str, options: &AnchorOptions, out: &mut Vec<Event>) {
-    let chars: Vec<char> = text.chars().collect();
     let mut cursor = 0usize;
     let mut normal = String::new();
 
-    while cursor < chars.len() {
-        let is_image_syntax = chars[cursor] == '[' && cursor > 0 && chars[cursor - 1] == '!';
-
-        if chars[cursor] == '[' && !is_image_syntax {
-            if let Some(link) = parse_link(&chars, cursor) {
-                let specs = |target: Option<&str>| options.custom.specs_for(target);
-                let built = build_attributes(&link.target, link.extras.as_ref(), &specs);
+    while cursor < text.len() {
+        let rest = &text[cursor..];
+        match read_head(rest, options) {
+            Read::Anchor { parts, consumed } => {
                 flush_text(&mut normal, out);
-
-                if let Some(message) = built.conflict.as_ref() {
-                    out.push(Event::Diagnostic {
-                        severity: Severity::Warning,
-                        message: message.clone(),
-                        span: None,
-                    });
-                }
-                for issue in &built.issues {
+                for issue in &parts.issues {
                     out.push(issue_event("anchor", issue));
                 }
-
-                emit_anchor(&link.label, built, out);
-                cursor = link.end;
-                continue;
+                emit_anchor(parts, out);
+                cursor += consumed;
+            }
+            // §4.3 / D-2: slot-shaped but illegal — an `Error`, and the text stays
+            // exactly as it was written.
+            Read::Malformed(error) => {
+                out.push(Event::Diagnostic {
+                    severity: Severity::Error,
+                    message: format!("[anchor] {error}"),
+                    span: None,
+                });
+                normal.push(TAG);
+                cursor += TAG.len_utf8();
+            }
+            Read::Literal => {
+                let ch = rest.chars().next().expect("cursor is in bounds");
+                normal.push(ch);
+                cursor += ch.len_utf8();
             }
         }
-
-        normal.push(chars[cursor]);
-        cursor += 1;
     }
 
     flush_text(&mut normal, out);
 }
 
-/// A parsed `[label](target "title")` head plus the §11 extras head attached to
-/// it (§7.2).
-struct ParsedLink {
-    end: usize,
-    label: String,
-    /// `url` and, after a `\0`, the optional head title.
-    target: String,
-    extras: Option<ExtrasHead>,
+/// What one `@` in the text turned out to be (§7.2).
+enum Read {
+    /// Not an anchor head — `mail@example.com`, or a head another tag claims.
+    Literal,
+    /// Slot-shaped but illegal (§4.3, D-2): `Error` plus literal text.
+    Malformed(SlotError),
+    /// A complete link: its attributes and the bytes it consumed.
+    Anchor {
+        /// What the `<a>` carries.
+        parts: AnchorParts,
+        /// How many bytes of the text the head occupied, extras included.
+        consumed: usize,
+    },
 }
 
-fn parse_link(chars: &[char], start: usize) -> Option<ParsedLink> {
-    if chars.get(start) != Some(&'[') {
-        return None;
-    }
+/// Reads an anchor head at the start of `rest` — the tag, the two slots (§5.2–
+/// §5.3) and the §11 extras head attached to the closing `)`.
+fn read_head(rest: &str, options: &AnchorOptions) -> Read {
+    let pair = match parse_slots(rest) {
+        SlotMatch::Slots { pair, rest: after } if pair.tag == SlotTag::Anchor => {
+            (pair, rest.len() - after.len())
+        }
+        // Only a **tagged** head is ours to complain about: an untagged malformed
+        // bracket (`[foo "bar](/x)`) belongs to whoever else wants it (§4.3).
+        SlotMatch::Malformed { error, .. } if rest.starts_with(TAG) => {
+            return Read::Malformed(error)
+        }
+        // Untagged `[x](y)` is not ours (§14): the anchor claims no head it was
+        // not tagged into, so `plugin-markdown` gets the text untouched.
+        _ => return Read::Literal,
+    };
+    let (pair, mut consumed) = pair;
 
-    let close_label = find_char(chars, start + 1, ']')?;
-    if chars.get(close_label + 1) != Some(&'(') {
-        return None;
-    }
-
-    let close_target = find_matching_paren(chars, close_label + 2)?;
-    let label: String = chars[start + 1..close_label].iter().collect();
-    let raw_input: String = chars[close_label + 2..close_target].iter().collect();
-
-    let (raw_target, title) = split_target_title(&raw_input);
-    let end = close_target + 1;
-
-    // §7.2/§4.1: extras must touch the closing `)`.
-    let (extras, end) = match scan_extras_chars(chars, end) {
-        Some((head, next)) => (Some(head), next),
-        None => (None, end),
+    // §4.1: the extras head must touch the `)`.
+    let extras = match parse_extras(&rest[consumed..]) {
+        ExtrasMatch::Head { head, rest: after } => {
+            consumed = rest.len() - after.len();
+            Some(head)
+        }
+        ExtrasMatch::Absent { .. } | ExtrasMatch::Malformed { .. } => None,
     };
 
-    let target = match title {
-        Some(t) => format!("{}\u{0}{}", raw_target, t),
-        None => raw_target,
-    };
+    let specs = |target: Option<&str>| options.custom.specs_for(target);
+    // §6.5 / D-7: the preset is voided by the **matched** entry, never by another
+    // entry's `field.*`.
+    let matched = extras
+        .as_ref()
+        .and_then(|head| options.custom.field_for(head.type_marker.as_deref()));
 
-    Some(ParsedLink {
-        end,
-        label,
-        target,
-        extras,
-    })
+    Read::Anchor {
+        parts: build_attributes(&pair, extras.as_ref(), &specs, matched),
+        consumed,
+    }
 }
 
-/// The attributes of one `<a>`: values in `BTreeMap` order (the emission order
-/// the golden fixtures were built with), the bare flags of a §11 extras head,
-/// the `^`/`~` conflict warning and the §13 diagnostics of the extras merge.
-struct AnchorAttrs {
+/// What one `<a>` carries: the text it wraps, its attributes in `BTreeMap`
+/// order (the emission order the golden fixtures were built with) and the bare
+/// flags of a §11 extras head.
+///
+/// There is no `target` / `rel` field any more: automatic external-link
+/// attributes and the URL-suffix modifiers that set them are gone (§7.2, §14),
+/// so both are ordinary extras keys like any other.
+#[derive(Debug, Default)]
+struct AnchorParts {
+    text: String,
     values: BTreeMap<String, String>,
     flags: Vec<String>,
-    conflict: Option<String>,
     issues: Vec<ExtrasIssue>,
 }
 
+/// Turns the two slots and the extras head into the fields the `<a>` exposes
+/// (§6.5 preset, §6.2 priority, §6.3 projection).
+///
+/// `field` is the **matched** entry's `field.*` (D-7): when it configures one,
+/// every preset row is void for this element and each position keeps its
+/// slot-qualified name, which the link writes as an attribute rather than
+/// dropping.
 fn build_attributes(
-    encoded_target: &str,
+    pair: &SlotPair,
     extras: Option<&ExtrasHead>,
     specs: SpecsResolver,
-) -> AnchorAttrs {
-    let (encoded_url, title) = encoded_target
-        .split_once('\u{0}')
-        .map(|(url, title)| (url, Some(title)))
-        .unwrap_or((encoded_target, None));
-
-    let (url, suffix_modifiers) = strip_url_modifiers(encoded_url);
-    let all_modifiers: Vec<char> = suffix_modifiers.chars().collect();
-
-    let mut attrs = BTreeMap::new();
-    attrs.insert("href".to_string(), url.clone());
-
-    if let Some(title) = title {
-        attrs.insert("title".to_string(), title.to_string());
-    }
-
-    let external = is_external(&url);
-    let mut target = if external {
-        Some("_blank".to_string())
-    } else {
-        None
-    };
-
-    let mut rel = Vec::new();
-    if external {
-        add_rel(&mut rel, "noopener");
-    }
-
-    let mut conflict = None;
-    let mut explicit_target: Option<&str> = None;
-    let mut i = 0usize;
-
-    while i < all_modifiers.len() {
-        let step = match all_modifiers[i] {
-            '^' => {
-                if explicit_target == Some("_self") {
-                    conflict = Some(
-                        "[anchor] both '^' and '~' were provided; last modifier wins".to_string(),
-                    );
-                }
-                target = Some("_blank".to_string());
-                explicit_target = Some("_blank");
-                add_rel(&mut rel, "noopener");
-                1
-            }
-            '~' => {
-                if explicit_target == Some("_blank") {
-                    conflict = Some(
-                        "[anchor] both '^' and '~' were provided; last modifier wins".to_string(),
-                    );
-                }
-                target = Some("_self".to_string());
-                explicit_target = Some("_self");
-                1
-            }
-            '!' => {
-                add_rel(&mut rel, "nofollow");
-                1
-            }
-            '$' => {
-                add_rel(&mut rel, "sponsored");
-                1
-            }
-            ';' if all_modifiers.get(i + 1) == Some(&';') => {
-                add_rel(&mut rel, "ugc");
-                2
-            }
-            '-' if all_modifiers.get(i + 1) == Some(&'-') => {
-                add_rel(&mut rel, "noreferrer");
-                2
-            }
-            // Unknown modifier (e.g. `?` section terminator): stop processing.
-            _ => break,
-        };
-        i += step;
-    }
-
-    // §7.2 / §6.2: the extras head attaches to the `<a>`; the construct head
-    // (URL modifiers and the `("title")` head) wins, `href` is never overridable.
-    let mut flags = Vec::new();
+    field: Option<&FieldConfig>,
+) -> AnchorParts {
+    let mut parts = AnchorParts::default();
     let mut issues = Vec::new();
+
+    // §6.5: `bracket.bare → inner_text`, `paren.bare → href`,
+    // `paren.quote → title`; every other position is a bare field (D-7).
+    let fields = HEAD.assign(pair, field).unwrap_or_else(|error| {
+        // The entry's assignments contradict each other (one path is a prefix of
+        // another), so they cannot all be published. A config clash is the
+        // author's bug: say so and keep the preset instead of silently emitting
+        // half a link. An empty config cannot clash — every path is a unit name.
+        issues.push(ExtrasIssue::error(format!(
+            "the matched entry's `field.*` assignments clash ({error}); the preset is kept"
+        )));
+        HEAD.assign(pair, None)
+            .expect("an untouched preset cannot clash")
+    });
+    for (path, value) in fields.iter() {
+        let name = path.dotted();
+        let text = value.literal();
+        if name == INNER_TEXT {
+            parts.text = text;
+        } else {
+            parts.values.insert(name, text);
+        }
+    }
+
     if let Some(head) = extras {
         let specs = specs(head.type_marker.as_deref());
         let parsed = to_attributes(head, &specs);
@@ -328,110 +308,43 @@ fn build_attributes(
                 issues.push(ExtrasIssue::owned_key(key));
                 continue;
             }
-            let text = match value {
-                ExtrasAttr::Flag => {
-                    if attrs.contains_key(key) {
-                        issues.push(ExtrasIssue::warning(format!(
-                            "`{key}` was dropped because the construct head already sets it"
-                        )));
-                    } else {
-                        flags.push(key.to_string());
-                    }
-                    continue;
-                }
-                ExtrasAttr::Value(value) => value.literal(),
-            };
-            if key == "rel" {
-                for token in text.split_whitespace() {
-                    add_rel(&mut rel, token);
-                }
+            if parts.values.contains_key(key) {
+                issues.push(ExtrasIssue::overridden(key));
                 continue;
             }
-            if key == "target" {
-                // §7.2: an explicit modifier wins, the external `_blank` does not.
-                if explicit_target.is_none() {
-                    target = Some(text);
-                } else {
-                    issues.push(ExtrasIssue::warning(
-                        "`target` was dropped because a URL modifier already set it",
-                    ));
+            match value {
+                // §6.3: a bare flag stays a bare attribute (`<a isFoo>`).
+                ExtrasAttr::Flag => parts.flags.push(key.to_string()),
+                ExtrasAttr::Value(value) => {
+                    parts.values.insert(key.to_string(), value.literal());
                 }
-                continue;
             }
-            if attrs.contains_key(key) {
-                issues.push(ExtrasIssue::warning(format!(
-                    "`{key}` was dropped because the construct head already sets it"
-                )));
-                continue;
-            }
-            attrs.insert(key.to_string(), text);
         }
         if let Some(id) = specs_id {
-            if attrs.contains_key("id") {
+            if parts.values.contains_key("id") {
                 issues.push(ExtrasIssue::warning(
                     "extras `slug` was dropped because the element already has an id",
                 ));
             } else {
-                attrs.insert("id".to_string(), id);
+                parts.values.insert("id".to_string(), id);
             }
+        }
+        // §11 rule 3: the `@@type{…}` marker is the routing key of the instance. It
+        // is carried to the node as a `type` attribute so a `{attrs.type}` template
+        // can read it back; an explicit `type:` prop keeps its own value.
+        if let Some(marker) = head.type_marker.as_deref() {
+            parts
+                .values
+                .entry("type".to_string())
+                .or_insert_with(|| marker.to_string());
         }
     }
 
-    if let Some(target) = target {
-        attrs.insert("target".to_string(), target);
-    }
-
-    if !rel.is_empty() {
-        attrs.insert("rel".to_string(), rel.join(" "));
-    }
-
-    // §11 rule 3: the `@@type{…}` marker is the routing key of the instance. It
-    // is carried to the node as a `type` attribute so a `{attrs.type}` template
-    // can read it back; an explicit `type:` prop keeps its own value.
-    let type_marker = extras.and_then(|head| head.type_marker.clone());
-    if let Some(marker) = &type_marker {
-        attrs
-            .entry("type".to_string())
-            .or_insert_with(|| marker.clone());
-    }
-
-    AnchorAttrs {
-        values: attrs,
-        flags,
-        conflict,
-        issues,
-    }
+    parts.issues = issues;
+    parts
 }
 
-fn strip_url_modifiers(url: &str) -> (String, String) {
-    let mut base = url.to_string();
-    let mut modifiers = String::new();
-    loop {
-        let (value, length) = if base.ends_with(";;") {
-            (";;".to_string(), 2)
-        } else if base.ends_with("--") {
-            ("--".to_string(), 2)
-        } else if base.ends_with('^')
-            || base.ends_with('~')
-            || base.ends_with('!')
-            || base.ends_with('$')
-        {
-            (base[base.len() - 1..].to_string(), 1)
-        } else if base.ends_with('?') {
-            // `?` terminates the modifier section: strip it from the URL
-            // and keep it in the modifier string so it acts as a
-            // left-to-right processing terminator (§7.2).
-            ("?".to_string(), 1)
-        } else {
-            break;
-        };
-        base.truncate(base.len() - length);
-        modifiers.insert_str(0, &value);
-    }
-    (base, modifiers)
-}
-
-fn emit_anchor(label: &str, attrs: AnchorAttrs, out: &mut Vec<Event>) {
+fn emit_anchor(parts: AnchorParts, out: &mut Vec<Event>) {
     // §11 rule 3 / D-3a: the plugin no longer picks the component — it tags the
     // node with its layer and keeps the `type` marker, and the renderer decides
     // once per document which entry answers it.
@@ -441,65 +354,16 @@ fn emit_anchor(label: &str, attrs: AnchorAttrs, out: &mut Vec<Event>) {
         name: "__layer".to_string(),
         value: ANCHOR_LAYER.to_string(),
     });
-    for (name, value) in attrs.values {
+    for (name, value) in parts.values {
         out.push(Event::Attribute { name, value });
     }
     // §6.3: a bare flag stays a bare attribute (`<a isFoo>`), it never becomes
     // `isFoo="isFoo"`.
-    for name in attrs.flags {
+    for name in parts.flags {
         out.push(Event::AttributeFlag { name });
     }
-    out.push(Event::Text(label.to_string()));
+    out.push(Event::Text(parts.text));
     out.push(Event::EndNode(node));
-}
-
-fn split_target_title(input: &str) -> (String, Option<String>) {
-    let trimmed = input.trim();
-    if let Some(quote) = trimmed.find('"') {
-        let url = trimmed[..quote].trim();
-        let title = trimmed[quote + 1..].trim_end_matches('"').to_string();
-        (url.to_string(), Some(title))
-    } else {
-        (trimmed.to_string(), None)
-    }
-}
-
-fn is_external(url: &str) -> bool {
-    url.starts_with("http://")
-        || url.starts_with("https://")
-        || url.starts_with("//")
-        || url.starts_with("www.")
-        || (!url.starts_with('/') && url.contains('.'))
-}
-
-fn add_rel(rel: &mut Vec<String>, value: &str) {
-    if !rel.iter().any(|item| item == value) {
-        rel.push(value.to_string());
-    }
-}
-
-fn find_char(chars: &[char], mut index: usize, wanted: char) -> Option<usize> {
-    while index < chars.len() {
-        if chars[index] == wanted {
-            return Some(index);
-        }
-        index += 1;
-    }
-    None
-}
-
-fn find_matching_paren(chars: &[char], mut index: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    while index < chars.len() {
-        match chars[index] {
-            '(' => depth += 1,
-            ')' if depth == 0 => return Some(index),
-            ')' => depth -= 1,
-            _ => {}
-        }
-        index += 1;
-    }
-    None
 }
 
 fn flush_text(normal: &mut String, out: &mut Vec<Event>) {
@@ -559,30 +423,61 @@ mod tests {
         assert_eq!(HEAD.preset_for(Slot::Paren, SlotKind::Tick), None);
     }
 
+    /// §7.2 / §14 (D-16): external-link detection is **gone**. An absolute URL is
+    /// an ordinary `href` — no `target`, no `rel`, no classification — and the old
+    /// suffix modifiers are just characters in the URL now.
     #[test]
-    fn adds_external_defaults_without_modifiers() {
-        let mut out = Vec::new();
-        emit_text(
-            "[foo](https://example.com)",
-            &AnchorOptions::default(),
-            &mut out,
-        );
-        let attrs: Vec<_> = out
-            .iter()
-            .filter_map(|event| match event {
-                Event::Attribute { name, value } => Some((name.as_str(), value.as_str())),
-                _ => None,
-            })
-            .collect();
-        assert!(attrs.contains(&("target", "_blank")));
-        assert!(attrs.contains(&("rel", "noopener")));
+    fn external_urls_get_no_automatic_target_or_rel() {
+        for url in [
+            "https://example.com",
+            "//cdn.example.com/x",
+            "www.example.com",
+            "/docs/bar",
+        ] {
+            let emitted = emit(&format!("@[foo]({url})"));
+            assert_eq!(value(&emitted, "href"), Some(url));
+            assert!(
+                value(&emitted, "target").is_none(),
+                "{url}: {:?}",
+                emitted.attrs
+            );
+            assert!(
+                value(&emitted, "rel").is_none(),
+                "{url}: {:?}",
+                emitted.attrs
+            );
+            assert!(
+                emitted.diagnostics.is_empty(),
+                "{url}: {:?}",
+                emitted.diagnostics
+            );
+        }
+
+        // `^`, `~`, `!`, `$`, `;;`, `--` are no longer syntax: they stay in the URL
+        // (a `rel:` / `target:` extra is the only way to set those attributes).
+        let emitted = emit("@[foo](https://example.com/bar!?~$)");
+        assert_eq!(value(&emitted, "href"), Some("https://example.com/bar!?~$"));
+        assert!(value(&emitted, "rel").is_none());
+        assert!(value(&emitted, "target").is_none());
+        assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
+    }
+
+    /// §5.3 / §14: the slot tag is what claims a head, so the untagged
+    /// `[text](url)` this element used to own is not an anchor any more — it stays
+    /// text for `plugin-markdown`, with no diagnostic.
+    #[test]
+    fn an_untagged_slot_is_not_an_anchor() {
+        let emitted = emit("[foo](/docs)@@anchor{.hero}");
+        assert!(emitted.attrs.is_empty(), "{:?}", emitted.attrs);
+        assert_eq!(emitted.text, "[foo](/docs)@@anchor{.hero}");
+        assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
     }
 
     #[test]
     fn parses_an_adjacent_extras_head() {
         let mut out = Vec::new();
         emit_text(
-            "[foo](/docs){zo: \"kong\", .bax}",
+            "@[foo](/docs){zo: \"kong\", .bax}",
             &AnchorOptions::default(),
             &mut out,
         );
@@ -609,7 +504,7 @@ mod tests {
     #[test]
     fn does_not_swallow_following_link() {
         let mut out = Vec::new();
-        emit_text("[a](/a)[b](/b)", &AnchorOptions::default(), &mut out);
+        emit_text("@[a](/a)@[b](/b)", &AnchorOptions::default(), &mut out);
         let links = out
             .iter()
             .filter(|event| matches!(event, Event::StartNode(NodeKind::Link)))
@@ -629,7 +524,7 @@ mod tests {
             )]),
         };
         let mut out = Vec::new();
-        emit_text("[foo](/docs)", &options, &mut out);
+        emit_text("@[foo](/docs)", &options, &mut out);
         // D-3a: the node keeps the built-in kind and names its layer; the
         // renderer, not the plugin, picks the component.
         assert!(out
@@ -664,7 +559,7 @@ mod tests {
         };
 
         let mut out = Vec::new();
-        emit_text("[a](/a)@@anchorA{.hero}", &options, &mut out);
+        emit_text("@[a](/a)@@anchorA{.hero}", &options, &mut out);
         assert!(out.iter().any(
             |event| matches!(event, Event::Attribute { name, value } if name == "type" && value == "anchorA")
         ));
@@ -676,7 +571,7 @@ mod tests {
         // entry answers it (the default here, `None` with no default) is the
         // renderer's decision, taken once per document.
         let mut out = Vec::new();
-        emit_text("[a](/a)@@undeclared{}", &options, &mut out);
+        emit_text("@[a](/a)@@undeclared{}", &options, &mut out);
         assert!(out.iter().any(
             |event| matches!(event, Event::Attribute { name, value } if name == "type" && value == "undeclared")
         ));
@@ -697,7 +592,7 @@ mod tests {
             )]),
         };
         let mut out = Vec::new();
-        emit_text("[a](/a)@@anchorB{}", &options, &mut out);
+        emit_text("@[a](/a)@@anchorB{}", &options, &mut out);
         assert!(out
             .iter()
             .any(|event| matches!(event, Event::StartNode(NodeKind::Link))));
@@ -805,7 +700,7 @@ mod tests {
 
     #[test]
     fn extras_attach_to_the_anchor_element() {
-        let emitted = emit("[foo](/docs)@@anchor{.hero,#main,rel: \"ugc\",isFoo}");
+        let emitted = emit("@[foo](/docs)@@anchor{.hero,#main,rel: \"ugc\",isFoo}");
         assert_eq!(value(&emitted, "href"), Some("/docs"));
         assert_eq!(value(&emitted, "class"), Some("hero"));
         assert_eq!(value(&emitted, "id"), Some("main"));
@@ -818,24 +713,24 @@ mod tests {
 
     #[test]
     fn head_title_wins_over_an_extras_title() {
-        let emitted = emit("[foo](/docs \"Head title\")@anchor{\"Extras title\"}");
+        let emitted = emit("@[foo](/docs \"Head title\")@anchor{\"Extras title\"}");
         // `@anchor{…}` is not a head (single `@`), so it stays literal text.
         assert_eq!(value(&emitted, "title"), Some("Head title"));
         assert!(emitted.text.contains("@anchor"));
 
-        let emitted = emit("[foo](/docs \"Head title\")@@anchor{\"Extras title\"}");
+        let emitted = emit("@[foo](/docs \"Head title\")@@anchor{\"Extras title\"}");
         assert_eq!(value(&emitted, "title"), Some("Head title"));
         assert!(emitted.mentions("`title`"), "{:?}", emitted.diagnostics);
     }
 
     #[test]
     fn extras_slug_becomes_the_element_id() {
-        let emitted = emit("[foo](/docs)@@anchor{`slug-a`}");
+        let emitted = emit("@[foo](/docs)@@anchor{`slug-a`}");
         assert_eq!(value(&emitted, "id"), Some("slug-a"));
         assert!(value(&emitted, "slug").is_none());
 
         // §6.2: `#id` > head slug > extras slug.
-        let emitted = emit("[foo](/docs)@@anchor{`slug-a`, #explicit}");
+        let emitted = emit("@[foo](/docs)@@anchor{`slug-a`, #explicit}");
         assert_eq!(value(&emitted, "id"), Some("explicit"));
         assert!(
             emitted.mentions("extras `slug`"),
@@ -879,7 +774,7 @@ mod tests {
         };
         let mut out = Vec::new();
         emit_text(
-            "[foo](/x)@@reference{`john-foo`, \"Price Title\", .cta, #main, style: \"color: red\"}",
+            "@[foo](/x)@@reference{`john-foo`, \"Price Title\", .cta, #main, style: \"color: red\"}",
             &options,
             &mut out,
         );
@@ -914,7 +809,7 @@ mod tests {
             .with_field(field)]),
         };
         let mut out = Vec::new();
-        emit_text("[foo](/x)@@reference{\"Price Title\"}", &options, &mut out);
+        emit_text("@[foo](/x)@@reference{\"Price Title\"}", &options, &mut out);
         let emitted = collect(out);
         assert_eq!(value(&emitted, "meta.title"), Some("Price Title"));
         assert!(value(&emitted, "title").is_none(), "{:?}", emitted.attrs);
@@ -925,7 +820,7 @@ mod tests {
     /// a §6.2 `Warning`.
     #[test]
     fn href_stays_construct_owned() {
-        let emitted = emit("[foo](/docs)@@anchor{href: \"/evil\"}");
+        let emitted = emit("@[foo](/docs)@@anchor{href: \"/evil\"}");
         assert_eq!(value(&emitted, "href"), Some("/docs"));
         assert!(emitted.errors_on("`href`"), "{:?}", emitted.diagnostics);
         assert!(
@@ -935,30 +830,96 @@ mod tests {
         );
     }
 
+    /// §6.5: the preset assignment is `inner_text` / `href` / `title`, and every
+    /// other position of the same head is a bare field under its slot-qualified
+    /// name — nothing is dropped (D-7).
     #[test]
-    fn target_extras_do_not_replace_an_explicit_modifier() {
-        // `^` is an explicit modifier: it wins.
-        let emitted = emit("[foo](/docs^)@@anchor{target: \"_self\"}");
-        assert_eq!(value(&emitted, "target"), Some("_blank"));
-        assert!(emitted.mentions("`target`"), "{:?}", emitted.diagnostics);
-        // A modifier is not a built-in field, so this stays a `Warning`.
+    fn all_six_positions_land_where_the_preset_says() {
+        let emitted =
+            emit("@[Inner \"Head quote\" `Head tick`](/docs \"Head title\" `Paren tick`)");
+        assert_eq!(emitted.text, "Inner");
+        assert_eq!(value(&emitted, "href"), Some("/docs"));
+        assert_eq!(value(&emitted, "title"), Some("Head title"));
+        assert_eq!(value(&emitted, "bracket.quote"), Some("Head quote"));
+        assert_eq!(value(&emitted, "bracket.tick"), Some("Head tick"));
+        assert_eq!(value(&emitted, "paren.tick"), Some("Paren tick"));
         assert!(
-            !emitted
-                .diagnostics
-                .iter()
-                .any(|(severity, _)| *severity == Severity::Error),
+            value(&emitted, "inner_text").is_none(),
             "{:?}",
-            emitted.diagnostics
+            emitted.attrs
         );
+        assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
+    }
 
-        // An external link only defaults to `_blank`, so extras may retarget it.
-        let emitted = emit("[foo](https://example.com)@@anchor{target: \"_self\"}");
-        assert_eq!(value(&emitted, "target"), Some("_self"));
+    /// §6.1 / D-7: an assigned position is a field of the author's own. The link
+    /// reads only the three names its preset declares, so a position that moved
+    /// away keeps its value as an attribute and stops feeding `href` / the text.
+    #[test]
+    fn an_assigned_position_is_a_field_of_the_author() {
+        let mut field = FieldConfig::new();
+        field.assign_slot(
+            Slot::Bracket,
+            SlotKind::Bare,
+            Some(Path::from_dotted("label").unwrap()),
+        );
+        field.assign_slot(
+            Slot::Paren,
+            SlotKind::Bare,
+            Some(Path::from_dotted("url").unwrap()),
+        );
+        let options = AnchorOptions {
+            custom: ComponentSet::from_entries([TypedComponent::typed(
+                ["reference"],
+                AnchorCustomNode {
+                    name: "Reference".into(),
+                    template: "<Reference>{children}</Reference>".into(),
+                    imports: Vec::new(),
+                },
+            )
+            .with_field(field)]),
+        };
+        let mut out = Vec::new();
+        emit_text("@[Inner](/docs)@@reference{}", &options, &mut out);
+        let emitted = collect(out);
+        assert_eq!(value(&emitted, "label"), Some("Inner"));
+        assert_eq!(value(&emitted, "url"), Some("/docs"));
+        // The preset is void as a whole (D-7): neither `inner_text` nor `href` is
+        // written, and the text the link wraps is empty.
+        assert!(value(&emitted, "href").is_none(), "{:?}", emitted.attrs);
+        assert_eq!(emitted.text, "");
+    }
+
+    /// A `@` that is not a head stays text, and a slot-shaped head that does not
+    /// parse is an `Error` + literal text (§4.3, D-2).
+    #[test]
+    fn a_malformed_slot_is_an_error_and_stays_literal() {
+        let emitted = emit("mail@example.com and @[foo \"bar](/x)");
+        assert!(emitted.attrs.is_empty(), "{:?}", emitted.attrs);
+        assert!(
+            emitted.text.contains("mail@example.com"),
+            "{}",
+            emitted.text
+        );
+        assert!(
+            emitted.text.contains("@[foo \"bar](/x)"),
+            "{}",
+            emitted.text
+        );
+        assert!(emitted.errors_on("slot"), "{:?}", emitted.diagnostics);
+    }
+
+    /// The tag is read wherever it starts a head — an anchor is inline by nature
+    /// (§7.2), so it is not tied to the line head.
+    #[test]
+    fn the_tag_is_claimed_mid_text() {
+        let emitted = emit("see @[the docs](/docs) for details");
+        assert_eq!(value(&emitted, "href"), Some("/docs"));
+        assert_eq!(emitted.text, "see the docs for details");
     }
 
     #[test]
     fn malformed_extras_stay_literal_text() {
-        let emitted = emit("[foo](/docs)@@anchor{`unterminated}");
+        let emitted = emit("@[foo](/docs)@@anchor{`unterminated}");
         assert_eq!(value(&emitted, "href"), Some("/docs"));
         assert!(emitted.text.contains("@@anchor{"), "{}", emitted.text);
         assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
@@ -967,7 +928,7 @@ mod tests {
     /// §14/§D3: the retired `[.class,#id]{key: value}` form is plain text.
     #[test]
     fn the_retired_legacy_form_is_literal_text() {
-        let emitted = emit("[foo](/docs)[.bax,#rew]{zo: \"kong\"}");
+        let emitted = emit("@[foo](/docs)[.bax,#rew]{zo: \"kong\"}");
         assert_eq!(value(&emitted, "href"), Some("/docs"));
         assert!(value(&emitted, "class").is_none());
         assert!(value(&emitted, "id").is_none());
@@ -982,19 +943,19 @@ mod tests {
     /// §4.1: extras touch the `)`, and a type may stand alone.
     #[test]
     fn a_type_only_head_stops_before_the_punctuation() {
-        let emitted = emit("[t](/a)@@anchorA.");
+        let emitted = emit("@[t](/a)@@anchorA.");
         assert_eq!(value(&emitted, "href"), Some("/a"));
         assert_eq!(value(&emitted, "type"), Some("anchorA"));
         assert_eq!(emitted.text, "t.");
 
         // A bare head is the same as the `@@` spelling (§3).
-        let emitted = emit("[t](/a){.hero}");
+        let emitted = emit("@[t](/a){.hero}");
         assert_eq!(value(&emitted, "href"), Some("/a"));
         assert_eq!(value(&emitted, "class"), Some("hero"));
         assert_eq!(emitted.text, "t");
 
         // `@@type {…}` is not a head (§4.1).
-        let emitted = emit("[t](/a)@@anchorA {.hero}");
+        let emitted = emit("@[t](/a)@@anchorA {.hero}");
         assert!(value(&emitted, "class").is_none());
         assert!(
             emitted.text.contains("@@anchorA {.hero}"),

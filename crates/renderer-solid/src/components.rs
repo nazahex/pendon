@@ -168,17 +168,28 @@ impl<C> ComponentSet<C> {
         self.specs_for_opt(type_marker).unwrap_or_default()
     }
 
+    /// §6.1 / D-5: the `field.*` keys of the entry that answers `type_marker` —
+    /// the **matched** entry, which is the one D-7's preset voiding reads.
+    ///
+    /// Same resolution as [`specs_for_opt`](Self::specs_for_opt): an exact
+    /// `type` entry wins, then the layer default. `None` means this set has
+    /// neither, so the element reports "no entry matched" and keeps every
+    /// preset row alive (`ElementHead::assign`).
+    pub fn field_for(&self, type_marker: Option<&str>) -> Option<&FieldConfig> {
+        if let Some(marker) = type_marker {
+            if let Some(entry) = self.entries.iter().find(|entry| entry.matches_type(marker)) {
+                return Some(&entry.field);
+            }
+        }
+        self.default_entry().map(|entry| &entry.field)
+    }
+
     /// Like [`specs_for`](Self::specs_for) but `None` when this set has neither an
     /// exact-`type` entry nor a layer default — so a plugin that owns several
     /// layers (`plugin-list`) can try each in turn before falling back.
     pub fn specs_for_opt(&self, type_marker: Option<&str>) -> Option<Specs> {
-        if let Some(marker) = type_marker {
-            if let Some(entry) = self.entries.iter().find(|entry| entry.matches_type(marker)) {
-                return Some(Specs::resolve(Some(&entry.field)));
-            }
-        }
-        self.default_entry()
-            .map(|entry| Specs::resolve(Some(&entry.field)))
+        self.field_for(type_marker)
+            .map(|field| Specs::resolve(Some(field)))
     }
 }
 

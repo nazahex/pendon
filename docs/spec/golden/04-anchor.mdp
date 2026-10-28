@@ -1,31 +1,54 @@
-The construct head wins over the extras; the extras value is dropped (§6.2).
+The head is **tagged** (§5.3, §7.2). Without the tag the text is not an anchor at
+all — `plugin-markdown` links it and the extras head stays literal (§14): no
+`type`, no `class`.
 
-[Head title wins](/docs "Head title")@@anchorA{"Extras title"}
+```text
+@[Inner text](/docs "Head title")@@anchorA{.hero}
+```
+
+@[Tagged](/docs)
+[Untagged](/docs)@@anchorA{.hero}
+
+§6.5: the preset assigns `bracket.bare → inner_text`, `paren.bare → href` and
+`paren.quote → title`. The other three positions of the same head are bare fields
+under their slot-qualified names — kept, never dropped (D-7).
+
+@[Inner "Head quote" `Head tick`](/docs "Head title" `Paren tick`)
+
+The tag is read wherever a head starts, because an anchor is inline by nature:
+
+Inline: see @[the docs](/docs) for details.
+
+§6.2: the construct head wins over the extras, and the extras value is dropped.
+
+@[Head title wins](/docs "Head title")@@anchorA{"Extras title"}
 
 `#id` beats the extras slug, and an extras slug becomes the id when nothing else
 did (§6.2).
 
-[Explicit id](/docs)@@anchorA{`slug-extras`, #explicit}
+@[Explicit id](/docs)@@anchorA{`slug-extras`, #explicit}
 
-[Slug only](/docs)@@anchorA{`slug-only`}
+@[Slug only](/docs)@@anchorA{`slug-only`}
 
-`href` is owned by the link; the extras value is ignored (§7.2).
+`href` is owned by the link; the extras value is an `Error` that names
+`field.override.href` (§13, D-12 rule 5).
 
-[Href is owned](/docs)@@anchorA{href: "/evil"}
+@[Href is owned](/docs)@@anchorA{href: "/evil"}
 
-URL modifiers are parsed before the head and win over `target:`:
+§14 (D-16): automatic external-link attributes and the URL-suffix modifiers are
+gone. A URL is a URL — no `target`, no `rel` — and `^`, `!`, `$`, `;;`, `--` are
+ordinary characters now:
 
-[Modifier wins](/docs^)@@anchorA{target: "_self"}
+@[No external defaults](https://example.com/bar)
+@[Suffix is text](/docs^!$;;--)
 
-[No modifier](https://example.com/bar)@@anchorA{target: "_self"}
+`target` and `rel` are ordinary extras keys now (§6.3):
 
-`rel:` merges with the modifier result instead of replacing it:
-
-[Rel merge](https://example.com/bar!?~$)@@anchorA{rel: "prefetch", hreflang: "en"}
+@[Extras attributes](https://example.com/bar)@@anchorA{target: "_self", rel: "prefetch", hreflang: "en"}
 
 A marker with no configured entry keeps the built-in `<a>` element and carries
 the marker as its `type` attribute (§11 rule 3):
 
-[Unclaimed marker](/docs)@@anchorZ{.hero}
+@[Unclaimed marker](/docs)@@anchorZ{.hero}
 
-[No marker at all](/docs)
+@[No marker at all](/docs)

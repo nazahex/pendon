@@ -1,21 +1,41 @@
 # pendon-plugin-anchor
 
-Link processing and external URL safety plugin for Pendon.
+Link processing for Pendon.
 
-`pendon-plugin-anchor` processes standard Markdown link syntax (`[label](url)`) with support for URL suffix modifiers, extra attributes, automatic external link detection, and custom Solid components. It runs as an inline text processor before markdown parsing to intercept raw link patterns.
+`pendon-plugin-anchor` turns a **tagged** slot head — `@[inner text](href "title")`
+— into a `<a>` node, attaches the extras head to it, and lets a custom Solid
+component take over through `[[task.anchor.custom]]`. It runs as an inline text
+processor before markdown parsing, so it claims its own heads before the Markdown
+parser sees them.
+
+The grammar is [`docs/spec/SYNTAX.md` §7.2](../../docs/spec/SYNTAX.md); this
+README is the plugin's reference, never a second copy of the grammar.
 
 ## What This Plugin Does
 
-- Parses `[label](url)` link syntax from raw text events
-- Automatically detects external URLs and applies `target="_blank"` with `rel="noopener"`
-- Supports URL suffix modifiers for fine-grained control over link behavior
-- Accepts extra attributes via `{key: "value"}` syntax after the link target
-- Emits structured `Link` nodes or custom Solid component nodes
-- Skips links inside code fences, inline code, HTML blocks, and HTML inline elements
-- Emits warnings for conflicting modifier combinations
-- Declares its slot contract and preset assignment as data (`pub const HEAD`,
-  `crates/extra`'s `ElementHead`) — the single copy of §7.2's
-  `bracket.bare`/`paren.bare`/`paren.quote` mapping
+- Parses **`@[inner_text](href "title")`** heads (§7.2) — the tag is mandatory
+- Reads both slots with the shared slot grammar (§5.2), so `bracket.quote`,
+  `bracket.tick` and `paren.tick` are kept as bare fields instead of dropped
+- Applies the element preset `bracket.bare → inner_text`, `paren.bare → href`,
+  `paren.quote → title` (§6.5)
+- Attaches an adjacent `{…}` / `@@type{…}` extras head to the `<a>` (§6.3)
+- Reports a head item that names `href` as an `Error` naming
+  `field.override.href` (D-12 rule 5)
+- Fronts a custom Solid component per `@@type{…}` marker (§11)
+- Skips links inside code fences, inline code, HTML blocks and HTML inline elements
+- Declares its contract, preset and owned fields as data (`pub const HEAD`,
+  `crates/extra`'s `ElementHead`) — the single copy of §7.2's table
+
+## What This Plugin Does **Not** Do (§14, D-16)
+
+These were removed in the Stage-2 rework and are **not syntax**:
+
+| Removed                                        | Today                                                      |
+| :--------------------------------------------- | :--------------------------------------------------------- |
+| untagged `[text](url)`                         | plain text; `plugin-markdown` links it, no extras, no type |
+| `^` `~` `!` `$` `;;` `--` URL-suffix modifiers | ordinary URL characters                                    |
+| automatic `target="_blank"` / `rel="noopener"` | nothing — write `target:` / `rel:` in the extras head      |
+| the `^`/`~` conflict warning                   | gone with the modifiers                                    |
 
 ## Recommended Plugin Order
 
@@ -25,9 +45,9 @@ micromatter,image,cite,wiki,anchor,markdown
 
 **Why this order matters:**
 
-1. `cite` and `wiki` must run before anchor because their syntax (`[^^](...)`, `[[...]]`) is more specific than generic `[label](url)`
-2. `anchor` runs before `markdown` to intercept raw link text before it becomes AST Link nodes
-3. `markdown` runs last to handle any remaining inline formatting
+1. `cite` and `wiki` must run before anchor because their syntax (`[^^](...)`, `[[...]]`) is more specific than the anchor's head
+2. `anchor` runs before `markdown` so its tagged heads become nodes instead of CommonMark links
+3. `markdown` runs last to handle every remaining inline construct
 
 Example task config:
 
@@ -44,83 +64,57 @@ format = "solid"
 ### Basic Link
 
 ```md
-[Visit our docs](/docs/getting-started)
+@[Visit our docs](/docs/getting-started)
 ```
 
 ### Link with Title
 
 ```md
-[Visit our docs](/docs/getting-started "Getting Started Guide")
-```
-
-### Link with Suffix Modifiers
-
-```md
-[External resource](https://example.com^!)
+@[Visit our docs](/docs/getting-started "Getting Started Guide")
 ```
 
 ### Link with Extra Attributes
 
 ```md
-[Styled link](/page){class: "btn btn-primary", data-track: "cta-click"}
+@[Styled link](/page){class: "btn btn-primary", data-track: "cta-click"}
 ```
 
 ### Combined Syntax
 
 ```md
-[Partner site](https://partner.com/path^--$! "Partner Page"){data-campaign: "q4-launch"}
+@[Partner site](https://partner.com/path "Partner Page")@@anchorA{data-campaign: "q4-launch", target: "_blank", rel: "noopener"}
 ```
 
-## URL Suffix Modifiers
+## The slot head (§7.2, §6.5)
 
-Modifiers are appended directly to the URL (before the title) and control link behavior:
+The tag is part of the syntax, not decoration: without `@` the bracket and paren
+belong to nobody (they are universal, §5.2), so `[text](url)` stays plain text
+and `plugin-markdown` links it with no extras and no `type`.
 
-| Modifier | Effect                  |
-| :------- | :---------------------- |
-| `^`      | Force `target="_blank"` |
-| `~`      | Force `target="_self"`  |
-| `!`      | Add `nofollow` to rel   |
-| `$`      | Add `sponsored` to rel  |
-| `;;`     | Add `ugc` to rel        |
-| `--`     | Add `noreferrer` to rel |
+Both slots are read by the shared grammar (§5.2), and the preset assigns three of
+the six positions:
 
-Modifiers can be combined in any order:
+| position       | preset name  | lands as              |
+| :------------- | :----------- | :-------------------- |
+| `bracket.bare` | `inner_text` | the text inside `<a>` |
+| `paren.bare`   | `href`       | `href`                |
+| `paren.quote`  | `title`      | `title`               |
 
-```md
-[Link](https://example.com^--$!)
+The other three (`bracket.quote`, `bracket.tick`, `paren.tick`) are published as
+attributes under their slot-qualified names, so a content is never dropped
+(D-7); a `field.<slot>.<kind>` key in the entry moves a position to a field of
+the author's own and voids the three preset rows for that entry (§6.1, §6.5).
 
-<!-- Results in: target="_blank" rel="noopener noreferrer sponsored nofollow" -->
-```
-
-### Conflict Resolution
-
-If both `^` and `~` are provided, the **last modifier wins** and a warning diagnostic is emitted:
-
-```md
-[Conflicting](https://example.com^~)
-
-<!-- Warning: [anchor] both '^' and '~' were provided; last modifier wins -->
-<!-- Result: target="_self" -->
-```
-
-## External Link Detection
-
-Links are automatically classified as external when the URL matches any of these patterns:
-
-- Starts with `http://` or `https://`
-- Starts with `//` (protocol-relative)
-- Starts with `www.`
-- Contains a `.` and does not start with `/`
-
-External links receive `target="_blank"` and `rel="noopener"` by default. These defaults can be overridden or augmented with suffix modifiers.
+The bracket's `|…` run is the §5.4 slot-modifier run: parsed and carried, but it
+contributes nothing until the modifier config lands. Pendon ships no modifier.
 
 ## Extra Attributes
 
 An extras head may be attached immediately after the closing parenthesis:
 
 ```md
-[Link](/page){class: "highlight", id: "important-link", --color: "blue"}
-[Link](/page)@@anchorA{.highlight, #important-link, data-track: "cta"}
+@[Link](/page){class: "highlight", id: "important-link", --color: "blue"}
+@[Link](/page)@@anchorA{.highlight, #important-link, data-track: "cta"}
 ```
 
 The head is a single `{…}` block; the `@@type` prefix is optional and, when
@@ -128,16 +122,22 @@ present, is the §11 routing marker of the instance. `.class` items accumulate i
 the `class` list, `#id` (or a positional `` `slug` ``) sets the element `id`, and
 `key: "value"` items set arbitrary attributes.
 
-Special handling:
+Special handling (§6.2, D-12):
 
-- `rel` values are **merged** with modifier-generated rel tokens (not replaced)
-- `target` overrides the modifier/default target value
+- The **construct head wins**: a head item that fills a position the preset
+  already filled is a `Warning` and is dropped (`@[x](/u "T")@@a{"Other"}` keeps
+  `T`)
+- A head item that names a field this element writes itself (`href`) is an
+  `Error` naming `field.override.href`
+- `.class` items accumulate; `#id` wins the `id`, and a positional `` `slug` ``
+  is the `id` **fallback** when no `#id` exists
 - Keys starting with `--` are passed through as-is (for CSS custom properties)
-- All other keys become regular HTML/Solid attributes
+- Every other key becomes a regular HTML/Solid attribute — `target` and `rel`
+  were never special and are not special now
 - Values can be quoted (`"value"`) or unquoted (`value`)
 
 The head must touch the closing `)` (no space, and no space before its own `{`):
-`[Link](/page) {.x}` and `[Link](/page)@@a {.x}` both stay literal text. The
+`@[Link](/page) {.x}` and `@[Link](/page)@@a {.x}` both stay literal text. The
 retired `[.class,#id]{key: value}` block is literal text too.
 
 ## Custom Solid Component
@@ -160,53 +160,51 @@ the same module are merged into a single `import` statement.
 
 ### Available Template Attributes
 
-| Attribute        | Description                                     |
-| :--------------- | :---------------------------------------------- |
-| `{attrs.href}`   | Link URL (modifiers stripped)                   |
-| `{attrs.title}`  | Link title (if provided)                        |
-| `{attrs.target}` | Target attribute (`_blank`, `_self`, or absent) |
-| `{attrs.rel}`    | Space-separated rel tokens                      |
-| `{attrs.class}`  | Class from extra attrs (if provided)            |
-| `{attrs.id}`     | ID from extra attrs (if provided)               |
-| `{attrs.data-*}` | Any extra data attributes                       |
-| `{children}`     | Link label text                                 |
+| Attribute       | Description                                          |
+| :-------------- | :--------------------------------------------------- |
+| `{attrs.href}`  | Link target                                          |
+| `{attrs.title}` | Link title (if provided)                             |
+| `{attrs.class}` | Class list from the extras head (if provided)        |
+| `{attrs.id}`    | `#id`, or the extras slug when no `#id` exists       |
+| `{attrs.type}`  | The `@@type{…}` marker, so an entry can read it back |
+| `{children}`    | `inner_text` — the text the `<a>` wraps              |
+
+`target`, `rel`, `hreflang` and every other extras key reach the template as an
+attribute of the same name; nothing is generated for them.
 
 ### Default HTML Output (No Custom Node)
 
 Without a custom node, links render as standard `<a>` tags via the built-in `Link` node type:
 
 ```html
-<a href="https://example.com" target="_blank" rel="noopener noreferrer sponsored nofollow">
-  External resource
-</a>
+<a href="/docs" title="Docs">Visit our docs</a>
 ```
 
 ### Specs (§6.1, D-5)
 
-An entry renames the §6.1 positional slots through its `field.*` keys —
+An entry renames the §6.1 positional items through its `field.*` keys —
 `field.specs.tick` / `field.specs.quote` for a `` `slug` `` / `"title"` item, and
 `field.specs.class` / `.id` / `.style` for a `.x` / `#x` / `style:` item. An
-entry that configures none keeps the §6.1 default paths;
-once it configures one the preset is void as a whole (D-7). An assignment also
-**moves** the position: the assigned path is the author's own public field,
-which this element neither reads nor renames (`Specs::element_path` answers
-`None`, §6.1). The table is in
+assignment **moves** the item: the assigned path is the author's own public
+field, which this element neither reads nor renames (`Specs::element_path`
+answers `None`, §6.1). These keys do not void the slot preset — only a
+`field.<slot>.<kind>` key does (§6.5, D-7). The table is in
 [`docs/spec/SYNTAX.md` §6.1](../../docs/spec/SYNTAX.md).
 
 ## Behavioral Notes
 
 - This plugin processes **raw text events** — it must run before `plugin-markdown`
 - Links inside code fences, inline code, HTML blocks, and HTML inline elements are ignored
-- Image syntax `![alt](src)` is explicitly skipped (handled by `plugin-image`)
+- Image syntax `![alt](src)` is another element's head (`plugin-image`, §7.1)
 - Extra attribute items (`.class`, `#id`, `{key: val}`) only support flat values — nested objects are not supported
 - Unquoted values in extra attrs are treated as literal strings (no expression evaluation)
-- Modifier parsing strips tokens from the URL right-to-left; malformed trailing characters that don't match known modifiers are left as part of the URL
+- A malformed slot (`@[a "b](/x)`) is an `Error` and stays literal text (§4.3)
 
 ## Scope and Limitations
 
-- Only processes `[label](url)` inline link syntax — reference-style links (`[label][ref]`) are not supported
-- Nested brackets in labels are not supported
-- Parentheses inside URLs must be balanced for correct parsing
+- Only processes the tagged `@[inner text](href "title")` head — reference-style links (`[label][ref]`) are not supported
+- Nested brackets in the bracket group are not supported
+- Parentheses inside the paren group must be balanced for correct parsing
 - The plugin does not validate URLs or check for broken links
 - Extra attributes require at least one extras item (`.class`, `#id`, `key: val` or a bare flag) after `)`; the head must be adjacent
 

@@ -278,6 +278,17 @@ the all-or-nothing reading.
 **Consequence.** Phase 4, per element: document which preset fields vanish, and
 list the bare fallbacks in `FIELDS-INVENTORY.md`.
 
+**Implementation note (S2-4.2, 2026-10-28).** The trigger is a **slot** key, not
+any `field.*` key: `ElementHead::assign` asks `FieldConfig::is_empty_slots()`
+(`field.bracket.*` / `field.paren.*`). The proposal's own wording scopes it that
+way ("even one user-made field definition for bracket or paren"), and `assign`
+maps _slot positions_ — a `field.specs.*` key renames an extras item and a
+`field.override.*` key renames a public path, so neither says where a slot lands.
+Fixture `34-specs-assignment` is the evidence: its `moveA` entry assigns all five
+specs positions inside an anchor, which keeps `href` and its text — reading "any
+`field.*` key" literally would have produced an `<a>` with no `href` at all.
+`preset::tests::a_specs_or_override_assignment_keeps_the_preset` pins it.
+
 ---
 
 ## D-8 — Fields-only custom entries
@@ -399,6 +410,14 @@ hard-coded, and a tag whose owner plugin is disabled still appears in text.
   immediately followed by `[`; `# Word` remains an ATX heading.
 
 **Consequence.** Phase 1 must test tags with each owner plugin disabled.
+
+**Implementation note (S2-4.2, 2026-10-28).** Rule 1 ("head position only") is
+what keeps `#` and `^` out of running text; it is **not** a line-start rule for
+every tag. An inline element's tag is recognised wherever it starts a head, so
+`see @[the docs](/docs) for details` is an anchor — §7.2 states it, and
+`plugin-anchor`'s `the_tag_is_claimed_mid_text` pins it. The anchor also makes the
+tag _mandatory_: an untagged `[text](url)` is claimed by nobody (§14), so
+`plugin-markdown` links it with no extras and no `type`.
 
 ---
 

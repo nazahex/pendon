@@ -24,11 +24,11 @@ all resolve against the page's own state.
 | a    |     1 |
 }}}
 
-[Card](/docs)@@anchorA{body: $card-body}
+@[Card](/docs)@@anchorA{body: $card-body}
 
 The inline form drops the payload's own `<p>` wrapper, so a payload written on
 the head line contributes inline nodes only:
 
 {{{mdp[card-note] See [[Wireless]] and [^^](book). }}}
 
-[Note](/docs)@@anchorA{note: $card-note}
+@[Note](/docs)@@anchorA{note: $card-note}

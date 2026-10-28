@@ -16,10 +16,12 @@
 //! delete the hand-written `insert("href", …)` calls without moving the truth
 //! (D-16, ADR-0014).
 //!
-//! **The preset is void as a whole.** One `field.*` key in the matched `custom`
-//! entry disables every assignment here for that entry — there is no half-preset
-//! mode — and each unassigned position falls back to its slot-qualified bare name
-//! ([`fallback_path`]: `bracket.bare`, `paren.quote`, …) per D-7. The voiding
+//! **The preset is void as a whole.** One `field.<slot>.<kind>` key in the
+//! matched `custom` entry disables every assignment here for that entry — there
+//! is no half-preset mode — and each unassigned position falls back to its
+//! slot-qualified bare name ([`fallback_path`]: `bracket.bare`, `paren.quote`, …)
+//! per D-7. The trigger is a *slot* key, not any `field.*`: the preset maps slot
+//! positions, so `field.specs.*` / `field.override.*` leave it alone. The voiding
 //! itself is the assignment step's job (S2-2.6); this module only holds the data
 //! and the lookups.
 
@@ -157,14 +159,17 @@ impl ElementHead {
     /// Every position the contract accepts is taken in head order, and each
     /// content present lands where:
     ///
-    /// | the entry configures…              | a position lands in                  |
-    /// | ---------------------------------- | ------------------------------------ |
-    /// | nothing (or no entry matched)      | its preset name, else its bare name  |
-    /// | **any** `field.*` key (D-7 void)   | the assigned name, else its bare name |
+    /// | the entry configures…                        | a position lands in                  |
+    /// | -------------------------------------------- | ------------------------------------ |
+    /// | no `field.<slot>.<kind>` (or no entry)       | its preset name, else its bare name  |
+    /// | **any** `field.<slot>.<kind>` (D-7 void)     | the assigned name, else its bare name |
     ///
     /// `config` is the **matched** entry's [`FieldConfig`], never the task's: D-7
     /// voids the preset per `custom` entry, and there is no half-preset mode — one
-    /// `field.*` key kills every preset row at once. `""` (`Some(None)`) is an
+    /// slot key kills every preset row at once. The trigger is a **slot**
+    /// assignment on purpose: `field.specs.*` and `field.override.*` say where an
+    /// extras item goes or how a public path is spelled, not where a slot lands,
+    /// so they leave the preset alive (`S2-4.2`). `""` (`Some(None)`) is an
     /// *unassign*, so that position falls back to its bare name like any other
     /// unassigned one (OBJ-10), and the order of `fallback_path` values is the
     /// head's own (bracket bare → quote → tick, then paren).
@@ -181,7 +186,7 @@ impl ElementHead {
         pair: &SlotPair,
         config: Option<&FieldConfig>,
     ) -> Result<FieldMap, FieldMapError> {
-        let preset_alive = config.is_none_or(FieldConfig::is_empty);
+        let preset_alive = config.is_none_or(FieldConfig::is_empty_slots);
         let mut fields = FieldMap::new();
         for &(slot, kind) in self.contract.accepted {
             let Some(value) = pair.get(slot, kind) else {
@@ -372,6 +377,38 @@ mod tests {
                 "{gone}"
             );
         }
+    }
+
+    #[test]
+    fn a_specs_or_override_assignment_keeps_the_preset() {
+        // S2-4.2: only a **slot** assignment voids the preset. Renaming an extras
+        // item (`field.specs.*`) or a public path (`field.override.*`) says
+        // nothing about where a slot lands, so `inner_text` / `href` / `title`
+        // survive — which is what fixture `34-specs-assignment` shows.
+        let pair = d7_pair();
+        let head = ElementHead::new(CONTRACT, PRESET);
+        let kept = rows(&head.assign(&pair, None).unwrap());
+
+        let mut config = FieldConfig::new();
+        config
+            .assign_specs("tick", Some(Path::from_dotted("slug").unwrap()))
+            .unwrap();
+        config
+            .add_override(
+                Path::from_dotted("href").unwrap(),
+                Path::from_dotted("url").unwrap(),
+            )
+            .unwrap();
+        assert!(!config.is_empty(), "the entry did configure something");
+        assert!(
+            config.is_empty_slots(),
+            "but it configured no slot position"
+        );
+        assert_eq!(
+            rows(&head.assign(&pair, Some(&config)).unwrap()),
+            kept,
+            "a non-slot key must not void the preset"
+        );
     }
 
     #[test]

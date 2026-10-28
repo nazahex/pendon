@@ -194,6 +194,22 @@ exactly one `export const headings` line each (no bytes removed), and
       `owns`) + `owns_field` — with `plugin-anchor` (`href`) and `plugin-wiki`
       (`href`, `title`) wired; the other elements declare theirs with their
       contracts. Next: `S2-4.2` (anchor).
+      `S2-4.2` done — the anchor reads its head through the shared grammar
+      (`parse_slots` + `parse_extras`), so **the `@` tag is mandatory**: an
+      untagged `[x](y)` is nobody's slot and falls through to `plugin-markdown`,
+      and the extras head after it stays literal. The preset drives the link —
+      `HEAD.assign` gives `inner_text` (the text), `href`, `title`, while
+      `bracket.quote` / `bracket.tick` / `paren.tick` are published under their
+      slot-qualified names, so nothing is dropped. Deleted: external-URL
+      `target`/`rel`, the six URL-suffix modifiers, the `^`/`~` conflict warning
+      and the `rel`/`target` special-casing (§14, D-16). Fix found on the way:
+      D-7's voiding trigger is a **slot** key, not any `field.*` key — otherwise
+      renaming a specs item voids `href` (dated note on D-7). Fixture `04-anchor`
+      rewritten (tag/untagged, all six positions, the removals), and the eight
+      other fixtures that use the element gained their `@`: no byte moved except
+      `04` and `23` (the markdown link inside an `mdp` payload loses its
+      auto-`target`/`rel`). Gate: fmt + dprint clean, clippy at baseline, 759
+      tests. Next: `S2-4.3` (blockquote).
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden

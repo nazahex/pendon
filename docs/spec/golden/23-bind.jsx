@@ -26,9 +26,9 @@ same plugin chain as the page (wiki, cite, figures, tables, math, …) and reach
 the prop as a fragment. Block form (body on following lines) keeps the payload&#39;s
 <code>&lt;p&gt;</code>; inline form (body on head line) drops it:
 </p>
-<p><a data={(<><p>This is <strong>block</strong> mdp <em>mode</em> with <code>code</code> and a <a href="https://example.com" rel="noopener" target="_blank">link</a>.</p>
+<p><a data={(<><p>This is <strong>block</strong> mdp <em>mode</em> with <code>code</code> and a <a href="https://example.com">link</a>.</p>
 </>)} href="/docs" type="anchorA">BlockMdp</a>
-<a data={(<>This is <strong>inline</strong> mdp <em>mode</em> with <code>code</code> and a <a href="https://example.com" rel="noopener" target="_blank">link</a>.</>)} href="/docs" type="anchorA">InlineMdp</a>
+<a data={(<>This is <strong>inline</strong> mdp <em>mode</em> with <code>code</code> and a <a href="https://example.com">link</a>.</>)} href="/docs" type="anchorA">InlineMdp</a>
 </p>
 <p>An undefined <code>$missing-mdp</code> warns and stays literal text:
 </p>

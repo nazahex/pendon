@@ -60,7 +60,9 @@ for interpreting the parsed properties.
   structural clashes are errors (`FieldMapError`). `FieldConfig` is the config
   side of the same vocabulary — one `custom` entry's `field.<slot>.<kind>` /
   `field.specs.<k>` / `field.override.<path>` keys, with `""` stored as `None`
-  (unassign, OBJ-10) and `is_empty()` as the D-7 preset-voiding trigger. The
+  (unassign, OBJ-10) and `is_empty_slots()` as the D-7 preset-voiding trigger
+  (a `field.specs.*` or `field.override.*` key does not void a preset — the
+  preset maps slot positions, `S2-4.2`). The
   field names never reach the IR — see
   [`docs/decisions/0014-field-model.md`](../../docs/decisions/0014-field-model.md).
 - **The projection** (`project(node, Option<&FieldConfig>) -> FieldMap`,
@@ -88,8 +90,9 @@ for interpreting the parsed properties.
   `bracket.quote`, `paren.tick`, …). The names are `FieldName`s — a
   `const fn`-validated, single-segment built-in name — so a typo in a preset
   table **fails to compile** rather than at load. Voiding a preset is the
-  entry's job: one `field.*` key in the matched `custom` entry disables the whole
-  table for that entry (D-7, `FieldConfig::is_empty`). `owns_field(&owned, key)`
+  entry's job: one `field.<slot>.<kind>` key in the matched `custom` entry
+  disables the whole table for that entry (D-7, `FieldConfig::is_empty_slots`).
+  `owns_field(&owned, key)`
   is the same rule for an element with no contract (`plugin-wiki`'s link); the
   collision itself is reported by the element as `ExtrasIssue::owned_key`.
 - **Specs** — `Specs` / `SpecsResolver`: _where_ each of the head's contents

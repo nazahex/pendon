@@ -24,6 +24,8 @@
 //! [`SlotMatch::Absent`] and [`SlotMatch::Malformed`] mean "emit the text
 //! verbatim".
 
+use std::fmt;
+
 /// One of the three contents a slot can carry, in canonical order.
 ///
 /// The order is the grammar: contents must appear bare → quote → tick, once
@@ -230,6 +232,29 @@ pub enum SlotError {
         /// The kind that came second, out of order.
         after: SlotKind,
     },
+}
+
+impl fmt::Display for SlotError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unterminated(kind) => write!(
+                f,
+                "the {} content of a slot is opened and never closed",
+                kind.name()
+            ),
+            Self::Duplicate(kind) => write!(
+                f,
+                "the {} content appears twice in one slot; each kind may appear once",
+                kind.name()
+            ),
+            Self::OutOfOrder { before, after } => write!(
+                f,
+                "slot content must be bare, then quote, then tick; `{}` came after `{}`",
+                after.name(),
+                before.name()
+            ),
+        }
+    }
 }
 
 /// What [`parse_slots`] found at the head of a line.

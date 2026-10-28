@@ -4,25 +4,25 @@ own numbering, so the same counter can run across headings, anchors and images.
 
 ##[slug-heading]("Title Heading")@@HeadingA{foo: "bar"}%%%numberB Title Heading - I.a (depth 2, so the missing parent counts as I)
 
-[link](/foo)@@AnchorA%%numberB will be numbered II.
+@[link](/foo)@@AnchorA%%numberB will be numbered II.
 
-[link](/foo)@@AnchorA%%%numberB will be numbered II.a.
+@[link](/foo)@@AnchorA%%%numberB will be numbered II.a.
 
-[link](/foo)@@AnchorA%%%numberB will be numbered II.b.
+@[link](/foo)@@AnchorA%%%numberB will be numbered II.b.
 
-[link](/foo)@@AnchorA%%%%numberB will be numbered II.b.1.
+@[link](/foo)@@AnchorA%%%%numberB will be numbered II.b.1.
 
-[link](/foo)@@AnchorA%%%%%%numberB will be numbered II.b.1.1.1.
+@[link](/foo)@@AnchorA%%%%%%numberB will be numbered II.b.1.1.1.
 
-[link](/foo)@@%%%numberB will be numbered II.c.
+@[link](/foo)@@%%%numberB will be numbered II.c.
 
-[link](/foo)@@%%numberB will be numbered III.
+@[link](/foo)@@%%numberB will be numbered III.
 
-[link](/foo)%%numberA will be numbered A.
+@[link](/foo)%%numberA will be numbered A.
 
-[link](/foo)%%%%numberA will be numbered A.A.A.
+@[link](/foo)%%%%numberA will be numbered A.A.A.
 
-[link](/foo)%%%numberA will be numbered A.B.
+@[link](/foo)%%%numberA will be numbered A.B.
 
 ![image foo](/foo.png)%%numberA
 

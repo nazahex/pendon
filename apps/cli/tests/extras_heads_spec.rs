@@ -45,7 +45,7 @@ const CASES: &[Case] = &[
     Case {
         name: "anchor",
         plugins: "anchor,markdown",
-        source: "[A](/a)@@anchorX{HEAD}\n",
+        source: "@[A](/a)@@anchorX{HEAD}\n",
         extra: "",
         expect: &[
             r#"class="cls""#,
@@ -230,7 +230,7 @@ template = "<Cite {...attrs} />"
         name: "number-marker",
         plugins: "anchor,number,markdown",
         // `%%` → depth 1 (ADR-0010), so one counter segment.
-        source: "[N](/n)@@numberedA{`slug-y`, %%numberA}\n",
+        source: "@[N](/n)@@numberedA{`slug-y`, %%numberA}\n",
         // §10.5: the marker reaches `plugin-number`, which writes `number`.
         extra: r#"
 [[task.number.custom]]

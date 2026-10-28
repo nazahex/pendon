@@ -49,7 +49,15 @@ Implementation units that own this grammar:
 ## 2. Terminology
 
 - **head** — the construct-specific prefix that carries the construct's own
-  identity: `[slug]`, `("title")`, `[[…]]`, `[^^](ref "loc")`, `~?!…(…)`, `|-…-|`.
+  identity: `@[slug](…)`, `[slug]`, `("title")`, `[[…]]`, `[^^](ref "loc")`,
+  `~?!…(…)`, `|-…-|`.
+- **slot** — the `[…]` and `(…)` groups of a head, each carrying at most one
+  _bare_, one _quoted_ and one _ticked_ content, in that order (§7.2, ADR-0012).
+  Slots are universal: an element claims the positions it wants by declaring a
+  contract, and a slot content no position claims is kept as a bare field.
+- **slot tag** — the sigil that says which element a slot belongs to (`@` for
+  the anchor, §7.2, D-11). A slot that is not attached to another head needs one;
+  without a tag the text is nobody's head.
 - **extras** — the shared `{…}` head (optionally `@@`-prefixed, optionally typed):
   unordered positional values (`` `slug` ``, `"title"`), classes, id, CSS
   variables, props and flags.
@@ -76,6 +84,7 @@ Implementation units that own this grammar:
 | `{{type}}`                  | inline & block marker              | `plugin-marker`     | new (freed from `cite.section`) |
 | `::type` … `::`             | inline directive, 2–7 colons       | `plugin-directive`  | new                             |
 | `==type` … `==`             | block directive                    | `plugin-directive`  | new                             |
+| `@[k]("k")`                 | anchor head (tag + slots)          | `plugin-anchor`     | current (§7.2)                  |
 | `[k]` `("k")`               | construct head (slug / title)      | per-plugin          | existing                        |
 | `\|-…-\|`                   | table declaration line             | `plugin-table`      | new                             |
 | `\|\| cap \|\|`             | table caption line                 | `plugin-table`      | new                             |
@@ -105,8 +114,8 @@ parts:
 
 ```text
 ~?!h300w800[alt](url)@@type{`slug`, .hero}   correct
-[alt](url){`slug`}                           correct (bare spelling)
-[alt](url)@@anchorA.                          correct: type-only head, `.` stays text
+@[text](url){`slug`}                         correct (bare spelling)
+@[text](url)@@anchorA.                       correct: type-only head, `.` stays text
 ~?!h300w800[alt](url) @@type{`slug`}         wrong → literal text
 ~?!h300w800[alt](url)@@type {`slug`}         wrong → literal text (space before `{`)
 @@type[…](…)                                 wrong → the groups must touch the type
@@ -186,7 +195,7 @@ The alphanumeric run ends at the first symbol. What follows decides the head:
 | any other symbol (`-`, `_`, `.`, `,`, …) | **type-only head**; the symbol stays literal text                |
 
 ```text
-[t](/a)@@anchorA.    → <a type="anchorA" …>t</a> + literal "."
+@[t](/a)@@anchorA.   → <a type="anchorA" …>t</a> + literal "."
 @@type-x{.x}         → type `type` + literal "-x{.x}"
 @@anchorA            → type-only head (end of the line)
 ```
@@ -257,7 +266,7 @@ ws          = 1*( " " | "\t" )
 - A `number-mark` is the `%%numberType` **numbering marker** (§10.5,
   [ADR-0010](../decisions/0010-plugin-number.md)). It is one whole item — no
   separator and nothing trailing — and it has three legal positions: alone as
-  the head (`[link](/u)%%numberA`, `##%%numberB`), the **last** item of a `{…}`
+  the head (`@[link](/u)%%numberA`, `##%%numberB`), the **last** item of a `{…}`
   body (`@@headingA{foo: "bar", %%%numberB}`), or directly after a head
   (`@@anchorA%%numberB`, `@@headingA{…}%%%numberB`, `@@%%%numberB`). `depth` is
   normalized once, here (`%%` → 1 … `%%%%%%%` → 6), and the item reaches the
@@ -331,12 +340,13 @@ some cases, projects it onto its own DOM field (an anchor's quote → its `title
 a citation's id → its `cite-id`). A default path an element does not name stays
 in the map under its dotted spelling.
 
-An entry that configures **no** `field.*` key keeps every default path above and
-its element keeps its preset (§6.5, D-7). Once it configures one, the preset is
-void as a whole (D-7): a position it leaves unassigned falls back to its own
-qualified name (`bracket.bare`, `paren.bare`, `specs.tick`, `specs.class`, …),
-never to a name the author chose for another position. There is no separate
-naming key (§14).
+An entry that configures **no** `field.<slot>.<kind>` key keeps every default path
+above and its element keeps its preset (§6.5, D-7). Once it configures one, the
+preset is void as a whole (D-7): a position it leaves unassigned falls back to its
+own qualified name (`bracket.bare`, `paren.bare`, `specs.tick`, `specs.class`, …),
+never to a name the author chose for another position. A `field.specs.*` or
+`field.override.*` key does not void anything — it names an extras item or a
+public path, not a slot's home. There is no separate naming key (§14).
 
 #### A moved position is the author's own field
 
@@ -368,17 +378,11 @@ adjacent extras head: `{{type}}[x]("y"){…}` / `{{type}}[x]("y")@@head{…}`
 stays raw, `("x")` is trimmed and unquoted. The keys are resolved per `type`
 like every other positional key (§11 rules 3 and 5).
 
-The groups are read by the layer that owns the construct, in the order of the
-task's plugin list: more than one enabled layer can read the same `[x]("y")`
-text, and **the layer that runs first wins**. With the canonical order
-(`anchor` before `marker`, the order every sandbox uses) a marker therefore
-keeps only a `[x]` that no `(` follows — `{{type}}[x]("y")` is already an anchor
-head by the time `plugin-marker` runs, so the marker renders without those
-attributes and the anchor component follows it. Listing `marker` before `anchor`
-hands the marker both groups instead (`{{type}}[x]("y")` → `slug` + `title`).
+The groups belong to the head they touch. Since a slot head is claimed by its
+tag (§5.3), nothing else competes for them: `{{type}}[x]("y")` is a marker with
+both groups under any plugin order, and an anchor is written `@[x]("y")` (§7.2).
 The single-group and type-only forms (`{{type}}[x]`, `{{type}}("y")`,
-`@@type[x]`, `@@type("y")`) parse the same way in either order: nothing else
-claims them before their layer runs.
+`@@type[x]`, `@@type("y")`) parse the same way.
 
 ### 6.2 head vs extras priority
 
@@ -387,7 +391,7 @@ wins**; the extras value is dropped silently (a `Severity::Warning` MAY be
 emitted):
 
 ```text
-[Foo](url "Head title")@@type{"Extras title"}   → title = "Head title"
+@[Foo](url "Head title")@@type{"Extras title"}   → title = "Head title"
 ###[slug-a]("Head")@@type{`slug-b`} Foo         → id = "slug-a", title = "Head"
 ```
 
@@ -427,7 +431,7 @@ Mapping to the event IR (`Event::Attribute { name, value: String }`):
 - `Object` / `Array` ([ADR-0005](../decisions/0005-structured-extras-values.md))
   → **compact JSON** text in `value` (`{"b":1}`), the stringly-typed form every
   renderer understands. Verified: with no data-binding plugin enabled,
-  `[a](/u)@@anchorA{a: {b: 1}}` renders `a="&#123;&quot;b&quot;:1&#125;"`.
+  `@[a](/u)@@anchorA{a: {b: 1}}` renders `a="&#123;&quot;b&quot;:1&#125;"`.
 - **JSX expression token.** A `{ … }` group whose body is a single identifier or
   dot-separated path — e.g. `{valueA}` or `{frontmatter.fm1}` — is a JSX
   expression rather than an object. It is transported as `JSX_ATTR_PREFIX`
@@ -545,17 +549,20 @@ plugin's crate (`ElementHead` in `crates/extra::preset`):
   configures nothing.
 
 The preset is what turns the groups and items of a _built-in_ construct into its
-own public fields (`[inner](/u "t")` → `inner_text`, `href`, `title`); §7.x states
-each element's table, and the crate's `HEAD` constant is the copy the code reads.
-A preset names **positions**, never a `specs.*` path: the five specs positions
-keep their default paths (§6.1), and what the element makes of them is §6.2/§6.3.
+own public fields (`@[inner](/u "t")` → `inner_text`, `href`, `title`); §7.x
+states each element's table, and the crate's `HEAD` constant is the copy the code
+reads. A preset names **positions**, never a `specs.*` path: the five specs
+positions keep their default paths (§6.1), and what the element makes of them is
+§6.2/§6.3.
 
-**The preset is void as a whole** (D-7): one `field.*` key in the matched
-`custom` entry disables every preset assignment for that entry — there is no
-half-preset mode — and each position the entry left unassigned falls back to its
-slot-qualified bare name (`bracket.bare`, `paren.quote`, …). A preset may only
-sit on a position the contract accepts (`ElementHead::is_consistent`, asserted by
-each plugin's own test), so the two halves cannot drift.
+**The preset is void as a whole** (D-7): one `field.<slot>.<kind>` key in the
+matched `custom` entry disables every preset assignment for that entry — there is
+no half-preset mode — and each position the entry left unassigned falls back to
+its slot-qualified bare name (`bracket.bare`, `paren.quote`, …). The trigger is a
+**slot** key because the preset maps slot positions: `field.specs.*` (an extras
+item) and `field.override.*` (a public path) leave it alive (`S2-4.2`). A preset
+may only sit on a position the contract accepts (`ElementHead::is_consistent`,
+asserted by each plugin's own test), so the two halves cannot drift.
 
 The same declaration carries the fields the element writes **itself**
 (`ElementHead::owned`, D-12 rule 5: `href` on an anchor, `src` on an image): a
@@ -592,17 +599,41 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
 ### 7.2 Anchor (`plugin-anchor`)
 
 ```ebnf
-anchor   = "[" text "]" "(" url modifier* title? ")" extras?
-modifier = "^" | "~" | "!" | "$" | ";;" | "--"
+anchor   = tag slot-pair extras?
+tag      = "@"                                  # mandatory (§5.3, D-11)
+slot-pair = "[" contents "]" [ "(" contents ")" ]   # §5.2, paren attached
 extras   = §5 extras-head                       # the shared {…} / @@type{…} head
 ```
 
-- Modifiers are appended directly to the URL (before the title) and parsed right-to-left: `^` forces `target="_blank"`, `~` forces `target="_self"`, `!` adds `nofollow`, `$` adds `sponsored`, `;;` adds `ugc`, `--` adds `noreferrer`.
-- Conflicting `^` and `~` modifiers resolve as last-wins with a warning diagnostic emitted.
-- External URLs (http, https, protocol-relative, www, or non-root paths containing dots) automatically receive `target="_blank"` and `rel="noopener"` unless overridden by modifiers.
-- Extras attach to the `<a>` element; `rel` values merge with modifier-generated tokens rather than replacing them, while `target` in extras overrides modifier defaults.
-- Positional `` `slug` `` maps to `id` when `#id` is absent; `"title"` in extras yields to the standard link title syntax.
-- Image syntax `![alt](src)` is explicitly skipped; reference-style links and nested brackets are unsupported.
+| position       | preset name  | meaning                  |
+| -------------- | ------------ | ------------------------ |
+| `bracket.bare` | `inner_text` | the text the `<a>` wraps |
+| `paren.bare`   | `href`       | the link target          |
+| `paren.quote`  | `title`      | the link title           |
+
+- The tag is **mandatory**. Slots are universal (§5.2), so an untagged
+  `[text](url)` belongs to no element: the anchor does not claim it, the text
+  reaches `plugin-markdown` as an ordinary CommonMark link, and an extras head
+  written after it stays literal text (§14).
+- The tag is read wherever a head starts, not only at the line head: an anchor is
+  inline by nature (`see @[the docs](/docs) for details`).
+- Those three rows are the whole preset (§6.5). `bracket.quote`, `bracket.tick`
+  and `paren.tick` are read as bare fields under their slot-qualified names, so
+  no content of a claimed head is dropped (D-7).
+- `href` is a **built-in** field: an extras `href:` is `Severity::Error` naming
+  `field.override.href` (§13, D-12 rule 5). `title` is not — the extras
+  `"quote"` is the link's title only when the head has none (§6.2).
+- Extras attach to the `<a>`, and the construct head wins over a same-named extras
+  item (§6.2). An extras `` `slug` `` is the `id` fallback when neither `#id` nor
+  a head-supplied id exists.
+- There is **no** automatic external-link handling and **no** URL-suffix modifier
+  (§14, D-16): `target`, `rel`, `hreflang`, … are ordinary extras keys, and `^`,
+  `!`, `$`, `;;`, `--` at the end of a target are ordinary characters of it.
+- The bracket's `|…` run is §5.4's slot modifier run. It is parsed and carried
+  (`SlotPair::modifiers`) but contributes nothing until the modifier config lands
+  (S2-6); Pendon ships no built-in modifier.
+- Image syntax `![alt](src)` is another element's head (§7.1), and reference-style
+  links and nested brackets are unsupported.
 
 ### 7.3 Cite (`plugin-cite`)
 
@@ -1205,6 +1236,9 @@ Config-load errors MUST abort the build before any file is processed.
 | `import = "…"` (string)                                          | `imports = ["…"]`                                                                    | **removed**: the singular form is accepted with a Warning (§15 OPEN-C2), then hard-errors.                                                                                                                                                                                                                        |
 | `[task.<plugin>.custom_node]`                                    | `[task.<plugin>.custom.<layer>]`                                                     | **removed**: `custom.<layer>` is read for `anchor`, `image` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`); every sandbox/fixture config is migrated. The stale key fails the build with a migration message. Unwired layers (`task.image.custom.img`) are config errors. |
 | `[task.heading]` `auto_number` / `number_style`                  | `[[task.heading.number]]`                                                            | **removed** (ADR-0010): both keys are read only to raise the §14 migration error. Numbering is `plugin-number` (§10.5), which writes `attrs.number` as an array and never prefixes the text.                                                                                                                      |
+| anchor URL-suffix modifiers (`^`, `~`, `!`, `$`, `;;`, `--`)     | —                                                                                    | **not syntax** (D-16, §7.2): deleted, not replaced. A modifier-shaped tail is now part of the URL, and the `target` / `rel` tokens they produced are ordinary extras keys; the `^`/`~` conflict warning went with them. Slot modifiers are §5.4's, and Pendon ships none.                                         |
+| automatic external-URL `target="_blank"` / `rel="noopener"`      | —                                                                                    | **not syntax** (D-16, §7.2): the anchor no longer classifies URLs, and no config key restores it — write `target` / `rel` in the extras when a link needs them.                                                                                                                                                   |
+| untagged `[text](url)` anchor                                    | `@[text](url)`                                                                       | **not syntax** (D-16, §7.2): the slot tag is mandatory, because the bracket and paren are universal (§5.2). Without it the text is an ordinary CommonMark link and a trailing extras head stays literal text.                                                                                                     |
 | `backtick_key` / `quote_key` / `bracket_key` / `parentheses_key` | `field.specs.tick` / `field.specs.quote` / `field.bracket.bare` / `field.paren.bare` | **removed** (D-16): the four naming keys are gone from the loader, so a config that still uses them **fails to load** with an unknown-key error (§13) — no alias, no deprecation. Naming is `field.*` only (§6.1); an entry that configures none keeps the seven default paths (`specs.tick` … `paren.bare`).     |
 
 ## 15. Open decisions
