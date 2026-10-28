@@ -204,9 +204,9 @@ impl Specs {
     /// every built-in name, which is the D-7 "preset is alive" case. Otherwise
     /// each name is the entry's assignment, and a position it left **unassigned**
     /// falls back to its own qualified spelling: `bracket.bare` / `paren.bare` for
-    /// the slot groups (D-7) and `specs.tick` / `specs.quote` for the specs items
-    /// (§6.3, S2-3.2). A name the user chose is therefore never silently reused
-    /// for an unnamed position, and an unnamed value is never lost.
+    /// the slot groups (D-7) and `specs.<k>` for the five specs positions (§6.1).
+    /// A name the user chose is therefore never silently reused for an unnamed
+    /// position, and an unnamed value is never lost.
     pub fn resolve(config: Option<&FieldConfig>) -> Self {
         let Some(config) = config.filter(|config| !config.is_empty()) else {
             return Self::default();

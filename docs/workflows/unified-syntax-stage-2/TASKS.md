@@ -446,7 +446,7 @@ assignable, and the DOM renderers still emit valid `class`/`id`/`style`.
       marker, directive emit `specs.class` / `bracket.bare` verbatim because
       extract reads the events, not the map) — Phase 4 rewrites those elements and
       Phase 7 freezes the tables, so they move then ("Phase 4 before 7").
-- [ ] **S2-3.5 — Re-freeze and document specs.** Dep: S2-3.2 … S2-3.4.
+- [x] **S2-3.5 — Re-freeze and document specs.** Dep: S2-3.2 … S2-3.4.
       G: specs fixtures (class/style/id/tick/quote, assigned + unassigned).
       Do: `SYNTAX.md` §5/§6.3/§6.4 update, §14 entry for the old flat names.
       Exit: fixtures frozen, `crates/*/README.md` links updated, phase gate green.
@@ -457,6 +457,22 @@ assignable, and the DOM renderers still emit valid `class`/`id`/`style`.
       `paren.bare` = parentheses slot) instead of deleting the columns with the
       section, and state each one's new default path (`specs.tick`,
       `specs.quote`, …) so a reader can tell a default from an assignment.
+      **Done 2026-10-28.** §6.1 is the seven-row table (`content` / `config key` /
+      `default path` / `meaning`), and the old `default` column is gone because it
+      was wrong: `slug` / `title` are the **element preset** (§6.5, D-7 — an
+      assignment), not the path, so the default column now names the path
+      (`specs.tick` … `bracket.bare`) and points at `SpecsKey::default_path`.
+      The §6.5 that five crates already cited did not exist and is now written;
+      §5.1's worked example lists public fields instead of attributes, §6.4 names
+      positions and paths and states the projection's sort (the "restate me"
+      reminder is gone), and §14's removed-keys row no longer promises `slug` /
+      `title`. New fixture `34-specs-assignment` is the `G:` box — one entry
+      assigning all five positions, an unclaimed type keeping every default in the
+      same document (`bar.id` / `foo.class` / `foo.style` / `slug` / `title`
+      verbatim, no `class`/`id`/`style` rename, and no id fallback). Nine plugin
+      READMEs replaced the copy-pasted "keeps `slug` / `title` / `class` / `id` /
+      `style`" sentence (wrong since S2-3.2) with a link to §6.1. No other golden
+      moved; gate green: fmt, clippy (no new warnings), 751 tests.
 
 ## Phase 4 — elements, one at a time
 

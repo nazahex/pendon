@@ -44,7 +44,7 @@ let normalized = process(&parsed);
 
 `plugin-markdown` exposes no `[task.markdown.custom]` component set — its
 `MarkdownOptions` only carries `allow_html` / `strip_comments` — so the blocks
-it owns always use the built-in §6.1 keys (`slug` / `title`). The
+it owns always use the §6.1 default paths (`specs.tick` / `specs.quote`). The
 `bind_decorators` resolver this plugin passes therefore returns the defaults.
 
 Decorator lines bound by this plugin (above paragraphs and code fences) may

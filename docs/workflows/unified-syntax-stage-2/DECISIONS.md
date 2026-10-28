@@ -204,6 +204,14 @@ change is mostly `#[serde(rename)]` + validation (Phase 2).
 > struct), which is also the shape Phase 4 needs. Because the naming path is the
 > only consumer, no golden byte moved: fixture 15 migrates its four keys to
 > `field.*` and renders identically.
+>
+> **Updated by S2-3.2/S2-3.5.** The last bullet above is history: the two specs
+> items no longer default to `slug` / `title` but to their own paths
+> (`specs.tick` / `specs.quote`, and `specs.class` / `specs.id` / `specs.style`
+> for the remaining three positions). The old names are the **element preset**
+> (`ElementHead`, `docs/spec/SYNTAX.md` §6.5) — an assignment, not a path — so a
+> construct that configures nothing reads the default path and publishes it under
+> its own DOM field.
 
 ---
 

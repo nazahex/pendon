@@ -36,7 +36,7 @@ value). Read them as living examples.
 cover config loading and the full CLI path, not just the parsers.
 
 ```bash
-cargo test -p pendon --test syntax_spec      # 27 fixtures, none #[ignore]d
+cargo test -p pendon --test syntax_spec      # 28 fixtures, none #[ignore]d
 ```
 
 ## Re-freezing (when output intentionally changes)
@@ -85,6 +85,7 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | 31 | `number-custom`    | `%%numberType` markers: marker depth (`%`−1), marker beats element numbering, `[[task.number.custom]]` blocks, numbers on headings/anchors/images (ADR-0010, P.2) |
 | 32 | `extract-heading`  | `[[task.heading.extract]]` — a file **and** `export const outline`; the automatic nested `headings` survives the deletion of `plugin-extract-heading` (ADR-0011, T4.5/T4.7) |
 | 33 | `extract-scopes`   | P.1.a/b/c — two `type`-scoped blocks (two paths, two formats), the `_` remainder, and one `export` name where the later block wins (D-6) |
+| 34 | `specs-assignment` | `field.specs.*` as a **move** — one entry assigning all five positions next to an entry that assigns nothing (§6.1, §6.3) |
 
 Fixtures 17–20 are covered by unit tests in the renderer/CLI crates rather than as
 golden files.

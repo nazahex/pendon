@@ -94,12 +94,14 @@ for interpreting the parsed properties.
   `class` / `id` / `style`. [`Specs::resolve`] is the only read side of the
   entry's `field.*` naming (`field.bracket.bare` / `field.paren.bare` /
   `field.specs.<k>` — §6.1, D-5); an entry that configures nothing keeps the
-  built-in `slug` / `title` / `class` / `id` / `style`. [`Specs::path`] says where
-  a position is _published_; [`Specs::element_path`] is the only view an element
+  built-in default paths (`specs.tick` / `specs.quote` / `specs.class` /
+  `specs.id` / `specs.style` and `bracket.bare` / `paren.bare`).
+  [`Specs::path`] says where a position is _published_; [`Specs::element_path`]
+  is the only view an element
   may use — it answers the default path while the position is unassigned and
   `None` once `field.specs.<k>` moved it, because the assigned path is the
   author's own public field (§6.1). The type's doc carries the
-  **`default` / `meaning`** table, because only a default path has semantics.
+  **`default path` / `meaning`** table, because only a default path has semantics.
 - **The DOM projection** (`Specs::dom_fields(items, element)` +
   `universal_field`, `src/typed.rs`) — the §6.3 boundary: the three universal
   positions (`specs.class` / `specs.id` / `specs.style`) are written as the DOM

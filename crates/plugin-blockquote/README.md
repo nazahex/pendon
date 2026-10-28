@@ -57,12 +57,12 @@ let jsx = render_solid_with_hints(&markdown(&events), solid_hints(&options).as_r
 `primary_layer()` is `blockquote` — the key `[[task.blockquote.custom]]`
 addresses.
 
-### Specs ((§6.1, D-5))
+### Specs (§6.1, D-5)
 
 An entry renames the §6.1 positional slots through its `field.*` keys —
 `field.specs.tick` / `field.specs.quote` for a `` `slug` `` / `"title"` item, and
 `field.specs.class` / `.id` / `.style` for a `.x` / `#x` / `style:` item. An
-entry that configures none keeps `slug` / `title` / `class` / `id` / `style`;
+entry that configures none keeps the §6.1 default paths;
 once it configures one the preset is void as a whole (D-7). An assignment also
 **moves** the position: the assigned path is the author's own public field,
 which this element neither reads nor renames (`Specs::element_path` answers

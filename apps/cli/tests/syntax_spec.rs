@@ -357,3 +357,13 @@ fn golden_32_extract_heading() {
 fn golden_33_extract_scopes() {
     assert_fixture("33-extract-scopes");
 }
+
+/// §16.3 fixture 34: `field.specs.*` as a **move** (S2-3.5, §6.1/§6.3). One entry
+/// assigns all five positions, so its head lands on the author's paths
+/// (`slug`, `title`, `foo.class`, `bar.id`, `foo.style`) with the default paths
+/// left empty — no `class` / `id` / `style` rename and no id fallback — while an
+/// entry that assigns nothing keeps every default in the same document.
+#[test]
+fn golden_34_specs_assignment() {
+    assert_fixture("34-specs-assignment");
+}

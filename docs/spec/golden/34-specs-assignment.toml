@@ -1,0 +1,20 @@
+[[task]]
+name = "Golden 34"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "anchor,markdown"
+format = "solid"
+
+# §6.1/§6.3: an assignment moves a position, and all five move the same way. The
+# fixture shows both halves at once — the author's paths verbatim, and the
+# default paths (`class` / `id` / `style`) empty for this entry.
+[[task.anchor.custom]]
+type = ["moveA"]
+name = "MoveA"
+imports = "import { MoveA } from '@comp/MoveA'"
+template = "<MoveA {...attrs}>{children}</MoveA>"
+field.specs.tick = "slug"
+field.specs.quote = "title"
+field.specs.class = "foo.class"
+field.specs.id = "bar.id"
+field.specs.style = "foo.style"

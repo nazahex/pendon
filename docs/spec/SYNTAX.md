@@ -277,36 +277,66 @@ ws          = 1*( " " | "\t" )
 > line (§4.3). This exact example is asserted by
 > `crates/extra/tests/extras_spec.rs::spec_worked_example`.
 
-| item                  | kind   | attribute               |
-| --------------------- | ------ | ----------------------- |
-| `` `slug-foo` ``      | slug   | `slug = "slug-foo"`     |
-| `"Title Foo"`         | title  | `title = "Title Foo"`   |
-| `.extra` `.class`     | class  | `class = "extra class"` |
-| `#id`                 | id     | `id = "id"`             |
-| `foo: "bar"`          | prop   | `foo = "bar"`           |
-| `bar: 12`             | prop   | `bar = 12` (Int)        |
-| `isFoo: true`         | prop   | `isFoo = true` (Bool)   |
-| `--style-var: "2rem"` | cssvar | merged into `style`     |
-| `isBar`               | flag   | bare attribute `isBar`  |
+| item                  | kind   | public field (§6.1)           |
+| --------------------- | ------ | ----------------------------- |
+| `` `slug-foo` ``      | slug   | `specs.tick = "slug-foo"`     |
+| `"Title Foo"`         | title  | `specs.quote = "Title Foo"`   |
+| `.extra` `.class`     | class  | `specs.class = "extra class"` |
+| `#id`                 | id     | `specs.id = "id"`             |
+| `foo: "bar"`          | prop   | `foo = "bar"`                 |
+| `bar: 12`             | prop   | `bar = 12` (Int)              |
+| `isFoo: true`         | prop   | `isFoo = true` (Bool)         |
+| `--style-var: "2rem"` | cssvar | merged into `specs.style`     |
+| `isBar`               | flag   | bare attribute `isBar`        |
+
+> Three of those paths are universal, so a DOM renderer prints them as the fields
+> they name — `class="extra class" id="id" style="--style-var: 2rem"` — while what
+> the tick and the quote become is the element's own decision (§6.1, §6.3,
+> §7.x). This exact map is asserted by
+> `crates/extra/tests/extras_spec.rs::spec_worked_example`.
 
 ## 6. Extras → attribute mapping
 
 ### 6.1 Positional names
 
-Positional items are named through the entry's `field.*` config (§7, §11, D-5):
+Every positional content of a head lands in exactly one **public field**, and the
+entry names it with a `field.*` key (§7, §11, D-5). The five `specs.*` rows are
+the **positions** a construct can attach meaning to (`SPECS_KEYS` in
+`crates/extra::field`); the two slot rows carry the bracket and parentheses
+groups of an element head:
 
-| item      | config key           | default | meaning          |
-| --------- | -------------------- | ------- | ---------------- |
-| `` `x` `` | `field.specs.tick`   | `slug`  | construct slug   |
-| `"x"`     | `field.specs.quote`  | `title` | construct title  |
-| `[x]`     | `field.bracket.bare` | `slug`  | bracket slot     |
-| `("x")`   | `field.paren.bare`   | `title` | parentheses slot |
+| content                 | config key           | default path   | meaning                              |
+| ----------------------- | -------------------- | -------------- | ------------------------------------ |
+| `` `x` `` (tick)        | `field.specs.tick`   | `specs.tick`   | the construct's slug (short id)      |
+| `"x"` (quote)           | `field.specs.quote`  | `specs.quote`  | the construct's title                |
+| `.x` / `class: "x"`     | `field.specs.class`  | `specs.class`  | the class list (accumulates, D-12)   |
+| `#x`                    | `field.specs.id`     | `specs.id`     | the element id                       |
+| `--x: v` / `style: "…"` | `field.specs.style`  | `specs.style`  | inline style declarations            |
+| `[x]` (bracket)         | `field.bracket.bare` | `bracket.bare` | the bracket group's bare content     |
+| `("x")` (paren)         | `field.paren.bare`   | `paren.bare`   | the parentheses group's bare content |
 
-An entry that configures **no** `field.*` key keeps every default. Once it
-configures one, the preset is void as a whole (D-7): a position it leaves
-unassigned falls back to its own qualified name (`bracket.bare`, `paren.bare`,
-`specs.tick`, `specs.quote`), never to a name the author chose for another
-position. There is no separate naming key (§14).
+The `meaning` column is the one piece of this table that exists **only** here: an
+assigned field carries no semantics of its own, so a rename never changes what
+the content _is_. The `default path` column is what the map carries when the
+entry configures nothing — it is the machine-readable
+`SpecsKey::default_path` (asserted by
+`crates/extra/tests/extras_spec.rs::specs_keys_cover_the_specs_vocabulary`), and
+the same seven rows are the doc of `Specs` in `crates/extra/src/typed.rs`.
+
+Three of the seven are **universal**: a DOM renderer writes `specs.class`,
+`specs.id` and `specs.style` as the fields they name (`class`, `id`, `style`,
+§6.3 rule 1). The other four have no DOM meaning of their own — what a slug, a
+title or a slot group _is_ belongs to the element, which reads it in §6.2 and, in
+some cases, projects it onto its own DOM field (an anchor's quote → its `title`,
+a citation's id → its `cite-id`). A default path an element does not name stays
+in the map under its dotted spelling.
+
+An entry that configures **no** `field.*` key keeps every default path above and
+its element keeps its preset (§6.5, D-7). Once it configures one, the preset is
+void as a whole (D-7): a position it leaves unassigned falls back to its own
+qualified name (`bracket.bare`, `paren.bare`, `specs.tick`, `specs.class`, …),
+never to a name the author chose for another position. There is no separate
+naming key (§14).
 
 #### A moved position is the author's own field
 
@@ -325,6 +355,10 @@ nor renames it (`specs.class` → `class`), and no other element gains a meaning
 for the assigned name. `Specs::element_path` in `crates/extra::typed` is that
 boundary: it answers the default path for an unassigned position and `None` for
 a moved one.
+
+Fixture [`34-specs-assignment`](golden/34-specs-assignment.mdp) is the
+executable form of both halves: one entry assigns all five positions and an
+unclaimed type in the same document keeps every default.
 
 Every `@@` head may carry the `[x]` / `("x")` groups between its type and its
 `{…}` body (`@@type[x]("y"){…}`, `@@type[x]("y")`, `@@[x]("y")`), each part
@@ -469,15 +503,21 @@ so both DOM targets agree and the JSON/AST keep the path untouched.
 
 ### 6.4 Emission order (deterministic)
 
-Attributes MUST be emitted in this canonical order so golden fixtures are
-stable:
+A head's contents are assigned into the public field map in this canonical order,
+so the map — and with it every golden fixture — is stable:
 
-1. `class` (single joined value, head classes then `.x` items in source order);
-2. `id`;
-3. the positional names — the groups first (`bracket`, then `paren`), then `tick`
-   and `quote` (§6.1);
-4. all remaining props and flags in source order, with `style` where the first
-   `style:` prop or `--var` item appeared.
+1. the class position (a single joined value, head classes then `.x` items in
+   source order);
+2. the id position;
+3. the remaining positional positions — the groups first (`bracket`, then
+   `paren`), then `tick` and `quote` (§6.1);
+4. all remaining props and flags in source order, with the style position where
+   the first `style:` prop or `--var` item appeared.
+
+Each step names a **position**, and the step writes it at the path the entry
+resolved for it: the default ones are `specs.class` / `specs.id` /
+`specs.style`, `specs.tick` / `specs.quote` and `bracket.bare` / `paren.bare`
+(§6.1); a moved one is written at the assigned path and never at the default.
 
 Duplicates are [D-12](../workflows/unified-syntax-stage-2/DECISIONS.md)'s rule,
 not a merge: two sources for one public path are `Severity::Error`, and the
@@ -489,11 +529,33 @@ positional **group** (`[…]` / `(…)`, §6.1) beats a same-key body item outri
 the body value is dropped with an §13 `Warning` (§6.2 head-wins style).
 Whitespace-only differences MUST NOT change the output.
 
-The list above is the order a head's items are **assigned** in. Since the field
-model landed ([ADR-0014](../decisions/0014-field-model.md)), the DOM renderers
+The list above is the order a head's items are **assigned** in. The DOM renderers
 emit the **projection's** order instead: `project` sorts by the public path, which
 is what keeps the §6.3 rename (`specs.class` → `class`) from moving the attribute
-it writes. `S2-3.5` restates this section as the map's own rule.
+it writes, and what keeps a moved position's output just as deterministic
+([ADR-0014](../decisions/0014-field-model.md)).
+
+### 6.5 The element preset
+
+An element with a slot head declares two pieces of data, both in the owning
+plugin's crate (`ElementHead` in `crates/extra::preset`):
+
+- its **contract** — the positions it claims ([ADR-0012](../decisions/0012-universal-slots.md));
+- its **preset** — which field each claimed position lands in when the user
+  configures nothing.
+
+The preset is what turns the groups and items of a _built-in_ construct into its
+own public fields (`[inner](/u "t")` → `inner_text`, `href`, `title`); §7.x states
+each element's table, and the crate's `HEAD` constant is the copy the code reads.
+A preset names **positions**, never a `specs.*` path: the five specs positions
+keep their default paths (§6.1), and what the element makes of them is §6.2/§6.3.
+
+**The preset is void as a whole** (D-7): one `field.*` key in the matched
+`custom` entry disables every preset assignment for that entry — there is no
+half-preset mode — and each position the entry left unassigned falls back to its
+slot-qualified bare name (`bracket.bare`, `paren.quote`, …). A preset may only
+sit on a position the contract accepts (`ElementHead::is_consistent`, asserted by
+each plugin's own test), so the two halves cannot drift.
 
 ## 7. Construct grammars
 
@@ -821,8 +883,8 @@ inline-directive = colons type [ "[" bracket "]" ] [ "(" paren ")" ] extras? tex
 colons           = "::" up to ":::::::" (2..7)
 ```
 
-- `[bracket]` name = `field.bracket.bare` (default `slug`), `("paren")` name =
-  `field.paren.bare` (default `title`) (§6.1).
+- `[bracket]`'s field = `field.bracket.bare` (default path `bracket.bare`),
+  `("paren")`'s = `field.paren.bare` (default path `paren.bare`) (§6.1).
 - The closing run MUST be `>=` the opening run (nesting depth = colon count).
   An inner directive with fewer colons closes implicitly at the outer's close.
 - Content is parsed as inline content.
@@ -1004,7 +1066,7 @@ Rules:
    so `_` answers it whenever the layer configures no `?` entry
    ([ADR-0008](decisions/0008-type-selectors.md) §3).
    Only the **winning** entry's `imports` are emitted. Positional keys (rule 5)
-   stay literal-only: a `_` / `*` entry contributes no `slug` / `title`
+   stay literal-only: a `_` / `*` entry contributes no positional (`field.*`)
    override.
 
    > **Cutover (OPEN-C3, `D-3a`).** Every element plugin emits its own built-in
@@ -1137,7 +1199,7 @@ Config-load errors MUST abort the build before any file is processed.
 | `import = "…"` (string)                                          | `imports = ["…"]`                                                                    | **removed**: the singular form is accepted with a Warning (§15 OPEN-C2), then hard-errors.                                                                                                                                                                                                                        |
 | `[task.<plugin>.custom_node]`                                    | `[task.<plugin>.custom.<layer>]`                                                     | **removed**: `custom.<layer>` is read for `anchor`, `image` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`); every sandbox/fixture config is migrated. The stale key fails the build with a migration message. Unwired layers (`task.image.custom.img`) are config errors. |
 | `[task.heading]` `auto_number` / `number_style`                  | `[[task.heading.number]]`                                                            | **removed** (ADR-0010): both keys are read only to raise the §14 migration error. Numbering is `plugin-number` (§10.5), which writes `attrs.number` as an array and never prefixes the text.                                                                                                                      |
-| `backtick_key` / `quote_key` / `bracket_key` / `parentheses_key` | `field.specs.tick` / `field.specs.quote` / `field.bracket.bare` / `field.paren.bare` | **removed** (D-16): the four naming keys are gone from the loader, so a config that still uses them **fails to load** with an unknown-key error (§13) — no alias, no deprecation. Naming is `field.*` only (§6.1); an entry that configures none keeps `slug` / `title`.                                          |
+| `backtick_key` / `quote_key` / `bracket_key` / `parentheses_key` | `field.specs.tick` / `field.specs.quote` / `field.bracket.bare` / `field.paren.bare` | **removed** (D-16): the four naming keys are gone from the loader, so a config that still uses them **fails to load** with an unknown-key error (§13) — no alias, no deprecation. Naming is `field.*` only (§6.1); an entry that configures none keeps the seven default paths (`specs.tick` … `paren.bare`).     |
 
 ## 15. Open decisions
 

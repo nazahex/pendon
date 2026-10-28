@@ -58,15 +58,15 @@ template = "<DirectiveDefault {...attrs}>{children}</DirectiveDefault>"
 
 `primary_layer()` is `directive`.
 
-### Specs ((§6.1, D-5))
+### Specs (§6.1, D-5)
 
-A directive head uses all four: `field.bracket.bare` (default `slug`) for
-`[….]`, `field.paren.bare` (default `title`) for `(…)`, and
-`field.specs.tick` / `field.specs.quote` (defaults `slug` / `title`) for the
-`{…}` items. An entry that configures none keeps every default (D-7). A
-`field.specs.<k>` assignment moves the position out of the element's reach: the
-assigned path is the author's public field, never read as a slug / title and
-never renamed to a DOM field (§6.1).
+A directive head uses all four: `field.bracket.bare` (default path
+`bracket.bare`) for `[….]`, `field.paren.bare` (default path `paren.bare`) for
+`(…)`, and `field.specs.tick` / `field.specs.quote` (default paths
+`specs.tick` / `specs.quote`) for the `{…}` items. An entry that configures none
+keeps every default path (D-7). A `field.specs.<k>` assignment moves the position
+out of the element's reach: the assigned path is the author's public field, never
+read as a slug / title and never renamed to a DOM field (§6.1).
 
 ## Rust API
 

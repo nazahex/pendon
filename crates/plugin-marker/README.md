@@ -44,11 +44,11 @@ let jsx = render_solid_with_hints(&markdown(&events), solid_hints(&options).as_r
 
 `primary_layer()` is `marker` — the key `[[task.marker.custom]]` addresses.
 
-### Specs ((§6.1, D-5))
+### Specs (§6.1, D-5)
 
 An entry renames the §6.1 positional slots through its `field.*` keys —
 `field.bracket.bare` for the `[x]` group and `field.paren.bare` for `("x")`. An
-entry that configures none keeps `slug` / `title` (D-7). The table is in
+entry that configures none keeps the §6.1 default paths (D-7). The table is in
 [`docs/spec/SYNTAX.md` §6.1](../../docs/spec/SYNTAX.md).
 
 ## Notes

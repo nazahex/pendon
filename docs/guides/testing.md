@@ -32,7 +32,7 @@ The golden set in [`../spec/golden/`](../spec/golden/) is copied into a temp
 project, rendered with the real CLI, and compared byte-for-byte.
 
 ```bash
-cargo test -p pendon --test syntax_spec          # 27 fixtures
+cargo test -p pendon --test syntax_spec          # 28 fixtures
 ```
 
 A fixture may also freeze the **files** its render writes

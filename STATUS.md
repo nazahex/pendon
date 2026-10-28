@@ -84,8 +84,7 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## In progress
 
-- [ ] **Stage 2 — Phases 0–2 done; Phase 3 in progress (`S2-3.1`, `S2-3.2`,
-      `S2-3.3`, `S2-3.4` done).** Docs live in
+- [ ] **Stage 2 — Phases 0–3 done; Phase 4 next (`S2-4.1`).** Docs live in
       [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md).
       **Phase 0 complete 2026-10-28**: D-1…D-17 signed (D-16 = clean total
       replacement: no compat, no warnings, no migration doc, old configs fail
@@ -176,7 +175,16 @@ exactly one `export const headings` line each (no bytes removed), and
       meaning, no universal rename, default path empty. Verified end-to-end in a
       three-format sandbox (solid / html / json); tests in `crates/extra`,
       `plugin-anchor` and the CLI config path
-      (`anchor_options_carry_the_entry_specs`). Next: `S2-3.5`.
+      (`anchor_options_carry_the_entry_specs`).
+      `S2-3.5` done — **Phase 3 is complete**: §6.1 is re-derived from `Specs`'
+      doc into seven rows (content / config key / **default path** / meaning, so a
+      default is visibly not an assignment), §5.1 and §14 now name the paths, §6.4
+      states the map order and the projection's sort, and the missing §6.5 ("the
+      element preset", D-7) that five crates already cited now exists. New golden
+      `34-specs-assignment`: one entry assigns all five positions and an unclaimed
+      type in the same document keeps every default. Nine plugin READMEs lose the
+      copy-pasted (and wrong) "keeps `slug` / `title` / `class` / `id` / `style`"
+      sentence in favour of a link to §6.1. Next: Phase 4, `S2-4.1`.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden
@@ -268,8 +276,8 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## Golden & freeze status (see [`docs/spec/golden/README.md`](docs/spec/golden/README.md))
 
-- Golden fixtures `01–12`, `14–16`, `21–28`, `30–33` are frozen and green; none
-  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (27 fixtures) is the gate.
+- Golden fixtures `01–12`, `14–16`, `21–28`, `30–34` are frozen and green; none
+  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (28 fixtures) is the gate.
 - Phase 3 re-froze `06-heading` (it loses the numbers `plugin-heading` used to
   compute and keeps its authored `number:` props) and `28-type-selectors`
   (dropped `auto_number`, no output change).

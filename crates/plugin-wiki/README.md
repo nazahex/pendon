@@ -50,19 +50,19 @@ let events = process_with_options(&parsed, opts);
 
 `WikiOptions` fields: `link_prefix: Option<String>` and `latex: Option<LatexOptions>`.
 
-### Specs ((§6.1, D-5))
+### Specs (§6.1, D-5)
 
 An entry renames the §6.1 positional slots through its `field.*` keys —
 `field.specs.tick` / `field.specs.quote` / `.class` / `.id` / `.style` — and an
-entry that configures none keeps `slug` / `title` / `class` / `id` / `style`
-(D-7). The infobox link reads the **quote** position into its `title` while that
-position keeps its default path; a `field.specs.quote` assignment publishes the
-author's own field and the link stops reading it (§6.1). `plugin-wiki` does not
-read the other positions yet (see below).
+entry that configures none keeps the §6.1 default paths (D-7). The infobox link
+reads the **quote** position into its `title` while that position keeps its
+default path; a `field.specs.quote` assignment publishes the author's own field
+and the link stops reading it (§6.1). `plugin-wiki` does not read the other
+positions yet (see below).
 
 > **Not yet wired:** `plugin-wiki`'s `WikiOptions` carries no `ComponentSet`, so
-> a `[task.wiki.custom]` key is not read yet and the extras stay on the built-in
-> `slug` / `title`. Adding the component set lifts this (see `STATUS.md`).
+> a `[task.wiki.custom]` key is not read yet and the extras stay on the §6.1
+> defaults. Adding the component set lifts this (see `STATUS.md`).
 
 ## Recommended order
 

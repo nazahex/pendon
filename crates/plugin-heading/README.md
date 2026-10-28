@@ -146,12 +146,12 @@ Without a custom component the plugin emits a `Heading` node with `level`, the
 optional `id` (or fallback `slug`), `raw_title` and the extras attributes
 (§6.4). The heading text is the node's content; nothing is prepended to it.
 
-### Specs ((§6.1, D-5))
+### Specs (§6.1, D-5)
 
 An entry renames the §6.1 positional slots through its `field.*` keys —
 `field.specs.tick` / `field.specs.quote` for a `` `slug` `` / `"title"` item, and
 `field.specs.class` / `.id` / `.style` for a `.x` / `#x` / `style:` item. An
-entry that configures none keeps `slug` / `title` / `class` / `id` / `style`;
+entry that configures none keeps the §6.1 default paths;
 once it configures one the preset is void as a whole (D-7). An assignment also
 **moves** the position: the assigned path is the author's own public field,
 which this element neither reads nor renames (`Specs::element_path` answers
