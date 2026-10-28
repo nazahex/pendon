@@ -223,10 +223,18 @@ ws          = 1*( " " | "\t" )
 
 - Item order is free; extras are completely optional. `{}` is a valid (empty)
   head: it adds no attribute and raises no warning.
-- Duplicate handling: `class` accumulates; `id`, `slug`, `title`, `prop`,
-  `flag` and `cssvar` are last-wins; a duplicate `id` emits `Severity::Warning`.
-  A duplicate key collapses to one attribute (§6.4), and a `class:` prop
-  accumulates into `class` exactly like a `.x` item.
+- Duplicate handling ([D-12](../workflows/unified-syntax-stage-2/DECISIONS.md)):
+  two sources for one public path inside one head is a bug, not a merge, so it
+  is a `Severity::Error` and the **first** value wins. That covers a repeated
+  `slug`, `title` or `#id`, and a repeated `prop` or `flag`. Two exceptions:
+  `class` accumulates and dedupes, keeping the first position (a `class:` prop
+  joins the `.x` items exactly like a `.x` item), and a repeated `style:`
+  property is CSS — last value wins, no diagnostic.
+- A `k` that names a **built-in field** of the element the head attaches to
+  (`href` on an anchor, `src` on an image) is `Severity::Error`: the construct
+  keeps its own value and the public name is chosen with
+  `field.override.<k>` (§11). A malformed value in either case never partially
+  applies (§4.3).
 - `value` classification (produces `AttrValue`, §6.3): quoted or backticked →
   `Str`; `true`/`false` → `Bool`; integer → `Int`; decimal → `Float`; otherwise
   `Raw`. A quoted value is unquoted on the way in; `Int`/`Float`/`Bool` render
@@ -447,13 +455,15 @@ stable:
 4. all remaining props and flags in source order, with `style` where the first
    `style:` prop or `--var` item appeared.
 
-Duplicates collapse to one attribute: the position of the first occurrence
-wins, the value of the last occurrence wins. `class` accumulates instead
-(a `class:` prop joins the `.x` items). A positional item and a same-named prop
-are such a duplicate: the positional slot keeps its place and the later value
-wins. One exception: a positional **group** (`[…]` / `(…)`, §6.1) beats a
-same-key body item outright — the body value is dropped with an §13 `Warning`
-(§6.2 head-wins style). Whitespace-only differences MUST NOT change the output.
+Duplicates are [D-12](../workflows/unified-syntax-stage-2/DECISIONS.md)'s rule,
+not a merge: two sources for one public path are `Severity::Error`, and the
+position **and** the value of the first occurrence win. `class` accumulates
+(a `class:` prop joins the `.x` items) and dedupes keeping the first position; a
+repeated `style:` property is CSS, so its last value wins with no diagnostic. A
+positional item and a same-named prop are such a duplicate. One exception: a
+positional **group** (`[…]` / `(…)`, §6.1) beats a same-key body item outright —
+the body value is dropped with an §13 `Warning` (§6.2 head-wins style).
+Whitespace-only differences MUST NOT change the output.
 
 The list above is the order a head's items are **assigned** in. Since the field
 model landed ([ADR-0014](../decisions/0014-field-model.md)), the DOM renderers
@@ -1063,25 +1073,27 @@ attributes — this is the item layer (L2/L3, §9.3), which is still pending.
 
 ## 13. Diagnostics
 
-| Condition                                                 | Severity                 |
-| --------------------------------------------------------- | ------------------------ |
-| malformed head / missing `}` / whitespace-separated head  | none (literal text)      |
-| a retired legacy form (`[.c,#id]{k:v}`, `[^^]("ref")`, …) | none (literal text)      |
-| duplicate `#id` in one extras block                       | Warning                  |
-| extras `id` overriding a head slug                        | Warning                  |
-| decorator with no following block                         | Warning                  |
-| dropped decorator (consecutive decorators)                | Warning                  |
-| dropped extras value because a head value won             | Warning                  |
-| unclosed block directive at EOF                           | Warning                  |
-| unknown plugin name in `task.plugin`                      | Warning                  |
-| unknown `task.<plugin>` key in `pendon.toml`              | **Error (config load)**  |
-| unknown key inside a `custom` entry                       | **Error (config load)**  |
-| template without `{children}` (non-void element)          | Error (config load)      |
-| unbalanced template element                               | Error (config load)      |
-| two default components for one layer                      | Error (config load)      |
-| `start:` prop on `ol` extras                              | Warning (ignored)        |
-| literal `U+E000` sentinel character in source             | Warning (stripped)       |
-| unknown key outside a known layer                         | Warning (passed through) |
+| Condition                                                            | Severity                                           |
+| -------------------------------------------------------------------- | -------------------------------------------------- |
+| malformed head / missing `}` / whitespace-separated head             | none (literal text)                                |
+| a retired legacy form (`[.c,#id]{k:v}`, `[^^]("ref")`, …)            | none (literal text)                                |
+| duplicate `#id` / `` `slug` `` / `"title"` / prop / flag in one head | **Error (first wins)**                             |
+| extras `k` naming a built-in field of the element (`href`, `src`)    | **Error (construct wins; use `field.override.k`)** |
+| repeated `style:` property or `--var` (last value wins, CSS)         | none                                               |
+| extras `id` overriding a head slug                                   | Warning                                            |
+| decorator with no following block                                    | Warning                                            |
+| dropped decorator (consecutive decorators)                           | Warning                                            |
+| dropped extras value because a head value won                        | Warning                                            |
+| unclosed block directive at EOF                                      | Warning                                            |
+| unknown plugin name in `task.plugin`                                 | Warning                                            |
+| unknown `task.<plugin>` key in `pendon.toml`                         | **Error (config load)**                            |
+| unknown key inside a `custom` entry                                  | **Error (config load)**                            |
+| template without `{children}` (non-void element)                     | Error (config load)                                |
+| unbalanced template element                                          | Error (config load)                                |
+| two default components for one layer                                 | Error (config load)                                |
+| `start:` prop on `ol` extras                                         | Warning (ignored)                                  |
+| literal `U+E000` sentinel character in source                        | Warning (stripped)                                 |
+| unknown key outside a known layer                                    | Warning (passed through)                           |
 
 Config-load errors MUST abort the build before any file is processed.
 

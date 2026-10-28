@@ -12,7 +12,9 @@
 
 use pendon_core::{Event, Severity};
 
-use crate::typed::{parse_extras, Attrs, ExtrasAttr, ExtrasHead, ExtrasMatch, ExtrasWarning};
+use crate::typed::{
+    parse_extras, Attrs, ExtrasAttr, ExtrasHead, ExtrasIssue, ExtrasMatch, IssueSeverity,
+};
 
 /// Scans `@@type{…}` / `@@{…}` at a **character** cursor.
 ///
@@ -48,35 +50,27 @@ pub fn emit_attrs(attrs: &Attrs, out: &mut Vec<Event>) {
     }
 }
 
-/// Pushes a §13 `Warning` for every warning a head resolved.
-pub fn emit_attr_warnings(context: &str, attrs: &Attrs, out: &mut Vec<Event>) {
-    for warning in &attrs.warnings {
-        out.push(warning_event(context, warning));
+/// Pushes a §13 diagnostic for every issue a head resolved.
+pub fn emit_attr_issues(context: &str, attrs: &Attrs, out: &mut Vec<Event>) {
+    for issue in &attrs.issues {
+        out.push(issue_event(context, issue));
     }
 }
 
-/// A `Severity::Warning` diagnostic carrying the §13 message for `warning`,
-/// prefixed with the plugin name.
-pub fn warning_event(context: &str, warning: &ExtrasWarning) -> Event {
+/// An `Event::Diagnostic` carrying `issue`'s own §13 severity (D-12 makes a
+/// duplicate an `Error`), prefixed with the plugin name.
+///
+/// This is the one adapter between the grammar layer's [`IssueSeverity`] and the
+/// IR's [`Severity`].
+pub fn issue_event(context: &str, issue: &ExtrasIssue) -> Event {
+    let severity = match issue.severity {
+        IssueSeverity::Warning => Severity::Warning,
+        IssueSeverity::Error => Severity::Error,
+    };
     Event::Diagnostic {
-        severity: Severity::Warning,
-        message: format!("[{context}] {}", warning_message(warning)),
+        severity,
+        message: format!("[{context}] {}", issue.message),
         span: None,
-    }
-}
-
-/// Human-readable §13 message for a resolved warning.
-pub fn warning_message(warning: &ExtrasWarning) -> String {
-    match warning {
-        ExtrasWarning::DuplicateId => {
-            "duplicate `#id` in one extras head; the last one wins".to_string()
-        }
-        ExtrasWarning::Overridden { key } => {
-            format!("`{key}` was dropped because the construct head already sets it")
-        }
-        ExtrasWarning::OwnedKeyIgnored { key } => {
-            format!("`{key}` is owned by the construct and cannot be overridden by extras")
-        }
     }
 }
 
@@ -160,19 +154,29 @@ mod tests {
     }
 
     #[test]
-    fn describes_and_emits_warnings() {
+    fn describes_and_emits_issues() {
         let attrs = Attrs {
             items: Vec::new(),
-            warnings: vec![
-                ExtrasWarning::DuplicateId,
-                ExtrasWarning::Overridden {
-                    key: "title".to_string(),
-                },
+            issues: vec![
+                ExtrasIssue::duplicate("specs.id"),
+                ExtrasIssue::overridden("title"),
             ],
         };
         let mut out = Vec::new();
-        emit_attr_warnings("anchor", &attrs, &mut out);
+        emit_attr_issues("anchor", &attrs, &mut out);
         assert_eq!(out.len(), 2);
+        match &out[0] {
+            Event::Diagnostic {
+                severity,
+                message,
+                span,
+            } => {
+                assert_eq!(*severity, Severity::Error);
+                assert!(message.starts_with("[anchor] `specs.id`"), "{message}");
+                assert!(span.is_none());
+            }
+            other => panic!("unexpected event {other:?}"),
+        }
         match &out[1] {
             Event::Diagnostic {
                 severity,

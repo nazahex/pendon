@@ -4,8 +4,8 @@ use std::path::Path;
 
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
-    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead, FieldName, Preset, Slot,
-    SlotContract, SlotKind, SlotPos, SlotTag,
+    issue_event, scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
+    ExtrasIssue, FieldName, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag,
 };
 use pendon_renderer_solid::{
     layer_templates, ComponentSet, DataExport, ImportEntry, SolidRenderHints,
@@ -164,8 +164,8 @@ struct CiteExtraAttrs {
     extras_style: Option<String>,
     /// Bare flags of the extras head (§6.3), emitted as bare attributes.
     flags: Vec<String>,
-    /// §13 warnings raised while merging the head.
-    warnings: Vec<String>,
+    /// §13 diagnostics raised while merging the head.
+    issues: Vec<ExtrasIssue>,
     /// The `@@type{…}` marker, when present: the §11 routing key (rule 3).
     type_marker: Option<String>,
 }
@@ -448,16 +448,12 @@ fn emit_text(text: &str, ctx: &mut CitationContext, out: &mut Vec<Event>) {
                     }
                 });
                 for key in dropped {
-                    extra.warnings.push(format!(
+                    extra.issues.push(ExtrasIssue::warning(format!(
                         "`{key}` was dropped because the construct head already sets it"
-                    ));
+                    )));
                 }
-                for message in &extra.warnings {
-                    out.push(Event::Diagnostic {
-                        severity: Severity::Warning,
-                        message: format!("[cite] {message}"),
-                        span: None,
-                    });
+                for issue in &extra.issues {
+                    out.push(issue_event("cite", issue));
                 }
 
                 if reference_exists(&ctx.references, &id) {
@@ -808,9 +804,7 @@ fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead, options: &Ci
     // §6.1/§11 rule 5: the entry answering this marker names the extras specs.
     let specs = options.custom.specs_for(head.type_marker.as_deref());
     let parsed = to_attributes(head, &specs);
-    for warning in &parsed.warnings {
-        extra.warnings.push(pendon_extra::warning_message(warning));
-    }
+    extra.issues.extend(parsed.issues.iter().cloned());
 
     // §6.2: `#id` > extras `slug`; both feed the `cite-id` slot.
     let extras_id = parsed.value(&specs.id).map(|value| value.literal());
@@ -828,9 +822,9 @@ fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead, options: &Ci
         match value {
             ExtrasAttr::Flag => {
                 if extra.has_key(key) {
-                    extra.warnings.push(format!(
+                    extra.issues.push(ExtrasIssue::warning(format!(
                         "`{key}` was dropped because the construct head already sets it"
-                    ));
+                    )));
                 } else {
                     extra.flags.push(key.to_string());
                 }
@@ -845,19 +839,18 @@ fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead, options: &Ci
                 }
                 if key == "style" {
                     if extra.has_key("style") {
-                        extra.warnings.push(
-                            "`style` was dropped because the construct head already sets it"
-                                .to_string(),
-                        );
+                        extra.issues.push(ExtrasIssue::warning(
+                            "`style` was dropped because the construct head already sets it",
+                        ));
                     } else {
                         extra.extras_style = Some(text);
                     }
                     continue;
                 }
                 if extra.has_key(key) {
-                    extra.warnings.push(format!(
+                    extra.issues.push(ExtrasIssue::warning(format!(
                         "`{key}` was dropped because the construct head already sets it"
-                    ));
+                    )));
                     continue;
                 }
                 extra.data.push((key.to_string(), text));
@@ -867,9 +860,9 @@ fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead, options: &Ci
 
     match extras_id.or(extras_slug) {
         Some(id) if extra.id.is_none() => extra.id = Some(id),
-        Some(_) => extra.warnings.push(
-            "extras `id` was dropped because the citation already has an id (§6.2)".to_string(),
-        ),
+        Some(_) => extra.issues.push(ExtrasIssue::warning(
+            "extras `id` was dropped because the citation already has an id (§6.2)",
+        )),
         None => {}
     }
 

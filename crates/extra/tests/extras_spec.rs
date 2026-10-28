@@ -4,15 +4,15 @@
 
 use pendon_extra::{
     parse_directive_head, parse_extras, parse_type_marker, to_attributes, AttrValue, Attrs,
-    DirectiveMatch, DirectiveSigil, ExtrasAttr, ExtrasError, ExtrasHead, ExtrasMatch,
-    ExtrasWarning, FieldConfig, Path, Slot, SlotKind, Specs, SPREAD_KEY,
+    DirectiveMatch, DirectiveSigil, ExtrasAttr, ExtrasError, ExtrasHead, ExtrasIssue, ExtrasMatch,
+    FieldConfig, IssueSeverity, Path, Slot, SlotKind, Specs, SPREAD_KEY,
 };
 
 /// Parses `input` as a complete head and maps it to attributes.
-fn attrs_of(input: &str) -> (Vec<(String, ExtrasAttr)>, Vec<ExtrasWarning>) {
+fn attrs_of(input: &str) -> (Vec<(String, ExtrasAttr)>, Vec<ExtrasIssue>) {
     let head = head_of(input);
     let attrs = to_attributes(&head, &Specs::default());
-    (attrs.items, attrs.warnings)
+    (attrs.items, attrs.issues)
 }
 
 /// Parses `input` that must consist of a single head.
@@ -171,27 +171,96 @@ fn values_are_typed_per_section_5() {
     );
 }
 
+/// D-12: `class` accumulates and dedupes, keeping the first position.
 #[test]
-fn classes_accumulate_and_other_items_are_last_wins() {
-    let (items, warnings) = attrs_of("@@type{.a, .b, #first, #second, k: \"1\", k: \"2\"}");
+fn class_accumulates_and_dedupes() {
+    let (items, issues) = attrs_of("@@type{.a, .b, .a, class: \"b c\"}");
     assert_eq!(
         items,
-        vec![
-            (
-                "specs.class".to_string(),
-                ExtrasAttr::Value(AttrValue::Str("a b".into()))
-            ),
-            (
-                "specs.id".to_string(),
-                ExtrasAttr::Value(AttrValue::Str("second".into()))
-            ),
-            (
-                "k".to_string(),
-                ExtrasAttr::Value(AttrValue::Str("2".into()))
-            ),
-        ]
+        vec![(
+            "specs.class".to_string(),
+            ExtrasAttr::Value(AttrValue::Str("a b c".into()))
+        )]
     );
-    assert_eq!(warnings, vec![ExtrasWarning::DuplicateId]);
+    assert!(issues.is_empty(), "{issues:?}");
+}
+
+/// D-12, one case per rule: a repeated `specs.tick` / `specs.quote` /
+/// `specs.id`, a repeated prop and a repeated flag are an `Error` that keeps the
+/// **first** value; a repeated `style:` property is last-wins with no
+/// diagnostic (CSS semantics).
+#[test]
+fn duplicates_are_an_error_and_the_first_value_wins() {
+    let cases: Vec<(&str, Vec<(String, ExtrasAttr)>, Vec<&str>)> = vec![
+        (
+            "@@type{`one`, `two`}",
+            vec![("specs.tick".to_string(), attr("one"))],
+            vec!["specs.tick"],
+        ),
+        (
+            "@@type{\"one\", \"two\"}",
+            vec![("specs.quote".to_string(), attr("one"))],
+            vec!["specs.quote"],
+        ),
+        (
+            "@@type{#one, #two}",
+            vec![("specs.id".to_string(), attr("one"))],
+            vec!["specs.id"],
+        ),
+        (
+            "@@type{k: \"one\", k: \"two\"}",
+            vec![("k".to_string(), attr("one"))],
+            vec!["k"],
+        ),
+        (
+            "@@type{isFlag, isFlag}",
+            vec![("isFlag".to_string(), ExtrasAttr::Flag)],
+            vec!["isFlag"],
+        ),
+        (
+            "@@type{--tone: red, --tone: blue}",
+            vec![("specs.style".to_string(), attr("--tone: blue"))],
+            vec![],
+        ),
+        (
+            "@@type{style: \"color: red\", style: \"color: blue\"}",
+            vec![("specs.style".to_string(), attr("color: blue"))],
+            vec![],
+        ),
+    ];
+
+    for (source, expected, errors) in cases {
+        let (items, issues) = attrs_of(source);
+        assert_eq!(items, expected, "{source}");
+        assert_eq!(issues.len(), errors.len(), "{source}: {issues:?}");
+        for (issue, field) in issues.iter().zip(errors) {
+            assert_eq!(issue.severity, IssueSeverity::Error, "{source}");
+            assert!(
+                issue.message.contains(&format!("`{field}`")),
+                "{source}: {}",
+                issue.message
+            );
+        }
+    }
+}
+
+/// D-12's last rule that `to_attributes` can see: two **assigned** names
+/// (`field.specs.class` and `field.specs.tick` both naming `class`) claiming one
+/// public path is an `Error`, and the earlier item — `class` is emitted first
+/// (§6.4) — keeps the path.
+#[test]
+fn colliding_assigned_names_are_an_error() {
+    let head = head_of("@@type{`slug-a`, .a}");
+    let specs = Specs {
+        class: "class".to_string(),
+        tick: "class".to_string(),
+        ..Specs::default()
+    };
+    let attrs = to_attributes(&head, &specs);
+    assert_eq!(attrs.items, vec![("class".to_string(), attr("a"))]);
+    assert_eq!(attrs.issues.len(), 1, "{:?}", attrs.issues);
+    assert_eq!(attrs.issues[0].severity, IssueSeverity::Error);
+    assert!(attrs.issues[0].message.contains("`class`"));
 }
 
 #[test]
@@ -294,24 +363,24 @@ fn css_vars_and_style_props_merge_into_one_style_attribute() {
     );
 }
 
+/// A `Str`-valued attribute, the shape every tested item produces.
+fn attr(value: &str) -> ExtrasAttr {
+    ExtrasAttr::Value(AttrValue::Str(value.to_string()))
+}
+
 #[test]
-fn duplicate_keys_collapse_to_one_attribute() {
-    // §6.4: the positional slot keeps its position, the later value wins.
-    let (items, warnings) = attrs_of("@@type{`s`, slug: \"other\"}");
+fn a_prop_named_like_a_flat_field_is_a_different_path() {
+    // D-12/S2-3.2: the specs position is `specs.tick`, so `slug: "other"` is a
+    // distinct public path and not a duplicate of the positional item.
+    let (items, issues) = attrs_of("@@type{`s`, slug: \"other\"}");
     assert_eq!(
         items,
         vec![
-            (
-                "specs.tick".to_string(),
-                ExtrasAttr::Value(AttrValue::Str("s".into()))
-            ),
-            (
-                "slug".to_string(),
-                ExtrasAttr::Value(AttrValue::Str("other".into()))
-            )
+            ("specs.tick".to_string(), attr("s")),
+            ("slug".to_string(), attr("other")),
         ]
     );
-    assert!(warnings.is_empty());
+    assert!(issues.is_empty(), "{issues:?}");
 }
 
 #[test]
@@ -358,6 +427,9 @@ fn escapes_are_consumed() {
     );
 }
 
+/// §6.2 head-wins, and D-12's built-in-field collision: a key the construct owns
+/// (`href`) is not a mergeable field, so dropping the extras value is an
+/// `Error` — the caller reads `owned`.
 #[test]
 fn the_head_wins_over_extras() {
     let extras = {
@@ -370,11 +442,13 @@ fn the_head_wins_over_extras() {
 
     let merged = construct.merge_with(extras, &["href"]);
     assert_eq!(merged.value("title"), Some(&AttrValue::Str("Head".into())));
-    assert_eq!(
-        merged.warnings,
-        vec![ExtrasWarning::OwnedKeyIgnored {
-            key: "href".to_string()
-        },]
+    assert_eq!(merged.issues, vec![ExtrasIssue::owned_key("href")]);
+    assert_eq!(merged.issues[0].severity, IssueSeverity::Error);
+    // The remedy the message names is `field.override.href` (D-4).
+    assert!(
+        merged.issues[0].message.contains("field.override.href"),
+        "{}",
+        merged.issues[0].message
     );
 }
 
@@ -563,7 +637,7 @@ fn groups_map_through_the_positional_keys() {
         attrs.value("paren.bare").map(AttrValue::literal),
         Some("T".to_string())
     );
-    assert_eq!(attrs.warnings.len(), 0, "{:?}", attrs.warnings);
+    assert_eq!(attrs.issues.len(), 0, "{:?}", attrs.issues);
 
     // The names follow the entry's `field.*` config like every other positional.
     let head = head_of("@@note[n](\"T\")");

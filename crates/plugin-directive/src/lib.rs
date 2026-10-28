@@ -24,10 +24,10 @@
 //! Code fences, inline code and raw HTML keep their text: a `::` / `==` inside
 //! them is literal (§4.3, same rule as every other construct plugin).
 
-use pendon_core::{Event, NodeKind, Severity};
+use pendon_core::{Event, NodeKind};
 use pendon_extra::{
-    parse_extras, to_attributes, warning_message, AttrValue, Attrs, DirectiveHead, ExtrasAttr,
-    ExtrasMatch,
+    issue_event, parse_extras, to_attributes, AttrValue, Attrs, DirectiveHead, ExtrasAttr,
+    ExtrasIssue, ExtrasMatch,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
@@ -59,7 +59,7 @@ pub struct DirectiveOptions {
 pub(crate) struct ParsedDirective {
     pub(crate) type_name: String,
     pub(crate) attrs: Vec<(String, ExtrasAttr)>,
-    pub(crate) warnings: Vec<String>,
+    pub(crate) issues: Vec<ExtrasIssue>,
 }
 
 /// §10.2/§10.3: preprocess inline and block directives into `Custom` nodes.
@@ -143,9 +143,9 @@ pub(crate) fn resolve_head(
         }
         ExtrasMatch::Malformed { error, .. } => {
             // §4.3: a malformed head is never dropped nor partially applied.
-            parsed.warnings.push(format!(
+            parsed.issues.push(ExtrasIssue::warning(format!(
                 "the extras head is malformed ({error:?}); it stays literal text (§4.3)"
-            ));
+            )));
             Attrs::default()
         }
         ExtrasMatch::Absent { .. } => Attrs::default(),
@@ -153,9 +153,7 @@ pub(crate) fn resolve_head(
 
     let merged = head_attrs.merge_with(extras, &[]);
     parsed.attrs = merged.items;
-    for warning in &merged.warnings {
-        parsed.warnings.push(warning_message(warning));
-    }
+    parsed.issues.extend(merged.issues);
     (parsed, consumed)
 }
 
@@ -166,12 +164,8 @@ pub(crate) fn emit_directive(
     children: &[Event],
     out: &mut Vec<Event>,
 ) {
-    for message in &parsed.warnings {
-        out.push(Event::Diagnostic {
-            severity: Severity::Warning,
-            message: format!("[directive] {message}"),
-            span: None,
-        });
+    for issue in &parsed.issues {
+        out.push(issue_event("directive", issue));
     }
 
     // §10.2/§10.3 + D8: the node keeps the built-in element and its `type`; the

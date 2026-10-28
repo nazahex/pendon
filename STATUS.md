@@ -84,7 +84,8 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## In progress
 
-- [ ] **Stage 2 — Phases 0–2 done; Phase 3 in progress (`S2-3.1` + `S2-3.4` done).** Docs live in
+- [ ] **Stage 2 — Phases 0–2 done; Phase 3 in progress (`S2-3.1`, `S2-3.2`,
+      `S2-3.4` done).** Docs live in
       [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md).
       **Phase 0 complete 2026-10-28**: D-1…D-17 signed (D-16 = clean total
       replacement: no compat, no warnings, no migration doc, old configs fail
@@ -150,16 +151,23 @@ exactly one `export const headings` line each (no bytes removed), and
       zero output moved. The four `default`/`meaning` rows §6.1 carries now also
       live on `Specs`'s doc, because an assigned field has no semantics of its
       own — otherwise `S2-3.5`'s rewrite would delete the last copy.
-      `S2-3.2` (shape) + `S2-3.4` done: the head emits `specs.class` / `specs.id` /
+      `S2-3.2` + `S2-3.4` done: the head emits `specs.class` / `specs.id` /
       `specs.style` / `specs.tick` / `specs.quote` (through `Specs`, so an
       assignment renames them) and `project` maps the three **universal** positions
       back to `class` / `id` / `style`, sorting entries by the final public path so
       nothing moves; `renderer-solid` emits a dotted path as a one-key spread
       (`{...{ "specs.tick": "x" }}`) because JSX has no `a.b=`, `renderer-html`
       prints it verbatim, JSON/AST keep it. Fixtures 10 and 14 re-frozen, one test
-      per specs position in each renderer. Next: `S2-3.2`'s **D-12 rule table**
-      (duplicates as `Error` keeping the first, `class` dedupe, `k` collisions),
-      then `S2-3.5`.
+      per specs position in each renderer. **D-12's rule table is in** (§6.4,
+      §13): a repeated `id` / `slug` / `title` / prop / flag is now an `Error`
+      that keeps the first value (the `DuplicateId` warning is gone), `class`
+      accumulates and dedupes keeping the first position, a repeated `style:`
+      property stays CSS last-wins with no diagnostic, and
+      `ExtrasIssue::owned_key` carries the built-in-field rule as an `Error`
+      naming `field.override.<k>` — `plugin-anchor`'s `href` uses it, the other
+      elements get theirs with their contracts (`S2-4.1`). Fixture `01` re-frozen
+      (`foo="one"`, `id="dup"`, plus a new positional-duplicate line). Next:
+      `S2-3.3` (the `field.specs.*` assignment), then `S2-3.5`.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden

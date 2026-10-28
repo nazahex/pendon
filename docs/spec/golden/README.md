@@ -25,7 +25,8 @@ file is as frozen as the page.
 
 The `.mdp` files are written to **double as prose**: they carry short comments
 explaining the rule the fixture exercises (e.g. `01-extras-head.mdp` explains that
-`class` accumulates and other keys are last-wins). Read them as living examples.
+`class` accumulates while every other duplicate is an `Error` keeping the first
+value). Read them as living examples.
 
 ## How they are tested
 

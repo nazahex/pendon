@@ -363,7 +363,7 @@ assignable, and the DOM renderers still emit valid `class`/`id`/`style`.
       `title` / `slug` / `title`, and what each content _is_): an assigned field
       keeps no semantics, so without a copy in code `S2-3.5` would delete the
       last one. No behaviour, no config, no golden byte.
-- [ ] **S2-3.2 — Emit `specs.*`.** Dep: S2-3.1.
+- [x] **S2-3.2 — Emit `specs.*`.** Dep: S2-3.1.
       Do: projection inserts `specs.tick`, `specs.quote`, `specs.class`,
       `specs.id`, `specs.style`; `k: v` stays `k`; duplicate `tick`/`quote`/`id`
       → error keeping the first (D-12); `class` accumulates and dedupes; `style`
@@ -380,15 +380,18 @@ assignable, and the DOM renderers still emit valid `class`/`id`/`style`.
       known (`to_attributes` + `Specs`, parse time); the ten plugins that read
       `class` / `id` / `style` / tick / quote off the head, `plugin-extract`'s
       field tables (`EXTRAS-INVENTORY.md`) and every golden then move with it.
-      **Shape landed 2026-10-28 (with S2-3.4)** — `to_attributes(head, specs)`
-      emits `specs.class` / `specs.id` / `specs.style` / `specs.tick` /
-      `specs.quote` (through `Specs`, so an assignment renames them) and every
-      fixture moved with it. **Still open: the D-12 rule table.** Today a
-      duplicate `tick`/`quote` is silent last-wins and a duplicate `id` is the
-      `DuplicateId` _warning_ (D-12 wants an `Error` keeping the first), `class`
-      accumulates without deduping, a duplicate `k` is silent last-wins (D-12
-      wants an `Error`), and the `k`-vs-built-in collision needs the element's
-      preset, i.e. Phase 4's wiring rather than `to_attributes`'.
+      **Done 2026-10-28.** `to_attributes(head, specs)` emits `specs.class` /
+      `specs.id` / `specs.style` / `specs.tick` / `specs.quote` (through `Specs`,
+      so an assignment renames them) and every fixture moved with it. The D-12
+      table is implemented in `crates/extra/src/typed.rs` and pinned by
+      `crates/extra/tests/extras_spec.rs`: a case-per-rule table
+      (`duplicates_are_an_error_and_the_first_value_wins`), a class-dedupe test
+      (`class_accumulates_and_dedupes`) and a colliding-assigned-names test;
+      `ExtrasIssue::owned_key` carries the built-in-field rule. Rule 5 (`k`
+      colliding with a built-in field) is only _partly_ landed: it needs each
+      element's built-in list, so the wiring is **deferred to S2-4.1** — an
+      anchor's `href:` is already an `Error`, the rest follow with their
+      contracts.
 - [ ] **S2-3.3 — `field.specs.*` assignment.** Dep: S2-3.2.
       Do: assignment renames the paths; `backtick_key`/`quote_key` no longer exist
       (deleted in S2-2.8 — a config that still uses them fails to load, per D-16).
@@ -456,6 +459,12 @@ README. If an element has nothing to delete, say so in the commit message.
       privately.
       Exit: a table-driven test "extras on all element heads"; no behaviour
       regression.
+      Also finish **D-12 rule 5** here: an element names the keys it writes
+      itself (`href` on an anchor, `src` on an image, `start` on an ordered
+      list) and reports a colliding `k: v` as `ExtrasIssue::owned_key` — an
+      `Error` pointing at `field.override.<k>` (D-4) — instead of dropping it
+      silently or last-wins. `plugin-anchor` is the reference; the remaining
+      heads follow with their contracts (S2-4.2 … S2-4.8).
 - [ ] **S2-4.2 — Anchor.** Dep: S2-4.1. `§7.2`
       Do: `@` tag claims `[]`/`()`; contract `bracket.bare→inner_text`,
       `paren.bare→href`, `paren.quote→title`; delete external-URL detection

@@ -1,7 +1,7 @@
-use pendon_core::{Event, NodeKind, Severity};
+use pendon_core::{Event, NodeKind};
 use pendon_extra::{
-    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, FieldName, Preset, Slot,
-    SlotContract, SlotKind, SlotPos, SlotTag,
+    issue_event, scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasIssue, FieldName,
+    Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use regex::Regex;
@@ -77,8 +77,8 @@ struct HeadingHead {
     flags: Vec<String>,
     /// The `@@type{…}` marker, when present: the §11 routing key (rule 3).
     type_marker: Option<String>,
-    /// §13 warnings raised while resolving the head.
-    warnings: Vec<String>,
+    /// §13 diagnostics raised while resolving the head.
+    issues: Vec<ExtrasIssue>,
     /// Characters of the input consumed by the head.
     consumed: usize,
 }
@@ -98,7 +98,7 @@ fn parse_heading_head(raw_text: &str, options: &HeadingOptions) -> HeadingHead {
     let mut cursor = 0;
     let mut head_id: Option<String> = None;
     let mut attrs = BTreeMap::new();
-    let mut warnings: Vec<String> = Vec::new();
+    let mut issues: Vec<ExtrasIssue> = Vec::new();
 
     // §7.4: an optional `[slug]` head, adjacent to the `#` run.
     if chars.get(cursor) == Some(&'[') {
@@ -137,9 +137,7 @@ fn parse_heading_head(raw_text: &str, options: &HeadingOptions) -> HeadingHead {
         // specs (`tick` for the slug, `quote` for the title).
         let specs = options.custom.specs_for(head.type_marker.as_deref());
         let parsed = to_attributes(&head, &specs);
-        for warning in &parsed.warnings {
-            warnings.push(pendon_extra::warning_message(warning));
-        }
+        issues.extend(parsed.issues.iter().cloned());
         let extras_id = parsed.value(&specs.id).map(|value| value.literal());
         let extras_slug = parsed.value(&specs.tick).map(|value| value.literal());
         // §6.3: the heading's own positions — `class` / `id` / `style` are the
@@ -153,9 +151,9 @@ fn parse_heading_head(raw_text: &str, options: &HeadingOptions) -> HeadingHead {
             match value {
                 ExtrasAttr::Flag => {
                     if attrs.contains_key(key) {
-                        warnings.push(format!(
+                        issues.push(ExtrasIssue::warning(format!(
                             "`{key}` was dropped because the construct head already sets it"
-                        ));
+                        )));
                     } else {
                         flags.push(key.to_string());
                     }
@@ -175,9 +173,9 @@ fn parse_heading_head(raw_text: &str, options: &HeadingOptions) -> HeadingHead {
                         continue;
                     }
                     if attrs.contains_key(key) {
-                        warnings.push(format!(
+                        issues.push(ExtrasIssue::warning(format!(
                             "`{key}` was dropped because the construct head already sets it"
-                        ));
+                        )));
                         continue;
                     }
                     attrs.insert(key.to_string(), text);
@@ -188,7 +186,9 @@ fn parse_heading_head(raw_text: &str, options: &HeadingOptions) -> HeadingHead {
         match extras_id {
             Some(id) => {
                 if head_id.is_some() {
-                    warnings.push("extras `#id` replaced the `[slug]` head (§6.2)".to_string());
+                    issues.push(ExtrasIssue::warning(
+                        "extras `#id` replaced the `[slug]` head (§6.2)",
+                    ));
                 }
                 head_id = Some(id);
             }
@@ -220,7 +220,7 @@ fn parse_heading_head(raw_text: &str, options: &HeadingOptions) -> HeadingHead {
         attrs,
         flags,
         type_marker,
-        warnings,
+        issues,
         consumed: cursor,
     }
 }
@@ -339,12 +339,8 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
                 name: "__layer".to_string(),
                 value: HEADING_LAYER.to_string(),
             });
-            for warning in &head.warnings {
-                out.push(Event::Diagnostic {
-                    severity: Severity::Warning,
-                    message: format!("[heading] {warning}"),
-                    span: None,
-                });
+            for issue in &head.issues {
+                out.push(issue_event("heading", issue));
             }
 
             // 6. Emit attributes based on rendering mode
@@ -514,7 +510,7 @@ mod tests {
         let head = parse_heading_head(text, &HeadingOptions::default());
         assert_eq!(head.id.as_deref(), Some("foo-bar"));
         assert_eq!(consumed_len(text, &head), "[foo-bar] ".len());
-        assert!(head.warnings.is_empty(), "{:?}", head.warnings);
+        assert!(head.issues.is_empty(), "{:?}", head.issues);
     }
 
     /// §14: the retired `[.class]` / `{key: value}` forms are literal text.
@@ -525,7 +521,7 @@ mod tests {
         assert_eq!(head.id.as_deref(), Some("foo-bar"));
         assert_eq!(head.attrs.get("class"), None);
         assert_eq!(head.attrs.get("qux"), None);
-        assert!(head.warnings.is_empty(), "{:?}", head.warnings);
+        assert!(head.issues.is_empty(), "{:?}", head.issues);
         assert_eq!(consumed_len(text, &head), "[foo-bar]".len());
 
         // A `.`-bracket alone is not a head either.
@@ -552,7 +548,7 @@ mod tests {
         assert_eq!(head.id.as_deref(), Some("foo"));
         assert_eq!(head.attrs.get("title").map(String::as_str), Some("Boom"));
         assert_eq!(consumed_len(text, &head), "[foo](\"Boom\") ".len());
-        assert!(head.warnings.is_empty(), "{:?}", head.warnings);
+        assert!(head.issues.is_empty(), "{:?}", head.issues);
     }
 
     #[test]
@@ -579,7 +575,7 @@ mod tests {
 
         let head = parse_heading_head("[slug]@@heading{#explicit}", &HeadingOptions::default());
         assert_eq!(head.id.as_deref(), Some("explicit"));
-        assert!(head.warnings.iter().any(|w| w.contains("#id")));
+        assert!(head.issues.iter().any(|i| i.message.contains("#id")));
 
         let head = parse_heading_head("@@heading{`extras-slug`}", &HeadingOptions::default());
         assert_eq!(head.id.as_deref(), Some("extras-slug"));
@@ -592,7 +588,7 @@ mod tests {
             &HeadingOptions::default(),
         );
         assert_eq!(head.attrs.get("title").map(String::as_str), Some("Head"));
-        assert!(head.warnings.iter().any(|w| w.contains("`title`")));
+        assert!(head.issues.iter().any(|i| i.message.contains("`title`")));
     }
 
     #[test]

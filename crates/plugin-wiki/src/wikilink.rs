@@ -1,7 +1,7 @@
 use pendon_core::{Event, NodeKind};
 use pendon_extra::{
-    emit_attr_warnings, parse_extras, to_attributes, warning_event, ExtrasAttr, ExtrasHead,
-    ExtrasMatch, ExtrasWarning, Specs,
+    emit_attr_issues, issue_event, parse_extras, to_attributes, ExtrasAttr, ExtrasHead,
+    ExtrasIssue, ExtrasMatch, Specs,
 };
 
 use crate::options::WikiOptions;
@@ -101,7 +101,7 @@ fn emit_wikilink_extras(head: Option<&ExtrasHead>, out: &mut Vec<Event>) {
     };
     let specs = Specs::default();
     let attrs = to_attributes(head, &specs);
-    emit_attr_warnings("wiki", &attrs, out);
+    emit_attr_issues("wiki", &attrs, out);
 
     // §11 rule 3: the marker is the routing key of the instance; it is carried
     // as a `type` attribute so a `{attrs.type}` template can read it back. An
@@ -120,12 +120,7 @@ fn emit_wikilink_extras(head: Option<&ExtrasHead>, out: &mut Vec<Event>) {
     // produces itself (§7.5).
     for (key, value) in specs.dom_fields(&attrs.items, &[(&specs.quote, "title")]) {
         if WIKI_OWNED_KEYS.contains(&key) {
-            out.push(warning_event(
-                "wiki",
-                &ExtrasWarning::OwnedKeyIgnored {
-                    key: key.to_string(),
-                },
-            ));
+            out.push(issue_event("wiki", &ExtrasIssue::owned_key(key)));
             continue;
         }
         match value {

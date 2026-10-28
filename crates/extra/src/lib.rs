@@ -11,7 +11,7 @@
 //!   (§5.2–§5.4, ADR-0012), parsed before Markdown sees it, plus
 //!   [`parse_slot_parts`] for one slot's content and [`SlotContract`] for the
 //!   positions an element accepts.
-//! * [`scan_extras_chars`] / [`emit_attrs`] / [`warning_event`] — the glue that
+//! * [`scan_extras_chars`] / [`emit_attrs`] / [`issue_event`] — the glue that
 //!   binds a parsed head to the event IR, shared by the construct plugins.
 //! * [`AttrValue`] / [`classify_scalar`] — typed attribute values (§6.3).
 //! * [`validate_field_name`] / [`Path`] / [`FieldMap`] / [`project`] — the public
@@ -30,7 +30,7 @@ mod slot;
 mod typed;
 mod value;
 
-pub use emit::{emit_attr_warnings, emit_attrs, scan_extras_chars, warning_event, warning_message};
+pub use emit::{emit_attr_issues, emit_attrs, issue_event, scan_extras_chars};
 
 pub use field::{
     project, validate_field_name, FieldConfig, FieldConfigError, FieldMap, FieldMapError,
@@ -52,8 +52,8 @@ pub use decorator::{
 pub use typed::{
     parse_directive_head, parse_extras, parse_extras_body, parse_type_marker, read_number_mark,
     read_positional_groups, to_attributes, universal_field, Attrs, DirectiveHead, DirectiveMatch,
-    DirectiveSigil, ExtrasAttr, ExtrasError, ExtrasHead, ExtrasItem, ExtrasMatch, ExtrasWarning,
-    NumberMark, Specs,
+    DirectiveSigil, ExtrasAttr, ExtrasError, ExtrasHead, ExtrasIssue, ExtrasItem, ExtrasMatch,
+    IssueSeverity, NumberMark, Specs,
 };
 
 /// Resolves the §6.1 [`Specs`] for a node's `type` marker (§11 rule 5).

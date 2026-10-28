@@ -19,10 +19,10 @@
 //! directive types. An extras head that carries its own type is reported and
 //! ignored: a marker has exactly one type.
 
-use pendon_core::{element_close, element_open, Event, NodeKind, Severity};
+use pendon_core::{element_close, element_open, Event, NodeKind};
 use pendon_extra::{
-    read_positional_groups, scan_extras_chars, to_attributes, warning_message, ExtrasAttr,
-    ExtrasHead, ExtrasWarning,
+    issue_event, read_positional_groups, scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead,
+    ExtrasIssue,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
@@ -51,7 +51,7 @@ pub struct MarkerOptions {
 struct ParsedMarker {
     type_name: String,
     attrs: Vec<(String, ExtrasAttr)>,
-    warnings: Vec<String>,
+    issues: Vec<ExtrasIssue>,
 }
 
 pub fn process(events: &[Event], options: &MarkerOptions) -> Vec<Event> {
@@ -197,18 +197,10 @@ fn scan_marker(
         cursor = next;
         // §6.2 head-wins: the marker's own groups beat the extras head's.
         if group_bracket.is_some() && head.bracket.is_some() {
-            marker
-                .warnings
-                .push(warning_message(&ExtrasWarning::Overridden {
-                    key: specs.bracket.clone(),
-                }));
+            marker.issues.push(ExtrasIssue::overridden(&specs.bracket));
         }
         if group_parentheses.is_some() && head.parentheses.is_some() {
-            marker
-                .warnings
-                .push(warning_message(&ExtrasWarning::Overridden {
-                    key: specs.paren.clone(),
-                }));
+            marker.issues.push(ExtrasIssue::overridden(&specs.paren));
         }
         if group_bracket.is_some() {
             head.bracket = group_bracket.clone();
@@ -217,14 +209,11 @@ fn scan_marker(
             head.parentheses = group_parentheses.clone();
         }
         let parsed = to_attributes(&head, &specs);
-        for warning in &parsed.warnings {
-            marker.warnings.push(warning_message(warning));
-        }
+        marker.issues.extend(parsed.issues);
         if head.type_marker.is_some() {
-            marker.warnings.push(
-                "a marker is routed by its own type; the extras head type was ignored (§10.1)"
-                    .to_string(),
-            );
+            marker.issues.push(ExtrasIssue::warning(
+                "a marker is routed by its own type; the extras head type was ignored (§10.1)",
+            ));
         }
         marker.attrs = parsed.items;
     } else if group_bracket.is_some() || group_parentheses.is_some() {
@@ -235,9 +224,7 @@ fn scan_marker(
             ..ExtrasHead::default()
         };
         let parsed = to_attributes(&head, &specs);
-        for warning in &parsed.warnings {
-            marker.warnings.push(warning_message(warning));
-        }
+        marker.issues.extend(parsed.issues);
         marker.attrs = parsed.items;
     }
 
@@ -299,12 +286,8 @@ fn emit_inline_text(text: &str, options: &MarkerOptions, out: &mut Vec<Event>) {
 }
 
 fn emit_marker(marker: &ParsedMarker, block: bool, children: Option<&str>, out: &mut Vec<Event>) {
-    for message in &marker.warnings {
-        out.push(Event::Diagnostic {
-            severity: Severity::Warning,
-            message: format!("[marker] {message}"),
-            span: None,
-        });
+    for issue in &marker.issues {
+        out.push(issue_event("marker", issue));
     }
 
     // D-3a: the marker node always keeps the built-in element and its `type`;

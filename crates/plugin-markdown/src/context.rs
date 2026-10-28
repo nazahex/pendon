@@ -1,5 +1,5 @@
 use pendon_core::{Event, NodeKind};
-use pendon_extra::{emit_attr_warnings, emit_attrs, Attrs};
+use pendon_extra::{emit_attr_issues, emit_attrs, Attrs};
 
 use crate::ContainerLayer;
 use crate::MarkdownOptions;
@@ -221,7 +221,7 @@ impl ParseContext {
                 value: marker,
             });
         }
-        emit_attr_warnings("markdown", &decorator.attrs, &mut self.out);
+        emit_attr_issues("markdown", &decorator.attrs, &mut self.out);
         emit_attrs(&decorator.attrs, &mut self.out);
     }
 

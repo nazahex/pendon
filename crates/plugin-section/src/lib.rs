@@ -47,7 +47,7 @@ use std::collections::HashMap;
 
 use pendon_core::{ensure_unique, slugify, Event, NodeKind, Severity};
 use pendon_extra::{
-    bind_decorators, scan_extras_chars, to_attributes, warning_message, Attrs, BoundDecorator,
+    bind_decorators, issue_event, scan_extras_chars, to_attributes, Attrs, BoundDecorator,
     ExtrasAttr, Specs,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
@@ -356,8 +356,8 @@ fn open_section(
         value: id,
     });
     if let Some(decorator) = decorator {
-        for warning in &decorator.attrs.warnings {
-            out.push(diagnostic(&warning_message(warning)));
+        for issue in &decorator.attrs.issues {
+            out.push(issue_event("section", issue));
         }
         emit_decorator_attrs(&decorator.attrs, &decorator.specs, out);
     }

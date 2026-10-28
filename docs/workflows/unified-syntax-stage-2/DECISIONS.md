@@ -417,6 +417,15 @@ otherwise). `specs.class` accumulates; `specs.style` is an object. Order is free
 **Consequence.** One unit-test table per rule in `crates/extra`; the `href`
 collision is the case agents will otherwise implement as "last wins".
 
+**Implementation note (S2-3.2, 2026-10-28).** Rules 1–4 and the `k: v` half of
+rule 5 are implemented in `to_attributes` (`crates/extra/src/typed.rs`); the
+`k`-vs-_built-in_ half of rule 5 is not decidable there, because a head does not
+know its element. Its carrier is `ExtrasIssue::owned_key` (an `Error` whose
+message names `field.override.<k>`), used by `Attrs::merge_with` for the keys a
+construct passes as `owned` and reported directly by an element that owns a key
+outright. Only `plugin-anchor`'s `href` does so today; the rest of the wiring is
+S2-4.1, where each element declares the keys it writes.
+
 ---
 
 ## D-13 — How a "plugin" becomes a "main crate"

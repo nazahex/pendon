@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
-    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead, FieldName, Preset, Slot,
-    SlotContract, SlotKind, SlotPos, SlotTag, SpecsResolver,
+    issue_event, scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
+    ExtrasIssue, FieldName, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag, SpecsResolver,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 
@@ -138,12 +138,8 @@ fn emit_text(text: &str, options: &AnchorOptions, out: &mut Vec<Event>) {
                         span: None,
                     });
                 }
-                for message in &built.warnings {
-                    out.push(Event::Diagnostic {
-                        severity: Severity::Warning,
-                        message: format!("[anchor] {message}"),
-                        span: None,
-                    });
+                for issue in &built.issues {
+                    out.push(issue_event("anchor", issue));
                 }
 
                 emit_anchor(&link.label, built, out);
@@ -207,12 +203,12 @@ fn parse_link(chars: &[char], start: usize) -> Option<ParsedLink> {
 
 /// The attributes of one `<a>`: values in `BTreeMap` order (the emission order
 /// the golden fixtures were built with), the bare flags of a §11 extras head,
-/// the `^`/`~` conflict warning and the §13 warnings of the extras merge.
+/// the `^`/`~` conflict warning and the §13 diagnostics of the extras merge.
 struct AnchorAttrs {
     values: BTreeMap<String, String>,
     flags: Vec<String>,
     conflict: Option<String>,
-    warnings: Vec<String>,
+    issues: Vec<ExtrasIssue>,
 }
 
 fn build_attributes(
@@ -299,13 +295,11 @@ fn build_attributes(
     // §7.2 / §6.2: the extras head attaches to the `<a>`; the construct head
     // (URL modifiers and the `("title")` head) wins, `href` is never overridable.
     let mut flags = Vec::new();
-    let mut warnings = Vec::new();
+    let mut issues = Vec::new();
     if let Some(head) = extras {
         let specs = specs(head.type_marker.as_deref());
         let parsed = to_attributes(head, &specs);
-        for warning in &parsed.warnings {
-            warnings.push(pendon_extra::warning_message(warning));
-        }
+        issues.extend(parsed.issues.iter().cloned());
         let specs_id = parsed.value(&specs.tick).map(|value| value.literal());
         // §6.3: the anchor's own positions — an extras `"title"` is the link's
         // `title`, and `class` / `id` / `style` are the universal DOM fields.
@@ -316,17 +310,18 @@ fn build_attributes(
                 continue;
             }
             if key == "href" {
-                warnings.push(
-                    "`href` is owned by the link; the extras value was ignored (§10.4)".to_string(),
-                );
+                // D-12's built-in collision: `href` is written by the link, so a
+                // `href:` extra is an `Error`, and `field.override.href` (D-4) is
+                // the way to publish it under another name.
+                issues.push(ExtrasIssue::owned_key("href"));
                 continue;
             }
             let text = match value {
                 ExtrasAttr::Flag => {
                     if attrs.contains_key(key) {
-                        warnings.push(format!(
+                        issues.push(ExtrasIssue::warning(format!(
                             "`{key}` was dropped because the construct head already sets it"
-                        ));
+                        )));
                     } else {
                         flags.push(key.to_string());
                     }
@@ -345,25 +340,25 @@ fn build_attributes(
                 if explicit_target.is_none() {
                     target = Some(text);
                 } else {
-                    warnings.push(
-                        "`target` was dropped because a URL modifier already set it".to_string(),
-                    );
+                    issues.push(ExtrasIssue::warning(
+                        "`target` was dropped because a URL modifier already set it",
+                    ));
                 }
                 continue;
             }
             if attrs.contains_key(key) {
-                warnings.push(format!(
+                issues.push(ExtrasIssue::warning(format!(
                     "`{key}` was dropped because the construct head already sets it"
-                ));
+                )));
                 continue;
             }
             attrs.insert(key.to_string(), text);
         }
         if let Some(id) = specs_id {
             if attrs.contains_key("id") {
-                warnings.push(
-                    "extras `slug` was dropped because the element already has an id".to_string(),
-                );
+                issues.push(ExtrasIssue::warning(
+                    "extras `slug` was dropped because the element already has an id",
+                ));
             } else {
                 attrs.insert("id".to_string(), id);
             }
@@ -392,7 +387,7 @@ fn build_attributes(
         values: attrs,
         flags,
         conflict,
-        warnings,
+        issues,
     }
 }
 
@@ -735,12 +730,29 @@ mod tests {
 
     // --- §7.2 extras head -------------------------------------------------
 
-    /// Collects the attributes, bare flags and warnings of one emitted text.
+    /// Collects the attributes, bare flags and §13 diagnostics of one emitted text.
     struct Emitted {
         attrs: Vec<(String, String)>,
         flags: Vec<String>,
-        warnings: Vec<String>,
+        /// Every `Event::Diagnostic`, as `(severity, message)`.
+        diagnostics: Vec<(Severity, String)>,
         text: String,
+    }
+
+    impl Emitted {
+        /// True when some diagnostic's message contains `needle`.
+        fn mentions(&self, needle: &str) -> bool {
+            self.diagnostics
+                .iter()
+                .any(|(_, message)| message.contains(needle))
+        }
+
+        /// True when some diagnostic is an `Error` whose message contains `needle`.
+        fn errors_on(&self, needle: &str) -> bool {
+            self.diagnostics
+                .iter()
+                .any(|(severity, message)| *severity == Severity::Error && message.contains(needle))
+        }
     }
 
     fn emit(text: &str) -> Emitted {
@@ -749,7 +761,7 @@ mod tests {
         let mut emitted = Emitted {
             attrs: Vec::new(),
             flags: Vec::new(),
-            warnings: Vec::new(),
+            diagnostics: Vec::new(),
             text: String::new(),
         };
         for event in out {
@@ -757,7 +769,9 @@ mod tests {
                 Event::Attribute { name, value } => emitted.attrs.push((name, value)),
                 Event::AttributeFlag { name } => emitted.flags.push(name),
                 Event::Text(text) => emitted.text.push_str(&text),
-                Event::Diagnostic { message, .. } => emitted.warnings.push(message),
+                Event::Diagnostic {
+                    severity, message, ..
+                } => emitted.diagnostics.push((severity, message)),
                 _ => {}
             }
         }
@@ -793,11 +807,7 @@ mod tests {
 
         let emitted = emit("[foo](/docs \"Head title\")@@anchor{\"Extras title\"}");
         assert_eq!(value(&emitted, "title"), Some("Head title"));
-        assert!(
-            emitted.warnings.iter().any(|w| w.contains("`title`")),
-            "{:?}",
-            emitted.warnings
-        );
+        assert!(emitted.mentions("`title`"), "{:?}", emitted.diagnostics);
     }
 
     #[test]
@@ -810,20 +820,24 @@ mod tests {
         let emitted = emit("[foo](/docs)@@anchor{`slug-a`, #explicit}");
         assert_eq!(value(&emitted, "id"), Some("explicit"));
         assert!(
-            emitted.warnings.iter().any(|w| w.contains("extras `slug`")),
+            emitted.mentions("extras `slug`"),
             "{:?}",
-            emitted.warnings
+            emitted.diagnostics
         );
     }
 
+    /// D-12's built-in collision: an extras `k: v` naming a field the element
+    /// writes itself is an **`Error`** that points at `field.override` (D-4), not
+    /// a §6.2 `Warning`.
     #[test]
     fn href_stays_construct_owned() {
         let emitted = emit("[foo](/docs)@@anchor{href: \"/evil\"}");
         assert_eq!(value(&emitted, "href"), Some("/docs"));
+        assert!(emitted.errors_on("`href`"), "{:?}", emitted.diagnostics);
         assert!(
-            emitted.warnings.iter().any(|w| w.contains("`href`")),
+            emitted.mentions("field.override.href"),
             "{:?}",
-            emitted.warnings
+            emitted.diagnostics
         );
     }
 
@@ -832,7 +846,16 @@ mod tests {
         // `^` is an explicit modifier: it wins.
         let emitted = emit("[foo](/docs^)@@anchor{target: \"_self\"}");
         assert_eq!(value(&emitted, "target"), Some("_blank"));
-        assert!(emitted.warnings.iter().any(|w| w.contains("`target`")));
+        assert!(emitted.mentions("`target`"), "{:?}", emitted.diagnostics);
+        // A modifier is not a built-in field, so this stays a `Warning`.
+        assert!(
+            !emitted
+                .diagnostics
+                .iter()
+                .any(|(severity, _)| *severity == Severity::Error),
+            "{:?}",
+            emitted.diagnostics
+        );
 
         // An external link only defaults to `_blank`, so extras may retarget it.
         let emitted = emit("[foo](https://example.com)@@anchor{target: \"_self\"}");
@@ -844,7 +867,7 @@ mod tests {
         let emitted = emit("[foo](/docs)@@anchor{`unterminated}");
         assert_eq!(value(&emitted, "href"), Some("/docs"));
         assert!(emitted.text.contains("@@anchor{"), "{}", emitted.text);
-        assert!(emitted.warnings.is_empty(), "{:?}", emitted.warnings);
+        assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
     }
 
     /// §14/§D3: the retired `[.class,#id]{key: value}` form is plain text.
@@ -854,7 +877,7 @@ mod tests {
         assert_eq!(value(&emitted, "href"), Some("/docs"));
         assert!(value(&emitted, "class").is_none());
         assert!(value(&emitted, "id").is_none());
-        assert!(emitted.warnings.is_empty(), "{:?}", emitted.warnings);
+        assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
         assert!(
             emitted.text.contains("[.bax,#rew]{zo: \"kong\"}"),
             "{}",

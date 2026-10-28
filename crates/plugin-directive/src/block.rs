@@ -16,7 +16,9 @@
 //! the way `plugin-custom` does for `:::` blocks.
 
 use pendon_core::{Event, NodeKind};
-use pendon_extra::{parse_directive_head, DirectiveHead, DirectiveMatch, DirectiveSigil};
+use pendon_extra::{
+    parse_directive_head, DirectiveHead, DirectiveMatch, DirectiveSigil, ExtrasIssue,
+};
 
 use crate::{emit_directive, is_verbatim, resolve_head, DirectiveOptions, ParsedDirective};
 
@@ -73,10 +75,9 @@ pub fn process(events: &[Event], options: &DirectiveOptions) -> Vec<Event> {
 
     // §10.3: an unclosed directive is closed implicitly, with a warning.
     while let Some(mut open) = stack.pop() {
-        open.parsed.warnings.push(
-            "unclosed block directive at the end of the input; closed implicitly (§10.3)"
-                .to_string(),
-        );
+        open.parsed.issues.push(ExtrasIssue::warning(
+            "unclosed block directive at the end of the input; closed implicitly (§10.3)",
+        ));
         let mut events = Vec::new();
         emit_directive(&open.parsed, true, &open.inner, &mut events);
         match stack.last_mut() {

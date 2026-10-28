@@ -1,10 +1,10 @@
 use pendon_core::{
     element_close, element_open, parse, raw_inline, Event, InlinePipeline, NodeKind, Options,
-    Pipeline, Severity,
+    Pipeline,
 };
 use pendon_extra::{
-    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead, FieldName, Preset, Slot,
-    SlotContract, SlotKind, SlotPos, SlotTag, Specs,
+    issue_event, scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
+    ExtrasIssue, FieldName, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag, Specs,
 };
 use pendon_plugin_markdown::process as process_markdown;
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
@@ -73,8 +73,8 @@ struct ParsedImage {
     marker: ImageMarker,
     /// Bare flags of the §7.1 extras head (§6.3), emitted on the outermost node.
     flags: Vec<String>,
-    /// §13 warnings raised while resolving the head and extras.
-    warnings: Vec<String>,
+    /// §13 diagnostics raised while resolving the head and extras.
+    issues: Vec<ExtrasIssue>,
 }
 
 /// The attributes of one image, assembled from its §7.1 extras head (§6).
@@ -648,7 +648,7 @@ fn build_parsed_image(
 ) -> ParsedImage {
     let AttachedBlocks { extras, .. } = blocks;
     let mut flags = Vec::new();
-    let mut warnings = Vec::new();
+    let mut issues = Vec::new();
     let type_marker = extras.as_ref().and_then(|head| head.type_marker.clone());
     let mut attrs = match extras.as_ref() {
         Some(head) => {
@@ -659,7 +659,7 @@ fn build_parsed_image(
                 .specs_for_opt(head.type_marker.as_deref())
                 .or_else(|| options.figure.specs_for_opt(head.type_marker.as_deref()))
                 .unwrap_or_default();
-            image_attrs_from_head(head, &mut flags, &mut warnings, &specs)
+            image_attrs_from_head(head, &mut flags, &mut issues, &specs)
         }
         None => ImageAttrs::default(),
     };
@@ -682,7 +682,7 @@ fn build_parsed_image(
         attrs,
         marker: core.marker,
         flags,
-        warnings,
+        issues,
     }
 }
 
@@ -702,13 +702,11 @@ fn has_attribute(attrs: &ImageAttrs, key: &str) -> bool {
 fn image_attrs_from_head(
     head: &ExtrasHead,
     flags: &mut Vec<String>,
-    warnings: &mut Vec<String>,
+    issues: &mut Vec<ExtrasIssue>,
     specs: &Specs,
 ) -> ImageAttrs {
     let parsed = to_attributes(head, specs);
-    for warning in &parsed.warnings {
-        warnings.push(pendon_extra::warning_message(warning));
-    }
+    issues.extend(parsed.issues.iter().cloned());
 
     let mut attrs = ImageAttrs::default();
     // §6.3: the image's own positions — `class` / `id` / `style` are the
@@ -932,12 +930,8 @@ fn image_style(attrs: &ImageAttrs) -> String {
 
 /// §13 diagnostics raised while parsing and merging an image head.
 fn push_image_warnings(parsed: &ParsedImage, out: &mut Vec<Event>) {
-    for message in &parsed.warnings {
-        out.push(Event::Diagnostic {
-            severity: Severity::Warning,
-            message: format!("[img] {message}"),
-            span: None,
-        });
+    for issue in &parsed.issues {
+        out.push(issue_event("img", issue));
     }
 }
 

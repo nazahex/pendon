@@ -357,18 +357,75 @@ pub enum DirectiveMatch<'a> {
     },
 }
 
-/// Non-fatal diagnostics attached to a parsed head (§13).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExtrasWarning {
-    /// Two `#id` items in one head; the last wins.
-    DuplicateId,
-    /// A duplicate key was resolved: the competing value was dropped when a
-    /// construct head collided with extras (§6.2), or this later value won while
-    /// the position of the first occurrence was kept (§6.4).
-    Overridden { key: String },
-    /// A construct-owned key (`href`, `src`, `start`) was passed as an extra.
-    OwnedKeyIgnored { key: String },
+/// How loud a §13 diagnostic about an extras head is.
+///
+/// The grammar layer stays free of `pendon_core`: severity is the IR's
+/// vocabulary, and [`crate::emit`] is the one adapter that maps this onto
+/// [`pendon_core::Severity`]. A head resolves either way, so no issue is ever
+/// fatal — D-12's `Error`s keep the first value and stay usable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IssueSeverity {
+    /// Something was dropped in favour of the source that wins (§6.2).
+    Warning,
+    /// Two sources claimed one public path — a duplicate inside one head, or a
+    /// `k: v` naming a built-in field — which is a bug and not a merge (D-12).
+    Error,
 }
+
+/// One §13 diagnostic a head resolved: its severity and its message.
+///
+/// A plugin that emits a head's diagnostics later (marker, cite, directive,
+/// anchor, image, heading) carries these instead of bare strings, because D-12
+/// makes three of the rules `Error` and a message alone cannot say how loud it
+/// is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtrasIssue {
+    pub severity: IssueSeverity,
+    pub message: String,
+}
+
+impl ExtrasIssue {
+    pub fn warning(message: impl Into<String>) -> Self {
+        Self {
+            severity: IssueSeverity::Warning,
+            message: message.into(),
+        }
+    }
+
+    pub fn error(message: impl Into<String>) -> Self {
+        Self {
+            severity: IssueSeverity::Error,
+            message: message.into(),
+        }
+    }
+
+    /// D-12: one public path, two sources inside one head — the first wins.
+    pub fn duplicate(field: &str) -> Self {
+        Self::error(format!(
+            "`{field}` is set twice in one extras head; the first one wins"
+        ))
+    }
+
+    /// §6.2: the construct head already set `field`, so the extras value lost.
+    pub fn overridden(field: &str) -> Self {
+        Self::warning(format!(
+            "`{field}` was dropped because the construct head already sets it"
+        ))
+    }
+
+    /// D-12's last rule: a `k: v` named like one of the element's **built-in**
+    /// fields (`href` on an anchor, `src` on an image).
+    ///
+    /// The construct keeps its own value — a built-in field is written by the
+    /// element, not by the head — and the way to give that value another public
+    /// name is `field.override.<field>` (D-4), never a second source in the head.
+    pub fn owned_key(field: &str) -> Self {
+        Self::error(format!(
+            "`{field}` is owned by the construct; rename it with `field.override.{field}` instead"
+        ))
+    }
+}
+
 /// A resolved attribute: either a typed value or a bare flag (§6.3).
 ///
 /// A flag is deliberately *not* an [`AttrValue`]: it maps to
@@ -380,11 +437,11 @@ pub enum ExtrasAttr {
     Flag,
 }
 
-/// Attributes produced from a head, plus its warnings.
+/// Attributes produced from a head, plus the §13 diagnostics it resolved.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Attrs {
     pub items: Vec<(String, ExtrasAttr)>,
-    pub warnings: Vec<ExtrasWarning>,
+    pub issues: Vec<ExtrasIssue>,
 }
 
 impl Attrs {
@@ -413,15 +470,17 @@ impl Attrs {
 
     /// Merges this **head** (which wins, §6.2) with the extras of the same
     /// construct. `owned` lists construct-owned keys (`href`, `src`, `start`)
-    /// that extras must never override.
+    /// that extras must never override: an attempt is D-12's built-in-field
+    /// collision, so it is an `Error` ([`ExtrasIssue::owned_key`]) and not the
+    /// `Warning` a plain §6.2 override raises.
     pub fn merge_with(self, extras: Attrs, owned: &[&str]) -> Attrs {
         let mut merged = self;
-        merged.warnings.extend(extras.warnings);
+        merged.issues.extend(extras.issues);
         for (key, value) in extras.items {
             if owned.contains(&key.as_str()) {
-                merged.warnings.push(ExtrasWarning::OwnedKeyIgnored { key });
+                merged.issues.push(ExtrasIssue::owned_key(&key));
             } else if merged.has(&key) {
-                merged.warnings.push(ExtrasWarning::Overridden { key });
+                merged.issues.push(ExtrasIssue::overridden(&key));
             } else {
                 merged.items.push((key, value));
             }
@@ -1049,17 +1108,26 @@ fn is_key(text: &str) -> bool {
 ///
 /// A positional **group** (`[...]` / `(...)` of §6.1) wins over a same-key item of
 /// the `{...}` body: the item is dropped with an `Overridden` warning (§6.2
-/// head-wins style). A `specs.class` / `specs.id` collision is left to the §6.4 collapse
-/// below, where the later group value wins at the first occurrence's position.
+/// head-wins style). Two sources for one public path *inside* one head are a bug
+/// and not a merge, so D-12 makes them an `Error` and keeps the **first** value:
+/// a repeated `specs.tick` / `specs.quote` / `specs.id` and a repeated prop or
+/// flag are `Error`s, `specs.class` accumulates and dedupes keeping the first
+/// position, and `specs.style` is one declaration per property, last value wins.
+///
+/// D-12's *last* rule — a `k: v` named like one of the element's built-in
+/// fields — is not decidable here, because a head does not know its element.
+/// [`Attrs::merge_with`] answers it for the keys a construct passes as `owned`,
+/// and an element that owns a key outright reports
+/// [`ExtrasIssue::owned_key`] itself; both are `Error`s.
 pub fn to_attributes(head: &ExtrasHead, specs: &Specs) -> Attrs {
     let mut classes: Vec<String> = Vec::new();
     let mut id: Option<String> = None;
     let mut slug: Option<String> = None;
     let mut title: Option<String> = None;
     let mut rest: Vec<(String, ExtrasAttr)> = Vec::new();
-    let mut style: Vec<String> = Vec::new();
+    let mut style: Vec<(String, String)> = Vec::new();
     let mut style_pos: Option<usize> = None;
-    let mut warnings = Vec::new();
+    let mut issues = Vec::new();
 
     // §6.1: the positional groups of the head itself, mapped through their
     // specs. They occupy the §6.4 slot before the body's positional items and
@@ -1083,49 +1151,55 @@ pub fn to_attributes(head: &ExtrasHead, specs: &Specs) -> Attrs {
 
     for item in &head.items {
         match item {
-            // `class` accumulates; every other kind is last-wins (§5).
-            ExtrasItem::Class(name) => classes.push(name.clone()),
-            ExtrasItem::Id(value) => {
-                if id.replace(value.clone()).is_some() {
-                    warnings.push(ExtrasWarning::DuplicateId);
-                }
-            }
+            // D-12: `class` accumulates and dedupes, keeping the first position.
+            ExtrasItem::Class(name) => push_class(&mut classes, name),
+            ExtrasItem::Id(value) => match id {
+                Some(_) => issues.push(ExtrasIssue::duplicate(&specs.id)),
+                None => id = Some(value.clone()),
+            },
             ExtrasItem::Slug(value) => {
                 if group_keys.contains(&specs.tick.as_str()) {
-                    warnings.push(ExtrasWarning::Overridden {
-                        key: specs.tick.clone(),
-                    });
+                    issues.push(ExtrasIssue::overridden(&specs.tick));
+                } else if slug.is_some() {
+                    issues.push(ExtrasIssue::duplicate(&specs.tick));
                 } else {
                     slug = Some(value.clone());
                 }
             }
             ExtrasItem::Title(value) => {
                 if group_keys.contains(&specs.quote.as_str()) {
-                    warnings.push(ExtrasWarning::Overridden {
-                        key: specs.quote.clone(),
-                    });
+                    issues.push(ExtrasIssue::overridden(&specs.quote));
+                } else if title.is_some() {
+                    issues.push(ExtrasIssue::duplicate(&specs.quote));
                 } else {
                     title = Some(value.clone());
                 }
             }
             ExtrasItem::CssVar { name, value } => {
                 style_pos.get_or_insert(rest.len());
-                style.push(format!("--{name}: {value}"));
+                set_declaration(
+                    &mut style,
+                    &format!("--{name}"),
+                    format!("--{name}: {value}"),
+                );
             }
             ExtrasItem::Prop { key, value } if key == "class" => {
                 // `class` accumulates, whether it arrives as `.x` or `class: "x"`.
-                classes.push(value.literal());
+                push_class(&mut classes, &value.literal());
             }
             ExtrasItem::Prop { key, value } if key == "style" => {
                 style_pos.get_or_insert(rest.len());
-                style.push(value.literal());
+                push_style(&mut style, value.literal());
             }
             ExtrasItem::Prop { key, value: _ } if group_keys.contains(&key.as_str()) => {
-                warnings.push(ExtrasWarning::Overridden { key: key.clone() });
+                issues.push(ExtrasIssue::overridden(key));
             }
-            ExtrasItem::Prop { key, value } => {
-                set(&mut rest, key, ExtrasAttr::Value(value.clone()))
-            }
+            ExtrasItem::Prop { key, value } => push_unique(
+                &mut rest,
+                key,
+                ExtrasAttr::Value(value.clone()),
+                &mut issues,
+            ),
             // §5/D-9: the marker is re-emitted as the internal `__number`
             // attribute (ADR-0001's transport carries the object intact), so
             // every construct plugin forwards it without knowing about it.
@@ -1138,9 +1212,11 @@ pub fn to_attributes(head: &ExtrasHead, specs: &Specs) -> Attrs {
                 ])),
             ),
             ExtrasItem::Flag { name } if group_keys.contains(&name.as_str()) => {
-                warnings.push(ExtrasWarning::Overridden { key: name.clone() });
+                issues.push(ExtrasIssue::overridden(name));
             }
-            ExtrasItem::Flag { name } => set(&mut rest, name, ExtrasAttr::Flag),
+            ExtrasItem::Flag { name } => {
+                push_unique(&mut rest, name, ExtrasAttr::Flag, &mut issues)
+            }
         }
     }
 
@@ -1168,9 +1244,13 @@ pub fn to_attributes(head: &ExtrasHead, specs: &Specs) -> Attrs {
     let style_pos = style_pos.unwrap_or(rest.len()).min(rest.len());
     for index in 0..=rest.len() {
         if index == style_pos && !style.is_empty() {
+            let declarations: Vec<&str> = style
+                .iter()
+                .map(|(_, declaration)| declaration.as_str())
+                .collect();
             items.push((
                 specs.style.clone(),
-                ExtrasAttr::Value(AttrValue::Str(style.join("; "))),
+                ExtrasAttr::Value(AttrValue::Str(declarations.join("; "))),
             ));
         }
         if let Some((key, value)) = rest.get(index) {
@@ -1178,22 +1258,68 @@ pub fn to_attributes(head: &ExtrasHead, specs: &Specs) -> Attrs {
         }
     }
 
-    // §6.4: duplicates collapse to one attribute — the position of the first
-    // occurrence wins, the value of the last occurrence wins.
+    // §6.4/D-12: two sources for one public path is a bug, not a merge, so the
+    // first occurrence keeps both its place and its value and the later one is
+    // reported. Inside one head this only fires when assigned names (`field.*`)
+    // collide — every other duplicate was caught above.
     let mut collapsed: Vec<(String, ExtrasAttr)> = Vec::new();
     for (key, value) in items {
-        match collapsed.iter_mut().find(|(name, _)| *name == key) {
-            Some(slot) => {
-                warnings.push(ExtrasWarning::Overridden { key: key.clone() });
-                slot.1 = value;
-            }
-            None => collapsed.push((key, value)),
+        if collapsed.iter().any(|(name, _)| *name == key) {
+            issues.push(ExtrasIssue::duplicate(&key));
+        } else {
+            collapsed.push((key, value));
         }
     }
 
     Attrs {
         items: collapsed,
-        warnings,
+        issues,
+    }
+}
+
+/// Appends a class name, keeping the first position and dropping repeats (D-12).
+///
+/// A `class:` prop may carry several names (`class: "a b"`), so each is handled
+/// like a `.x` item.
+fn push_class(classes: &mut Vec<String>, names: &str) {
+    for name in names.split_whitespace() {
+        if !classes.iter().any(|existing| existing == name) {
+            classes.push(name.to_string());
+        }
+    }
+}
+
+/// Inserts `key`, or reports it when an earlier item already claimed it: D-12
+/// keeps the **first** value of a repeated prop or flag.
+fn push_unique(
+    items: &mut Vec<(String, ExtrasAttr)>,
+    key: &str,
+    value: ExtrasAttr,
+    issues: &mut Vec<ExtrasIssue>,
+) {
+    if items.iter().any(|(name, _)| name == key) {
+        issues.push(ExtrasIssue::duplicate(key));
+    } else {
+        items.push((key.to_string(), value));
+    }
+}
+
+/// Folds a `style:` value into the declaration list, one declaration per
+/// property: a repeated property keeps the first position and the last value
+/// (CSS semantics, D-12).
+fn push_style(style: &mut Vec<(String, String)>, declaration: String) {
+    let property = declaration.split_once(':').map_or_else(
+        || declaration.trim().to_string(),
+        |(name, _)| name.trim().to_string(),
+    );
+    set_declaration(style, &property, declaration);
+}
+
+/// Replaces the declaration of `property` in place, or appends a new one.
+fn set_declaration(style: &mut Vec<(String, String)>, property: &str, declaration: String) {
+    match style.iter_mut().find(|(name, _)| name == property) {
+        Some(slot) => slot.1 = declaration,
+        None => style.push((property.to_string(), declaration)),
     }
 }
 

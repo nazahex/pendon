@@ -28,8 +28,8 @@ use std::collections::HashMap;
 
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
-    bind_decorators, emit_attrs, parse_extras, to_attributes, warning_message, Attrs,
-    BoundDecorator, ExtrasMatch,
+    bind_decorators, emit_attrs, issue_event, parse_extras, to_attributes, Attrs, BoundDecorator,
+    ExtrasMatch,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
@@ -259,8 +259,8 @@ fn emit_quote(
             value: marker.clone(),
         });
     }
-    for extras_warning in &attrs.warnings {
-        out.push(diagnostic(&warning_message(extras_warning)));
+    for issue in &attrs.issues {
+        out.push(issue_event("blockquote", issue));
     }
     emit_attrs(&attrs, out);
     out.extend(body);

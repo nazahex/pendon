@@ -44,7 +44,7 @@
 use std::collections::HashMap;
 
 use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::{bind_decorators, emit_attrs, warning_message, BoundDecorator};
+use pendon_extra::{bind_decorators, emit_attrs, issue_event, BoundDecorator};
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
 
@@ -148,8 +148,8 @@ pub fn process(events: &[Event], options: &ListOptions) -> Vec<Event> {
                 value: marker.clone(),
             });
         }
-        for extras_warning in &decorator.attrs.warnings {
-            out.push(diagnostic(&warning_message(extras_warning)));
+        for issue in &decorator.attrs.issues {
+            out.push(issue_event("list", issue));
         }
         emit_attrs(&decorator.attrs, &mut out);
         // The marker lines stay untouched: `plugin-markdown` parses them.
