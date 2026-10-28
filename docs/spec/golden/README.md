@@ -67,7 +67,7 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | 08 | `table-decl`       | `\|-…-\|`, `\|\| caption \|\|`, decl head `[slug]`            |
 | 09 | `table-layers`     | column/th/td/tr/tbody/tfoot extras routing                    |
 | 10 | `decorator-blocks` | paragraph + code fence decorators, typed / bare / `@@[…]`     |
-| 11 | `blockquote`       | inner extras + decorator above                                |
+| 11 | `blockquote`       | decorator above only; an inner `@@` stays literal             |
 | 12 | `list-container`   | L1 decorator → `ul`/`ol` + `start`                            |
 | 13 | `list-item`        | L2 item-decorator → `li` (open — blocked by L37)              |
 | 14 | `marker`           | `{{type}}` forms + positional groups                          |

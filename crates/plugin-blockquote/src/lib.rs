@@ -1,14 +1,10 @@
-//! §9.2: the blockquote layer — `> @@type{…} content`.
+//! §9.2: the blockquote layer — `> content`, configured by a decorator line.
 //!
-//! `>` stays plain Markdown; this plugin only binds the *extras* a blockquote
-//! may carry. Two spellings, the inner one winning (§9.2):
-//!
-//! * **inner head** — `> @@type{…} content`. The head sits immediately inside
-//!   the quote, before its first content. A space between the marker, the head
-//!   and the content is allowed (§4.1: blockquote is one of the two adjacency
-//!   exceptions, with list).
-//! * **decorator line** — `@@type{…}` on the line directly above the quote
-//!   (§9.1, bound by [`pendon_extra::bind_decorators`]).
+//! `>` stays plain Markdown; this plugin binds the *extras* a blockquote may
+//! carry. A quote has **no head of its own**: the only way to configure one is
+//! the decorator line above it (§9.1, bound by [`pendon_extra::bind_decorators`]).
+//! Anything written inside the `>` — `> @@type{…} content` included — is content,
+//! and `@@type{…}` there is literal text.
 //!
 //! The plugin runs **before** `plugin-markdown` (§12.1). It replaces the
 //! paragraph the core parser wrapped the quote in with the quote node itself:
@@ -27,10 +23,7 @@
 use std::collections::HashMap;
 
 use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::{
-    bind_decorators, emit_attrs, issue_event, parse_extras, to_attributes, Attrs, BoundDecorator,
-    ExtrasMatch,
-};
+use pendon_extra::{bind_decorators, emit_attrs, issue_event, BoundDecorator};
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
 
@@ -88,7 +81,6 @@ pub fn process(events: &[Event], options: &BlockquoteOptions) -> Vec<Event> {
         emit_quote(
             &bindings.events[(i + 1)..end],
             decorators.get(&i).copied(),
-            options,
             &mut out,
         );
         i = end + 1;
@@ -185,55 +177,26 @@ fn diagnostic(message: &str) -> Event {
 }
 
 /// §9.2: turns one quote paragraph into the quote node.
-fn emit_quote(
-    paragraph: &[Event],
-    decorator: Option<&BoundDecorator>,
-    options: &BlockquoteOptions,
-    out: &mut Vec<Event>,
-) {
-    let mut inner = Attrs::default();
-    let mut type_marker: Option<String> = None;
+///
+/// The only head a blockquote reads is the decorator line above it (§9.1). The
+/// content inside `>` is **content**, not a head: a `@@type{…}` written there is
+/// literal text, and a slot written there belongs to whichever element claims
+/// it.
+fn emit_quote(paragraph: &[Event], decorator: Option<&BoundDecorator>, out: &mut Vec<Event>) {
     let mut body: Vec<Event> = Vec::with_capacity(paragraph.len());
-    let mut first = true;
-
     for event in paragraph {
-        let Event::Text(text) = event else {
-            body.push(event.clone());
-            continue;
-        };
-        if text.trim().is_empty() {
-            body.push(event.clone());
-            continue;
-        }
-        let line = strip_one_level(text);
-        if first {
-            first = false;
-            match parse_extras(line.trim_start_matches(' ')) {
-                // §9.2/§4.1: the head sits immediately inside the quote and the
-                // space between the head and the content is allowed here.
-                ExtrasMatch::Head { head, rest } => {
-                    type_marker = head.type_marker.clone();
-                    inner = to_attributes(
-                        &head,
-                        &options.custom.specs_for(head.type_marker.as_deref()),
-                    );
-                    body.push(Event::Text(rest.trim_start_matches(' ').to_string()));
-                }
-                // §4.3: an absent or malformed head stays literal text.
-                ExtrasMatch::Absent { .. } | ExtrasMatch::Malformed { .. } => {
-                    body.push(Event::Text(line));
-                }
-            }
-        } else {
-            body.push(Event::Text(line));
+        match event {
+            // One quote level is stripped; lazy continuation lines keep their
+            // text (§9.2).
+            Event::Text(text) => body.push(Event::Text(strip_one_level(text))),
+            _ => body.push(event.clone()),
         }
     }
 
-    // §9.2: "when both exist the inner one wins", so the inner head merges
-    // *over* the decorator's attributes.
-    let decorator_attrs = decorator.map(|d| d.attrs.clone()).unwrap_or_default();
-    let marker = type_marker.or_else(|| decorator.and_then(|d| d.type_marker.clone()));
-    let attrs = inner.merge_with(decorator_attrs, &[]);
+    // §9.2: a quote has no construct head, no slot contract and no built-in
+    // fields — the decorator is the whole of its extras.
+    let attrs = decorator.map(|d| d.attrs.clone()).unwrap_or_default();
+    let marker = decorator.and_then(|d| d.type_marker.clone());
 
     // §11 rule 3 / D-3a: the plugin does not pick the component; it tags the
     // node with its layer and the renderer decides once per document.
@@ -341,16 +304,17 @@ mod tests {
             .collect()
     }
 
-    /// §9.2: the head immediately inside the quote decorates the quote itself.
+    /// §9.2: an inner `@@type{…}` is **content**, not a head — the quote keeps it
+    /// literally, reads no `type` and no extras from it.
     #[test]
-    fn the_inner_head_decorates_the_quote() {
+    fn an_inner_head_is_literal_text() {
         let out = run("> @@bqA{.x} body\n");
         assert_eq!(element(&out).as_deref(), Some("blockquote"), "{out:?}");
         assert_eq!(attr(&out, "__layer").as_deref(), Some("blockquote"));
-        assert_eq!(attr(&out, "type").as_deref(), Some("bqA"));
-        assert_eq!(attr(&out, "specs.class").as_deref(), Some("x"));
-        assert!(text(&out).contains("body"));
-        // The `>` marker is gone and the paragraph wrapper with it.
+        assert_eq!(attr(&out, "type"), None, "{out:?}");
+        assert_eq!(attr(&out, "specs.class"), None, "{out:?}");
+        assert!(text(&out).contains("@@bqA{.x} body"), "{:?}", text(&out));
+        // The `>` marker is still gone and the paragraph wrapper with it.
         assert!(!text(&out).contains('>'), "{:?}", text(&out));
         assert!(
             !out.iter()
@@ -359,12 +323,18 @@ mod tests {
         );
     }
 
-    /// §9.2: the marker and the head may be separated by a space.
+    /// §9.2: the body is content, so a slot inside it belongs to the element that
+    /// claims it — the quote itself reads none of it.
     #[test]
-    fn a_space_after_the_marker_is_allowed() {
-        let out = run(">@@bqA{.x} body\n");
-        assert_eq!(attr(&out, "type").as_deref(), Some("bqA"), "{out:?}");
-        assert_eq!(attr(&out, "__layer").as_deref(), Some("blockquote"));
+    fn the_body_keeps_its_own_slots() {
+        let out = run("> @[the docs](/docs) and [plain](/x)\n");
+        assert_eq!(attr(&out, "type"), None, "{out:?}");
+        assert_eq!(attr(&out, "href"), None, "{out:?}");
+        assert!(
+            text(&out).contains("@[the docs](/docs) and [plain](/x)"),
+            "{:?}",
+            text(&out)
+        );
     }
 
     /// §9.1/§9.2: a decorator line directly above the quote decorates it too.
@@ -380,19 +350,11 @@ mod tests {
         assert!(text(&out).contains("quoted"));
     }
 
-    /// §9.2: "when both exist the inner one wins".
-    #[test]
-    fn the_inner_head_wins_over_the_decorator() {
-        let out = run("@@bqB{.outer}\n\n> @@bqA{.inner} body\n");
-        assert_eq!(attr(&out, "type").as_deref(), Some("bqA"), "{out:?}");
-        assert_eq!(attr(&out, "type").as_deref(), Some("bqA"));
-        assert_eq!(attr(&out, "specs.class").as_deref(), Some("inner"));
-    }
-
-    /// §11 rule 3 + D8: an unclaimed type renders the built-in element.
+    /// §11 rule 3 + D8: an unclaimed decorator `type` renders the built-in
+    /// element and keeps every extra.
     #[test]
     fn an_unclaimed_type_falls_back_to_the_element() {
-        let out = run_with("> @@bqZ{.z} body\n", &typed_only());
+        let out = run_with("@@bqZ{.z}\n\n> body\n", &typed_only());
         assert!(custom(&out).is_none(), "{out:?}");
         assert_eq!(element(&out).as_deref(), Some("blockquote"));
         assert_eq!(attr(&out, "type").as_deref(), Some("bqZ"));

@@ -92,7 +92,7 @@ Implementation units that own this grammar:
 | `~?!` / `~?!!`              | image / figure marker              | `plugin-image`      | existing                        |
 | `[^^](ref "loc")`           | citation                           | `plugin-cite`       | **current** (§7.3)              |
 | `[[…]]`                     | wiki link                          | `plugin-wiki`       | existing                        |
-| `>`                         | blockquote                         | `plugin-blockquote` | current (+extras)               |
+| `>`                         | blockquote                         | `plugin-blockquote` | current (decorator only, §9.2)  |
 | `-` `*` `+`                 | unordered list container           | `plugin-list`       | current (+extras)               |
 | `1.`                        | ordered list container             | `plugin-list`       | current (+extras)               |
 | `{{{lang[var] … }}}`        | data block                         | `plugin-bind`       | new (§19)                       |
@@ -129,9 +129,9 @@ type-only head followed by literal text.
 
 Two exceptions exist, both for block constructs whose marker must be followed by
 a space anyway: a **list item** and a **blockquote** MAY write a space between the
-marker, the head and the content (`> {.x} text`, `- {.x} item`, §9). Every other
-construct — including table cells — requires strict adjacency. Decorator lines
-(§9.1) stand on their own line instead.
+marker, the head and the content (`- {.x} item`, §9). Every other construct —
+including table cells — requires strict adjacency. Decorator lines (§9.1) stand on
+their own line instead.
 
 ### 4.2 Escaping
 
@@ -797,20 +797,21 @@ A paragraph line like this stays a link — without `@@` it is not a decorator.
 ### 9.2 Blockquote (`plugin-blockquote`)
 
 ```ebnf
-blockquote_inner = ">" ws "@@" type positional* extras? content
-decorator_line   = "@@" type positional* extras?
+blockquote       = ">" ws content                  # `>` stays plain Markdown
+decorator_line   = "…@@type{…}" above it           # §9.1 is the only head
 ```
 
-- This plugin binds extras to the blockquote node **before** `plugin-markdown` parses content; `>` remains plain Markdown.
-- Two spellings are supported: an inner head immediately inside the quote (`> @@type{…}`) or a decorator line directly above it.
-- The inner head takes precedence when both forms are present for the same blockquote.
-- Whitespace between the `>` marker, the head, and the content is explicitly allowed as an adjacency exception (§4.1).
-- Decorator lines inside code fences or raw HTML blocks are treated as literal text and do not bind.
+- A blockquote has **no head of its own** (§9.2): no slot contract, no preset, no
+  owned fields. The only way to configure one is the decorator line directly
+  above it (§9.1), which binds before `plugin-markdown` parses the content.
+- Everything inside the `>` is **content**: `> @@type{…} text` is literal text
+  (the head is not read there), and a slot inside the body belongs to whichever
+  element claims it — the quote reads none of them.
 - The paragraph wrapping the quote becomes a built-in `NodeKind::Element("blockquote")` tagged
   `__layer = "blockquote"` (§11 rule 3, ADR-0008 `D-3a`): the plugin never swaps in a
   component — the renderer resolves the layer, and a quote no component answers renders as
   the built-in element.
-- Nodes are marked `__plugin_kind = "block"` so stripped body content is re-lexed as block-level Markdown (headings, lists, nested quotes).
+- Nodes are marked `__plugin_kind = "block"` so the body is re-lexed as block-level Markdown (headings, lists, nested quotes).
 - Nesting is preserved one level at a time; `>> inner` leaves `> inner` for the subsequent Markdown pass.
 
 ### 9.3 List (`plugin-list`)
@@ -1239,6 +1240,7 @@ Config-load errors MUST abort the build before any file is processed.
 | anchor URL-suffix modifiers (`^`, `~`, `!`, `$`, `;;`, `--`)     | —                                                                                    | **not syntax** (D-16, §7.2): deleted, not replaced. A modifier-shaped tail is now part of the URL, and the `target` / `rel` tokens they produced are ordinary extras keys; the `^`/`~` conflict warning went with them. Slot modifiers are §5.4's, and Pendon ships none.                                         |
 | automatic external-URL `target="_blank"` / `rel="noopener"`      | —                                                                                    | **not syntax** (D-16, §7.2): the anchor no longer classifies URLs, and no config key restores it — write `target` / `rel` in the extras when a link needs them.                                                                                                                                                   |
 | untagged `[text](url)` anchor                                    | `@[text](url)`                                                                       | **not syntax** (D-16, §7.2): the slot tag is mandatory, because the bracket and paren are universal (§5.2). Without it the text is an ordinary CommonMark link and a trailing extras head stays literal text.                                                                                                     |
+| blockquote inner head (`> @@type{…} content`)                    | decorator line above the quote                                                       | **not syntax** (D-16, §9.2): a quote has no head, so everything inside `>` is content and `@@type{…}` written there is literal text. The decorator line (§9.1) is the only way to configure a quote.                                                                                                              |
 | `backtick_key` / `quote_key` / `bracket_key` / `parentheses_key` | `field.specs.tick` / `field.specs.quote` / `field.bracket.bare` / `field.paren.bare` | **removed** (D-16): the four naming keys are gone from the loader, so a config that still uses them **fails to load** with an unknown-key error (§13) — no alias, no deprecation. Naming is `field.*` only (§6.1); an entry that configures none keeps the seven default paths (`specs.tick` … `paren.bare`).     |
 
 ## 15. Open decisions

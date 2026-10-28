@@ -2,6 +2,9 @@
 //! reads the same `{…}` grammar, so the five specs positions (§6.1) and the
 //! `%%numberType` marker (§10.5) reach every construct.
 //!
+//! The blockquote appears once, as a decorator: it has no head of its own, so a
+//! `@@type{…}` inside the `>` is content and stays literal (§9.2, `S2-4.3`).
+//!
 //! One document per row, one project, one render: the table below is the audit,
 //! and each row asserts what its element's own projection (§6.3, §7.x) makes of
 //! the shared head. The head text is identical everywhere —
@@ -179,14 +182,6 @@ template = "<Cite {...attrs} />"
             r#"title="Title X""#,
             r#"type="cellX""#,
         ],
-    },
-    Case {
-        name: "quote-inner",
-        plugins: "blockquote,markdown",
-        source: "> @@quoteX{HEAD} quoted\n",
-        extra: "",
-        // §9.2: the quote's own head, right after the `>` marker.
-        expect: &[r#"class="cls""#, r#"id="elem-x""#, r#"type="quoteX""#],
     },
     Case {
         name: "quote-decorator",

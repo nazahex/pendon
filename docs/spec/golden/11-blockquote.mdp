@@ -1,16 +1,23 @@
-§9.2: a quote carries its extras through an **inner head**, right after the `>`
-marker (a space between marker, head and content is allowed, §4.1):
-
-> @@quoteA{.q, #q1} quoted *text*
-
-§9.2/§9.1: a **decorator line** directly above the quote decorates it too (the
-line touches the `>` it decorates, §9.1):
+§9.2: a quote has **no head of its own**. The only way to configure one is the
+**decorator line** directly above it (§9.1, a line touches the `>` it decorates):
 
 @@{.outer}
 > a plain quoted body
 
-§9.2: when both exist the inner head wins; an unclaimed type falls back to the
-built-in `<blockquote>` and still keeps every extra (§11 rule 3, D8):
+A claimed `type` renders its component, and every extra lands on the quote node
+(§11 rule 3):
 
-@@quoteA{.lost}
-> @@quoteZ{.z} inner wins
+@@quoteA{.q, #q1}
+> quoted *text*
+
+An unclaimed type falls back to the built-in `<blockquote>` and still keeps every
+extra (§11 rule 3, D8):
+
+@@quoteZ{.z}
+> an unclaimed type
+
+Anything written **inside** the `>` is content, not a head: `@@` and the braces
+are literal text there, and the body keeps the constructs and slots that its own
+elements claim (§9.2):
+
+> @@quoteA{.q} this is not a head

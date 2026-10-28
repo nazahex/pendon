@@ -1,25 +1,27 @@
 # pendon-plugin-blockquote
 
-Binds the **extras** a blockquote may carry to the quote node, before
+Binds the **extras** a blockquote carries to the quote node, before
 `plugin-markdown` parses the Markdown (`docs/spec/SYNTAX.md` §9.1, §9.2).
 
-`>` stays plain Markdown. This plugin only owns the two spellings a quote's
-extras may use:
+`>` stays plain Markdown, and a quote has **no head of its own**: the only way to
+configure one is a decorator line directly above it.
 
 ```text
-@@quoteA[intro]("title"){.x}          ← §9.1 decorator line with positional groups, directly above the quote
-> @@quoteA[intro]("title"){.x} quoted ← §9.2 inner head with positional groups, immediately inside the quote
+@@quoteA[intro]("title"){.x}    ← §9.1 decorator line with positional groups
+> quoted text
 ```
 
-When both are present the **inner** head wins (§9.2).
+Everything inside the `>` is content (§9.2): `> @@quoteA{.x} text` reads no head,
+so the `@@` and the braces stay literal text, and a slot written in the body
+belongs to whichever element claims it.
 
 ## What it does
 
 - Finds every paragraph that opens a quote (`> …`), including the lines a lazy
-  continuation adds.
-- Parses the head immediately inside the quote (`> @@type{…} content`); the space
-  between the marker, the head and the content is allowed here (§4.1 —
-  blockquote is one of the two adjacency exceptions, with list).
+  continuation adds, and strips exactly one `>` level from each of them.
+- Reads **no** head from the body (§9.2): the decorator line is the whole of a
+  quote's extras, so the element declares no slot contract, no preset and no
+  owned field.
 - Binds a decorator line directly above the quote through
   [`pendon_extra::bind_decorators`](../extra/src/decorator.rs) (§9.1) and reports
   the decorators that bind to nothing as `Severity::Warning`.
@@ -59,14 +61,12 @@ addresses.
 
 ### Specs (§6.1, D-5)
 
-An entry renames the §6.1 positional slots through its `field.*` keys —
+An entry renames the §6.1 positional items through its `field.*` keys —
 `field.specs.tick` / `field.specs.quote` for a `` `slug` `` / `"title"` item, and
 `field.specs.class` / `.id` / `.style` for a `.x` / `#x` / `style:` item. An
-entry that configures none keeps the §6.1 default paths;
-once it configures one the preset is void as a whole (D-7). An assignment also
-**moves** the position: the assigned path is the author's own public field,
-which this element neither reads nor renames (`Specs::element_path` answers
-`None`, §6.1). The table is in
+assignment **moves** the item: the assigned path is the author's own public
+field, which this element neither reads nor renames (`Specs::element_path`
+answers `None`, §6.1). The table is in
 [`docs/spec/SYNTAX.md` §6.1](../../docs/spec/SYNTAX.md).
 
 ## Notes

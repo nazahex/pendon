@@ -1,6 +1,6 @@
 //! End-to-end checks: core → `plugin-blockquote` → `plugin-markdown` → solid.
 //!
-//! They prove the two things the crate exists for: the quote's extras become
+//! They prove the two things the crate exists for: a decorator's extras become
 //! attributes of the quote node, and `plugin-markdown` still parses the body
 //! (a list inside the quote is a list, not raw text).
 
@@ -51,7 +51,7 @@ fn pipeline(src: &str) -> Vec<Event> {
 /// §9.2: the body of the quote is still block content for `plugin-markdown`.
 #[test]
 fn the_quote_body_is_relexed_as_blocks() {
-    let out = pipeline("> @@quoteA{.x}\n>\n> - one\n> - two\n");
+    let out = pipeline("@@quoteA{.x}\n\n> - one\n> - two\n");
     // D-3a: the quote names its layer and keeps the marker; the component is
     // chosen by the renderer, not here.
     assert!(
@@ -79,7 +79,7 @@ fn the_quote_body_is_relexed_as_blocks() {
 /// `__plugin_kind` marker never reaches the output (§11 rule 3).
 #[test]
 fn solid_rendering_of_a_typed_quote() {
-    let events = pipeline("> @@quoteA{.x} quoted *text*\n");
+    let events = pipeline("@@quoteA{.x}\n\n> quoted *text*\n");
     let jsx = render_solid_with_hints(&events, solid_hints(&options()).as_ref());
     assert!(jsx.contains("<QuoteA"), "{jsx}");
     assert!(jsx.contains("class=\"x\""), "{jsx}");
@@ -100,11 +100,22 @@ fn solid_rendering_of_an_untyped_quote_uses_the_default() {
 #[test]
 fn solid_rendering_of_a_fallback_quote() {
     let events = {
-        let events = parse("> @@quoteZ{.x} body\n", &Options::default());
+        let events = parse("@@quoteZ{.x}\n\n> body\n", &Options::default());
         pendon_plugin_markdown::process(&process(&events, &typed_only()))
     };
     let jsx = render_solid_with_hints(&events, solid_hints(&typed_only()).as_ref());
     assert!(jsx.contains("<blockquote"), "{jsx}");
     assert!(jsx.contains("class=\"x\""), "{jsx}");
     assert!(jsx.contains("body"), "{jsx}");
+}
+
+/// §9.2: the quote reads no head from its body — an inner `@@type{…}` is content
+/// and reaches the renderer as literal text, with no `type` and no extras.
+#[test]
+fn an_inner_head_is_not_a_head() {
+    let events = pipeline("> @@quoteA{.x} body\n");
+    let jsx = render_solid_with_hints(&events, solid_hints(&options()).as_ref());
+    assert!(jsx.contains("@@quoteA"), "{jsx}");
+    assert!(!jsx.contains("class=\"x\""), "{jsx}");
+    assert!(!jsx.contains("type=\"quoteA\""), "{jsx}");
 }

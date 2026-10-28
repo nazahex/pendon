@@ -210,6 +210,16 @@ exactly one `export const headings` line each (no bytes removed), and
       `04` and `23` (the markdown link inside an `mdp` payload loses its
       auto-`target`/`rel`). Gate: fmt + dprint clean, clippy at baseline, 759
       tests. Next: `S2-4.3` (blockquote).
+      `S2-4.3` done — a quote has **no head**: the inner `> @@type{…}` form is
+      gone (`emit_quote` copies the body with one `>` level stripped and reads
+      nothing else), so the decorator line above the quote is the only way to
+      configure one, and `> @@type{…} text` is literal text. The element declares
+      no `ElementHead` at all — no contract, no preset, no owned fields — stated in
+      §9.2. Fixture `11-blockquote` rewritten and re-frozen; the S2-4.1 audit's
+      `quote-inner` row dropped (its `quote-decorator` row still proves the head is
+      read); §14 gained the removal, §4.1's adjacency exception now names the list
+      item only. Gate: fmt + dprint clean, clippy at baseline, 759 tests. Next:
+      `S2-4.4` (cite).
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden

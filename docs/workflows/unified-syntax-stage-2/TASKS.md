@@ -558,12 +558,26 @@ README. If an element has nothing to delete, say so in the commit message.
       `23` moved a byte — the removal visible in `23` is the markdown link inside
       an `mdp` payload losing `target`/`rel`. Gate green: fmt + dprint clean,
       clippy at baseline, 759 tests.
-- [ ] **S2-4.3 — Blockquote.** Dep: S2-4.1. `§9.2`
+- [x] **S2-4.3 — Blockquote.** Dep: S2-4.1. `§9.2`
       Do: remove slots/extras _inside_ `>`; only the decorator configures a
       blockquote; `/`-content keeps its own slots. No built-in fields.
       G: blockquote fixture — decorator form renders, `> @@type…` becomes literal
       text.
       Exit: contract table for blockquote is empty and documented as such.
+      **Done 2026-10-28.** `emit_quote` lost its inner-head branch (and the
+      `options`/`parse_extras`/`to_attributes`/`Attrs` imports it needed): the
+      body is now copied with one `>` level stripped and nothing else, so the
+      decorator line is the whole of a quote's extras. The element declares no
+      `ElementHead` at all — no slot contract, no preset, no owned fields — and
+      §9.2 says so. Tests: `an_inner_head_is_literal_text`, `the_body_keeps_its_
+      own_slots` (a slot in the body belongs to its own element) and
+      `an_inner_head_is_not_a_head` (end-to-end, solid), replacing the three
+      inner-head cases; `quote-inner` left the S2-4.1 audit table (the decorator
+      row still proves the head is read). Fixture `11-blockquote` rewritten
+      (decorator-only + an inner `@@` that stays literal) and re-frozen; §14's
+      "not syntax" list gained the inner head, §4.1's adjacency exception now
+      names the list item only, and §3's `>` row says `decorator only`. Gate
+      green: fmt + dprint clean, clippy at baseline, 759 tests.
 - [ ] **S2-4.4 — Cite.** Dep: S2-4.2 (shares slot machinery), OBJ-1 resolved.
       `§7.3`
       Do: `^` tag; `bracket.bare→reference_id`, `bracket.quote→locator`;
