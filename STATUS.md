@@ -54,8 +54,8 @@ with headings — eight goldens re-frozen with that one line). Goldens
 `32-extract-heading` and `33-extract-scopes` (`NN-name.out/` freezes side files
 too); `sandbox/extract` runs and writes all four of its outputs.
 
-**Next:** the L37 blocker below (it also unblocks Step 3 and Step 6b), then the
-deferred replay of the stale sandbox baselines. The Phase-4 gates are closed:
+**Next:** the L37 blocker below (it also unblocks Step 3 and Step 6b). The
+Phase-4 gates are closed:
 `cargo test --workspace`, `cargo clippy --workspace --all-targets` and
 `cargo fmt --all -- --check` are green, the eight re-frozen goldens moved by
 exactly one `export const headings` line each (no bytes removed), and
@@ -197,19 +197,20 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## Deferred
 
-- **Stale sandbox baselines (from Phases 1–2).** `sandbox/anchor`,
-  `sandbox/custom/inline`, `sandbox/img/*`, `sandbox/list/*` and
-  `sandbox/table/integ` still hold older output: `"cites"` where the exports are
-  now `references` + `citations`, `class={"q"}` where a typed string now renders
-  `class="q"`, `cra-1` where the cite id is `cite-1` (and
-  `img/image/out/extra.html` drifts near L37). Re-rendering them is a reviewable
-  separate pass — do not cite them as truth until then. `sandbox/number/` is a
-  pre-implementation sketch (no source, non-runnable `pendon.toml`). Measured for
-  `sandbox/ultimate`: a fresh render differs from its baseline in the
-  `export const headings` line only — 3 headings in `default`/`full` plus
-  `subset`, whose baseline predates any `headings` export. Two of the three are
-  L37's swallowed body text; the third is a heading inside a blockquote, which now
-  takes its enclosing section's id (§6.2/§9.5). Not a Phase-4 regression.
+- **Stale sandbox baselines — maintainer-owned, not an agent task.** Take
+  `sandbox/ultimate` and every other stale sandbox as untrustworthy input: do not
+  re-render them, do not freeze them into goldens, and do not treat a diff there
+  as a regression in your change. The maintainer replays them by hand. Concretely,
+  `sandbox/anchor`, `sandbox/custom/inline`, `sandbox/img/*`, `sandbox/list/*` and
+  `sandbox/table/integ` still hold older output (`"cites"` where the exports are
+  now `references` + `citations`, `class={"q"}` where a typed string renders
+  `class="q"`, `cra-1` where the cite id is `cite-1`), `sandbox/ultimate` differs
+  from a fresh render in the `export const headings` line (two of three are L37's
+  swallowed body text, the third a heading in a blockquote that takes its
+  enclosing section's id — §6.2/§9.5), and `sandbox/number/` is a
+  pre-implementation sketch with no source. `sandbox/{image,unified,universal,multi}`
+  are the ones that still track `HEAD`. A golden is the contract; a sandbox is a
+  scratch copy — the gate never depends on a sandbox staying in sync.
 
 - **§11 threading gaps** (from the positional-keys pass):
   - `plugin-table`: `extras_to_layer(head)` still uses `ExtrasOptions::default()`;

@@ -66,6 +66,13 @@ Verify `out/` matches expectations. When output is part of an integration
 contract, include only intentional changes in the commit — do not commit generated
 artifacts from `target/`.
 
+Not every sandbox tracks `HEAD`: some predate the current pipeline and are
+**maintainer-owned**. Do not re-render those, do not freeze their `out/` into a
+golden, and do not read a diff there as a regression in your change; the live
+list of which ones are stale (and why) is the "Deferred" item in
+[`STATUS.md`](../../STATUS.md). Similarly, `sandbox/number/` is a sketch with no
+source and cannot run at all.
+
 ## Generated files
 
 - Never revert unrelated user changes.

@@ -59,3 +59,10 @@ Do **not** read `docs/archive/**` unless asked — it is historical and frozen.
    migration notes. Removed config keys are a load **error**; removed syntax is
    plain text. See D-16 in
    [`docs/workflows/unified-syntax-stage-2/DECISIONS.md`](docs/workflows/unified-syntax-stage-2/DECISIONS.md).
+7. **Goldens are the contract; sandboxes are scratch.** Some `sandbox/*` baselines
+   predate the current pipeline and are **maintainer-owned** (live list: the
+   "Deferred" item in [`STATUS.md`](STATUS.md)). You may still render one to
+   inspect real output (rule 2), but never commit its regenerated `out/` as part of
+   a change, never freeze it into a golden, and never read its diff as a
+   regression — `cargo test --workspace` decides. When output changes
+   intentionally, re-freeze the fixture under `docs/spec/golden/`.
