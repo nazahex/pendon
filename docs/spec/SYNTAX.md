@@ -824,6 +824,11 @@ marker         = "-" | "*" | "+" | DIGIT+ "."
 - This plugin binds extras to list containers **before** `plugin-markdown` parses content; markers remain plain Markdown.
 - A decorator line directly above a list targets the container layer: `unordered` for `-`/`*`/`+`, `ordered` for `1.`.
 - The layer is determined strictly by the **marker**, never by the decorator's own type name.
+- The container has **no head of its own and no preset**: no slot contract, no
+  `ElementHead`, and nothing is read from the items — the decorator line is the
+  only source of the container's fields (S2-4.8). A `@@type{…}` written at the
+  start of an item is content, and the items' own constructs (an anchor, a nested
+  list) are parsed by the elements that claim them.
 - Container nodes stay `NodeKind::Element("ul"|"ol")` (with `__plugin_kind`) tagged
   `__layer = "unordered"|"ordered"` (§11 rule 3, ADR-0008 `D-3a`): the plugin never emits
   `NodeKind::Custom`, the renderer resolves the layer.
@@ -831,7 +836,10 @@ marker         = "-" | "*" | "+" | DIGIT+ "."
 - Ordered list start offsets follow CommonMark behavior (first item number); extras cannot currently override this value.
 - Decorator lines that fail to bind to a valid list trigger a `Severity::Warning` diagnostic.
 - Item-level decorators (L2/L3) and nesting validation (L5) are defined in spec but not yet implemented.
-- Positional slots default to `` `slug` `` and `"title"` but can be renamed per entry via `field.specs.tick` and `field.specs.quote` (§6.1); an assignment moves the position, so this layer stops reading it.
+- The decorator's positional items are §6.1's: they land on the default paths
+  (`specs.tick` → `specs.quote` → …) unless the entry renames them with
+  `field.specs.*`, and an assignment moves the item, so this layer stops reading
+  it. There is no list preset to void — the container has none.
 - Unbound decorators outside of lists remain as ordinary block nodes to prevent silent data loss.
 
 ### 9.4 Layer mapping for lists

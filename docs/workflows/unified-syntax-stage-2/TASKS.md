@@ -634,12 +634,24 @@ README. If an element has nothing to delete, say so in the commit message.
       G: image fixture; `~?!![](src)` renders as literal text.
       Exit: preset assignment = `src`, `alt`; no `figure`/`figcaption` in any
       fixture output.
-- [ ] **S2-4.8 — List.** Dep: S2-4.1. `§9.3–§9.4`
+- [x] **S2-4.8 — List.** Dep: S2-4.1. `§9.3–§9.4`
       Do: no slot contract; decorator only (wired in Phase 5); preset
       assignment empty
       (drop the extras-derived fields from the inventory rows).
       G: list fixture with a decorator.
       Exit: preset assignment is empty in code and inventory.
+      **Done 2026-10-28 — the list was already there.** `plugin-list` declares no
+      `ElementHead`, no `SlotContract` and no `Preset`: it binds the decorator line
+      only and passes its extras through, so its preset assignment is empty in code
+      (`golden/12-list-container` already exercises the decorator form). §9.3 now
+      says so explicitly, and its stale bullet ("positional slots default to
+      `slug` and `title`" — pre-S2-3.5 wording) became §6.1's default paths plus
+      "there is no list preset to void". New test
+      `a_head_inside_an_item_is_content`: a `@@type{…}` written at the start of an
+      item contributes nothing to the container. The inventory half of the exit
+      belongs to **`S2-7.2`**, which rewrites every element's table to "only
+      built-in fields, drop everything that comes from extras" and marks preset
+      membership per field — doing it here would be undone there.
 - [x] **S2-4.9 — Marker.** Dep: S2-4.1. `§10.1`
       Do: `{{type}}[slot](slot)@@type{specs}%%numbering`; `{{type}}` silently
       overrides `@@type` (no error, no warning); marker contracts nothing; the

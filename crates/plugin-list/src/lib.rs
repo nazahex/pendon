@@ -373,6 +373,22 @@ mod tests {
         assert_eq!(element(&out).as_deref(), Some("ol"), "{out:?}");
     }
 
+    /// §9.3/`S2-4.8`: the container's fields come from the decorator line alone.
+    /// The list declares no slot contract and no preset, so a head written inside
+    /// an item is content and contributes nothing to the container.
+    #[test]
+    fn a_head_inside_an_item_is_content() {
+        let out = run("@@{.u}\n\n- @@unorderedA{.x} one\n- two\n");
+        assert_eq!(element(&out).as_deref(), Some("ul"), "{out:?}");
+        assert_eq!(attr(&out, "specs.class").as_deref(), Some("u"));
+        assert_eq!(attr(&out, "type"), None, "{out:?}");
+        assert!(
+            text(&out).contains("- @@unorderedA{.x} one"),
+            "the item head was consumed: {:?}",
+            text(&out)
+        );
+    }
+
     /// §9.3: a list without a decorator is left for `plugin-markdown`.
     #[test]
     fn an_undecorated_list_is_left_alone() {

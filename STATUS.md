@@ -234,6 +234,12 @@ exactly one `export const headings` line each (no bytes removed), and
       gained both type sources and was re-frozen; §10.1's obsolete
       "layer order decides which element reads `[x]("y")`" note now points at
       `@[x]("y")`. 760 tests. Next: `S2-4.10` (section) / `S2-4.4` (cite).
+      `S2-4.8` done — the list needed no code change: `plugin-list` declares no
+      contract and no preset, so its preset assignment was already empty; §9.3 now
+      says so and its pre-S2-3.5 `slug`/`title` bullet became §6.1's default
+      paths. New test `a_head_inside_an_item_is_content`. The inventory half of
+      the exit is `S2-7.2`'s (it rewrites every table anyway). 761 tests. Next:
+      `S2-4.10` (section) / `S2-4.4` (cite).
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden
