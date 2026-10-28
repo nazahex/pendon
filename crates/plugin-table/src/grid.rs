@@ -93,7 +93,11 @@ fn process_row_group(
                     grid[row_idx][col_idx].is_hidden = true;
                 }
             } else {
-                let mut cell_attrs = col_spec.map(|c| c.attrs.clone()).unwrap_or_default();
+                // §8 / OPEN-E1: the alignment row's cell extras belong to **that
+                // column's `<th>`** only. Only the alignment and the width cascade
+                // into the body cells — cascading the extras too would duplicate
+                // (and number) every attribute on every `<td>` of the column.
+                let mut cell_attrs = LayerAttrs::default();
                 merge_layer(&mut cell_attrs, &cell_spec.attrs);
 
                 // Important: Preserve existing colspan and rowspan values if they were already set by previous cells

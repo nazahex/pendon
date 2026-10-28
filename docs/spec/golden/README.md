@@ -42,7 +42,7 @@ The one-key spread `{...{ "specs.tick": "x" }}` is the only spelling (§6.3), so
 fixture cannot freeze invalid output and pass.
 
 ```bash
-cargo test -p pendon --test syntax_spec      # 30 fixtures, none #[ignore]d
+cargo test -p pendon --test syntax_spec      # 31 fixtures, none #[ignore]d
 ```
 
 ## Re-freezing (when output intentionally changes)
@@ -92,6 +92,8 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | 32 | `extract-heading`  | `[[task.heading.extract]]` — a file **and** `export const outline`; the automatic nested `headings` survives the deletion of `plugin-extract-heading` (ADR-0011, T4.5/T4.7) |
 | 33 | `extract-scopes`   | P.1.a/b/c — two `type`-scoped blocks (two paths, two formats), the `_` remainder, and one `export` name where the later block wins (D-6) |
 | 34 | `specs-assignment` | `field.specs.*` as a **move** — one entry assigning all five positions next to an entry that assigns nothing (§6.1, §6.3) |
+| 35 | `cite-fields`      | cite under a `field.*` block: `reference_id`→tick, `locator`→quote, published as `ref_id`/`loc`/`no` with the ordinals unchanged (D-4, §7.3) |
+| 36 | `table-slots`      | one head grammar on every table layer: `[…]("…")` + `{specs}` + `%%numbering` on table/caption/th/tbody/row/cell/tfoot, column extras `<th>`-only (§8) |
 
 Fixtures 17–20 are covered by unit tests in the renderer/CLI crates rather than as
 golden files.

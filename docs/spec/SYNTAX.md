@@ -782,6 +782,18 @@ Mapping to table layers:
 | foot-row cell-front extras           | that `<td>` (`cell`)                         |
 | foot-row end-of-line extras          | that `<tr>` (`row`)                          |
 
+Every one of those is the **same** head (§5) — `@@type?[…]("…"){…}%%numberType`
+so a slot pair, the specs items and a numbering marker reach whichever layer the
+head sits on, and the layer keys above are only _where_ the head is read. What a
+head names is not layer-specific: `@@cellA[slug]("t"){.x}%%%numberA` puts
+`bracket.bare` / `paren.bare` on the cell, `class="x"` with it, and the
+`__number` transport `plugin-number` reads (§10.5). Golden `36-table-slots` is
+the seven-layer proof.
+
+A column's extras stay on its `<th>`: the alignment and the width cascade into
+the column's `<td>`s, the rest does not (OPEN-E1), so an attribute or a number is
+never duplicated on every body cell.
+
 Rules:
 
 - **Slot placement (§4.1).** A table has **no** adjacency exception: every head
@@ -1367,9 +1379,6 @@ objects**; the spec text above already assumes the recommendation.
 - **OPEN-B1 (bare fence).** A bare `==…==` fence only closes; anonymous block
   directives are impossible. **Recommendation: as specified** (removes the
   open/close ambiguity of `===`).
-- **OPEN-E1 (table column extras).** Alignment-row cell extras apply to that
-  column's `<th>` only. **Recommendation: yes** (cascading to `<td>`s would
-  duplicate attributes on every body cell).
 - **OPEN-T1 (tenant of `plugin-blockquote`/`plugin-list`).** Both plugins are
   **new crates** (they now exist); the existing markdown-plugin behaviour stays
   as fallback when they are not enabled. **Recommendation: new crates.**
@@ -1403,6 +1412,11 @@ Rationale lives in [`decisions/`](../decisions/).
 - **OPEN-IR-1 (flags) — resolved.** `Event::AttributeFlag { name }` is in the IR
   and rendered verbatim by the AST, JSON, HTML (compact + pretty) and Solid
   renderers (§6.3).
+- **OPEN-E1 (table column extras) — resolved.** Alignment-row cell extras apply
+  to that column's `<th>` only; the alignment and the width are what cascade into
+  the column's `<td>`s. Implemented in `crates/plugin-table/src/grid.rs` and
+  frozen by golden `09-table-layers` (a `class` on a delimiter cell stays on the
+  `<th>`, while `<td>` keeps only `style="text-align: …"`).
 - **OPEN-L2 (list layers) — resolved.** Layer keys are `list` (= `<li>` item),
   `unordered` (= `<ul>` container) and `ordered` (= `<ol>` container), mirroring
   `task.table.custom.<layer>`. Config: `[task.list.custom.list]`,

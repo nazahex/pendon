@@ -20,7 +20,8 @@ head at the end of a sentence does not gain a space (§4.1):
 </p>
 <p><a href="/docs" type="anchorY">Empty typed</a>
 </p>
-<p>The same heads attach to a heading and to table cells (§7.4, §8):
+<p>The same heads attach to a heading and to table cells (§7.4, §8) — a column&#39;s
+alignment-row extras stay on its <code>&lt;th&gt;</code>, a body cell keeps only its own head:
 </p>
 <h3 class="fancy" id="slug-a" type="headingX">A typed heading</h3>
 <table>
@@ -32,7 +33,7 @@ head at the end of a sentence does not gain a space (§4.1):
   </thead>
   <tbody>
     <tr>
-      <td class="v-top lead" style="text-align: left;" type="cellB">1</td>
+      <td class="lead" style="text-align: left;" type="cellB">1</td>
       <td style="text-align: right;">2</td>
     </tr>
   </tbody>

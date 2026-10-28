@@ -1,0 +1,17 @@
+[[task]]
+name = "Golden 36"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,table,number,markdown"
+format = "solid"
+
+# §8/§10.5: one `%%numberType` group per layer, so a table, its caption, a
+# column, its body, a row, a cell and the footer can each be numbered — the
+# marker is an extras item, so it needs nothing table-specific.
+[[task.number.custom]]
+type = ["NumberA"]
+style = "upper-alpha"
+
+[[task.number.custom]]
+type = ["NumberB"]
+style = "decimal"

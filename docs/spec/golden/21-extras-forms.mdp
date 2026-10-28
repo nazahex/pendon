@@ -18,7 +18,8 @@ An empty head carries nothing at all:
 
 @[Empty typed](/docs)@@anchorY{}
 
-The same heads attach to a heading and to table cells (§7.4, §8):
+The same heads attach to a heading and to table cells (§7.4, §8) — a column's
+alignment-row extras stay on its `<th>`, a body cell keeps only its own head:
 
 ###@@headingX{`slug-a`, .fancy} A typed heading
 

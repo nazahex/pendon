@@ -316,6 +316,16 @@ exactly one `export const headings` line each (no bytes removed), and
       whole outline is extractable; `plugin-extract` prefers that `depth` and
       keeps the open-section count as its fallback. `22-section` and
       `32-extract-heading` re-frozen. 777 tests.
+      **`S2-4.11` done — the seven table layers share one head.** They already did
+      (one `scan_extras_chars` → `to_attributes` path), so slots + `{specs}` +
+      `%%numbering` needed no read-side change; the matrix instead exposed a
+      mapping bug — a delimiter cell's extras were cloned onto every `<td>` of the
+      column. `grid.rs` now cascades only the alignment and the width, the extras
+      stay on the `<th>` (§8/OPEN-E1, now resolved in §15). New fixture
+      `36-table-slots` (every layer with `[slug]("t"){.c}%%%numberA`);
+      `09-table-layers` + `21-extras-forms` re-frozen. 777 tests (31 fixtures).
+      **Phase 4 is closed** — `S2-4.12` (bare-field universality) is the next
+      Phase-4 item, then Phase 5 (`@@` mandatory).
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden
@@ -436,3 +446,6 @@ exactly one `export const headings` line each (no bytes removed), and
 - `S2-4.10` moved `22-section` and `32-extract-heading` by the `depth` attribute
   (§9.5): every `<section>` now publishes the outline level it stands for, so a
   fixture that renders a section shows one extra attribute and nothing else.
+- `S2-4.11` moved `09-table-layers` and `21-extras-forms` (a `<td>` no longer
+  receives the column's `class`/`type` — §8/OPEN-E1) and added `36-table-slots`,
+  the seven-layer proof that every table layer reads `[…]("…"){…}%%numberType`.

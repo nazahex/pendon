@@ -67,7 +67,10 @@ Column alignment, width, and default classes are controlled via the delimiter ro
 - **Horizontal alignment** follows GFM rules (`:---` left, `:---:` center, `---:` right).
 - **Width specifiers** use parentheses `(200px)` immediately after the dashes.
 - **Column classes** use an extras head `{.v-top}` after the alignment and width
-  code, touching it; it injects attributes into every cell in that column.
+  code, touching it. The head decorates **that column's `<th>` only** (§8,
+  OPEN-E1): the alignment and the width are what cascade into the column's
+  `<td>`s, so a class, a `type` or a `%%numberType` marker is never cloned onto
+  every body cell.
 
 ### Colspan & Rowspan Merging
 

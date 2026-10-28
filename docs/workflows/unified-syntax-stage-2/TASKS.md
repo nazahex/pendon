@@ -787,12 +787,25 @@ README. If an element has nothing to delete, say so in the commit message.
       re-frozen (`<section depth="0">`, `<section depth="2" id=…>`, …); §9.5 gained
       the "no head / `id`+`depth`" table, the inventory row and the plugin README
       updated. 777 tests.
-- [ ] **S2-4.11 — Table layers (non-decorator half).** Dep: S2-4.1. `§8`
+- [x] **S2-4.11 — Table layers (non-decorator half).** Dep: S2-4.1. `§8`
       Do: keep `@@captionType`/`@@cellType`/`@@rowType` on layers; make every
       layer accept full slots **and** `{specs}` **and** `%%numbering` (today only
       type+specs); leave the table head line for Phase 5.
       G: table fixture exercising slots+numbering on a cell.
       Exit: no layer rejects a valid extras combination.
+      **Done 2026-10-29.** Measured first: the seven layer heads already ran
+      through the one `scan_extras_chars` → `to_attributes` path, so slots,
+      `{specs}` and `%%numbering` all arrived on `table`, `caption`, `th`,
+      `tbody`, `row`, `cell` and `tfoot` — the read side needed no change. What
+      the matrix did turn up is a **layer-mapping** bug: the alignment row's cell
+      extras were cloned onto every `<td>` of the column (a `type`, a `class` and
+      a `%%number` per body cell), which contradicts §8's mapping table and
+      OPEN-E1. `grid.rs` now cascades only the alignment and the width, and the
+      extras stay on the `<th>` — OPEN-E1 moved to §15's resolved list. New
+      fixture `36-table-slots` is the seven-layer proof (every layer with
+      `[slug]("t"){.c}%%%numberA`); `09-table-layers` and `21-extras-forms`
+      re-frozen by the `<td>`s losing the column's `class`/`type`, prose updated.
+      777 tests (31 fixtures).
 - [ ] **S2-4.12 — Bare-field universality.** Dep: S2-4.2 … S2-4.11.
       Do: assert that _any_ uncontracted slot content survives as slot-qualified
       bare fields (`bracket.tick`, `paren.quote`, …) on every element, and that

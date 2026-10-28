@@ -215,13 +215,15 @@ mod tests {
         assert!(has_attribute(&caption[0], "class", "cap"), "{caption:?}");
         assert!(has_attribute(&caption[0], "type", "captionX"));
 
-        // Cell-front extras → the `<th>` of that column (and its `<td>`s), row
-        // end-of-line extras → the `<tr>`, `|===|` extras → the `<tfoot>`.
+        // Cell-front extras → the `<th>` of that column, row end-of-line extras →
+        // the `<tr>`, `|===|` extras → the `<tfoot>`.
         assert!(has_attribute(&out, "type", "cellA"));
         assert!(has_attribute(&out, "class", "v-top"));
         assert!(has_attribute(&out, "type", "cellB"));
-        // §6.4: the column class and the cell class accumulate.
-        assert!(has_attribute(&out, "class", "v-top lead"));
+        // §8/OPEN-E1: the column's extras stay on its `<th>`; the body cell keeps
+        // only its own head (the column's alignment still reaches it).
+        assert!(!has_attribute(&out, "class", "v-top lead"));
+        assert!(has_attribute(&out, "class", "lead"));
         assert!(has_attribute(&out, "type", "rowB"));
         assert!(has_attribute(&out, "class", "info"));
         let tfoot = all_element_children(&out, "tfoot");

@@ -1,5 +1,6 @@
-Column extras in the alignment row route the column's `<th>` and its `<td>`
-cells, and the alignment row's end-of-line extras belong to the `<tbody>` (§8):
+Column extras in the alignment row belong to that column's `<th>` only (§8,
+OPEN-E1), while the alignment and the width cascade into every `<td>` of the
+column. The alignment row's end-of-line extras belong to the `<tbody>`:
 
 |-[layers]@@tableX{.striped}-|
 ||@@captionAB{.cap} Layer routing||

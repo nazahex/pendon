@@ -1,0 +1,15 @@
+§8: every table layer reads the same head — `@@type[…]("…"){…}%%numberType` —
+so a slot pair, the specs items and a numbering marker reach the `<table>`, the
+`<caption>`, a column's `<th>`, the `<tbody>`, a `<tr>`, a `<td>` and the
+`<tfoot>` alike. Nothing is layer-specific except *where* the head sits:
+
+|-[tbl-slug]("Table title")@@tableX{.t}%%%numberA -|
+||@@captionX[cap-slug]("Cap title"){.c}%%%numberA A caption ||
+| A | B | C |
+| :---@@thX[th-slug]("Th title"){.v}%%%numberA | ---: | --- |@@tbodyX{.tb}
+|@@cellX[cl-slug]("Cl title"){.cl}%%%numberA 1 | 2 | 3 |@@rowX{.rw}
+|===|@@tfootX[ft-slug]("Ft title"){.ft}%%%numberA
+| Total | > | 9 |
+
+The column extras above stay on the `<th>` (§8/OPEN-E1): the `<td>` under it
+keeps only the alignment, which is why `cellX` appears once.

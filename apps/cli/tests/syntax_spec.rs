@@ -425,3 +425,12 @@ fn golden_34_specs_assignment() {
 fn golden_35_cite_fields() {
     assert_fixture("35-cite-fields");
 }
+
+/// §16.3 fixture 36: one head grammar for every table layer (S2-4.11, §8). The
+/// `<table>`, the `<caption>`, a column's `<th>`, the `<tbody>`, a `<tr>`, a
+/// `<td>` and the `<tfoot>` each carry a `[…]("…")` pair, `.class` items and a
+/// `%%numberType` marker — and the column's extras stay on the `<th>`.
+#[test]
+fn golden_36_table_slots() {
+    assert_fixture("36-table-slots");
+}
