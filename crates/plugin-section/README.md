@@ -11,6 +11,13 @@ then parses the interior of every `Section` this plugin emits.
 - Each heading opens a `Section` at its level; a deeper heading nests, an equal
   or shallower heading closes the open sections first.
 - Content before the first heading is wrapped in a preface `Section` (level 0).
+- **A section has no head.** It declares no `ElementHead` and contracts no slot
+  position — there is no `[bracket]` for it to claim. Its two own fields are the
+  ones it derives (§9.5): `id` (the chain below) and `depth` (the outline level it
+  stands for — the heading's own `depth`, a `<--->` child's parent + 1, `0` for
+  the preface). Both are public fields, so a component receives them as props and
+  the built-in `<section>` prints them as attributes. Every section carries the
+  `section` layer tag (§11 rule 3), the preface included.
 - **Section decorator.** A decorator line directly above a heading
   (`@@sectionA[intro]("title"){.x}` / `@@[intro]("title"){.x}` / `{…}`, optional
   indentation, blank line allowed) decorates the **section**, not the heading —

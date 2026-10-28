@@ -938,10 +938,26 @@ overridable by extras (`start:` prop is rejected with a `Severity::Warning`).
 markers are read before Markdown runs. Markdown then parses the interior of
 every `Section`.
 
+**A section has no head of its own.** It contracts no slot position and declares
+no `ElementHead`: there is no `[bracket]` for it to claim. Its fields are the two
+it derives, which is its whole preset assignment (§6.5, D-7):
+
+| field   | from                                                                                                                 |
+| ------- | -------------------------------------------------------------------------------------------------------------------- |
+| `id`    | the id chain below; absent on the preface and on a `<--->` child                                                     |
+| `depth` | the outline level it stands for: the heading's own `depth` (§7.4), a `<--->` child's parent + 1, `0` for the preface |
+
+Because the depth is the heading's, a section and the heading inside it agree,
+and a `<--->` child is exactly one deeper than its parent. `depth` is a public
+field, so a component receives it as a prop and the built-in `<section>` prints it
+as an attribute.
+
 - A decorator line directly above a heading — `@@type{…}` / `{…}` (optional
   indentation; a blank line before the heading is allowed) — decorates the
   **section**, not the heading: the heading already owns its extras on its `#`
-  run (§7.4).
+  run (§7.4). That decorator is the section's head in every respect but spelling
+  (the §9.1 binder claims it, `S2-5.x` formalises the claim), so its `type`,
+  `class` and remaining items attach to the `<section>`.
 
   ```text
   @@sectionA{`slug-section`, #sectionID}

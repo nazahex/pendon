@@ -767,13 +767,26 @@ README. If an element has nothing to delete, say so in the commit message.
       legal anchor head, so layer order decides" note became "an anchor is
       `@[x]("y")`, so nothing competes for a marker's groups" (S2-4.2's tag makes
       it true). Gate green: fmt + dprint clean, clippy at baseline, 760 tests.
-- [ ] **S2-4.10 — Section.** Dep: S2-4.6. `§9.5`
+- [x] **S2-4.10 — Section.** Dep: S2-4.6. `§9.5`
       Do: section has no head; preset assignment = `id`, `depth` (from heading
       depth); a
       decorator above a heading is claimed by section (Phase 5 implements the
       claim; here wire section's read side).
       G: section fixture with `depth`/`id`.
       Exit: preset assignment = `id`, `depth`.
+      **Done 2026-10-29.** The read side was already there (the §9.1 binder claims
+      the decorator above a heading and routes its `type`/`class`/items to the
+      `<section>`); what was missing is the second assigned field: `depth` is now
+      published on **every** section — the heading's own `depth` for a headed one,
+      parent + 1 for a `<--->` child, `0` for the preface — so section and heading
+      agree and the outline is readable without counting nesting. The preface and
+      the `<--->` children also gained their `__layer` tag (§11 rule 3), so the
+      whole outline is extractable instead of only its headed part;
+      `plugin-extract` now prefers a section's own `depth` and keeps the
+      open-section count as the fallback. `22-section` and `32-extract-heading`
+      re-frozen (`<section depth="0">`, `<section depth="2" id=…>`, …); §9.5 gained
+      the "no head / `id`+`depth`" table, the inventory row and the plugin README
+      updated. 777 tests.
 - [ ] **S2-4.11 — Table layers (non-decorator half).** Dep: S2-4.1. `§8`
       Do: keep `@@captionType`/`@@cellType`/`@@rowType` on layers; make every
       layer accept full slots **and** `{specs}` **and** `%%numbering` (today only

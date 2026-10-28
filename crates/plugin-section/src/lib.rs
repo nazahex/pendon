@@ -287,14 +287,31 @@ fn close_all(stack: &mut Vec<Frame>, out: &mut Vec<Event>) {
 
 /// §9.5: opens a preface `Section` (level 0, no id) for content that precedes
 /// the first heading.
+///
+/// It is a section like any other — same layer tag, same `depth` field — so an
+/// extractor sees the whole outline instead of only its headed part.
 fn ensure_preface(stack: &mut Vec<Frame>, out: &mut Vec<Event>) {
     if stack.is_empty() {
-        out.push(Event::StartNode(NodeKind::Section));
+        push_section_open(out, 0);
         stack.push(Frame {
             level: 0,
             node: NodeKind::Section,
         });
     }
+}
+
+/// Opens one `<section>` node: its §11 layer tag (§11 rule 3) and its `depth`
+/// field (§9.5 — the outline level it stands for, `0` for the preface).
+fn push_section_open(out: &mut Vec<Event>, depth: usize) {
+    out.push(Event::StartNode(NodeKind::Section));
+    out.push(Event::Attribute {
+        name: "__layer".to_string(),
+        value: SECTION_LAYER.to_string(),
+    });
+    out.push(Event::Attribute {
+        name: "depth".to_string(),
+        value: depth.to_string(),
+    });
 }
 
 /// Applies a level marker to the outline.
@@ -305,7 +322,7 @@ fn apply_marker(stack: &mut Vec<Frame>, out: &mut Vec<Event>, marker: Marker) {
             if current >= MAX_LEVEL {
                 return;
             }
-            out.push(Event::StartNode(NodeKind::Section));
+            push_section_open(out, current + 1);
             stack.push(Frame {
                 level: current + 1,
                 node: NodeKind::Section,
@@ -343,6 +360,13 @@ fn open_section(
     out.push(Event::Attribute {
         name: "__layer".to_string(),
         value: SECTION_LAYER.to_string(),
+    });
+    // §9.5's preset assignment: `depth` is the outline level the section stands
+    // for — the depth of the heading it wraps — so a section and its heading
+    // agree, and a `<--->` child is one deeper than its parent.
+    out.push(Event::Attribute {
+        name: "depth".to_string(),
+        value: level.to_string(),
     });
     if let Some(marker) = decorator.and_then(|d| d.type_marker.clone()) {
         out.push(Event::Attribute {
@@ -676,6 +700,44 @@ mod tests {
         // Four consecutive deepens on one paragraph, capped at level 6.
         let out = run("## A\n\n<--->\n<--->\n<--->\n<--->\n\nx\n");
         assert_eq!(section_starts(&out).len(), 5, "{out:?}");
+    }
+
+    /// §9.5's preset assignment: every section publishes `depth` — the outline
+    /// level it stands for — and the heading's own depth is what a headed section
+    /// carries, so section and heading agree.
+    #[test]
+    fn every_section_publishes_its_depth() {
+        let out = run("Preface text\n\n## A\n\nbody\n\n### B\n\n<--->\n\ndeep\n");
+        let depths: Vec<String> = out
+            .iter()
+            .enumerate()
+            .filter_map(|(index, event)| match event {
+                Event::StartNode(NodeKind::Section) => Some(index),
+                _ => None,
+            })
+            .map(|index| {
+                out[index + 1..]
+                    .iter()
+                    .find_map(|event| match event {
+                        Event::Attribute { name, value } if name == "depth" => Some(value.clone()),
+                        Event::Attribute { .. } => None,
+                        _ => None,
+                    })
+                    .expect("every section carries depth")
+            })
+            .collect();
+        // prehead 0, `## A` 2, `### B` 3, `<--->` under B 4.
+        assert_eq!(depths, ["0", "2", "3", "4"], "{out:?}");
+        // Every one of them names the layer that owns it (§11 rule 3), the
+        // preface included.
+        let layers = out
+            .iter()
+            .filter(|event| {
+                matches!(event, Event::Attribute { name, value }
+                if name == "__layer" && value == SECTION_LAYER)
+            })
+            .count();
+        assert_eq!(layers, 4, "{out:?}");
     }
 
     /// §9.5 / D-3a: the section keeps its kind and its layer tag plus the

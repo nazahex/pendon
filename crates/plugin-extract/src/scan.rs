@@ -17,8 +17,8 @@ use crate::fields::element_of_layer;
 /// name it next to the node's attributes.
 pub const INNER_TEXT: &str = "inner_text";
 
-/// Outline depth: a heading's own `depth` attribute, a section's
-/// open-section count, `1` elsewhere.
+/// Outline depth: a heading's or a section's own `depth` attribute, the
+/// open-section count for a section without one, `1` elsewhere.
 pub const DEPTH: &str = "depth";
 
 /// One element occurrence, as the extractor sees it.
@@ -103,13 +103,20 @@ pub fn scan(events: &[Event]) -> Vec<ElementNode> {
                 };
                 let (attrs, inner_text) = consume(events, index, kind);
                 let depth = match element {
+                    // §9.5/§7.4: both publish their own `depth`, so the attribute is
+                    // the answer. The section count stays as the fallback for a node
+                    // an older/foreign emitter left without one.
+                    "section" => attrs
+                        .iter()
+                        .find(|(key, _)| key == "depth")
+                        .and_then(|(_, value)| value.parse::<u8>().ok())
+                        .unwrap_or_else(|| sections.max(1)),
                     "heading" => attrs
                         .iter()
                         .find(|(key, _)| key == "depth")
                         .and_then(|(_, value)| value.parse::<u8>().ok())
                         .map(|depth| depth.clamp(1, 6))
                         .unwrap_or(1),
-                    "section" => sections.max(1),
                     _ => 1,
                 };
                 nodes.push(ElementNode {

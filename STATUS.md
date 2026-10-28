@@ -308,6 +308,14 @@ exactly one `export const headings` line each (no bytes removed), and
       **code span** is no longer claimed (markdown would print `<img>` inside
       backticks). Fixtures: `03-image-figure` → `03-image` (rewritten), `27-bind-mdp`
       (payload line + `img` layer), `31-number-custom` byte-identical. 776 tests.
+      **`S2-4.10` done — section publishes its `depth`.** A section has no head
+      (it declares no `ElementHead`); its two own fields are the ones it derives,
+      `id` (the decorator/heading chain) and `depth` — the heading's own depth, a
+      `<--->` child's parent + 1, `0` for the preface. The preface and the
+      `<--->` children also gained the `section` layer tag (§11 rule 3), so the
+      whole outline is extractable; `plugin-extract` prefers that `depth` and
+      keeps the open-section count as its fallback. `22-section` and
+      `32-extract-heading` re-frozen. 777 tests.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden
@@ -425,3 +433,6 @@ exactly one `export const headings` line each (no bytes removed), and
   `[task.image.custom.img]` entry now). `31-number-custom` did **not** move: a
   `%%numberType` marker is an extras item, so those images were already the
   plugin's and the block shape is unchanged.
+- `S2-4.10` moved `22-section` and `32-extract-heading` by the `depth` attribute
+  (§9.5): every `<section>` now publishes the outline level it stands for, so a
+  fixture that renders a section shows one extra attribute and nothing else.

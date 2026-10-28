@@ -190,14 +190,19 @@ Source: §10.1 · `crates/plugin-marker` · golden `14-marker`.
 
 Source: §9.5 · `crates/plugin-section` · golden `22-section`.
 
-| field        | type   | recommended | notes                                               |
-| ------------ | ------ | ----------- | --------------------------------------------------- |
-| `id`         | string | yes         | `#sectionID` > `[slug]` > extras slug > title slug  |
-| `type`       | string | yes         | the decorator's marker (§6.2)                       |
-| `class`      | string | yes         | extras only                                         |
-| `title`      | string | no          | extras `title:`                                     |
-| `inner_text` | text   | no          | the whole section body; prefer the child headings   |
-| `depth`      | number | yes         | open-section count at the section's own `StartNode` |
+A section has **no head**: it declares no `ElementHead` and contracts no slot.
+Its own two fields are the ones it derives — `id` from the chain and `depth` from
+the heading it wraps (or its parent `<--->` section + 1, `0` for the preface) —
+and the decorator line above the heading publishes everything else.
+
+| field        | type   | recommended | notes                                                              |
+| ------------ | ------ | ----------- | ------------------------------------------------------------------ |
+| `id`         | string | yes         | `#sectionID` > `[slug]` > extras slug > title slug                 |
+| `type`       | string | yes         | the decorator's marker (§6.2)                                      |
+| `class`      | string | yes         | extras only                                                        |
+| `title`      | string | no          | extras `title:`                                                    |
+| `inner_text` | text   | no          | the whole section body; prefer the child headings                  |
+| `depth`      | number | yes         | the heading's own depth; a `<--->` child's parent + 1; `0` prehead |
 
 | `level` | string | yes | head `("paren")`; a positional slot, kept verbatim |
 | `summary` | string | yes | backticked extras item (§6.1) |
