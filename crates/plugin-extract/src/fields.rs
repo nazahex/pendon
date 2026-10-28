@@ -61,10 +61,10 @@ pub fn recommended(element: &str) -> &'static [&'static str] {
         "anchor" => &["href", "id", "title", "type", "inner_text"],
         "blockquote" => &["type", "id", "class", "inner_text"],
         "cite" => &[
+            "reference_id",
+            "locator",
             "citation_number",
-            "instance_index",
             "cite-id",
-            "loc",
             "type",
         ],
         "directive" => &["type", "id", "level", "summary", "inner_text"],
@@ -133,27 +133,30 @@ mod tests {
     #[test]
     fn presets_narrow_through_only_and_omit() {
         let occurrence = available(&[
+            "reference_id",
+            "locator",
             "citation_number",
-            "instance_index",
             "cite-id",
-            "loc",
             "class",
         ]);
         assert_eq!(
             select_fields(&block("cite", true, &[], &[]), &occurrence),
-            ["citation_number", "instance_index", "cite-id", "loc"]
+            ["reference_id", "locator", "citation_number", "cite-id"]
         );
         assert_eq!(
             select_fields(&block("cite", true, &["citation_number"], &[]), &occurrence),
             ["citation_number"]
         );
         assert_eq!(
-            select_fields(&block("cite", true, &["loc"], &["loc"]), &occurrence),
+            select_fields(
+                &block("cite", true, &["locator"], &["locator"]),
+                &occurrence
+            ),
             Vec::<String>::new()
         );
         assert_eq!(
-            select_fields(&block("cite", false, &[], &["loc"]), &occurrence),
-            ["citation_number", "instance_index", "cite-id", "class"]
+            select_fields(&block("cite", false, &[], &["locator"]), &occurrence),
+            ["reference_id", "citation_number", "cite-id", "class"]
         );
     }
 

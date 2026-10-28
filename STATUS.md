@@ -254,6 +254,24 @@ exactly one `export const headings` line each (no bytes removed), and
       self-tested) so invalid JSX cannot be frozen again. Rejected nested props
       `specs={{ … }}` recorded as **D-18**; §6.3 + the solid README say "one rule,
       two paths". 763 tests. Next: `S2-4.4` (cite).
+      `S2-4.4` done — the hand-rolled `[^^](ref "loc")` scanner is deleted; cite
+      now reads `[^reference_id "locator"](paren…)` through `parse_slots` +
+      `parse_extras` + `HEAD.assign`, like the anchor. `reference_id` is mandatory
+      (no assignment → `Error`, text stays literal), `citation_number` is declared
+      as the element's owned field (D-12 rule 5), and `instance_index` is gone
+      from the node, the record and the extract table. The three config keys
+      (`citation_class`, `ref_id_prefix`, `citation_id_prefix`) and the
+      pre-RFC-0002 shim are deleted, so a stale config is an unknown-key load
+      error; the built-in `<sup>` uses fixed constants instead. **Also fixed a
+      real gap:** `field.override.*` was inert because every renderer called
+      `project(v, None)` — `ComponentTemplate` now carries the winning entry's
+      `FieldConfig` (`with_field`) and the component path projects with it, so an
+      override renames `{attrs.ref_id}` / `{...attrs}` while the processor keeps
+      reading its own names (D-4). `citations` rows are now
+      `{reference_id, locator?, citation_number}` (D-19). Fixtures: `05-cite`
+      rewritten, `26-cite-scope` / `27-bind-mdp` / `33-extract-scopes` (+ its
+      side files) re-frozen, new `35-cite-fields` is the "simpler version"
+      config. 769 tests. Next: `S2-4.6` (heading).
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden
@@ -345,8 +363,8 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## Golden & freeze status (see [`docs/spec/golden/README.md`](docs/spec/golden/README.md))
 
-- Golden fixtures `01–12`, `14–16`, `21–28`, `30–34` are frozen and green; none
-  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (28 fixtures) is the gate.
+- Golden fixtures `01–12`, `14–16`, `21–28`, `30–35` are frozen and green; none
+  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (30 fixtures) is the gate.
 - Phase 3 re-froze `06-heading` (it loses the numbers `plugin-heading` used to
   compute and keeps its authored `number:` props) and `28-type-selectors`
   (dropped `auto_number`, no output change).
@@ -360,3 +378,8 @@ exactly one `export const headings` line each (no bytes removed), and
   `{...{ "path": … }}` spread, nothing else — the harness now rejects a dotted
   attribute name on every fixture, so that class of invalid JSX cannot be frozen
   again.
+- `S2-4.4` moved every cite fixture: `05-cite` rewritten (`[^id "loc"]` heads,
+  paren positions, the two `Error` cases), `26-cite-scope` (one citations row),
+  `27-bind-mdp` and `33-extract-scopes` (its `.cite.json` / `.cite.yaml` side
+  files too) — all by the field rename `ref_id`/`loc` → `reference_id`/`locator`
+  and the loss of `instance_index`; `35-cite-fields` is new.

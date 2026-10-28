@@ -10,7 +10,7 @@ format = "solid"
 type = ["CiteA", "CiteB"]
 output = ["./out/[slug].cite.json", "./out/[slug].cite.yaml"]
 format = ["json", "yaml"]
-only = ["ref_id", "citation_number"]
+only = ["reference_id", "citation_number"]
 
 # P.1.c: this block owns `citationsC` first…
 [[task.cite.extract]]
@@ -23,8 +23,8 @@ output = "./out/[slug].rest.yaml"
 format = "yaml"
 export = "citationsC"
 recommended = true
-only = ["ref_id", "citation_number"]
-omit = ["ref_id"]
+only = ["reference_id", "citation_number"]
+omit = ["reference_id"]
 
 [task.cite]
 reference_source = "external"

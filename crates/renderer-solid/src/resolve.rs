@@ -228,6 +228,7 @@ mod tests {
             selectors,
             template: format!("<{name} />"),
             imports: Vec::new(),
+            field: None,
         }
     }
 
@@ -319,6 +320,7 @@ mod tests {
             selectors: Vec::new(),
             template: "<Epis />".to_string(),
             imports: Vec::new(),
+            field: None,
         };
         let hints = hints(vec![custom]);
         let ast = doc(vec![json!({

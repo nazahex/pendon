@@ -31,19 +31,19 @@ A block names one destination or both, plus the field selection:
 type = ["CiteA", "CiteB"]
 output = ["./out/[slug].cite.json", "../../project-2/[category].yaml"]
 format = ["json", "yaml"]
-only = ["citation_number", "instance_index"]
+only = ["reference_id", "citation_number"]
 
 # P.1.b — an in-module binding, no file
 [[task.cite.extract]]
 export = "citationsC"
-omit = ["instance_index"]
+omit = ["locator"]
 
 # P.1.c — both, and it overrides the earlier `citationsC`
 [[task.cite.extract]]
 output = "./out/[category]-cite-c.yaml"
 format = "yaml"
 export = "citationsC"
-omit = ["instance_index"]
+omit = ["locator"]
 ```
 
 - `output` is a path (or a list) **relative to the project root**, with the same

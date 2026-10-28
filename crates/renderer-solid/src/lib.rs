@@ -350,6 +350,51 @@ mod tests {
         assert!(!output.contains("specs.tick=\""), "output = {output}");
     }
 
+    /// §6.1 / D-4: `field.override.<path>` renames an attribute **as it is
+    /// written**, so a template reads the public name (`{attrs.ref_id}`) while the
+    /// node keeps the internal one the processor produced. Before S2-4.4 the
+    /// projection was always called with `None` on this path, which made an
+    /// override a documented no-op.
+    #[test]
+    fn an_override_renames_a_component_prop() {
+        let mut events = vec![Event::StartNode(NodeKind::Document)];
+        events.extend(pendon_core::element_open("span"));
+        events.push(Event::Attribute {
+            name: "__layer".to_string(),
+            value: "cite".to_string(),
+        });
+        events.push(Event::Attribute {
+            name: "reference_id".to_string(),
+            value: "smith".to_string(),
+        });
+        events.push(pendon_core::element_close("span"));
+        events.push(Event::EndNode(NodeKind::Document));
+
+        let mut field = pendon_extra::FieldConfig::new();
+        field
+            .add_override(
+                pendon_extra::Path::from_dotted("reference_id").expect("valid path"),
+                pendon_extra::Path::from_dotted("ref_id").expect("valid path"),
+            )
+            .expect("one override");
+        let hints = SolidRenderHints {
+            templates: vec![ComponentTemplate::new_layer(
+                "cite",
+                Vec::new(),
+                "<Cite {...attrs} />",
+                Vec::new(),
+            )
+            .with_field(field)],
+            ..SolidRenderHints::default()
+        };
+        let output = render_solid_with_hints(&events, Some(&hints));
+        assert!(
+            output.contains(r#"<Cite ref_id="smith" />"#),
+            "output = {output}"
+        );
+        assert!(!output.contains("reference_id"), "output = {output}");
+    }
+
     /// §11 rule 3: a `__`-prefixed key is an internal marker (`__plugin_kind`),
     /// never a real attribute. It must not reach the output even on a plain
     /// `Element` node, where the template path's `{...attrs}` filter does not
@@ -400,7 +445,7 @@ mod tests {
                     "cite",
                     "citationList",
                     serde_json::json!([
-                        {"ref_id": "book", "citation_number": 1, "instance_index": 1}
+                        {"reference_id": "book", "citation_number": 1}
                     ]),
                 ),
             ],
@@ -413,7 +458,7 @@ mod tests {
         );
         assert!(
             output.contains(
-                r#"export const citationList = [{"citation_number":1,"instance_index":1,"ref_id":"book"}];"#
+                r#"export const citationList = [{"citation_number":1,"reference_id":"book"}];"#
             ),
             "output = {output}"
         );

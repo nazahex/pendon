@@ -4,8 +4,9 @@ use std::path::Path;
 
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
-    issue_event, scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
-    ExtrasIssue, FieldName, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag, SpecsKey,
+    issue_event, parse_extras, parse_slots, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
+    ExtrasIssue, ExtrasMatch, FieldName, Preset, Slot, SlotContract, SlotKind, SlotMatch, SlotPos,
+    SlotTag, SpecsKey,
 };
 use pendon_renderer_solid::{
     layer_templates, ComponentSet, DataExport, ImportEntry, SolidRenderHints,
@@ -13,6 +14,15 @@ use pendon_renderer_solid::{
 use serde_json::{Map, Value};
 
 // --- Slot head (§7.3, §6.1) ---
+
+/// The two characters that open cite's head: the bracket and its tag (§5.3,
+/// D-11).
+///
+/// The caret sits **inside** the bracket (`SlotTag::Cite`), so the content starts
+/// after those two characters. That caret is the only thing that makes a bracket
+/// a citation — the old `[^^](ref "loc")` form put a second caret and a paren
+/// there instead (§14).
+const HEAD_OPEN: &str = "[^";
 
 /// Every position cite claims: `[^reference_id "locator" `bracket tick`](paren …)`
 /// — a claimed head is read whole, so an unnamed content becomes a bare field
@@ -30,10 +40,11 @@ const SLOTS: &[SlotPos] = &[
 /// `bracket.quote` → `locator`.
 ///
 /// These two are the only *slot* presets; `citation_number` is computed by this
-/// plugin and is therefore not a position. The processor reads `reference_id` and
-/// `locator` **by name**, so a user may move them to any position in the head
-/// (§7.3) as long as the names survive — or override the names and keep the
-/// processor reading its own (D-4).
+/// plugin and is therefore not a position ([`OWNED`]). The processor reads
+/// `reference_id` and `locator` **by name**, so a user may move them to any
+/// position in the head (`field.bracket.tick = "reference_id"`) as long as the
+/// names survive — or rename them publicly and keep the processor reading its own
+/// (D-4).
 const PRESET: &[Preset] = &[
     Preset::new(
         Slot::Bracket,
@@ -43,6 +54,10 @@ const PRESET: &[Preset] = &[
     Preset::new(Slot::Bracket, SlotKind::Quote, FieldName::new("locator")),
 ];
 
+/// D-12 rule 5: the field the processor writes itself, so an extras item that
+/// spells it is an `Error` (`field.override.<k>` publishes it under another name).
+const OWNED: &[FieldName] = &[FieldName::new("citation_number")];
+
 /// The tag that claims cite's head (D-11), the positions it claims, and their
 /// fallback-to-preset assignment (§6.1, §6.5, D-7).
 pub const HEAD: ElementHead = ElementHead::new(
@@ -51,7 +66,25 @@ pub const HEAD: ElementHead = ElementHead::new(
         tag: SlotTag::Cite,
     },
     PRESET,
-);
+)
+.with_owned(OWNED);
+
+// --- Built-in markup (§7.3) ---
+
+/// The class of the fallback `<sup>` when no component answers the citation.
+///
+/// Not configurable (`citation_class` is gone, §14): a site that wants its own
+/// class names writes a `Cite` component instead — the reason the config key was
+/// removed. The three constants below are what the built-in markup has always
+/// produced by default.
+const CITATION_CLASS: &str = "cite-ref";
+
+/// The `href` prefix of a citation's backlink into the bibliography
+/// (`#citeref-1-book`).
+const REF_HREF_PREFIX: &str = "citeref-";
+
+/// The `id` prefix of a citation's own anchor (`cite-1`).
+const CITATION_ANCHOR_PREFIX: &str = "cite-";
 
 // --- Public Types ---
 
@@ -72,9 +105,6 @@ pub fn primary_layer() -> &'static str {
 
 #[derive(Clone, Debug)]
 pub struct CiteOptions {
-    pub ref_id_prefix: String,
-    pub citation_class: String,
-    pub citation_id_prefix: String,
     /// Export variable name for references data (Solid/JS output).
     pub references_export: String,
     /// Export variable name for citations data (Solid/JS output).
@@ -93,9 +123,6 @@ pub struct CiteOptions {
 impl Default for CiteOptions {
     fn default() -> Self {
         Self {
-            ref_id_prefix: "citeref-".to_string(),
-            citation_class: "cite-ref".to_string(),
-            citation_id_prefix: "cite-".to_string(),
             references_export: "references".to_string(),
             citations_export: "citations".to_string(),
             references_scope: None,
@@ -108,8 +135,7 @@ impl Default for CiteOptions {
 /// Which references the `references` export carries (§2.6 of RFC-0002).
 ///
 /// The scope is a **filter on the export only**: `citations`, the
-/// `citation_number` / `instance_index` assignment and the diagnostics are
-/// unaffected by it.
+/// `citation_number` assignment and the diagnostics are unaffected by it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReferencesScope {
     /// Only the references the document actually cites.
@@ -191,13 +217,14 @@ pub struct CitationContext {
     options: CiteOptions,
     /// Every **physical** citation occurrence, in document order. This is the
     /// data exported as `export const citations = [...]` (§2.3): entries repeat
-    /// when the same `(ref_id, loc)` is cited more than once.
+    /// when the same `(reference_id, locator)` is cited more than once.
     citations: Vec<Value>,
-    /// `(ref_id, loc)` → display ordinal (`citation_number`).
+    /// `(reference_id, locator)` → display ordinal (`citation_number`).
     identities: HashMap<String, usize>,
-    /// Next display ordinal handed out to a new `(ref_id, loc)` tuple.
+    /// Next display ordinal handed out to a new `(reference_id, locator)` tuple.
     next_citation_number: usize,
     /// Absolute counter for physical citation occurrences (never deduplicates).
+    /// Not a field (§7.3): only the built-in markup's backlink anchor uses it.
     instance_counter: usize,
     diagnostics: Vec<Event>,
 }
@@ -270,9 +297,11 @@ impl CitationContext {
 
     /// Returns every physical citation occurrence as a JSON array.
     ///
-    /// Each entry carries `ref_id`, `citation_number`, `instance_index` and the
-    /// optional `loc`. A duplicated `(ref_id, loc)` keeps the same
-    /// `citation_number` but gets its own `instance_index` (§2.2).
+    /// Each entry carries `reference_id`, `citation_number` and, when the head
+    /// names one, `locator` (§7.3). A duplicated `(reference_id, locator)` keeps
+    /// its `citation_number` and is recorded again — every physical occurrence is
+    /// a row, which is what makes `citations` a citation list rather than a
+    /// bibliography.
     pub fn get_citations(&self) -> Value {
         Value::Array(self.citations.clone())
     }
@@ -282,7 +311,7 @@ impl CitationContext {
         let mut used = Map::new();
         if let Some(refs) = self.references.as_object() {
             for cite in &self.citations {
-                if let Some(id) = cite.get("ref_id").and_then(Value::as_str) {
+                if let Some(id) = cite.get("reference_id").and_then(Value::as_str) {
                     if let Some(reference) = refs.get(id) {
                         used.insert(id.to_string(), reference.clone());
                     }
@@ -296,7 +325,7 @@ impl CitationContext {
             .and_then(Value::as_object)
         {
             for cite in &self.citations {
-                if let Some(id) = cite.get("ref_id").and_then(Value::as_str) {
+                if let Some(id) = cite.get("reference_id").and_then(Value::as_str) {
                     if !used.contains_key(id) {
                         if let Some(reference) = ext.get(id) {
                             used.insert(id.to_string(), reference.clone());
@@ -425,134 +454,103 @@ pub fn solid_hints(
 // --- Internal Processing ---
 
 fn emit_text(text: &str, ctx: &mut CitationContext, out: &mut Vec<Event>) {
-    let chars: Vec<char> = text.chars().collect();
     let mut cursor = 0usize;
     let mut normal = String::new();
 
-    while cursor < chars.len() {
-        if chars[cursor..].starts_with(&['[', '^', '^', ']', '(']) {
-            if let Some((end, id, props, mut extra)) = parse_citation(&chars, cursor, ctx.options())
-            {
+    while cursor < text.len() {
+        let rest = &text[cursor..];
+        match read_head(rest, ctx) {
+            Read::Cite { parts, consumed } => {
                 flush_text(&mut normal, out);
-
-                // §7.3/§6.2: the cite args are the construct head and win over
-                // a same-named extras prop.
-                let head_keys: Vec<String> = props.keys().cloned().collect();
-                let mut dropped: Vec<String> = Vec::new();
-                extra.data.retain(|(key, _)| {
-                    if head_keys.contains(key) {
-                        dropped.push(key.clone());
-                        false
-                    } else {
-                        true
-                    }
-                });
-                for key in dropped {
-                    extra.issues.push(ExtrasIssue::warning(format!(
-                        "`{key}` was dropped because the construct head already sets it"
-                    )));
-                }
-                for issue in &extra.issues {
+                for issue in &parts.extra.issues {
                     out.push(issue_event("cite", issue));
                 }
-
-                if reference_exists(&ctx.references, &id) {
-                    let mut citation = Map::new();
-                    citation.insert("ref_id".to_string(), Value::String(id.clone()));
-                    for (key, value) in props {
-                        citation.insert(key, Value::String(value));
-                    }
-
-                    // Identity for deduplication: the `(ref_id, loc)` tuple.
-                    // `loc` may be absent, so use a sentinel for "no loc".
-                    let loc = citation.get("loc").and_then(Value::as_str).unwrap_or("");
-                    let identity = format!("{id}\x1F{loc}");
-
-                    // `citation_number`: the display ordinal. A repeated
-                    // `(ref_id, loc)` keeps the number it was first given.
-                    let citation_number = match ctx.identities.get(&identity) {
-                        Some(&existing) => existing,
-                        None => {
-                            ctx.next_citation_number += 1;
-                            let new_number = ctx.next_citation_number;
-                            ctx.identities.insert(identity, new_number);
-                            new_number
-                        }
-                    };
-
-                    // `instance_index`: absolute per physical occurrence; it
-                    // never deduplicates (§2.2).
-                    ctx.instance_counter += 1;
-                    let instance_index = ctx.instance_counter;
-
-                    // Record the physical occurrence for the `citations` export.
-                    let mut record = citation.clone();
-                    record.insert(
-                        "citation_number".to_string(),
-                        Value::Number(citation_number.into()),
-                    );
-                    record.insert(
-                        "instance_index".to_string(),
-                        Value::Number(instance_index.into()),
-                    );
-                    ctx.citations.push(Value::Object(record));
-
-                    // The emitted node carries both numbers.
-                    citation.insert(
-                        "citation_number".to_string(),
-                        Value::Number(citation_number.into()),
-                    );
-                    citation.insert(
-                        "instance_index".to_string(),
-                        Value::Number(instance_index.into()),
-                    );
-
-                    emit_citation(
-                        out,
-                        &ctx.options,
-                        &citation,
-                        citation_number,
-                        instance_index,
-                        &extra,
-                    );
+                if reference_exists(&ctx.references, &parts.reference_id) {
+                    emit_citation(*parts, ctx, out);
                 } else {
-                    // Reference not found: emit raw syntax as plain text and log diagnostic
-                    let raw: String = chars[cursor..end].iter().collect();
-                    normal.push_str(&raw);
+                    // Reference not found: the text stays as written and the
+                    // document gets an `Error` (§7.3).
+                    normal.push_str(&text[cursor..cursor + consumed]);
                     ctx.diagnostics.push(Event::Diagnostic {
                         severity: Severity::Error,
-                        message: format!("[cite] reference '{}' was not found", id),
+                        message: format!("[cite] reference '{}' was not found", parts.reference_id),
                         span: None,
                     });
                 }
-
-                // CRITICAL: Always advance cursor past the parsed citation,
-                // regardless of whether the reference existed or not.
-                cursor = end;
-                continue;
+                cursor += consumed;
+            }
+            // §4.3 / D-2: slot-shaped but illegal, or a citation without a
+            // reference. The `Error` is reported and the text stays as written.
+            Read::Malformed(message) => {
+                out.push(Event::Diagnostic {
+                    severity: Severity::Error,
+                    message: format!("[cite] {message}"),
+                    span: None,
+                });
+                normal.push('[');
+                cursor += '['.len_utf8();
+            }
+            Read::Literal => {
+                let ch = rest.chars().next().expect("cursor is in bounds");
+                normal.push(ch);
+                cursor += ch.len_utf8();
             }
         }
-
-        // Fallback: character is not part of a valid citation syntax
-        normal.push(chars[cursor]);
-        cursor += 1;
     }
 
     flush_text(&mut normal, out);
 }
 
-fn emit_citation(
-    out: &mut Vec<Event>,
-    options: &CiteOptions,
-    citation: &Map<String, Value>,
-    citation_number: usize,
-    instance_index: usize,
-    extra: &CiteExtraAttrs,
-) {
+/// Emits one citation: assigns its `citation_number`, records the physical
+/// occurrence and renders it — a §11 component when the `cite` layer is
+/// configured, the built-in `<sup>` markup otherwise.
+fn emit_citation(parts: CiteParts, ctx: &mut CitationContext, out: &mut Vec<Event>) {
+    // Identity for deduplication: the `(reference_id, locator)` tuple. The
+    // locator may be absent, so use a sentinel for "no locator".
+    let identity = format!(
+        "{}\x1F{}",
+        parts.reference_id,
+        parts.locator.as_deref().unwrap_or("")
+    );
+
+    // `citation_number`: the display ordinal. A repeated
+    // `(reference_id, locator)` keeps the number it was first given.
+    let citation_number = match ctx.identities.get(&identity) {
+        Some(&existing) => existing,
+        None => {
+            ctx.next_citation_number += 1;
+            let new_number = ctx.next_citation_number;
+            ctx.identities.insert(identity, new_number);
+            new_number
+        }
+    };
+
+    // `instance_count`: absolute per physical occurrence; it never deduplicates.
+    // It is **not** a field (§7.3 — `plugin-number` replaces it): the built-in
+    // markup uses it for its own backlink anchor, nothing else.
+    ctx.instance_counter += 1;
+    let instance = ctx.instance_counter;
+
+    // Record the physical occurrence for the `citations` export (§20).
+    let mut record = Map::new();
+    record.insert(
+        "reference_id".to_string(),
+        Value::String(parts.reference_id.clone()),
+    );
+    if let Some(locator) = &parts.locator {
+        record.insert("locator".to_string(), Value::String(locator.clone()));
+    }
+    record.insert(
+        "citation_number".to_string(),
+        Value::Number(citation_number.into()),
+    );
+    ctx.citations.push(Value::Object(record));
+
+    let options = &ctx.options;
     // §11 rule 3 / D-3a: with a configured `cite` layer every citation becomes a
     // structured, layer-tagged node and the renderer picks the entry; with none
     // configured no template can ever apply, so the built-in `<sup>` markup is
-    // emitted directly, exactly as before.
+    // emitted directly.
     if !options.custom.is_empty() {
         let node = NodeKind::Element("sup".to_string());
         out.push(Event::StartNode(node.clone()));
@@ -564,54 +562,64 @@ fn emit_citation(
             name: "__layer".to_string(),
             value: CITE_LAYER.to_string(),
         });
-        if let Some(marker) = &extra.type_marker {
+        if let Some(marker) = &parts.extra.type_marker {
             out.push(Event::Attribute {
                 name: "type".to_string(),
                 value: marker.clone(),
             });
         }
-        // Emit core citation attributes
-        for (key, value) in citation {
+        // The processor's own fields (§7.3): the preset names, so a
+        // `field.override.*` can rename them on the way out (D-4).
+        out.push(Event::Attribute {
+            name: "reference_id".to_string(),
+            value: parts.reference_id.clone(),
+        });
+        if let Some(locator) = &parts.locator {
             out.push(Event::Attribute {
-                name: key.clone(),
-                value: value_to_string(value),
+                name: "locator".to_string(),
+                value: locator.clone(),
             });
         }
-        // Emit extra attributes (class, id, props, style)
-        emit_extra_attrs(out, extra);
+        out.push(Event::Attribute {
+            name: "citation_number".to_string(),
+            value: citation_number.to_string(),
+        });
+        // Every other claimed position keeps its (possibly moved) field name.
+        for (name, value) in &parts.values {
+            out.push(Event::Attribute {
+                name: name.clone(),
+                value: value.clone(),
+            });
+        }
+        emit_extra_attrs(out, &parts.extra);
         out.push(Event::EndNode(node));
         return;
     }
 
-    // Default HTML output
-    emit_citation_html(
-        out,
-        options,
-        citation,
-        citation_number,
-        instance_index,
-        extra,
-    );
+    emit_citation_html(out, &parts, citation_number, instance);
 }
 
-/// Default HTML rendering with extra class support
+/// The built-in markup: `<sup class="cite-ref"><a href="#citeref-1-book"
+/// id="cite-1">[1]</a></sup>` plus the extras the head carries.
+///
+/// The class and the two prefixes are constants (§7.3): a site that wants its own
+/// spelling writes a `Cite` component, which is why `citation_class`,
+/// `ref_id_prefix` and `citation_id_prefix` are gone (§14).
 fn emit_citation_html(
     out: &mut Vec<Event>,
-    options: &CiteOptions,
-    citation: &Map<String, Value>,
+    parts: &CiteParts,
     citation_number: usize,
-    instance_index: usize,
-    extra: &CiteExtraAttrs,
+    instance: usize,
 ) {
-    let ref_id = citation
-        .get("ref_id")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-    let target = format!("{}{}-{}", options.ref_id_prefix, citation_number, ref_id);
-    let anchor = format!("{}{}", options.citation_id_prefix, instance_index);
+    let extra = &parts.extra;
+    let target = format!(
+        "{}{}-{}",
+        REF_HREF_PREFIX, citation_number, parts.reference_id
+    );
+    let anchor = format!("{}{}", CITATION_ANCHOR_PREFIX, instance);
 
-    // Build class list: base citation_class + extra classes
-    let mut classes = vec![options.citation_class.clone()];
+    // Build class list: the built-in class + extra classes
+    let mut classes = vec![CITATION_CLASS.to_string()];
     classes.extend(extra.classes.iter().cloned());
     let class_attr = classes.join(" ");
 
@@ -703,108 +711,154 @@ fn cite_style(extra: &CiteExtraAttrs) -> String {
 
 // --- Parsing Helpers ---
 
-/// Parses `[^^](ref "loc")` (§7.3) plus an adjacent extras head.
-///
-/// The reference is an **unquoted** token and the location is an optional
-/// **quoted** string. Everything else stays literal text: a quoted reference
-/// (`[^^](book)`), the retired `("ref", "loc")` form, a `loc=` prop and an
-/// empty `[^^]()` are not citations.
-///
-/// Returns (total_end_position, cite_id, cite_props, extra_attrs).
-fn parse_citation(
-    chars: &[char],
-    start: usize,
-    options: &CiteOptions,
-) -> Option<(usize, String, BTreeMap<String, String>, CiteExtraAttrs)> {
-    // `[^^](` is five characters.
-    let mut cursor = start + 5;
-
-    while matches!(chars.get(cursor), Some(ch) if ch.is_whitespace()) {
-        cursor += 1;
-    }
-    let reference_start = cursor;
-    while let Some(&ch) = chars.get(cursor) {
-        if ch == ')' || ch.is_whitespace() {
-            break;
-        }
-        if ch == '"' || ch == ',' {
-            return None;
-        }
-        cursor += 1;
-    }
-    if cursor == reference_start {
-        return None;
-    }
-    let id: String = chars[reference_start..cursor].iter().collect();
-    let mut props = BTreeMap::new();
-
-    // An optional quoted location, separated from the reference by whitespace.
-    let mut after_space = cursor;
-    while matches!(chars.get(after_space), Some(ch) if ch.is_whitespace()) {
-        after_space += 1;
-    }
-    if after_space > cursor {
-        if chars.get(after_space) != Some(&'"') {
-            return None;
-        }
-        let mut quote_end = after_space + 1;
-        while let Some(&ch) = chars.get(quote_end) {
-            if ch == '"' {
-                break;
-            }
-            quote_end += 1;
-        }
-        if chars.get(quote_end) != Some(&'"') {
-            return None;
-        }
-        let loc: String = chars[after_space + 1..quote_end].iter().collect();
-        props.insert("loc".to_string(), loc);
-        cursor = quote_end + 1;
-        while matches!(chars.get(cursor), Some(ch) if ch.is_whitespace()) {
-            cursor += 1;
-        }
-    }
-
-    if chars.get(cursor) != Some(&')') {
-        return None;
-    }
-    cursor += 1;
-
-    let extra = parse_cite_extra_attrs(chars, &mut cursor, options);
-    Some((cursor, id, props, extra))
+/// What one `[^` in the text turned out to be (§7.3).
+enum Read {
+    /// Not a citation: no `[^…]` at all, or a bracket another tag claims.
+    Literal,
+    /// Slot-shaped but illegal (§4.3, D-2), or a citation whose `reference_id`
+    /// is missing: an `Error`, and the text stays as written.
+    Malformed(String),
+    /// A complete citation: its fields and the bytes the head occupied. Boxed
+    /// because a citation carries far more than a literal does.
+    Cite {
+        parts: Box<CiteParts>,
+        consumed: usize,
+    },
 }
 
-/// Parses the blocks attached to a citation: the adjacent §7.3 `{…}` /
-/// `@@type{…}` extras head. It attaches to the citation node; the construct head
-/// (the citation args) wins (§6.2). The retired `[.class,#id]{key: val}` block is
-/// literal text (§14).
-fn parse_cite_extra_attrs(
-    chars: &[char],
-    cursor: &mut usize,
-    options: &CiteOptions,
-) -> CiteExtraAttrs {
-    let mut extra = CiteExtraAttrs::default();
+/// What one citation carries: the two fields the processor reads, every other
+/// claimed position, and the §11 extras head.
+#[derive(Debug, Default)]
+struct CiteParts {
+    /// `reference_id` — the reference the citation points at. Mandatory (§7.3):
+    /// a head that does not assign it is not a citation.
+    reference_id: String,
+    /// `locator` — optional, and part of the citation's identity (§7.3).
+    locator: Option<String>,
+    /// Every other claimed position, under its field name: a position the preset
+    /// does not name keeps its slot-qualified path (`bracket.tick`,
+    /// `paren.bare`, …, D-7), and a moved position keeps the author's name.
+    values: BTreeMap<String, String>,
+    /// The extras head, merged onto the citation (§6.2/§6.3).
+    extra: CiteExtraAttrs,
+}
 
-    // §7.3/§4.1: the extras head must be adjacent (`[^^](book)@@cite{…}`).
-    let rest: Vec<char> = chars[*cursor..].to_vec();
-    if let Some((head, next)) = scan_extras_chars(&rest, 0) {
-        *cursor += next;
-        merge_cite_extras(&mut extra, &head, options);
+/// Reads a citation head at the start of `rest` — the `^` tag, the slots (§5.2–
+/// §5.3) and the §11 extras head attached to the closing delimiter.
+fn read_head(rest: &str, ctx: &CitationContext) -> Read {
+    if !rest.starts_with(HEAD_OPEN) {
+        return Read::Literal;
+    }
+    let (pair, mut consumed) = match parse_slots(rest) {
+        SlotMatch::Slots { pair, rest: after } if pair.tag == SlotTag::Cite => {
+            (pair, rest.len() - after.len())
+        }
+        // §4.3 / D-2: tagged and slot-shaped but illegal.
+        SlotMatch::Malformed { error, .. } => return Read::Malformed(error.to_string()),
+        // `^[` with no usable head, or a bracket another tag owns.
+        _ => return Read::Literal,
+    };
+
+    // §4.1: the extras head must touch the closing delimiter.
+    let extras = match parse_extras(&rest[consumed..]) {
+        ExtrasMatch::Head { head, rest: after } => {
+            consumed = rest.len() - after.len();
+            Some(head)
+        }
+        ExtrasMatch::Absent { .. } | ExtrasMatch::Malformed { .. } => None,
+    };
+
+    let options = ctx.options();
+    // §6.5 / D-7: the preset is voided by the **matched** entry, never by another
+    // entry's `field.*`. No extras head means no `type` marker, which is exactly
+    // the entry the renderer will pick (the layer default), so its `field.*`
+    // applies too — otherwise a default `Cite` component could never assign or
+    // unassign a position.
+    let marker = extras.as_ref().and_then(|head| head.type_marker.as_deref());
+    let matched = options.custom.field_for(marker);
+
+    let mut parts = CiteParts::default();
+    // §6.5: `bracket.bare → reference_id`, `bracket.quote → locator`; every
+    // other position is a bare field (D-7).
+    let mut issues = Vec::new();
+    let fields = HEAD.assign(&pair, matched).unwrap_or_else(|error| {
+        // The entry's assignments contradict each other (one path is a prefix of
+        // another), so they cannot all be published. A config clash is the
+        // author's bug: say so and keep the preset.
+        issues.push(ExtrasIssue::error(format!(
+            "the matched entry's `field.*` assignments clash ({error}); the preset is kept"
+        )));
+        HEAD.assign(&pair, None)
+            .expect("an untouched preset cannot clash")
+    });
+    // The names this construct's own head produced; an extras item spelling one
+    // loses (§6.2).
+    let mut head_keys: Vec<String> = Vec::new();
+    for (path, value) in fields.iter() {
+        let name = path.dotted();
+        let text = value.literal();
+        head_keys.push(name.clone());
+        match name.as_str() {
+            "reference_id" => parts.reference_id = text,
+            "locator" => parts.locator = Some(text),
+            _ => {
+                parts.values.insert(name, text);
+            }
+        }
+    }
+    // §7.3: without a reference there is nothing to number, so the head is not a
+    // citation — the `Error` names the cause.
+    if parts.reference_id.is_empty() {
+        if fields.is_empty() {
+            return Read::Malformed(
+                "a citation needs a `reference_id` (`[^reference_id]`)".to_string(),
+            );
+        }
+        return Read::Malformed(
+            "no position assigns `reference_id`; the cite preset is void (see `field.*`)"
+                .to_string(),
+        );
     }
 
-    extra
+    if let Some(head) = extras {
+        merge_cite_extras(&mut parts.extra, &head, options, &head_keys);
+    }
+    parts.extra.issues.extend(issues);
+
+    Read::Cite {
+        parts: Box::new(parts),
+        consumed,
+    }
 }
 
 /// Merges a §7.3 extras head into the citation's extra attributes.
 ///
-/// The construct side wins (§6.2): a slot the head or the deprecated block
-/// already set is kept and the extras value is reported as dropped. `class`
-/// accumulates (§6.4) and bare flags stay bare attributes (§6.3).
-fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead, options: &CiteOptions) {
+/// The construct side wins (§6.2): an item that spells a name the head already
+/// produced (`reference_id`, `locator`, a slot field) is dropped and reported,
+/// `class` accumulates (§6.4) and bare flags stay bare attributes (§6.3).
+fn merge_cite_extras(
+    extra: &mut CiteExtraAttrs,
+    head: &ExtrasHead,
+    options: &CiteOptions,
+    head_keys: &[String],
+) {
     // §6.1/§11 rule 5: the entry answering this marker names the extras specs.
     let specs = options.custom.specs_for(head.type_marker.as_deref());
     let parsed = to_attributes(head, &specs);
     extra.issues.extend(parsed.issues.iter().cloned());
+
+    // §6.2: an extras item that spells a name the citation's own head produced
+    // loses — the head is the construct, the extras only decorate it.
+    let mut items = Vec::with_capacity(parsed.items.len());
+    for (key, value) in parsed.items.iter() {
+        if head_keys.iter().any(|head| head == key) {
+            extra.issues.push(ExtrasIssue::warning(format!(
+                "`{key}` was dropped because the construct head already sets it"
+            )));
+            continue;
+        }
+        items.push((key.clone(), value.clone()));
+    }
 
     // §6.2/§6.3: `#id` > extras `slug`; both feed the `cite-id` slot **while the
     // position keeps its default path** — a `field.specs.*` assignment publishes it
@@ -821,10 +875,16 @@ fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead, options: &Ci
     // §6.3: the citation's own positions — `class` / `style` are the universal
     // DOM fields, `#id` feeds `cite-id` and an extras `"title"` is the `title`.
     for (key, value) in specs.dom_fields(
-        &parsed.items,
+        &items,
         &[(SpecsKey::Id, "cite-id"), (SpecsKey::Quote, "title")],
     ) {
         if key == "cite-id" || tick == Some(key) {
+            continue;
+        }
+        if HEAD.owns(key) {
+            // D-12 rule 5: the processor writes `citation_number`, so an extras
+            // item that spells it is an `Error`, not a silent overwrite.
+            extra.issues.push(ExtrasIssue::owned_key(key));
             continue;
         }
         match value {
@@ -925,13 +985,6 @@ fn reference_exists(references: &Value, id: &str) -> bool {
         .is_some_and(|map| map.contains_key(id))
 }
 
-fn value_to_string(value: &Value) -> String {
-    value
-        .as_str()
-        .map(str::to_string)
-        .unwrap_or_else(|| value.to_string())
-}
-
 fn flush_text(text: &mut String, out: &mut Vec<Event>) {
     if !text.is_empty() {
         out.push(Event::Text(std::mem::take(text)));
@@ -977,11 +1030,14 @@ mod tests {
     use super::*;
     use pendon_renderer_solid::TypedComponent;
 
-    /// §7.3's preset, position by position (S2-2.5): cite presets the bracket,
-    /// not the paren — the old `[^^](ref "locator")` form is pre-D-16 history.
+    /// §7.3's preset, position by position (S2-4.4): the bracket carries the
+    /// reference and the locator, the paren is claimed but never preset.
     #[test]
     fn the_head_declares_the_spec_preset() {
         assert_eq!(HEAD.contract.tag, SlotTag::Cite);
+        // The contract's sigil is the character the reader looks for.
+        assert_eq!(HEAD.contract.tag.sigil(), Some('^'));
+        assert_eq!(HEAD_OPEN, "[^");
         assert!(
             HEAD.is_consistent(),
             "a preset must sit on a claimed position"
@@ -1006,6 +1062,10 @@ mod tests {
         assert!(HEAD.contract.accepts(Slot::Paren, SlotKind::Bare));
         assert_eq!(HEAD.preset_for(Slot::Paren, SlotKind::Bare), None);
         assert_eq!(HEAD.preset_for(Slot::Bracket, SlotKind::Tick), None);
+        // §7.3: the processor writes `citation_number` itself, so an extras item
+        // spelling it is an `Error` (D-12 rule 5).
+        assert!(HEAD.owns("citation_number"));
+        assert!(!HEAD.owns("reference_id"));
     }
 
     fn events_with_refs() -> Vec<Event> {
@@ -1018,7 +1078,7 @@ mod tests {
             },
             Event::EndNode(NodeKind::Frontmatter),
             Event::StartNode(NodeKind::Paragraph),
-            Event::Text(r#"A [^^](book "p. 1") B [^^](book "p. 1") C [^^](book "p. 2")."#.into()),
+            Event::Text(r#"A [^book "p. 1"] B [^book "p. 1"] C [^book "p. 2"]."#.into()),
             Event::EndNode(NodeKind::Paragraph),
             Event::EndNode(NodeKind::Document),
         ]
@@ -1032,17 +1092,16 @@ mod tests {
 
         let citations = ctx.get_citations();
         let arr = citations.as_array().unwrap();
-        // Three physical occurrences: `p. 1`, `p. 1`, `p. 2` (§2.2).
+        // Three physical occurrences: `p. 1`, `p. 1`, `p. 2` (§2.2). The record
+        // carries the fields (§7.3) — `instance_index` is gone.
         assert_eq!(arr.len(), 3);
-        assert_eq!(arr[0]["ref_id"], "book");
+        assert_eq!(arr[0]["reference_id"], "book");
         assert_eq!(arr[0]["citation_number"], 1);
-        assert_eq!(arr[0]["instance_index"], 1);
-        assert_eq!(arr[1]["loc"], "p. 1");
+        assert!(arr[0].get("instance_index").is_none(), "{}", arr[0]);
+        assert_eq!(arr[1]["locator"], "p. 1");
         assert_eq!(arr[1]["citation_number"], 1);
-        assert_eq!(arr[1]["instance_index"], 2);
-        assert_eq!(arr[2]["loc"], "p. 2");
+        assert_eq!(arr[2]["locator"], "p. 2");
         assert_eq!(arr[2]["citation_number"], 2);
-        assert_eq!(arr[2]["instance_index"], 3);
     }
 
     #[test]
@@ -1054,7 +1113,7 @@ mod tests {
         let events_a = vec![
             Event::StartNode(NodeKind::Document),
             Event::StartNode(NodeKind::Paragraph),
-            Event::Text(r#"[^^](book "p. 1")"#.into()),
+            Event::Text(r#"[^book "p. 1"]"#.into()),
             Event::EndNode(NodeKind::Paragraph),
             Event::EndNode(NodeKind::Document),
         ];
@@ -1063,7 +1122,7 @@ mod tests {
         let events_b = vec![
             Event::StartNode(NodeKind::Document),
             Event::StartNode(NodeKind::Paragraph),
-            Event::Text(r#"[^^](book "p. 2")"#.into()),
+            Event::Text(r#"[^book "p. 2"]"#.into()),
             Event::EndNode(NodeKind::Paragraph),
             Event::EndNode(NodeKind::Document),
         ];
@@ -1073,18 +1132,19 @@ mod tests {
         let arr = citations.as_array().unwrap();
         assert_eq!(arr.len(), 2);
         assert_eq!(arr[0]["citation_number"], 1);
-        assert_eq!(arr[0]["instance_index"], 1);
+        assert_eq!(arr[0]["locator"], "p. 1");
         assert_eq!(arr[1]["citation_number"], 2);
-        assert_eq!(arr[1]["instance_index"], 2);
+        assert_eq!(arr[1]["locator"], "p. 2");
     }
 
-    /// §2.1: the inline anchor is keyed by `instance_index`, its `href` by
-    /// `citation_number` + `ref_id`, so a duplicate citation gets a fresh
-    /// anchor id but reuses the number.
+    /// §2.1: the inline anchor is keyed by the physical occurrence, its `href` by
+    /// `citation_number` + `reference_id`, so a duplicate citation gets a fresh
+    /// anchor id but reuses the number. Neither is a field any more (§7.3): the
+    /// anchor is built-in markup, the number is `citation_number`.
     #[test]
     fn duplicate_citations_keep_the_number_but_get_a_fresh_anchor() {
         let result = process(
-            &events_with_text(r#"[^^](book "p. 1") and [^^](book "p. 1")"#),
+            &events_with_text(r#"[^book "p. 1"] and [^book "p. 1"]"#),
             &CiteOptions::default(),
         );
 
@@ -1129,7 +1189,7 @@ mod tests {
 
     fn context(references: Value, options: CiteOptions) -> CitationContext {
         let mut ctx = CitationContext::new(references, options);
-        let _ = ctx.process_events(&events_with_text(r#"[^^](book)"#));
+        let _ = ctx.process_events(&events_with_text(r#"[^book]"#));
         ctx
     }
 
@@ -1189,8 +1249,8 @@ mod tests {
             serde_json::json!(1)
         );
         assert_eq!(
-            all.get_citations()[0]["instance_index"],
-            serde_json::json!(1)
+            all.get_citations()[0]["reference_id"],
+            serde_json::json!("book")
         );
         assert!(all.drain_diagnostics().is_empty());
     }
@@ -1216,54 +1276,79 @@ mod tests {
             .any(|event| matches!(event, Event::StartNode(NodeKind::Custom(_)))));
     }
 
+    /// A context over one reference and no components, for `read_head` tests.
+    fn reading_context() -> CitationContext {
+        CitationContext::new(
+            serde_json::json!({"book": {"title": "Book"}}),
+            CiteOptions::default(),
+        )
+    }
+
+    /// The `Read::Cite` parts of `source`, which must be one citation head.
+    fn cite_parts(source: &str) -> (CiteParts, usize) {
+        match read_head(source, &reading_context()) {
+            Read::Cite { parts, consumed } => (*parts, consumed),
+            _ => panic!("{source} is not a citation head"),
+        }
+    }
+
     #[test]
     fn parses_extra_attrs_after_cite_args() {
-        let chars: Vec<char> =
-            r#"[^^](book "p. 1"){.highlight, .urgent, #my-cite, foo: "bar", --color: "red"}"#
-                .chars()
-                .collect();
-        let (end, id, props, extra) = parse_citation(&chars, 0, &CiteOptions::default()).unwrap();
-        assert_eq!(id, "book");
-        assert_eq!(props.get("loc").map(|s| s.as_str()), Some("p. 1"));
-        assert_eq!(extra.classes, vec!["highlight", "urgent"]);
-        assert_eq!(extra.id, Some("my-cite".to_string()));
-        assert_eq!(extra.data, vec![("foo".to_string(), "bar".to_string())]);
-        assert_eq!(extra.extras_style.as_deref(), Some("--color: red"));
+        let (parts, end) = cite_parts(
+            r#"[^book "p. 1"]{.highlight, .urgent, #my-cite, foo: "bar", --color: "red"}"#,
+        );
+        assert_eq!(parts.reference_id, "book");
+        assert_eq!(parts.locator.as_deref(), Some("p. 1"));
+        assert_eq!(parts.extra.classes, vec!["highlight", "urgent"]);
+        assert_eq!(parts.extra.id, Some("my-cite".to_string()));
+        assert_eq!(
+            parts.extra.data,
+            vec![("foo".to_string(), "bar".to_string())]
+        );
+        assert_eq!(parts.extra.extras_style.as_deref(), Some("--color: red"));
         assert!(end > 0);
     }
 
-    /// §7.3/D5: the only accepted forms are an unquoted ref and an optional
-    /// quoted loc. Everything else is literal text.
+    /// §7.3/D-16: the tag, not a second caret, is what makes a citation. The old
+    /// spellings are no longer citations — `[^^](book)` now reads `^` as the
+    /// reference (`bracket.bare`) and `book` as a paren field, so it cites a
+    /// reference named `^`; an empty head has no `reference_id` at all.
     #[test]
-    fn the_retired_cite_forms_are_literal_text() {
-        for source in [
-            concat!("[^^](", "\"book\"", ")"),
-            concat!("[^^](book, ", "\"p. 1\"", ")"),
-            concat!("[^^](book, loc=", "\"p. 1\"", ")"),
-            "[^^]()",
-        ] {
-            let chars: Vec<char> = source.chars().collect();
-            assert!(
-                parse_citation(&chars, 0, &CiteOptions::default()).is_none(),
-                "{source} must stay literal"
-            );
+    fn the_retired_cite_forms_are_not_citations() {
+        let (parts, _) = cite_parts("[^^](book)");
+        assert_eq!(parts.reference_id, "^");
+        assert_eq!(
+            parts.values.get("paren.bare").map(String::as_str),
+            Some("book")
+        );
+
+        // A head without a `reference_id` is an `Error`, and the text stays.
+        for source in ["[^]", "[^\"book\"]", "[^`tick`]"] {
+            match read_head(source, &reading_context()) {
+                Read::Malformed(message) => {
+                    assert!(message.contains("reference_id"), "{source}: {message}");
+                }
+                _ => panic!("{source} must not be a citation"),
+            }
         }
 
-        // …and none of them renders a citation.
         let result = process(
-            &events_with_text(concat!(
-                "[^^](",
-                "\"book\"",
-                ") and [^^](book, ",
-                "\"p. 1\"",
-                ") and [^^]()"
-            )),
+            &events_with_text("[^^](book) and [^] and [^\"book\"]"),
             &CiteOptions::default(),
         );
+        // Nothing renders as a citation: no `<sup>`, and the text survives.
         assert!(html_text(&result).is_empty(), "{}", html_text(&result));
         assert!(result.iter().any(|event| matches!(
             event,
-            Event::Text(text) if text.contains("book")
+            Event::Text(text) if text.contains("[^^](book)")
+        )));
+        assert!(result.iter().any(|event| matches!(
+            event,
+            Event::Diagnostic { message, .. } if message.contains("reference '^' was not found")
+        )));
+        assert!(result.iter().any(|event| matches!(
+            event,
+            Event::Diagnostic { message, .. } if message.contains("needs a `reference_id`")
         )));
     }
 
@@ -1286,7 +1371,7 @@ mod tests {
             },
             Event::EndNode(NodeKind::Frontmatter),
             Event::StartNode(NodeKind::Paragraph),
-            Event::Text(r#"[^^](book){.hero, foo: "bar"}"#.into()),
+            Event::Text(r#"[^book]{.hero, foo: "bar"}"#.into()),
             Event::EndNode(NodeKind::Paragraph),
             Event::EndNode(NodeKind::Document),
         ];
@@ -1331,31 +1416,27 @@ mod tests {
 
     #[test]
     fn parses_the_extras_head_after_cite_args() {
-        let chars: Vec<char> =
-            r#"[^^](book)@@cite{.highlight, #short, note: "x", --color: "red"} tail"#
-                .chars()
-                .collect();
-        let (end, id, props, extra) = parse_citation(&chars, 0, &CiteOptions::default()).unwrap();
-        assert_eq!(id, "book");
-        assert!(props.is_empty());
-        assert_eq!(extra.classes, vec!["highlight"]);
-        assert_eq!(extra.id.as_deref(), Some("short"));
+        let source = r#"[^book]@@cite{.highlight, #short, note: "x", --color: "red"} tail"#;
+        let (parts, end) = cite_parts(source);
+        assert_eq!(parts.reference_id, "book");
+        assert!(parts.locator.is_none());
+        assert_eq!(parts.extra.classes, vec!["highlight"]);
+        assert_eq!(parts.extra.id.as_deref(), Some("short"));
         // §11 rule 3: the marker rides along as the `type` attribute.
-        assert_eq!(extra.type_marker.as_deref(), Some("cite"));
+        assert_eq!(parts.extra.type_marker.as_deref(), Some("cite"));
         assert_eq!(
-            extra.data,
+            parts.extra.data,
             vec![
                 ("note".to_string(), "x".to_string()),
                 ("type".to_string(), "cite".to_string()),
             ]
         );
-        assert_eq!(extra.extras_style.as_deref(), Some("--color: red"));
+        assert_eq!(parts.extra.extras_style.as_deref(), Some("--color: red"));
 
         // Only the citation and its head are consumed, the trailing text stays.
-        let consumed: String = chars[..end].iter().collect();
         assert_eq!(
-            consumed,
-            r#"[^^](book)@@cite{.highlight, #short, note: "x", --color: "red"}"#
+            &source[..end],
+            r#"[^book]@@cite{.highlight, #short, note: "x", --color: "red"}"#
         );
     }
 
@@ -1370,7 +1451,7 @@ mod tests {
             })]);
 
         let result = process(
-            &events_with_text(r#"[^^](book)@@cite{.hero, citeId: "short", isFoo}"#),
+            &events_with_text(r#"[^book]@@cite{.hero, citeId: "short", isFoo}"#),
             &options,
         );
 
@@ -1386,34 +1467,35 @@ mod tests {
         assert!(result
             .iter()
             .any(|e| matches!(e, Event::AttributeFlag { name } if name == "isFoo")));
-        // §7.3/§2.5: the reference id reaches the template as `ref_id`.
+        // §7.3: the reference reaches the template as `reference_id`, the field
+        // the processor reads (a `field.override.*` renames it publicly, D-4).
         assert!(result.iter().any(|e| matches!(
             e,
-            Event::Attribute { name, value } if name == "ref_id" && value == "book"
+            Event::Attribute { name, value } if name == "reference_id" && value == "book"
         )));
     }
 
     #[test]
     fn cite_args_win_over_extras_props() {
         let result = process(
-            &events_with_text(r#"[^^](book "p. 1")@@cite{loc: "p. 9", note: "n"}"#),
+            &events_with_text(r#"[^book "p. 1"]@@cite{locator: "p. 9", note: "n"}"#),
             &CiteOptions::default(),
         );
 
         let html = html_text(&result);
         assert!(html.contains("data-note=\"n\""), "{html}");
-        assert!(!html.contains("loc"), "{html}");
+        assert!(!html.contains("locator"), "{html}");
         assert!(result.iter().any(|event| matches!(
             event,
             Event::Diagnostic { message, .. }
-                if message.contains("[cite]") && message.contains("`loc`")
+                if message.contains("[cite]") && message.contains("`locator`")
         )));
     }
 
     #[test]
     fn extras_style_and_flags_reach_the_markup() {
         let result = process(
-            &events_with_text(r#"[^^](book)@@cite{.hero, --color: "red", isFoo}"#),
+            &events_with_text(r#"[^book]@@cite{.hero, --color: "red", isFoo}"#),
             &CiteOptions::default(),
         );
 
@@ -1426,7 +1508,7 @@ mod tests {
     #[test]
     fn cites_extras_id_lands_in_the_cite_id_slot() {
         let result = process(
-            &events_with_text(r#"[^^](book)@@cite{`short-slug`}"#),
+            &events_with_text(r#"[^book]@@cite{`short-slug`}"#),
             &CiteOptions::default(),
         );
         // §6.2: `#id` > extras `slug`.
@@ -1437,7 +1519,7 @@ mod tests {
     #[test]
     fn the_retired_block_is_literal_text() {
         let result = process(
-            &events_with_text(r#"[^^](book)[#short]"#),
+            &events_with_text(r#"[^book][#short]"#),
             &CiteOptions::default(),
         );
         assert!(
@@ -1450,6 +1532,155 @@ mod tests {
             event,
             Event::Text(text) if text.contains("[#short]")
         )));
+    }
+
+    /// §7.3: a user may move the two fields to any position; the processor reads
+    /// them by name, so numbering still works. `field.bracket.tick` alone voids
+    /// the preset (D-7), so `locator` must be assigned too.
+    #[test]
+    fn a_moved_position_keeps_the_processor_working() {
+        let mut field = pendon_extra::FieldConfig::new();
+        field.assign_slot(
+            Slot::Bracket,
+            SlotKind::Tick,
+            Some(pendon_extra::Path::from_dotted("reference_id").expect("valid path")),
+        );
+        field.assign_slot(
+            Slot::Bracket,
+            SlotKind::Bare,
+            Some(pendon_extra::Path::from_dotted("locator").expect("valid path")),
+        );
+        let mut entry = TypedComponent::default_component(CiteCustomNode {
+            name: "Citation".into(),
+            template: "<Citation />".into(),
+            imports: Vec::new(),
+        });
+        entry.field = field;
+        let options = CiteOptions {
+            custom: ComponentSet::from_entries([entry]),
+            ..CiteOptions::default()
+        };
+
+        // The bare content carries the locator, the tick the reference (§5.2
+        // orders the contents bare → quote → tick).
+        let result = process(&events_with_text("[^p. 1 `book`]"), &options);
+        assert!(result.iter().any(|event| matches!(
+            event,
+            Event::Attribute { name, value } if name == "reference_id" && value == "book"
+        )));
+        assert!(result.iter().any(|event| matches!(
+            event,
+            Event::Attribute { name, value } if name == "locator" && value == "p. 1"
+        )));
+        assert!(result.iter().any(|event| matches!(
+            event,
+            Event::Attribute { name, value } if name == "citation_number" && value == "1"
+        )));
+        assert!(
+            !result.iter().any(|event| matches!(
+                event,
+                Event::Diagnostic { message, .. }
+                    if message.contains("clash") || message.contains("reference")
+            )),
+            "no diagnostic expected: {result:?}"
+        );
+    }
+
+    /// D-4: an override renames a field for public consumption only — the
+    /// processor still numbers off `reference_id` / `locator`.
+    #[test]
+    fn an_override_does_not_break_numbering() {
+        let mut field = pendon_extra::FieldConfig::new();
+        field
+            .add_override(
+                pendon_extra::Path::from_dotted("reference_id").expect("valid path"),
+                pendon_extra::Path::from_dotted("ref_id").expect("valid path"),
+            )
+            .expect("one override");
+        field
+            .add_override(
+                pendon_extra::Path::from_dotted("citation_number").expect("valid path"),
+                pendon_extra::Path::from_dotted("no").expect("valid path"),
+            )
+            .expect("unique target");
+        let mut entry = TypedComponent::default_component(CiteCustomNode {
+            name: "Citation".into(),
+            template: "<Citation />".into(),
+            imports: Vec::new(),
+        });
+        entry.field = field;
+        let options = CiteOptions {
+            custom: ComponentSet::from_entries([entry]),
+            ..CiteOptions::default()
+        };
+
+        let result = process(&events_with_text("[^book] and [^book \"p. 1\"]"), &options);
+        // The node still speaks the internal names (the renderer renames them).
+        assert!(result.iter().any(|event| matches!(
+            event,
+            Event::Attribute { name, value } if name == "reference_id" && value == "book"
+        )));
+        let citations = result
+            .iter()
+            .filter(
+                |event| matches!(event, Event::Attribute { name, .. } if name == "citation_number"),
+            )
+            .count();
+        assert_eq!(citations, 2, "both citations were numbered");
+    }
+
+    /// D-12 rule 5: `citation_number` is the processor's own field, so an extras
+    /// item that spells it is an `Error` — it never silently overwrites the
+    /// ordinal (`field.override.citation_number` publishes the ordinal under
+    /// another name instead, D-4).
+    #[test]
+    fn an_extras_item_cannot_write_the_citation_number() {
+        let result = process(
+            &events_with_text(r#"[^book]@@cite{citation_number: "9", note: "n"}"#),
+            &CiteOptions::default(),
+        );
+        assert!(result.iter().any(|event| matches!(
+            event,
+            Event::Diagnostic { severity: Severity::Error, message, .. }
+                if message.contains("citation_number")
+        )));
+        // The processor's number still wins.
+        let html = html_text(&result);
+        assert!(html.contains("[1]</a>"), "{html}");
+    }
+
+    /// §7.3: `reference_id` is mandatory. A head that leaves it unassigned is an
+    /// `Error` naming the cause, and the text stays as written.
+    #[test]
+    fn a_head_without_a_reference_id_is_an_error() {
+        // `field.bracket.bare = ""` unassigns the preset (OBJ-10), so the head
+        // carries a value no field claims.
+        let mut field = pendon_extra::FieldConfig::new();
+        field.assign_slot(Slot::Bracket, SlotKind::Bare, None);
+        let mut entry = TypedComponent::default_component(CiteCustomNode {
+            name: "Citation".into(),
+            template: "<Citation />".into(),
+            imports: Vec::new(),
+        });
+        entry.field = field;
+        let options = CiteOptions {
+            custom: ComponentSet::from_entries([entry]),
+            ..CiteOptions::default()
+        };
+
+        let result = process(&events_with_text("[^book] tail"), &options);
+        assert!(result.iter().any(|event| matches!(
+            event,
+            Event::Diagnostic { message, .. }
+                if message.contains("[cite]") && message.contains("reference_id")
+        )));
+        assert!(result.iter().any(|event| matches!(
+            event,
+            Event::Text(text) if text.contains("[^book]")
+        )));
+        assert!(!result
+            .iter()
+            .any(|event| matches!(event, Event::Attribute { name, .. } if name == "__layer")));
     }
 
     #[test]
@@ -1471,7 +1702,7 @@ mod tests {
             },
             Event::EndNode(NodeKind::Frontmatter),
             Event::StartNode(NodeKind::Paragraph),
-            Event::Text(r#"[^^](book){#short}"#.into()),
+            Event::Text(r#"[^book]{#short}"#.into()),
             Event::EndNode(NodeKind::Paragraph),
             Event::EndNode(NodeKind::Document),
         ];
@@ -1479,7 +1710,7 @@ mod tests {
         let result = process(&events, &options);
         assert!(result.iter().any(|event| matches!(
             event,
-            Event::Attribute { name, value } if name == "ref_id" && value == "book"
+            Event::Attribute { name, value } if name == "reference_id" && value == "book"
         )));
         assert!(result.iter().any(|event| matches!(
             event,

@@ -21,7 +21,10 @@ pub fn render_node(v: &Value, out: &mut String, ctx: &Ctx) {
                     escape_jsx(text, &mut children);
                 }
             }
-            let fields = pendon_extra::project(v, None).attrs();
+            // §6.1 / D-4: the winning entry's `field.*` is what spells the
+            // projection, so `field.override.<path>` renames the attribute a
+            // template sees (`{attrs.ref_id}`) without touching the node.
+            let fields = pendon_extra::project(v, template.field.as_ref()).attrs();
             out.push_str(&template::render_template(
                 template, &fields, &children, text, ctx,
             ));

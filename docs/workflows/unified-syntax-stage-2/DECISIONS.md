@@ -659,6 +659,33 @@ attribute name (`S2-3.6`), so the invalid spelling cannot be frozen again.
 
 ---
 
+## D-19 — The `citations` export speaks the citation's field names
+
+**Context.** `plugin-cite` exports every physical citation occurrence as
+`export const citations = […]` (ADR-0009, §20). The rows used to be
+`{ref_id, loc?, citation_number, instance_index}`, a mix of RFC-0002's working
+names and a per-occurrence counter that S2-4.4 deletes (`instance_index` is
+`plugin-number`'s job — §14).
+
+**Decision.** The row is `{reference_id, locator?, citation_number}`, i.e. exactly
+the fields the citation node carries, in its own vocabulary.
+
+**Why.** One vocabulary for one thing: after S2-4.4 the node is spelled
+`reference_id` / `locator`, and two names for one value is precisely what this
+rework removes. `field.override.*` does **not** reach the export: an override
+renames a **field as it is rendered or extracted** (D-4), and the export is data
+the plugin records, not a projection of a node — a template that wants the public
+names reads them off the props (`{attrs.ref_id}`), which is what golden
+`35-cite-fields` does.
+
+**Rejected.** Keeping `ref_id` / `loc` for compatibility — D-16 forbids the alias
+and it would leave the export as the only place the old names survive.
+
+**Consequence.** §7.3, §20, `EXTRAS-INVENTORY.md` and the plugin README document
+the new row shape; goldens `05` / `26` / `33` were re-frozen with it.
+
+---
+
 ## Objectives — answered at sign-off (2026-10-28)
 
 Each answer is binding for the phase that owns it; where an answer contradicts the
@@ -742,6 +769,7 @@ proposal, the answer wins and `SYNTAX.md` records the corrected rule.
 | D-16     | settled | owner policy 2026-10-28: clean total replacement, no compat                 |
 | D-17     | settled | 2026-10-28                                                                  |
 | D-18     | settled | 2026-10-28 — one-key spread on both paths; nested props rejected            |
+| D-19     | settled | 2026-10-28 — the citations export uses the node's field names               |
 
 **Phase 0 exit met 2026-10-28.** Every decision above is `settled` and every
 objective below is answered. Baseline before Phase 1: `cargo test --workspace`

@@ -1,0 +1,23 @@
+[[task]]
+name = "Golden 35"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,cite,markdown"
+format = "solid"
+
+[task.cite]
+reference_source = "internal"
+
+# §7.3: one slot assignment voids the preset (D-7), so both fields are redefined;
+# the overrides publish them under shorter names (D-4). The processor is not
+# affected by either — it reads `reference_id` / `locator` by name.
+[[task.cite.custom]]
+type = ["citeShort"]
+name = "CiteShort"
+imports = "import { CiteShort } from '@comp/CiteShort'"
+template = "<CiteShort reference={references[\"{attrs.ref_id}\"]} {...attrs} />"
+field.bracket.tick = "reference_id"
+field.bracket.quote = "locator"
+field.override.reference_id = "ref_id"
+field.override.citation_number = "no"
+field.override.locator = "loc"

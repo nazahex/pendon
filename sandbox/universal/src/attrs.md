@@ -20,7 +20,7 @@ references:
 
 :::note["Foo Bar"]("Bax Xo")
 
-Ullamco excepteur adipisicing quis ullamco ea mollit et nulla sint non et id commodo commodo [^^](suryana-2026 "hlm. 45"){.suyn, #surya, rox:"hen"}::[ep3]{doo: "bax"} Aliquip commodo commodo et ut reprehenderit qui magna laboris et.::.
+Ullamco excepteur adipisicing quis ullamco ea mollit et nulla sint non et id commodo commodo [^suryana-2026 "hlm. 45"]{.suyn, #surya, rox:"hen"}::[ep3]{doo: "bax"} Aliquip commodo commodo et ut reprehenderit qui magna laboris et.::.
 
 > ! In amet deserunt consequat cupidatat laboris cupidatat.
 

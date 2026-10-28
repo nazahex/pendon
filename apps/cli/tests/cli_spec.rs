@@ -835,7 +835,7 @@ fn render_cite_scope(frontmatter: bool, scope: &str) -> String {
     std::fs::create_dir_all(&src_dir).expect("create src dir");
     std::fs::create_dir_all(&out_dir).expect("create out dir");
 
-    let body = "[^^](book) and [^^](book \"p. 2\").\n";
+    let body = "[^book] and [^book \"p. 2\"].\n";
     let source = if frontmatter {
         std::fs::write(
             src_dir.join("chapter.md"),

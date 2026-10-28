@@ -37,9 +37,6 @@ export = "headingsB"
 [task.cite]
 reference_source = "external"
 reference_file = "./src/reference.yaml"
-ref_id_prefix = "ref-"
-citation_class = "citation"
-citation_id_prefix = "cite-"
 references_export = "references"
 # citations_export = "citations" this field is no longer valid and needed
 references_scope = "all"

@@ -97,6 +97,14 @@ regrouped into a nested prop ([D-18](../../docs/workflows/unified-syntax-stage-2
 the golden harness rejects any rendered `.jsx` that spells one as a plain
 attribute name.
 
+`field.override.<path>` is applied by the same projection, so it needs the
+config of the entry that answers the node: `ComponentTemplate::field` carries it,
+set by `layer_templates` from the entry's `field.*` (`S2-4.4`). That is what makes
+`{attrs.ref_id}` and `{...attrs}` read the **public** name while the node keeps the
+internal one the plugin wrote (D-4). The built-in element path and
+`renderer-html` have no entry to ask, so they pass `None` and keep the node's own
+names.
+
 ## Usage
 
 ```bash

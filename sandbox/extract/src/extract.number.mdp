@@ -22,6 +22,6 @@
 
 ![image foo](/foo.png)@@ImageA{foo:"bar"}%%numberA akan bernomor 3
 
-Kutipan juga diekstrak dari berkas referensi eksternal: [^^](smith2020 "hlm. 12") dan [^^](doe2022 "§3").
+Kutipan juga diekstrak dari berkas referensi eksternal: [^smith2020 "hlm. 12"] dan [^doe2022 "§3"].
 
 

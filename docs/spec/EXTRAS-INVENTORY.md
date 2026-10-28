@@ -91,23 +91,24 @@ Source: §9.2 · `crates/plugin-blockquote` · golden `11-blockquote`.
 
 Source: §7.3 · `crates/plugin-cite` · golden `05-cite`.
 
-The proposal's P.3 names `instance_id` and `ref_id`; the node's real names are
-`instance_index` and `cite-id`, and `recommended` uses the real ones.
+`reference_id` and `locator` are the §7.3 preset (S2-4.4); `citation_number` is
+assigned by the processor and is the one field the element **owns** (D-12 rule 5).
+`instance_index` is gone (§14) — a per-occurrence ordinal is `plugin-number`'s.
 
 | field             | type   | recommended | notes                                                            |
 | ----------------- | ------ | ----------- | ---------------------------------------------------------------- |
-| `citation_number` | number | yes         | assigned by `plugin-cite`; stable for a repeated `(ref_id, loc)` |
-| `instance_index`  | number | yes         | one per physical occurrence, `1..n` over the document            |
+| `reference_id`    | string | yes         | the reference the head names; mandatory (§7.3)                   |
+| `locator`         | string | yes         | the quoted locator; part of the citation's identity              |
+| `citation_number` | number | yes         | assigned by `plugin-cite`; stable for a repeated `(id, locator)` |
 | `cite-id`         | string | yes         | the node's `id` slot (`#id` / slug) — the backlink anchor        |
-| `loc`             | string | yes         | the locator; part of the citation's identity                     |
 | `type`            | string | yes         | the `@@type` marker                                              |
 | `note`            | string | no          | extras only                                                      |
 | `class`           | string | no          | extras only                                                      |
-| `inner_text`      | text   | no          | the citation's display text (`^^` → the footnote marker)         |
+| `inner_text`      | text   | no          | the citation's display text (the `[n]` marker)                   |
 
-`reference` is **not** a field: the renderer resolves it from `ref_id` against
-`export const references`. Extract `cite-id` and join on the `references` export —
-which is what golden `05`'s `citations` array does.
+`reference` is **not** a field: the renderer resolves it from `reference_id`
+against `export const references`. Extract `cite-id` and join on the `references`
+export — which is what golden `05`'s `citations` array does.
 
 ## 5. `directive` — `__layer = "directive"`
 
@@ -231,7 +232,7 @@ extract surface until a table layer owns them.
 | ------------ | ------------------------------------------------------------------ |
 | `anchor`     | `href`, `id`, `title`, `type`, `inner_text`                        |
 | `blockquote` | `type`, `id`, `class`, `inner_text`                                |
-| `cite`       | `citation_number`, `instance_index`, `cite-id`, `loc`, `type`      |
+| `cite`       | `reference_id`, `locator`, `citation_number`, `cite-id`, `type`    |
 | `directive`  | `type`, `id`, `level`, `summary`, `inner_text`                     |
 | `heading`    | `level`, `id`, `slug`, `raw_title`, `number`, `type`, `inner_text` |
 | `image`      | `src`, `alt`, `width`, `height`, `type`, `id`                      |

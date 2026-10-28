@@ -10,26 +10,34 @@ references:
     language: en
 ---
 
-The citation head is `[^^](ref "loc")`: an unquoted reference and an optional
-quoted location. Extras merge into the citation node while the cite args win
-(§7.3). `#id`/slug feed the `cite-id` slot.
+The citation head is `[^reference_id "locator"]`: the caret is the slot tag, the
+bare content is the reference and the quoted one the locator (§7.3). They land in
+the preset's two fields, so the node carries `reference_id` and `locator`, and an
+adjacent extras head decorates the node without ever writing them (§6.2):
 
-Minim [^^](book "hlm. 45")@@citeX{.paper, #smith, note: "short"} esse do ut anim proident.
+Minim [^book "hlm. 45"]@@citeX{.paper, #smith, note: "short"} esse do ut anim proident.
 
-A location argument stays the construct value even when the extras ask for one:
+The locator stays the construct value even when the extras ask for one:
 
-[^^](book "hlm. 45")@@citeX{loc: "dropped", .thin}
+[^book "hlm. 45"]@@citeX{locator: "dropped", .thin}
 
 A locator is part of the citation identity: the same reference with a different
 (or no) locator gets a new number.
 
-[^^](book)@@citeX{.repeat}
+[^book]@@citeX{.repeat}
 
-A repeated `(ref_id, loc)` keeps its `citation_number` but takes a fresh
-`instance_index`, so every physical occurrence has its own backlink anchor:
+A repeated `(reference_id, locator)` keeps its `citation_number`:
 
-[^^](book)@@citeX{.again}
+[^book]@@citeX{.again}
 
-Retired spellings are not citations; they stay literal text (§7.3):
+Every position the preset does not name stays a bare field, so a paren's contents
+are ordinary fields of the node (§6.1, D-7):
 
-[^^](book, "hlm. 45") and [^^]("book") and [^^]()
+[^book "hlm. 7"](paperback "Reprint")@@citeX
+
+A head without a reference is an error, not a citation (§7.3): `[^]` and
+`[^"book"]` stay text, and so does a citation of a reference the document does
+not know. The retired `[^^](book "hlm. 45")` spelling is not a citation either —
+its second caret is now the reference:
+
+[^] and [^"book"] and [^nosuch]

@@ -52,7 +52,7 @@
 #   - Marker `{{type}}`, inline directive `::type` and block directive `==type`
 #     carry the type inside their own fence, so they have no @@ form and no
 #     `n` cases; their `{...}` follows the fence directly.
-#   - Cite form is `[^^](ref "loc")` (unquoted ref, optional quoted loc). The
+#   - Cite form is `[^ref "loc"]` (unquoted ref, optional quoted loc). The
 #     old forms `[^^]("id")`, `[^^]("id", "loc")` and the `loc=` prop are
 #     removed and must stay literal, with no warning.
 #   - The legacy extras form `[.class,#id]{k:v}` is removed and must stay
@@ -355,7 +355,7 @@ A52 [t](/a)@@anchor1{.x}
 
 ######("T18n")@@{.l6n} H18n level 6 non-canonical
 
-###[h19]("T19")@@headingX{.k} H19 KS [a](/x "T")@@anchorA{.k} **b** _i_ `c` [[W]]@@wikiX{.k} [^^](paper-smith)@@citeX{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$
+###[h19]("T19")@@headingX{.k} H19 KS [a](/x "T")@@anchorA{.k} **b** _i_ `c` [[W]]@@wikiX{.k} [^paper-smith]@@citeX{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$
 
 <!-- H20: heading with empty text, typed -->
 
@@ -367,7 +367,7 @@ A52 [t](/a)@@anchor1{.x}
 
 ###{.x}
 
-###[h24]{.k} H24 KSu [a](/x "T"){.k} **b** _i_ `c` [[W]]{.k} [^^](paper-smith){.k} {{footnote}}{.k} ::asideA{.k} d:: $x$
+###[h24]{.k} H24 KSu [a](/x "T"){.k} **b** _i_ `c` [[W]]{.k} [^paper-smith]{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$
 
 ###[h25]("T25"){.a, #i, k: "v"} H25 slug+title+XXYZ untyped
 
@@ -411,7 +411,7 @@ A52 [t](/a)@@anchor1{.x}
 
 ~!w100[I14](/i.png "Head T")@@imageX{"Extras T", .a, .b, #i, k: "v", n: 2}
 
-~?!!w100[I15](/i.png)@@figureX{isA} Caption KS [a](/x)@@anchorA{.k} [^^](paper-smith)@@citeX{.k} [[W]]@@wikiX{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$ **b**
+~?!!w100[I15](/i.png)@@figureX{isA} Caption KS [a](/x)@@anchorA{.k} [^paper-smith]@@citeX{.k} [[W]]@@wikiX{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$ **b**
 
 ![I16 plain markdown image](/i.png)
 
@@ -429,53 +429,53 @@ A52 [t](/a)@@anchor1{.x}
 
 ~!w100[I22](/i.png "Head T"){"Extras T", .a}
 
-~?!!w100[I23](/i.png){.f} Caption KSu [a](/x){.k} [^^](paper-smith){.k} [[W]]{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$ **b**
+~?!!w100[I23](/i.png){.f} Caption KSu [a](/x){.k} [^paper-smith]{.k} [[W]]{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$ **b**
 
 ##[s-cite] Cite
 
-<!-- Cite form: [^^](id "loc"). The old [^^]("id", "loc") is obsolete. -->
+<!-- Cite form: [^id "loc"]. The old [^^]("id", "loc") is obsolete. -->
 
-C01 Minim [^^](paper-smith) esse.
+C01 Minim [^paper-smith] esse.
 
-C02 Minim [^^](paper-smith "hlm. 55") esse.
+C02 Minim [^paper-smith "hlm. 55"] esse.
 
-C03 Minim [^^](paper-smith){} esse.
+C03 Minim [^paper-smith]{} esse.
 
-C03n Minim [^^](paper-smith)@@{} esse.
+C03n Minim [^paper-smith]@@{} esse.
 
-C04 Minim [^^](paper-smith)@@citeX{} esse.
+C04 Minim [^paper-smith]@@citeX{} esse.
 
-C05 Minim [^^](paper-smith)@@citeX{.paper} esse.
+C05 Minim [^paper-smith]@@citeX{.paper} esse.
 
-C06 Minim [^^](paper-smith)@@citeX{.paper, #smith} esse.
+C06 Minim [^paper-smith]@@citeX{.paper, #smith} esse.
 
-C07 Minim [^^](suryana-2026 "hlm. 45")@@citeX{.a, .b, #i, note: "short", n: 2} esse.
+C07 Minim [^suryana-2026 "hlm. 45"]@@citeX{.a, .b, #i, note: "short", n: 2} esse.
 
-C08 Minim [^^](doe-2020)@@citeX{`slug-foo`, "Title Foo", .extra, .class, #id, foo: "bar", bar: 12, isFoo: true, --style-var: "2rem", isBar} esse.
+C08 Minim [^doe-2020]@@citeX{`slug-foo`, "Title Foo", .extra, .class, #id, foo: "bar", bar: 12, isFoo: true, --style-var: "2rem", isBar} esse.
 
-C09 [^^](paper-smith "hlm. 1")@@citeX{loc: "dropped", .thin}
+C09 [^paper-smith "hlm. 1"]@@citeX{loc: "dropped", .thin}
 
-C10 [^^](missing-ref)@@citeX{.x}
+C10 [^missing-ref]@@citeX{.x}
 
-C11 [^^](paper-smith) [^^](suryana-2026){.y}[^^](doe-2020)
+C11 [^paper-smith] [^suryana-2026]{.y}[^doe-2020]
 
-C12 [^^](paper-smith) dan lagi [^^](paper-smith)@@citeX{.again}
+C12 [^paper-smith] dan lagi [^paper-smith]@@citeX{.again}
 
-C13 [^^]()
+C13 [^]
 
-C14 [^^](paper-smith)@@citeZ{.x} unclaimed
+C14 [^paper-smith]@@citeZ{.x} unclaimed
 
-C15 [^^](paper-smith)@@citeX
+C15 [^paper-smith]@@citeX
 
-C16 Minim [^^](paper-smith){.paper} esse.
+C16 Minim [^paper-smith]{.paper} esse.
 
-C17 Minim [^^](paper-smith "hlm. 7"){.paper, #smith2} esse.
+C17 Minim [^paper-smith "hlm. 7"]{.paper, #smith2} esse.
 
-C18 Minim [^^](suryana-2026 "hlm. 45"){.a, .b, #i2, note: "short", n: 2} esse.
+C18 Minim [^suryana-2026 "hlm. 45"]{.a, .b, #i2, note: "short", n: 2} esse.
 
-C19 Minim [^^](doe-2020){`slug-foo`, "Title Foo", .extra, .class, #id, foo: "bar", bar: 12, isFoo: true, --style-var: "2rem", isBar} esse.
+C19 Minim [^doe-2020]{`slug-foo`, "Title Foo", .extra, .class, #id, foo: "bar", bar: 12, isFoo: true, --style-var: "2rem", isBar} esse.
 
-C19n Minim [^^](doe-2020)@@{`slug-foo`, "Title Foo", .extra, .class, #id, foo: "bar", bar: 12, isFoo: true, --style-var: "2rem", isBar} esse.
+C19n Minim [^doe-2020]@@{`slug-foo`, "Title Foo", .extra, .class, #id, foo: "bar", bar: 12, isFoo: true, --style-var: "2rem", isBar} esse.
 
 <!-- C20-C22: retired cite forms. Expected: plain literal text, no warning. -->
 
@@ -485,7 +485,7 @@ C21 [^^]("paper-smith")
 
 C22 [^^]("paper-smith", "hlm. 55")
 
-C23 Minim [^^](paper-smith)@@citeX. esse
+C23 Minim [^paper-smith]@@citeX. esse
 
 ##[s-wiki] Wiki
 
@@ -604,12 +604,12 @@ cell on its right (colspan) ; only ^ is merged into the cell above (rowspan).
 |{.h1} H1 |@@cellA{.h2} H2 | H3 | H4 |
 | :---(200px)@@cellA{.v-top} | :---:{.c} | ---:(30%) | :---@@cellB{.a, #i, k: "v", n: 2} |@@tbodyX{.tb}
 |@@cellB{.lead} X | 15 | [Ada](/docs)@@anchorA{.u} | [[W]]@@wikiX{.w} |
-| plain | > | [^^](paper-smith)@@citeX{.c} | {{footnote}}{.m} |@@rowB{.row-info}
+| plain | > | [^paper-smith]@@citeX{.c} | {{footnote}}{.m} |@@rowB{.row-info}
 |{} empty-extras | ::asideA{.k} d:: | $x^2$ | `c` |@@rowA{}
 | a | b | c | d |{.untyped-row}
 | \| escaped | | | |@@rowB{.a, #r, k: "v", n: 2}
 | all-row | x | y | z |@@rowB{`slug-foo`, "Title Foo", .extra, .class, #id, foo: "bar", bar: 12, isFoo: true, --style-var: "2rem", isBar}
-|@@cellA{.only-extras} | **b** _i_ | [a](/x "T")@@anchorA{.k} [^^](paper-smith)@@citeX{.k} |@@cellB{`s`, "T", .a, #i, k: "v", n: 1, b: true, --v: "1", flag} KS |
+|@@cellA{.only-extras} | **b** _i_ | [a](/x "T")@@anchorA{.k} [^paper-smith]@@citeX{.k} |@@cellB{`s`, "T", .a, #i, k: "v", n: 1, b: true, --v: "1", flag} KS |
 |===|@@tfootX{.total}
 | Total | > | > | 1 |@@rowA{.f}
 |@@cellA{.t} F2 | x | y | z |
@@ -746,7 +746,7 @@ T18 untyped canonical on every table slot:
 |{.h1} H1 |{.h2} H2 | H3 | H4 |
 | :---(200px){.v-top} | :---:{.c, #i} | ---:(30%){.a, .b, #i2, k: "v", n: 2} | :---{`s`, "T", .a, #i3, k: "v", n: 1, b: true, --v: "1", flag} |{.tb}
 |{.lead} X | 15 | [Ada](/docs){.u} | [[W]]{.w} |
-| plain | > | [^^](paper-smith){.c} | {{footnote}}{.m} |{.row-info}
+| plain | > | [^paper-smith]{.c} | {{footnote}}{.m} |{.row-info}
 |{} empty | ::asideA{.k} d:: | $x^2$ | `c` |{}
 | a | b | c | d |{.a, #r, k: "v", n: 2}
 | all-row | x | y | z |{`slug-foo`, "Title Foo", .extra, .class, #id, foo: "bar", bar: 12, isFoo: true, --style-var: "2rem", isBar}
@@ -913,7 +913,7 @@ T31 a cell starting with a marker touching the pipe (head vs marker, edge):
 >
 > {{markerA}}{.q}
 
-> @@bqA{.q15} KS [a](/x "T")@@anchorA{.k} **b** _i_ `c` [[W]]@@wikiX{.k} [^^](paper-smith)@@citeX{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$
+> @@bqA{.q15} KS [a](/x "T")@@anchorA{.k} **b** _i_ `c` [[W]]@@wikiX{.k} [^paper-smith]@@citeX{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$
 
 > {} Q16 untyped empty
 
@@ -935,7 +935,7 @@ T31 a cell starting with a marker touching the pipe (head vs marker, edge):
 
 > @@bqA[q26( Q26 malformed inner-head group stays literal, type falls back
 
-> {.q24} KSu [a](/x "T"){.k} **b** _i_ `c` [[W]]{.k} [^^](paper-smith){.k} {{footnote}}{.k} ::asideA{.k} d:: $x$
+> {.q24} KSu [a](/x "T"){.k} **b** _i_ `c` [[W]]{.k} [^paper-smith]{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$
 
 ##[s-list] List
 
@@ -1078,7 +1078,7 @@ o. L26 retired o. syntax (expect plain paragraph)
 
 - L34 multi-paragraph
 
-  second paragraph KS [a](/x)@@anchorA{.k} **b** [[W]]@@wikiX{.k} [^^](paper-smith)@@citeX{.k} {{footnote}}{.k} ::asideA{.k} d::
+  second paragraph KS [a](/x)@@anchorA{.k} **b** [[W]]@@wikiX{.k} [^paper-smith]@@citeX{.k} {{footnote}}{.k} ::asideA{.k} d::
 
   ```ts
   const l = "@@{.literal}";
@@ -1181,7 +1181,7 @@ D22 :x one colon: literal
 
 D23 ::::::::asideA eight colons::::::::
 
-D24 ::asideA{.o} [a](/x)@@anchorA{.k} [[W]]@@wikiX{.k} [^^](paper-smith)@@citeX{.k} {{footnote}}{.k} $x$ **b** `c`::
+D24 ::asideA{.o} [a](/x)@@anchorA{.k} [[W]]@@wikiX{.k} [^paper-smith]@@citeX{.k} {{footnote}}{.k} $x$ **b** `c`::
 
 D25 ::asideA unterminated directive stays literal
 
@@ -1194,7 +1194,7 @@ D30 false positives: std::vector, std::collections::HashMap, a::b::c, 12:30:45, 
 
 D31 ::type-x invalid type:: ::type_x invalid::
 
-D32 ::asideA{.o} [a](/x){.k} [[W]]{.k} [^^](paper-smith){.k} {{footnote}}{.k} $x$ **b** `c`:: untyped inner heads
+D32 ::asideA{.o} [a](/x){.k} [[W]]{.k} [^paper-smith]{.k} {{footnote}}{.k} $x$ **b** `c`:: untyped inner heads
 
 ##[s-bdir] Block directive
 
@@ -1337,7 +1337,7 @@ L7b
 
 {{markerA}}{.k}
 
-KS [a](/x "T")@@anchorA{.k} **b** _i_ `c` [[W]]@@wikiX{.k} [^^](paper-smith)@@citeX{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$
+KS [a](/x "T")@@anchorA{.k} **b** _i_ `c` [[W]]@@wikiX{.k} [^paper-smith]@@citeX{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$
 
 $$a \to b$$
 
@@ -1379,21 +1379,21 @@ B20 inner block with inline ::asideA{.k} d:: and ::::asideB x :::asideA y::: z::
 
 ~?!!w100[B23](/i.png){.k} cap
 
-KSu [a](/x "T"){.k} **b** _i_ `c` [[W]]{.k} [^^](paper-smith){.k} {{footnote}}{.k} ::asideA{.k} d:: $x$
+KSu [a](/x "T"){.k} **b** _i_ `c` [[W]]{.k} [^paper-smith]{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$
 
 ===
 
 ##[s-nest] Nesting
 
-N01 **[a _b_ `c`](/x)@@anchorA{.k}** _[[W]]@@wikiX{.k}_ ~~[x](/a){.s}~~ **[^^](paper-smith)@@citeX{.k}** _{{footnote}}{.k}_
+N01 **[a _b_ `c`](/x)@@anchorA{.k}** _[[W]]@@wikiX{.k}_ ~~[x](/a){.s}~~ **[^paper-smith]@@citeX{.k}** _{{footnote}}{.k}_
 
 N02 ::asideA{.o} **bold ::asideB{.i} italic [a](/x)@@anchorA{.k}:: end** after::
 
-~?!!w100[N03](/i.png)@@figureX{.f} Cap [a](/x)@@anchorA{.k} [^^](paper-smith)@@citeX{.k} [[W]]@@wikiX{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$ **b**
+~?!!w100[N03](/i.png)@@figureX{.f} Cap [a](/x)@@anchorA{.k} [^paper-smith]@@citeX{.k} [[W]]@@wikiX{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$ **b**
 
-N04 **[a _b_ `c`](/x){.k}** _[[W]]{.k}_ ~~[x](/a){.s}~~ **[^^](paper-smith){.k}** _{{footnote}}{.k}_
+N04 **[a _b_ `c`](/x){.k}** _[[W]]{.k}_ ~~[x](/a){.s}~~ **[^paper-smith]{.k}** _{{footnote}}{.k}_
 
-~?!!w100[N05](/i.png){.f} Cap KSu [a](/x){.k} [^^](paper-smith){.k} [[W]]{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$ **b**
+~?!!w100[N05](/i.png){.f} Cap KSu [a](/x){.k} [^paper-smith]{.k} [[W]]{.k} {{footnote}}{.k} ::asideA{.k} d:: $x$ **b**
 
 > @@bqA{.deep}
 >
@@ -1429,7 +1429,7 @@ N04 **[a _b_ `c`](/x){.k}** _[[W]]{.k}_ ~~[x](/a){.s}~~ **[^^](paper-smith){.k}*
 
 |-[n15]-|
 
-| @@cellA{.k} ::asideA{.k} [a](/x)@@anchorA{.k} d:: | @@cellB{.k2} {{footnote}}{.k} [[W]]@@wikiX{.k} $x$ [^^](paper-smith)@@citeX{.k} |
+| @@cellA{.k} ::asideA{.k} [a](/x)@@anchorA{.k} d:: | @@cellB{.k2} {{footnote}}{.k} [[W]]@@wikiX{.k} $x$ [^paper-smith]@@citeX{.k} |
 | ------------------------------------------------- | ------------------------------------------------------------------------------- |
 | **[a](/x)@@anchorA{.k}**                          | `c`                                                                             |
 
@@ -1453,7 +1453,7 @@ N04 **[a _b_ `c`](/x){.k}** _[[W]]{.k}_ ~~[x](/a){.s}~~ **[^^](paper-smith){.k}*
 
 |-[n18]-|
 
-|{.k} ::asideA{.k} [a](/x){.k} d:: |{.k2} {{footnote}}{.k} [[W]]{.k} $x$ [^^](paper-smith){.k} |
+|{.k} ::asideA{.k} [a](/x){.k} d:: |{.k2} {{footnote}}{.k} [[W]]{.k} $x$ [^paper-smith]{.k} |
 | --------------------------------- | ---------------------------------------------------------- |
 | **[a](/x){.k}**                   | `c`                                                        |
 

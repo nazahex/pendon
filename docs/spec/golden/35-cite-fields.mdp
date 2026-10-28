@@ -1,0 +1,29 @@
+---
+references:
+  book:
+    id: book
+    title: A Book
+  paper:
+    id: paper
+    title: A Paper
+---
+
+A `field.*` block moves a position (§6.1) and can rename a public field (D-4).
+This entry is the proposal's "simpler version": `reference_id` sits in the tick
+and `locator` in the bare content, while the node publishes them as `ref_id` and
+`loc` and numbers them as `no`:
+
+Minim [^p. 1 `book`]@@citeShort esse.
+
+Second [^"p. 2" `paper`]@@citeShort.
+
+Assigning one slot position voids the whole preset (D-7), so a head that leaves
+`reference_id` unassigned is an error rather than a citation — the bare content
+stays the author's own field:
+
+[^p. 9]@@citeShort
+
+The same citation seen twice keeps one number, because the identity is still the
+`(reference_id, locator)` pair:
+
+[^p. 1 `book`]@@citeShort again.

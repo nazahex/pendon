@@ -103,7 +103,7 @@ format = "solid"
 type = ["CiteA", "CiteB"]
 output = ["./out/scoped.json", "./out/scoped.yaml"]
 format = ["json", "yaml"]
-only = ["ref_id", "citation_number"]
+only = ["reference_id", "citation_number"]
 
 [[task.cite.extract]]
 export = "citationsC"
@@ -113,13 +113,13 @@ output = "./out/rest.yaml"
 format = "yaml"
 export = "citationsC"
 recommended = true
-only = ["ref_id", "citation_number"]
-omit = ["ref_id"]
+only = ["reference_id", "citation_number"]
+omit = ["reference_id"]
 "#,
     );
     fs::write(
         dir.join("src/doc.mdp"),
-        "A [^^](alpha)@@CiteA, B [^^](beta)@@CiteB, C [^^](gamma).\n",
+        "A [^alpha]@@CiteA, B [^beta]@@CiteB, C [^gamma].\n",
     )
     .expect("source");
     with_cite(&dir);
@@ -132,14 +132,14 @@ omit = ["ref_id"]
     assert_eq!(
         scoped,
         serde_json::json!([
-            { "citation_number": "1", "ref_id": "alpha" },
-            { "citation_number": "2", "ref_id": "beta" },
+            { "citation_number": "1", "reference_id": "alpha" },
+            { "citation_number": "2", "reference_id": "beta" },
         ])
     );
     // `format` wins over the extension: the second destination is YAML.
     let yaml = read(&dir, "out/scoped.yaml");
-    assert!(contains("ref_id: alpha").eval(&yaml), "yaml = {yaml}");
-    assert!(contains("ref_id: beta").eval(&yaml), "yaml = {yaml}");
+    assert!(contains("reference_id: alpha").eval(&yaml), "yaml = {yaml}");
+    assert!(contains("reference_id: beta").eval(&yaml), "yaml = {yaml}");
 
     // P.1.b — no `type` is `_`: the safety net for the types no block names, so
     // only the untyped `gamma` citation.
@@ -177,20 +177,20 @@ format = "solid"
 type = "CiteA"
 output = "./out/[slug].cite.json"
 format = "json"
-only = ["ref_id"]
+only = ["reference_id"]
 "#,
     );
     fs::create_dir_all(dir.join("src/alpha")).expect("alpha dir");
     fs::create_dir_all(dir.join("src/beta")).expect("beta dir");
-    fs::write(dir.join("src/alpha/doc.mdp"), "A [^^](alpha)@@CiteA.\n").expect("alpha");
-    fs::write(dir.join("src/beta/doc.mdp"), "B [^^](beta)@@CiteB.\n").expect("beta");
+    fs::write(dir.join("src/alpha/doc.mdp"), "A [^alpha]@@CiteA.\n").expect("alpha");
+    fs::write(dir.join("src/beta/doc.mdp"), "B [^beta]@@CiteB.\n").expect("beta");
     with_cite(&dir);
 
     run_in(&dir);
 
     assert_eq!(
         serde_json::from_str::<Value>(&read(&dir, "out/alpha.cite.json")).expect("alpha json"),
-        serde_json::json!([{ "ref_id": "alpha" }])
+        serde_json::json!([{ "reference_id": "alpha" }])
     );
     // `CiteB` is not `CiteA`, so this page's block matches nothing at all.
     assert!(
@@ -217,13 +217,13 @@ format = "solid"
 [[task.cite.extract]]
 output = "./out/all-cite.json"
 format = "json"
-only = ["ref_id"]
+only = ["reference_id"]
 "#,
     );
     fs::create_dir_all(dir.join("src/alpha")).expect("alpha dir");
     fs::create_dir_all(dir.join("src/beta")).expect("beta dir");
-    fs::write(dir.join("src/alpha/doc.mdp"), "A [^^](alpha).\n").expect("alpha");
-    fs::write(dir.join("src/beta/doc.mdp"), "B [^^](beta).\n").expect("beta");
+    fs::write(dir.join("src/alpha/doc.mdp"), "A [^alpha].\n").expect("alpha");
+    fs::write(dir.join("src/beta/doc.mdp"), "B [^beta].\n").expect("beta");
     with_cite(&dir);
 
     run_in(&dir);
@@ -232,7 +232,7 @@ only = ["ref_id"]
         serde_json::from_str(&read(&dir, "out/all-cite.json")).expect("the file parses");
     let rows = rows.as_array().expect("an array of rows");
     assert_eq!(rows.len(), 1, "the shared path holds one page: {rows:?}");
-    let id = rows[0]["ref_id"].as_str().expect("a ref_id");
+    let id = rows[0]["reference_id"].as_str().expect("a reference_id");
     assert!(
         id == "alpha" || id == "beta",
         "the file is written by a real page: {id}"
@@ -258,7 +258,7 @@ format = "json"
 export = "citationsC"
 "#,
     );
-    fs::write(dir.join("src/doc.mdp"), "A [^^](alpha).\n").expect("source");
+    fs::write(dir.join("src/doc.mdp"), "A [^alpha].\n").expect("source");
     with_cite(&dir);
 
     run_in(&dir);
@@ -332,10 +332,10 @@ format = "solid"
 [[task.cite.extract]]
 output = "./out/cites.json"
 format = "json"
-only = ["ref_id"]
+only = ["reference_id"]
 "#,
     );
-    fs::write(dir.join("src/doc.mdp"), "A [^^](alpha).\n").expect("source");
+    fs::write(dir.join("src/doc.mdp"), "A [^alpha].\n").expect("source");
     with_cite(&dir);
     run_in(&dir);
 

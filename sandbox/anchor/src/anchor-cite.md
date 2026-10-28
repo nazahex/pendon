@@ -24,7 +24,7 @@ Aliquip [consectetur](https://foo.com/bar--! "Title Foo"){rel: "prefetch", hrefl
 
 ![Aternative Text](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp)
 
-Mollit [labore](/foo/bar^--$! "Buy Foo!"){rel: "sponsored"} anim ipsum[^^](paper-smith) in ullamco.
+Mollit [labore](/foo/bar^--$! "Buy Foo!"){rel: "sponsored"} anim ipsum[^paper-smith] in ullamco.
 
 ~?!!h300w800[lorem ipsum](https://res.cloudinary.com/ddbrg3jf1/image/upload/v1773735344/revano_bench_egora7.webp){.extra, .class, .or, #custom-id, foo: "bar", baz: 23, --wix: "sum", --rotate: "5deg"} Exercitation qui **exercitation** dolor velit _aliqua_ consectetur voluptate [consequat](/consequat) labore elit non esse occaecat.
 

@@ -95,15 +95,15 @@ from being read as a Markdown link before the plugin sees it:
 
 ##[cite] Cite
 
-The citation head is `[^^](ref)`; extras merge into the citation node while the
+The citation head is `[^ref]`; extras merge into the citation node while the
 cite args win (§7.3). `#id`/slug feed the `cite-id` slot.
 
-Minim [^^](paper-smith)@@citeX{.paper, #smith, note: "short"} esse do ut anim
+Minim [^paper-smith]@@citeX{.paper, #smith, note: "short"} esse do ut anim
 proident est qui magna non elit quis eiusmod dolore.
 
 A location argument stays the construct value:
 
-[^^](suryana-2026 "hlm. 45")@@citeX{loc: "dropped", .thin}
+[^suryana-2026 "hlm. 45"]@@citeX{loc: "dropped", .thin}
 
 ##[wiki] Wiki link
 

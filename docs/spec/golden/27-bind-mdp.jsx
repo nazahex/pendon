@@ -2,7 +2,7 @@ import Figure from '@comp/Figure'
 
 export const frontmatter = {"references":{"book":{"id":"book","title":"A Book","type":"book"}}};
 export const references = {"book":{"id":"book","title":"A Book","type":"book"}};
-export const citations = [{"citation_number":1,"instance_index":1,"loc":"hlm. 45","ref_id":"book"},{"citation_number":2,"instance_index":2,"ref_id":"book"}];
+export const citations = [{"citation_number":1,"locator":"hlm. 45","reference_id":"book"},{"citation_number":2,"reference_id":"book"}];
 export default function PendonView() { return (<>
 <p>An <code>mdp</code> payload is a <strong>sub-document</strong>: it is parsed and run through the <em>same</em>
 chain as the page, so every enabled plugin reaches inside it — not just

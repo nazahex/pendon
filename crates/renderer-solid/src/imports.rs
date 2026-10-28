@@ -1,3 +1,4 @@
+use pendon_extra::FieldConfig;
 use pendon_types::Selector;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -37,6 +38,14 @@ pub struct ComponentTemplate {
     /// entry wins at least one occurring type, so a losing component's import
     /// line never appears.
     pub imports: Vec<ImportEntry>,
+    /// §6.1 / D-4: the `field.*` keys of the entry that owns this template.
+    ///
+    /// The projection is what spells a node's attributes, so it is also the only
+    /// place `field.override.<path>` can rename one — and the entry is the only
+    /// source of that config (`S2-4.4`). `None` for a template that is not a
+    /// configured entry (identity matches, the CLI's single template), which
+    /// projects the node as it stands.
+    pub field: Option<FieldConfig>,
 }
 
 impl ComponentTemplate {
@@ -59,7 +68,18 @@ impl ComponentTemplate {
             selectors,
             template: template.into(),
             imports,
+            field: None,
         }
+    }
+
+    /// Attaches the entry's `field.*` (§6.1, D-4), so an override renames the
+    /// attribute the projection writes.
+    ///
+    /// Set by [`layer_templates`](crate::layer_templates), which is where a §11
+    /// entry is turned into a template — the element plugins never see this.
+    pub fn with_field(mut self, field: FieldConfig) -> Self {
+        self.field = if field.is_empty() { None } else { Some(field) };
+        self
     }
 
     /// A component that is **not** a §11 layer: it answers the AST node
@@ -81,6 +101,7 @@ impl ComponentTemplate {
             selectors: Vec::new(),
             template: template.into(),
             imports,
+            field: None,
         }
     }
 }

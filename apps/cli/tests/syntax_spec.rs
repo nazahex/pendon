@@ -414,3 +414,13 @@ fn golden_33_extract_scopes() {
 fn golden_34_specs_assignment() {
     assert_fixture("34-specs-assignment");
 }
+
+/// §16.3 fixture 35: cite's fields under a `field.*` block (S2-4.4, §7.3). The
+/// entry moves `reference_id` to the tick and `locator` to the quote, and
+/// publishes them as `ref_id` / `loc` and the number as `no` (D-4) — the
+/// processor still numbers off its own names, so the identity and the ordinals
+/// are unchanged.
+#[test]
+fn golden_35_cite_fields() {
+    assert_fixture("35-cite-fields");
+}

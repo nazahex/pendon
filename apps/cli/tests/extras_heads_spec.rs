@@ -73,7 +73,7 @@ const CASES: &[Case] = &[
     Case {
         name: "cite",
         plugins: "cite,anchor,markdown",
-        source: "[^^](alpha)@@citeX{HEAD}\n",
+        source: "[^alpha]@@citeX{HEAD}\n",
         // §7.3: the citation layer needs a component to become a structured node.
         extra: r#"
 [task.cite]
@@ -85,8 +85,10 @@ name = "Cite"
 imports = "import { Cite } from '@comp/Cite'"
 template = "<Cite {...attrs} />"
 "#,
-        // §6.3: the citation's own id field, and the quote as its `title`.
+        // §7.3/§6.3: the reference the head assigns, the citation's own id field,
+        // and the quote as its `title`.
         expect: &[
+            r#"reference_id="alpha""#,
             r#"cite-id="elem-x""#,
             r#"class="cls""#,
             r#"title="Title X""#,

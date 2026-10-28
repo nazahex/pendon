@@ -14,7 +14,7 @@ carry a node list (Solid: `(<>{…}</>)`).
 {{{mdp[card-body]
 ## Payload heading
 
-A [[Nested Wiki]] link, a citation [^^](book "hlm. 45") and inline math $x^2$
+A [[Nested Wiki]] link, a citation [^book "hlm. 45"] and inline math $x^2$
 all resolve against the page's own state.
 
 ~?!!w400[Chart](https://example.com/chart.png)@@figureX{.wide} A caption from the payload.
@@ -29,6 +29,6 @@ all resolve against the page's own state.
 The inline form drops the payload's own `<p>` wrapper, so a payload written on
 the head line contributes inline nodes only:
 
-{{{mdp[card-note] See [[Wireless]] and [^^](book). }}}
+{{{mdp[card-note] See [[Wireless]] and [^book]. }}}
 
 @[Note](/docs)@@anchorA{note: $card-note}

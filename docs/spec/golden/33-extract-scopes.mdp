@@ -5,5 +5,5 @@ block names — and takes `citationsC` away from the block before it, because a 
 `export` of the same name wins entirely (D-6). `references` still lists every entry:
 extraction reads the document, it does not cite anything.
 
-A [^^](alpha)@@CiteA, B [^^](beta)@@CiteB, C [^^](gamma).
+A [^alpha]@@CiteA, B [^beta]@@CiteB, C [^gamma].
 

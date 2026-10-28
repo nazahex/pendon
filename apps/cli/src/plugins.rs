@@ -288,7 +288,6 @@ pub fn build_cite_options(
     let Some(config) = config else {
         return Ok(CiteOptions::default());
     };
-    check_legacy_cite_keys(config)?;
     let external_references = match config.reference_source.as_deref().unwrap_or("frontmatter") {
         "frontmatter" | "internal" => None,
         "external" => {
@@ -365,42 +364,12 @@ pub fn build_cite_options(
         })
     })?;
     Ok(CiteOptions {
-        ref_id_prefix: config
-            .ref_id_prefix
-            .clone()
-            .unwrap_or(defaults.ref_id_prefix),
-        citation_class: config
-            .citation_class
-            .clone()
-            .unwrap_or(defaults.citation_class),
-        citation_id_prefix: config
-            .citation_id_prefix
-            .clone()
-            .unwrap_or(defaults.citation_id_prefix),
         references_export,
         citations_export,
         references_scope,
         custom,
         external_references,
     })
-}
-
-/// RFC-0002 §2.1: `prefix` / `class` / `id_prefix` were renamed. A stale config
-/// must fail with the new name rather than silently rendering with defaults.
-fn check_legacy_cite_keys(config: &CiteTaskConfig) -> Result<(), String> {
-    let renames: [(&str, &str, &Option<toml::Value>); 3] = [
-        ("prefix", "ref_id_prefix", &config.prefix),
-        ("class", "citation_class", &config.class),
-        ("id_prefix", "citation_id_prefix", &config.id_prefix),
-    ];
-    for (old, new, value) in renames {
-        if value.is_some() {
-            return Err(format!(
-                "task.cite.{old} was renamed to task.cite.{new}; update pendon.toml (RFC-0002 §2.1)"
-            ));
-        }
-    }
-    Ok(())
 }
 
 /// `[[task.bind.inject]]` (§6.1): every entry becomes one module-level
@@ -1478,19 +1447,10 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
         }
     }
 
-    /// RFC-0002 §2.1/§2.3: a renamed cite key or a malformed export name must
-    /// fail loudly instead of silently rendering with defaults.
+    /// RFC-0002 §2.3: a malformed export name must fail loudly instead of
+    /// silently rendering with defaults.
     #[test]
-    fn cite_rejects_renamed_keys_and_bad_export_names() {
-        let cite: CiteTaskConfig =
-            toml::from_str("prefix = \"cite-\"\n").expect("valid cite config");
-        let err = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
-            .expect_err("renamed key");
-        assert!(
-            err.contains("task.cite.prefix was renamed to task.cite.ref_id_prefix"),
-            "{err}"
-        );
-
+    fn cite_rejects_bad_export_names() {
         let cite: CiteTaskConfig =
             toml::from_str("citations_export = \"cites-list\"\n").expect("valid cite config");
         let err = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)

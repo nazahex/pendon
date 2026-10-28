@@ -49,7 +49,7 @@ Implementation units that own this grammar:
 ## 2. Terminology
 
 - **head** — the construct-specific prefix that carries the construct's own
-  identity: `@[slug](…)`, `[slug]`, `("title")`, `[[…]]`, `[^^](ref "loc")`,
+  identity: `@[slug](…)`, `[^ref "loc"]`, `[slug]`, `("title")`, `[[…]]`,
   `~?!…(…)`, `|-…-|`.
 - **slot** — the `[…]` and `(…)` groups of a head, each carrying at most one
   _bare_, one _quoted_ and one _ticked_ content, in that order (§7.2, ADR-0012).
@@ -90,7 +90,7 @@ Implementation units that own this grammar:
 | `\|\| cap \|\|`             | table caption line                 | `plugin-table`      | new                             |
 | `\|===\|`                   | table foot separator               | `plugin-table`      | existing (kept)                 |
 | `~?!` / `~?!!`              | image / figure marker              | `plugin-image`      | existing                        |
-| `[^^](ref "loc")`           | citation                           | `plugin-cite`       | **current** (§7.3)              |
+| `[^ref "loc"]`              | citation (tag + slots)             | `plugin-cite`       | current (§7.3)                  |
 | `[[…]]`                     | wiki link                          | `plugin-wiki`       | existing                        |
 | `>`                         | blockquote                         | `plugin-blockquote` | current (decorator only, §9.2)  |
 | `-` `*` `+`                 | unordered list container           | `plugin-list`       | current (+extras)               |
@@ -647,20 +647,44 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
 ### 7.3 Cite (`plugin-cite`)
 
 ```ebnf
-cite     = "[^^]" "(" ref [ ws dquote loc dquote ] ")" extras?
-ref      = 1*( any char except ws, ")", ",", dquote )
+cite     = "[" tag bracket [ "(" slots ")" ] extras?
+tag      = "^"                                  # inside the bracket (§5.3)
+bracket  = slots                                # reference_id, locator
 extras   = §5 extras-head                       # the shared {…} / @@type{…} head
 ```
 
-- The reference is **unquoted** and the location is an optional **quoted**
-  string. `[^^](book)` and `[^^](book "hlm. 45")` are the only two forms.
-- Everything else is literal text (no citation, no warning):
-  `[^^]("book")`, `[^^](book, "hlm. 45")`, `[^^](book loc="x")` and `[^^]()`.
-- Extras attach to the citation node and MUST touch the closing `)`; the head
-  values (`id`, `loc`) win over same-named extras props (§6.2).
-- First head positional → `id`; the quoted location → `loc`. There is no `loc=`
-  prop form of the head: the quoted string after the reference is the only
-  location syntax.
+```mdp
+[^reference_id "locator" `bracket tick`](paren bare "paren quote" `paren tick`)
+```
+
+- The tag is the caret **inside** the bracket: `[^book]` is a citation, `[book]`
+  is not (`plugin-markdown`'s text), and `[^^](book)` is not either — its second
+  caret becomes the reference `^` (§14).
+- `bracket.bare` → `reference_id`, `bracket.quote` → `locator`. **`reference_id`
+  is mandatory**: a head that assigns it nowhere (an empty bracket, a quoted-only
+  one, or an entry whose `field.*` voided the preset and did not redefine it) is
+  an `Error` and the text stays as written. `locator` is optional.
+- Every other claimed position (the tick, the whole paren) is an ordinary field:
+  unassigned positions keep their slot-qualified path (`bracket.tick`,
+  `paren.bare`, `paren.quote`, `paren.tick`) per D-7.
+- Positions are movable: `field.bracket.tick = "reference_id"` +
+  `field.bracket.quote = "locator"` is the documented way to put the reference in
+  the tick (voiding the preset renames **every** row, so both must be assigned —
+  §6.1). The processor reads `reference_id` / `locator` **by name**, so a moved or
+  publicly renamed field (`field.override.reference_id = "ref_id"`) never changes
+  numbering or identity (D-4).
+- Extras attach to the citation node and MUST touch the closing `)`; an item
+  that spells a name the head produced is dropped with a warning (§6.2). An
+  extras `#id` / `` `slug` `` feeds the node's `cite-id`, and an extras quote is
+  its `title` (§6.3).
+- The citation's fields are `reference_id`, `locator` and `citation_number` (the
+  display ordinal, assigned by the processor; a repeated
+  `(reference_id, locator)` keeps its number). There is no `instance_index`
+  (§14) — a per-occurrence ordinal is `plugin-number`'s job (§10.5).
+- Without a `cite` component the built-in markup is
+  `<sup class="cite-ref"><a href="#citeref-1-book" id="cite-1">[1]</a></sup>`:
+  the class and the two prefixes are fixed, because a site that wants its own
+  spelling configures a `Cite` component (§7.3 config above, §14).
 
 ### 7.4 Heading (`plugin-heading`)
 
@@ -1223,49 +1247,53 @@ attributes — this is the item layer (L2/L3, §9.3), which is still pending.
 
 ## 13. Diagnostics
 
-| Condition                                                            | Severity                                           |
-| -------------------------------------------------------------------- | -------------------------------------------------- |
-| malformed head / missing `}` / whitespace-separated head             | none (literal text)                                |
-| a retired legacy form (`[.c,#id]{k:v}`, `[^^]("ref")`, …)            | none (literal text)                                |
-| duplicate `#id` / `` `slug` `` / `"title"` / prop / flag in one head | **Error (first wins)**                             |
-| extras `k` naming a built-in field of the element (`href`, `src`)    | **Error (construct wins; use `field.override.k`)** |
-| repeated `style:` property or `--var` (last value wins, CSS)         | none                                               |
-| extras `id` overriding a head slug                                   | Warning                                            |
-| decorator with no following block                                    | Warning                                            |
-| dropped decorator (consecutive decorators)                           | Warning                                            |
-| dropped extras value because a head value won                        | Warning                                            |
-| unclosed block directive at EOF                                      | Warning                                            |
-| unknown plugin name in `task.plugin`                                 | Warning                                            |
-| unknown `task.<plugin>` key in `pendon.toml`                         | **Error (config load)**                            |
-| unknown key inside a `custom` entry                                  | **Error (config load)**                            |
-| template without `{children}` (non-void element)                     | Error (config load)                                |
-| unbalanced template element                                          | Error (config load)                                |
-| two default components for one layer                                 | Error (config load)                                |
-| `start:` prop on `ol` extras                                         | Warning (ignored)                                  |
-| literal `U+E000` sentinel character in source                        | Warning (stripped)                                 |
-| unknown key outside a known layer                                    | Warning (passed through)                           |
+| Condition                                                                            | Severity                                           |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| malformed head / missing `}` / whitespace-separated head                             | none (literal text)                                |
+| a retired legacy form (`[.c,#id]{k:v}`, `[^^]("ref")`, …)                            | none (literal text)                                |
+| a cite head that assigns no `reference_id` (§7.3)                                    | **Error (text stays literal)**                     |
+| duplicate `#id` / `` `slug` `` / `"title"` / prop / flag in one head                 | **Error (first wins)**                             |
+| extras `k` naming a built-in field of the element (`href`, `src`, `citation_number`) | **Error (construct wins; use `field.override.k`)** |
+| repeated `style:` property or `--var` (last value wins, CSS)                         | none                                               |
+| extras `id` overriding a head slug                                                   | Warning                                            |
+| decorator with no following block                                                    | Warning                                            |
+| dropped decorator (consecutive decorators)                                           | Warning                                            |
+| dropped extras value because a head value won                                        | Warning                                            |
+| unclosed block directive at EOF                                                      | Warning                                            |
+| unknown plugin name in `task.plugin`                                                 | Warning                                            |
+| unknown `task.<plugin>` key in `pendon.toml`                                         | **Error (config load)**                            |
+| unknown key inside a `custom` entry                                                  | **Error (config load)**                            |
+| template without `{children}` (non-void element)                                     | Error (config load)                                |
+| unbalanced template element                                                          | Error (config load)                                |
+| two default components for one layer                                                 | Error (config load)                                |
+| `start:` prop on `ol` extras                                                         | Warning (ignored)                                  |
+| literal `U+E000` sentinel character in source                                        | Warning (stripped)                                 |
+| unknown key outside a known layer                                                    | Warning (passed through)                           |
 
 Config-load errors MUST abort the build before any file is processed.
 
 ## 14. Retirement and collisions
 
-| Removed                                                          | Replaced by                                                                          | Note                                                                                                                                                                                                                                                                                                              |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `[task.cite.section]`                                            | `plugin-marker` (`{{bibliography}}`)                                                 | **removed**: `CiteOptions.section` and `CitationContext::replace_section_markers` are gone; the section component is now a marker.                                                                                                                                                                                |
-| `{{section}}` in sources                                         | marker block                                                                         | **removed**: the `{{ footnote }}` lines in `sandbox/cite` and `sandbox/img` are gone; `{{…}}` is free for `plugin-marker`.                                                                                                                                                                                        |
-| `:::name` custom blocks                                          | `==type` block directive                                                             | deprecated alias kept for one release (Warning), then hard-error — §15 OPEN-R1.                                                                                                                                                                                                                                   |
-| bare `===` table footer                                          | `\|===\|`                                                                            | **removed**: only `\|===\|` remains.                                                                                                                                                                                                                                                                              |
-| `o.` ordered-list offset                                         | first item's number                                                                  | **removed**: an `ol`'s `start` comes from the first item and is not overridable (§9.4).                                                                                                                                                                                                                           |
-| `plugin-quiz` (`:::quiz`)                                        | —                                                                                    | retired from the pipeline; plugin code stays, deep rework later.                                                                                                                                                                                                                                                  |
-| legacy `[.c,#id]{k:v}`                                           | `{…}` / `@@type{…}`                                                                  | **removed** (D3): plain literal text, no warning, no deprecation path. Gone from the code (`parse_attrs`, `ExtraAttrs`, `legacy_extras_warning`), docs, sandboxes and READMEs.                                                                                                                                    |
-| `import = "…"` (string)                                          | `imports = ["…"]`                                                                    | **removed**: the singular form is accepted with a Warning (§15 OPEN-C2), then hard-errors.                                                                                                                                                                                                                        |
-| `[task.<plugin>.custom_node]`                                    | `[task.<plugin>.custom.<layer>]`                                                     | **removed**: `custom.<layer>` is read for `anchor`, `image` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`); every sandbox/fixture config is migrated. The stale key fails the build with a migration message. Unwired layers (`task.image.custom.img`) are config errors. |
-| `[task.heading]` `auto_number` / `number_style`                  | `[[task.heading.number]]`                                                            | **removed** (ADR-0010): both keys are read only to raise the §14 migration error. Numbering is `plugin-number` (§10.5), which writes `attrs.number` as an array and never prefixes the text.                                                                                                                      |
-| anchor URL-suffix modifiers (`^`, `~`, `!`, `$`, `;;`, `--`)     | —                                                                                    | **not syntax** (D-16, §7.2): deleted, not replaced. A modifier-shaped tail is now part of the URL, and the `target` / `rel` tokens they produced are ordinary extras keys; the `^`/`~` conflict warning went with them. Slot modifiers are §5.4's, and Pendon ships none.                                         |
-| automatic external-URL `target="_blank"` / `rel="noopener"`      | —                                                                                    | **not syntax** (D-16, §7.2): the anchor no longer classifies URLs, and no config key restores it — write `target` / `rel` in the extras when a link needs them.                                                                                                                                                   |
-| untagged `[text](url)` anchor                                    | `@[text](url)`                                                                       | **not syntax** (D-16, §7.2): the slot tag is mandatory, because the bracket and paren are universal (§5.2). Without it the text is an ordinary CommonMark link and a trailing extras head stays literal text.                                                                                                     |
-| blockquote inner head (`> @@type{…} content`)                    | decorator line above the quote                                                       | **not syntax** (D-16, §9.2): a quote has no head, so everything inside `>` is content and `@@type{…}` written there is literal text. The decorator line (§9.1) is the only way to configure a quote.                                                                                                              |
-| `backtick_key` / `quote_key` / `bracket_key` / `parentheses_key` | `field.specs.tick` / `field.specs.quote` / `field.bracket.bare` / `field.paren.bare` | **removed** (D-16): the four naming keys are gone from the loader, so a config that still uses them **fails to load** with an unknown-key error (§13) — no alias, no deprecation. Naming is `field.*` only (§6.1); an entry that configures none keeps the seven default paths (`specs.tick` … `paren.bare`).     |
+| Removed                                                                 | Replaced by                                                                          | Note                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `[task.cite.section]`                                                   | `plugin-marker` (`{{bibliography}}`)                                                 | **removed**: `CiteOptions.section` and `CitationContext::replace_section_markers` are gone; the section component is now a marker.                                                                                                                                                                                |
+| `{{section}}` in sources                                                | marker block                                                                         | **removed**: the `{{ footnote }}` lines in `sandbox/cite` and `sandbox/img` are gone; `{{…}}` is free for `plugin-marker`.                                                                                                                                                                                        |
+| `:::name` custom blocks                                                 | `==type` block directive                                                             | deprecated alias kept for one release (Warning), then hard-error — §15 OPEN-R1.                                                                                                                                                                                                                                   |
+| bare `===` table footer                                                 | `\|===\|`                                                                            | **removed**: only `\|===\|` remains.                                                                                                                                                                                                                                                                              |
+| `o.` ordered-list offset                                                | first item's number                                                                  | **removed**: an `ol`'s `start` comes from the first item and is not overridable (§9.4).                                                                                                                                                                                                                           |
+| `plugin-quiz` (`:::quiz`)                                               | —                                                                                    | retired from the pipeline; plugin code stays, deep rework later.                                                                                                                                                                                                                                                  |
+| legacy `[.c,#id]{k:v}`                                                  | `{…}` / `@@type{…}`                                                                  | **removed** (D3): plain literal text, no warning, no deprecation path. Gone from the code (`parse_attrs`, `ExtraAttrs`, `legacy_extras_warning`), docs, sandboxes and READMEs.                                                                                                                                    |
+| `import = "…"` (string)                                                 | `imports = ["…"]`                                                                    | **removed**: the singular form is accepted with a Warning (§15 OPEN-C2), then hard-errors.                                                                                                                                                                                                                        |
+| `[task.<plugin>.custom_node]`                                           | `[task.<plugin>.custom.<layer>]`                                                     | **removed**: `custom.<layer>` is read for `anchor`, `image` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`); every sandbox/fixture config is migrated. The stale key fails the build with a migration message. Unwired layers (`task.image.custom.img`) are config errors. |
+| `[task.heading]` `auto_number` / `number_style`                         | `[[task.heading.number]]`                                                            | **removed** (ADR-0010): both keys are read only to raise the §14 migration error. Numbering is `plugin-number` (§10.5), which writes `attrs.number` as an array and never prefixes the text.                                                                                                                      |
+| anchor URL-suffix modifiers (`^`, `~`, `!`, `$`, `;;`, `--`)            | —                                                                                    | **not syntax** (D-16, §7.2): deleted, not replaced. A modifier-shaped tail is now part of the URL, and the `target` / `rel` tokens they produced are ordinary extras keys; the `^`/`~` conflict warning went with them. Slot modifiers are §5.4's, and Pendon ships none.                                         |
+| automatic external-URL `target="_blank"` / `rel="noopener"`             | —                                                                                    | **not syntax** (D-16, §7.2): the anchor no longer classifies URLs, and no config key restores it — write `target` / `rel` in the extras when a link needs them.                                                                                                                                                   |
+| untagged `[text](url)` anchor                                           | `@[text](url)`                                                                       | **not syntax** (D-16, §7.2): the slot tag is mandatory, because the bracket and paren are universal (§5.2). Without it the text is an ordinary CommonMark link and a trailing extras head stays literal text.                                                                                                     |
+| blockquote inner head (`> @@type{…} content`)                           | decorator line above the quote                                                       | **not syntax** (D-16, §9.2): a quote has no head, so everything inside `>` is content and `@@type{…}` written there is literal text. The decorator line (§9.1) is the only way to configure a quote.                                                                                                              |
+| `backtick_key` / `quote_key` / `bracket_key` / `parentheses_key`        | `field.specs.tick` / `field.specs.quote` / `field.bracket.bare` / `field.paren.bare` | **removed** (D-16): the four naming keys are gone from the loader, so a config that still uses them **fails to load** with an unknown-key error (§13) — no alias, no deprecation. Naming is `field.*` only (§6.1); an entry that configures none keeps the seven default paths (`specs.tick` … `paren.bare`).     |
+| `[^^](ref "loc")` cite head                                             | `[^ref "loc"]`                                                                       | **not syntax** (D-16, §7.3): the caret is the slot tag and sits inside the bracket, so the old form's second caret becomes the reference. A `cite` head without `reference_id` is an `Error`, not a citation.                                                                                                     |
+| `[task.cite]` `citation_class` / `ref_id_prefix` / `citation_id_prefix` | a `Cite` component                                                                   | **removed** (D-16, §7.3): the built-in `<sup>` markup's class and prefixes are constants; a site that wants its own spelling configures the component. The three keys are unknown now, so a config that still sets them **fails to load** (§13).                                                                  |
+| `citation_number`'s sibling `instance_index`                            | `plugin-number` (§10.5)                                                              | **removed** (D-16, §7.3): the per-occurrence ordinal is no longer a field of the citation. The citations export carries `reference_id` / `locator` / `citation_number` only; the built-in markup still needs a unique backlink anchor and derives one internally.                                                 |
 
 ## 15. Open decisions
 
@@ -1530,13 +1558,13 @@ name        = ( ALPHA | "_" | "$" ) { ALPHA | DIGIT | "_" | "$" }
 
 Current producers:
 
-| Name                                    | Producer                     | Notes                                                             |
-| --------------------------------------- | ---------------------------- | ----------------------------------------------------------------- |
-| `frontmatter`                           | `renderer-solid` (automatic) | only when the document has frontmatter                            |
-| `headings`                              | `renderer-solid` (automatic) | built from the AST (§21); only when it has headings; nested shape |
-| `references`, `citations`               | `plugin-cite` (§7.3)         | names configurable; references first                              |
-| `[[task.bind.inject]]`'s `export`       | `plugin-bind` (§19)          | whole file payloads; Solid tasks only                             |
-| `[[task.<element>.extract]]`'s `export` | `plugin-extract` (§21)       | one flat row per occurrence; Solid tasks only                     |
+| Name                                    | Producer                     | Notes                                                                                                  |
+| --------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `frontmatter`                           | `renderer-solid` (automatic) | only when the document has frontmatter                                                                 |
+| `headings`                              | `renderer-solid` (automatic) | built from the AST (§21); only when it has headings; nested shape                                      |
+| `references`, `citations`               | `plugin-cite` (§7.3)         | names configurable; references first; a `citations` row is `{reference_id, locator?, citation_number}` |
+| `[[task.bind.inject]]`'s `export`       | `plugin-bind` (§19)          | whole file payloads; Solid tasks only                                                                  |
+| `[[task.<element>.extract]]`'s `export` | `plugin-extract` (§21)       | one flat row per occurrence; Solid tasks only                                                          |
 
 The automatic `headings` outline used to be injected into the event stream by
 `plugin-extract-heading`; the renderer now builds it from the `Heading` nodes

@@ -219,6 +219,7 @@ where
         .map(|entry| {
             let (template, imports) = payload(&entry.component);
             ComponentTemplate::new_layer(layer, entry.selectors.clone(), template, imports)
+                .with_field(entry.field.clone())
         })
         .collect()
 }

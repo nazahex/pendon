@@ -606,7 +606,7 @@ README. If an element has nothing to delete, say so in the commit message.
       "not syntax" list gained the inner head, §4.1's adjacency exception now
       names the list item only, and §3's `>` row says `decorator only`. Gate
       green: fmt + dprint clean, clippy at baseline, 759 tests.
-- [ ] **S2-4.4 — Cite.** Dep: S2-4.2 (shares slot machinery), OBJ-1 resolved.
+- [x] **S2-4.4 — Cite.** Dep: S2-4.2 (shares slot machinery), OBJ-1 resolved.
       `§7.3`
       Do: `^` tag; `bracket.bare→reference_id`, `bracket.quote→locator`;
       `reference_id` mandatory (error when the preset is voided and nothing
@@ -622,6 +622,33 @@ README. If an element has nothing to delete, say so in the commit message.
       Exit: preset assignment = `reference_id`, `locator`, `citation_number`;
       overrides
       (`ref_id`, `no`, `loc`) work without breaking numbering.
+      **Done 2026-10-28.** The hand-rolled `[^^](ref "loc")` scanner is gone:
+      `read_head` uses `parse_slots` + `parse_extras` like the anchor, so the head
+      is `[^reference_id "locator"](paren…)` with `HEAD.assign` deciding where each
+      position lands. `reference_id` is mandatory — a head that assigns it nowhere
+      (`[^]`, `[^"book"]`, or an entry that voided the preset without redefining
+      it) is an `Error` and the text stays literal; `citation_number` is declared
+      as the element's **owned** field (D-12 rule 5), so an extras item spelling
+      it is an `Error`. `instance_index` is deleted from the node, the record and
+      the extract table (§14) — only the built-in markup's backlink anchor still
+      needs a per-occurrence counter, and it stays internal. The three config keys
+      and the pre-RFC-0002 shim are deleted, so a stale config is an unknown-key
+      **load error**; the built-in `<sup>` class and its two prefixes are now
+      constants, which is the documented reason to configure a `Cite` component.
+      **A gap this closed:** `field.override.*` was documented but inert — every
+      renderer called `project(v, None)` (S2-3.2's note). `ComponentTemplate`
+      now carries the winning entry's `FieldConfig` (`with_field`, set by
+      `layer_templates`) and the component path projects with it, so the exit
+      box's `ref_id` / `no` / `loc` renames are real (new renderer test
+      `an_override_renames_a_component_prop`); the processor keeps reading its own
+      names (D-4, new test `an_override_does_not_break_numbering`).
+      Fixtures: `05-cite` rewritten (preset, paren positions, extras, identity,
+      the two error cases), `26-cite-scope` re-frozen (one citations row),
+      `27-bind-mdp` + `33-extract-scopes` (and its three side files) migrated, new
+      **`35-cite-fields`** is the `G:` box — the proposal's "simpler version"
+      (`field.bracket.tick`/`quote` + the three overrides). `citations` rows are
+      now `{reference_id, locator?, citation_number}` (D-19). Sandbox sources and
+      configs migrated (no re-render). 768 tests.
 - [x] **S2-4.5 — Directive: verify "no change".** Dep: S2-4.1. `§10.2–§10.3`
       Do: confirm `::type` / `==type` are untouched and `type` stays in the
       directive preset (it does not come from extras). Add the missing regression

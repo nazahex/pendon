@@ -407,8 +407,10 @@ impl FieldMap {
 ///    produces today — authored `k: v`, `type`, `name`, `level`, `src`, … —
 ///    obeys the rules);
 /// 3. `config`'s `field.override.<path>` renames an entry **as it is written**
-///    (D-4). No override exists until Phase 4, so `None` is what every caller
-///    passes today;
+///    (D-4). `renderer-solid`'s component path passes the winning §11 entry's
+///    config (`ComponentTemplate::field`), so an override reaches `{attrs.k}` and
+///    `{...attrs}`; the built-in element path and `renderer-html` pass `None`,
+///    because no entry answers those nodes;
 /// 4. the entries are ordered by their **public** path, so the §6.3 rename
 ///    `specs.class` → `class` writes the same attribute in the same place.
 pub fn project(node: &serde_json::Value, config: Option<&FieldConfig>) -> FieldMap {

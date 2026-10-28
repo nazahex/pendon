@@ -190,12 +190,6 @@ pub struct CiteTaskConfig {
     pub number: Vec<NumberRule>,
     pub reference_source: Option<String>,
     pub reference_file: Option<String>,
-    /// Prefix for the bibliography anchor `href`s (`ref_id_prefix`).
-    pub ref_id_prefix: Option<String>,
-    /// CSS class of the inline citation element (`citation_class`).
-    pub citation_class: Option<String>,
-    /// Prefix for the inline anchor ids (`citation_id_prefix`).
-    pub citation_id_prefix: Option<String>,
     /// Name of the Solid/JS export holding the reference map.
     pub references_export: Option<String>,
     /// Name of the Solid/JS export holding the citation list.
@@ -203,14 +197,6 @@ pub struct CiteTaskConfig {
     /// §2.6 of RFC-0002: which references the export carries — `cited` or
     /// `all`. Unset keeps the source-dependent default.
     pub references_scope: Option<String>,
-    /// Removed pre-RFC-0002 name (`prefix` → `ref_id_prefix`). Parsed so a
-    /// stale config fails with a migration message instead of silently
-    /// rendering with defaults.
-    pub prefix: Option<toml::Value>,
-    /// Removed pre-RFC-0002 name (`class` → `citation_class`).
-    pub class: Option<toml::Value>,
-    /// Removed pre-RFC-0002 name (`id_prefix` → `citation_id_prefix`).
-    pub id_prefix: Option<toml::Value>,
     /// §11 layer component sets: `[[task.cite.custom]]` (primary layer `cite`).
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.cite.custom_node]`, §14).

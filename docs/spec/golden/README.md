@@ -42,7 +42,7 @@ The one-key spread `{...{ "specs.tick": "x" }}` is the only spelling (§6.3), so
 fixture cannot freeze invalid output and pass.
 
 ```bash
-cargo test -p pendon --test syntax_spec      # 28 fixtures, none #[ignore]d
+cargo test -p pendon --test syntax_spec      # 30 fixtures, none #[ignore]d
 ```
 
 ## Re-freezing (when output intentionally changes)

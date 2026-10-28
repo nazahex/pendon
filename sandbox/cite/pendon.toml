@@ -13,9 +13,6 @@ post_hook = ["prettier --write ./out/[slug].jsx"]
 [task.cite]
 reference_source = "external"
 reference_file = "./src/reference.yaml"
-ref_id_prefix = "ref-" # Prefix for `href` linking to bibliography entries
-citation_class = "citation" # CSS class for the inline `<sup>` citation element
-citation_id_prefix = "cite-" # Prefix for inline anchor IDs (backlink targets from bibliography)
 references_export = "references" # Override the exported variable name for references data
 citations_export = "citations"
 references_scope = "all" # `cited` (external default) | `all` (frontmatter default)
@@ -48,6 +45,3 @@ template = "<Bibliography references={references} citations={citations} {...attr
 # [task.cite]
 # reference_source = "external"
 # reference_file = "./src/reference.yaml"
-# ref_id_prefix = "ref-"
-# citation_class = "citation"
-# citation_id_prefix = "cite-"

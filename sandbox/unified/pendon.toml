@@ -65,9 +65,6 @@ template = "<Figure {...attrs}>{children}</Figure>"
 
 [task.cite]
 reference_source = "internal"
-ref_id_prefix = "cite-"
-citation_class = "cite-ref"
-citation_id_prefix = "cra-"
 
 [[task.cite.custom]]
 name = "Cite"
