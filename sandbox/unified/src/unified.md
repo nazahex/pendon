@@ -36,7 +36,7 @@ references:
 
 The unified attribute syntax is the **extras head**: `@@type{…}`, written
 adjacent to a construct with no space in between. This document exercises every
-construct that reads it — anchor, heading, image/figure, cite, wiki link and the
+construct that reads it — anchor, heading, image, cite, wiki link and the
 seven table layers.
 
 ##[anchor] Anchor
