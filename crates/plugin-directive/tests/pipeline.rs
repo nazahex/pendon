@@ -114,14 +114,15 @@ fn each_type_resolves_its_own_positional_names() {
     assert_eq!(attr(&out, "author"), Some("C".to_string()));
     assert_eq!(attr(&out, "summary"), Some("D".to_string()));
     // …and nothing spills onto the built-in slot the key was renamed away from.
-    assert_eq!(attr(&out, "slug"), None, "{out:?}");
-    assert_eq!(attr(&out, "title"), None, "{out:?}");
+    for unset in ["bracket.bare", "paren.bare", "specs.tick", "specs.quote"] {
+        assert_eq!(attr(&out, unset), None, "{unset} spilled: {out:?}");
+    }
 
     // A type with no `field.*` config falls through to the layer default, which
-    // configures nothing, so the §6.1 defaults apply (head > extras §6.2).
+    // configures nothing, so the §6.1 default paths apply (head > extras §6.2).
     let out = run("::other[X](\"Y\"){`Z`, \"W\"}Body::");
-    assert_eq!(attr(&out, "slug"), Some("X".to_string()), "{out:?}");
-    assert_eq!(attr(&out, "title"), Some("Y".to_string()), "{out:?}");
+    assert_eq!(attr(&out, "bracket.bare"), Some("X".to_string()), "{out:?}");
+    assert_eq!(attr(&out, "paren.bare"), Some("Y".to_string()), "{out:?}");
     assert_eq!(attr(&out, "label"), None, "{out:?}");
 }
 

@@ -48,7 +48,7 @@ impl std::error::Error for ConfigError {}
 ///
 /// Defined in `pendon-extra` with the name rules and the [`pendon_extra::Path`]
 /// type, so this module only maps TOML onto it. Positional naming reads it too
-/// ([`pendon_extra::PositionalNames::resolve`]): since §14 there is no separate
+/// ([`pendon_extra::Specs::resolve`]): since §14 there is no separate
 /// naming key, so `field.*` is the only way to rename a slot or a specs position.
 pub use pendon_extra::FieldConfig;
 
@@ -88,7 +88,7 @@ impl ComponentEntry {
     /// is not this entry's type.
     ///
     /// Wildcards are resolved per document by the renderer (decision D-3a), so
-    /// they never match here — `names_for` and the duplicate check are
+    /// they never match here — `specs_for` and the duplicate check are
     /// literal-only by design (see `pendon-types`).
     pub fn matches_type(&self, type_marker: &str) -> bool {
         self.selectors
@@ -1295,12 +1295,12 @@ template = "<H>{{children}}</H>"
         }
     }
 
-    /// §14/D-16: the four positional-naming keys are **removed**, not aliased.
+    /// §14/D-16: the four legacy naming keys are **removed**, not aliased.
     /// Each one is an unknown key now, so a stale config fails the load instead
     /// of silently keeping `slug` / `title` (the tested `field.*` spelling is
     /// `field.bracket.bare` / `field.paren.bare` / `field.specs.tick|quote`).
     #[test]
-    fn each_removed_positional_key_is_a_load_error() {
+    fn each_removed_naming_key_is_a_load_error() {
         for key in [
             "backtick_key",
             "quote_key",

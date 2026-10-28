@@ -85,17 +85,17 @@ pub fn primary_layer() -> &'static str {
 
 /// §9.3 L1: binds a container decorator line to the list below it.
 pub fn process(events: &[Event], options: &ListOptions) -> Vec<Event> {
-    // §6.1/§11 rule 5: a decorator's positional keys come from the container
+    // §6.1/§11 rule 5: a decorator's specs come from the container
     // entry it names, across the three layers `plugin-list` owns.
-    let keys = |target: Option<&str>| {
+    let specs = |target: Option<&str>| {
         options
             .unordered
-            .names_for_opt(target)
-            .or_else(|| options.ordered.names_for_opt(target))
-            .or_else(|| options.list.names_for_opt(target))
+            .specs_for_opt(target)
+            .or_else(|| options.ordered.specs_for_opt(target))
+            .or_else(|| options.list.specs_for_opt(target))
             .unwrap_or_default()
     };
-    let bindings = bind_decorators(events, &keys, list_target);
+    let bindings = bind_decorators(events, &specs, list_target);
     let decorators: HashMap<usize, &BoundDecorator> = bindings
         .bound
         .iter()
@@ -335,8 +335,8 @@ mod tests {
         assert_eq!(attr(&out, "__plugin_kind").as_deref(), Some("unordered"));
         assert_eq!(attr(&out, "__layer").as_deref(), Some("unordered"));
         assert_eq!(attr(&out, "type").as_deref(), Some("unorderedA"));
-        assert_eq!(attr(&out, "class").as_deref(), Some("u"));
-        assert_eq!(attr(&out, "id").as_deref(), Some("l03"));
+        assert_eq!(attr(&out, "specs.class").as_deref(), Some("u"));
+        assert_eq!(attr(&out, "specs.id").as_deref(), Some("l03"));
         // The marker lines stay untouched for `plugin-markdown` (§9.3).
         assert!(text(&out).contains("- one"), "{:?}", text(&out));
         assert!(!text(&out).contains("@@"));
@@ -349,7 +349,7 @@ mod tests {
         assert_eq!(element(&out).as_deref(), Some("ul"), "{out:?}");
         assert_eq!(attr(&out, "__layer").as_deref(), Some("unordered"));
         assert_eq!(attr(&out, "type"), None);
-        assert_eq!(attr(&out, "class").as_deref(), Some("u"));
+        assert_eq!(attr(&out, "specs.class").as_deref(), Some("u"));
     }
 
     /// §9.4: the marker decides the layer, not the decorator's type.

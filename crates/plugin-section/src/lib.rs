@@ -48,7 +48,7 @@ use std::collections::HashMap;
 use pendon_core::{ensure_unique, slugify, Event, NodeKind, Severity};
 use pendon_extra::{
     bind_decorators, scan_extras_chars, to_attributes, warning_message, Attrs, BoundDecorator,
-    ExtrasAttr,
+    ExtrasAttr, Specs,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
@@ -118,8 +118,8 @@ enum Marker {
 }
 
 pub fn process(events: &[Event], options: &SectionOptions) -> Vec<Event> {
-    let keys = |target: Option<&str>| options.section.names_for(target);
-    let bindings = bind_decorators(events, &keys, section_target);
+    let specs = |target: Option<&str>| options.section.specs_for(target);
+    let bindings = bind_decorators(events, &specs, section_target);
     let decorators: HashMap<usize, &BoundDecorator> = bindings
         .bound
         .iter()
@@ -359,7 +359,7 @@ fn open_section(
         for warning in &decorator.attrs.warnings {
             out.push(diagnostic(&warning_message(warning)));
         }
-        emit_decorator_attrs(&decorator.attrs, out);
+        emit_decorator_attrs(&decorator.attrs, &decorator.specs, out);
     }
     stack.push(Frame { level, node });
 }
@@ -367,8 +367,9 @@ fn open_section(
 /// §9.5: the section id — `#sectionID` > decorator slug > `[slug]` > heading
 /// extras slug > the slug of the heading title.
 fn section_id(decorator: Option<&BoundDecorator>, chain: &HeadInfo) -> String {
-    let deco_id = decorator.and_then(|d| d.attrs.value("id").map(|value| value.literal()));
-    let deco_slug = decorator.and_then(|d| d.attrs.value("slug").map(|value| value.literal()));
+    let deco_id = decorator.and_then(|d| d.attrs.value(&d.specs.id).map(|value| value.literal()));
+    let deco_slug =
+        decorator.and_then(|d| d.attrs.value(&d.specs.tick).map(|value| value.literal()));
     deco_id
         .or(deco_slug)
         .or_else(|| chain.slug_head.clone())
@@ -376,17 +377,20 @@ fn section_id(decorator: Option<&BoundDecorator>, chain: &HeadInfo) -> String {
         .unwrap_or_else(|| slugify(&chain.title))
 }
 
-/// Pushes a decorator's attributes, minus `id` and `slug` (both were consumed by
-/// the id chain), in canonical order (§6.4).
-fn emit_decorator_attrs(attrs: &Attrs, out: &mut Vec<Event>) {
-    for (name, value) in &attrs.items {
-        if name == "id" || name == "slug" {
+/// Pushes a decorator's attributes, minus `#id` and the extras slug (both were
+/// consumed by the id chain), in canonical order (§6.4) with its `specs.*` paths
+/// projected (§6.3).
+fn emit_decorator_attrs(attrs: &Attrs, specs: &Specs, out: &mut Vec<Event>) {
+    for (name, value) in specs.dom_fields(&attrs.items, &[]) {
+        if name == "id" || name == specs.tick {
             continue;
         }
         match value {
-            ExtrasAttr::Flag => out.push(Event::AttributeFlag { name: name.clone() }),
+            ExtrasAttr::Flag => out.push(Event::AttributeFlag {
+                name: name.to_string(),
+            }),
             ExtrasAttr::Value(value) => out.push(Event::Attribute {
-                name: name.clone(),
+                name: name.to_string(),
                 value: value.literal(),
             }),
         }
@@ -449,10 +453,10 @@ fn heading_chain(raw: &str, level: usize, options: &SectionOptions) -> HeadInfo 
     let mut extras_slug = None;
     let mut extras_id = None;
     if let Some((head, next)) = scan_extras_chars(&chars, cursor) {
-        let keys = options.section.names_for(head.type_marker.as_deref());
-        let parsed = to_attributes(&head, &keys);
-        extras_id = parsed.value("id").map(|value| value.literal());
-        extras_slug = parsed.value(&keys.tick).map(|value| value.literal());
+        let specs = options.section.specs_for(head.type_marker.as_deref());
+        let parsed = to_attributes(&head, &specs);
+        extras_id = parsed.value(&specs.id).map(|value| value.literal());
+        extras_slug = parsed.value(&specs.tick).map(|value| value.literal());
         cursor = next;
     }
 

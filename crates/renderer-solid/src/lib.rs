@@ -228,6 +228,88 @@ mod tests {
         );
     }
 
+    /// A paragraph carrying one extra attribute, so a §6.3 mapping can be checked
+    /// one position at a time.
+    fn paragraph_with_attr(name: &str, value: &str) -> Vec<Event> {
+        vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Attribute {
+                name: name.to_string(),
+                value: value.to_string(),
+            },
+            Event::Text("body".to_string()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ]
+    }
+
+    /// S2-3.4/§6.3: the universal specs positions are **DOM** attributes in the
+    /// JSX output — `specs.class` is written `class`, never the dotted path.
+    #[test]
+    fn specs_class_renders_as_the_dom_class() {
+        let output = render_solid(&paragraph_with_attr("specs.class", "lead big"));
+        assert!(
+            output.contains("<p class=\"lead big\">"),
+            "output = {output}"
+        );
+    }
+
+    /// S2-3.4/§6.3: `specs.id` is the DOM `id`.
+    #[test]
+    fn specs_id_renders_as_the_dom_id() {
+        let output = render_solid(&paragraph_with_attr("specs.id", "p1"));
+        assert!(output.contains("<p id=\"p1\">"), "output = {output}");
+    }
+
+    /// S2-3.4/§6.3: `specs.style` is the DOM `style`.
+    #[test]
+    fn specs_style_renders_as_the_dom_style() {
+        let output = render_solid(&paragraph_with_attr("specs.style", "--tone: red"));
+        assert!(
+            output.contains("<p style=\"--tone: red\">"),
+            "output = {output}"
+        );
+    }
+
+    /// S2-3.4: `specs.tick` is **not** universal, so the field map's path is what
+    /// reaches the DOM. `specs.tick="x"` is not JSX (a `.` is a member
+    /// expression), so it is emitted as a one-key spread that keeps the name.
+    #[test]
+    fn specs_tick_keeps_its_dotted_name() {
+        let output = render_solid(&paragraph_with_attr("specs.tick", "listing-1"));
+        assert!(
+            output.contains("<p {...{ \"specs.tick\": \"listing-1\" }}>"),
+            "output = {output}"
+        );
+        assert!(!output.contains("specs.tick=\""), "output = {output}");
+    }
+
+    /// S2-3.4: `specs.quote` keeps its dotted path too, and a neighbouring
+    /// universal position is still written as its DOM name.
+    #[test]
+    fn specs_quote_keeps_its_dotted_name() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Attribute {
+                name: "specs.quote".to_string(),
+                value: "T".to_string(),
+            },
+            Event::Attribute {
+                name: "specs.class".to_string(),
+                value: "lead".to_string(),
+            },
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+        let output = render_solid(&events);
+        assert!(
+            output.contains("<p class=\"lead\" {...{ \"specs.quote\": \"T\" }}>"),
+            "output = {output}"
+        );
+    }
+
     /// §11 rule 3: a `__`-prefixed key is an internal marker (`__plugin_kind`),
     /// never a real attribute. It must not reach the output even on a plain
     /// `Element` node, where the template path's `{...attrs}` filter does not

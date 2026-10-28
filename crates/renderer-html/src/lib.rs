@@ -134,6 +134,103 @@ mod tests {
         );
     }
 
+    /// A paragraph carrying one extra attribute, so a §6.3 mapping can be checked
+    /// one position at a time.
+    fn paragraph_with_attr(name: &str, value: &str) -> Vec<Event> {
+        vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Attribute {
+                name: name.to_string(),
+                value: value.to_string(),
+            },
+            Event::Text("body".to_string()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ]
+    }
+
+    /// S2-3.4/§6.3: the universal specs positions are real DOM attributes in both
+    /// modes — `class`, `id` and `style` are what the browser gets.
+    #[test]
+    fn specs_class_renders_as_the_dom_class() {
+        let events = paragraph_with_attr("specs.class", "lead big");
+        let compact = render_html(&events);
+        assert!(
+            compact.contains("<p class=\"lead big\">"),
+            "compact = {compact}"
+        );
+        let pretty = render_html_pretty(&events);
+        assert!(
+            pretty.contains("<p class=\"lead big\">"),
+            "pretty = {pretty}"
+        );
+    }
+
+    /// S2-3.4/§6.3: `specs.id` is the DOM `id`.
+    #[test]
+    fn specs_id_renders_as_the_dom_id() {
+        let events = paragraph_with_attr("specs.id", "p1");
+        for output in [render_html(&events), render_html_pretty(&events)] {
+            assert!(output.contains("<p id=\"p1\">"), "output = {output}");
+        }
+    }
+
+    /// S2-3.4/§6.3: `specs.style` is the DOM `style`.
+    #[test]
+    fn specs_style_renders_as_the_dom_style() {
+        let events = paragraph_with_attr("specs.style", "--tone: red");
+        for output in [render_html(&events), render_html_pretty(&events)] {
+            assert!(
+                output.contains("<p style=\"--tone: red\">"),
+                "output = {output}"
+            );
+        }
+    }
+
+    /// S2-3.4: an element-specific position keeps the field map's dotted path.
+    /// HTML has no attribute-name restriction that would forbid it, so
+    /// `specs.tick` is printed verbatim (the JSX renderer spreads it instead).
+    #[test]
+    fn specs_tick_keeps_its_dotted_name() {
+        let events = paragraph_with_attr("specs.tick", "listing-1");
+        for output in [render_html(&events), render_html_pretty(&events)] {
+            assert!(
+                output.contains("<p specs.tick=\"listing-1\">"),
+                "output = {output}"
+            );
+        }
+    }
+
+    /// S2-3.4: `specs.quote` keeps its dotted path, and paths are emitted in the
+    /// projection's order (`specs.quote` before `specs.tick`).
+    #[test]
+    fn specs_quote_keeps_its_dotted_name() {
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Attribute {
+                name: "specs.tick".to_string(),
+                value: "listing-1".to_string(),
+            },
+            Event::Attribute {
+                name: "specs.quote".to_string(),
+                value: "T".to_string(),
+            },
+            Event::Attribute {
+                name: "specs.class".to_string(),
+                value: "lead".to_string(),
+            },
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+        let output = render_html(&events);
+        assert!(
+            output.contains("<p class=\"lead\" specs.quote=\"T\" specs.tick=\"listing-1\">"),
+            "output = {output}"
+        );
+    }
+
     #[test]
     fn link_title_is_rendered_in_html_modes() {
         let compact = render_html(&link_with_title_events());

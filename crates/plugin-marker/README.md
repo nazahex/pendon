@@ -44,7 +44,7 @@ let jsx = render_solid_with_hints(&markdown(&events), solid_hints(&options).as_r
 
 `primary_layer()` is `marker` — the key `[[task.marker.custom]]` addresses.
 
-### Positional names (§6.1, D-5)
+### Specs ((§6.1, D-5))
 
 An entry renames the §6.1 positional slots through its `field.*` keys —
 `field.bracket.bare` for the `[x]` group and `field.paren.bare` for `("x")`. An

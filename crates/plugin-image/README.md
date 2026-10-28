@@ -277,7 +277,7 @@ pipeline.add(move |ev| pendon_plugin_wiki::process_with_options(&ev, wiki_opts.c
 let events = pendon_plugin_image::process(&events, &image_opts, &pipeline);
 ```
 
-### Positional names (§6.1, D-5)
+### Specs ((§6.1, D-5))
 
 An entry renames the §6.1 positional slots through its `field.*` keys —
 `field.specs.tick` / `field.specs.quote` for a `` `slug` `` / `"title"` item. An

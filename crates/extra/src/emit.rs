@@ -83,7 +83,7 @@ pub fn warning_message(warning: &ExtrasWarning) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::typed::{to_attributes, PositionalNames};
+    use crate::typed::{to_attributes, Specs};
 
     fn chars(text: &str) -> Vec<char> {
         text.chars().collect()
@@ -134,7 +134,7 @@ mod tests {
             ExtrasMatch::Head { head, .. } => head,
             other => panic!("expected head, got {other:?}"),
         };
-        let attrs = to_attributes(&head, &PositionalNames::default());
+        let attrs = to_attributes(&head, &Specs::default());
         let mut out = Vec::new();
         emit_attrs(&attrs, &mut out);
         let names: Vec<String> = out
@@ -145,7 +145,17 @@ mod tests {
                 other => panic!("unexpected event {other:?}"),
             })
             .collect();
-        assert_eq!(names, vec!["class", "id", "slug", "title", "foo", "isFoo"]);
+        assert_eq!(
+            names,
+            vec![
+                "specs.class",
+                "specs.id",
+                "specs.tick",
+                "specs.quote",
+                "foo",
+                "isFoo"
+            ]
+        );
         assert!(matches!(out[5], Event::AttributeFlag { .. }));
     }
 

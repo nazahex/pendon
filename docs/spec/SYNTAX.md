@@ -405,6 +405,36 @@ in `renderer-solid` and `renderer-html`. An **explicit** template binding
 (`k={attrs.k}`) is untouched — the template author asked for that slot, so it
 keeps rendering `k={""}`.
 
+#### Public field names in the DOM renderers
+
+A public field is a **path** ([ADR-0014](../decisions/0014-field-model.md) rule 1),
+so a renderer has to decide what the attribute is _called_. Two rules:
+
+1. **A universal position becomes its DOM field.** `specs.class` → `class`,
+   `specs.id` → `id`, `specs.style` → `style` (`universal_field` in
+   `crates/extra::typed`, applied by `project`). It is a rename only: the map is
+   ordered by the _public_ path (§6.4), so `class` is written where `specs.class`
+   sat. An **element assignment wins** — a `field.specs.id` that names `cite-id`
+   is written `cite-id` and never `id`, because only the element knows what its
+   id _is_ (§7). That is why an element projects its own head through
+   `Specs::dom_fields(items, …)` instead of leaving the universal path to the
+   renderer.
+2. **Every other path keeps its dotted spelling** — `specs.tick`, `specs.quote`,
+   the slot groups `bracket.bare` / `paren.bare`, and an assigned
+   `heading.anchor`. A cross-element position has no DOM meaning (§6.1), and the
+   path is the field's public identity.
+
+| Renderer                 | `specs.class` | `specs.tick`                                       |
+| ------------------------ | ------------- | -------------------------------------------------- |
+| `renderer-html`          | `class="…"`   | `specs.tick="…"` (verbatim; HTML allows that name) |
+| `renderer-solid`         | `class="…"`   | `{...{ "specs.tick": "…" }}` (JSX has no `a.b=`)   |
+| `renderer-json` / `-ast` | `specs.class` | `specs.tick` (the path; no rename happens there)   |
+
+JSX reads `a.b=` as a member expression, not as an attribute name, so
+`renderer-solid` emits a dotted field as a one-key spread and keeps the path as
+the computed key. The compiled JSX sets the attribute the HTML renderer prints,
+so both DOM targets agree and the JSON/AST keep the path untouched.
+
 ### 6.4 Emission order (deterministic)
 
 Attributes MUST be emitted in this canonical order so golden fixtures are
@@ -424,6 +454,12 @@ are such a duplicate: the positional slot keeps its place and the later value
 wins. One exception: a positional **group** (`[…]` / `(…)`, §6.1) beats a
 same-key body item outright — the body value is dropped with an §13 `Warning`
 (§6.2 head-wins style). Whitespace-only differences MUST NOT change the output.
+
+The list above is the order a head's items are **assigned** in. Since the field
+model landed ([ADR-0014](../decisions/0014-field-model.md)), the DOM renderers
+emit the **projection's** order instead: `project` sorts by the public path, which
+is what keeps the §6.3 rename (`specs.class` → `class`) from moving the attribute
+it writes. `S2-3.5` restates this section as the map's own rule.
 
 ## 7. Construct grammars
 

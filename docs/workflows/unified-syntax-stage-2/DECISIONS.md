@@ -187,10 +187,11 @@ change is mostly `#[serde(rename)]` + validation (Phase 2).
 > config: `ExtrasOptions` named a head's four positional contents and
 > `to_attributes` emitted those names, so deleting the keys without a replacement
 > would have moved golden 15's bytes. The replacement is the config-side type
-> itself: `PositionalNames { bracket, paren, tick, quote }` +
-> `PositionalNames::resolve(Option<&FieldConfig>)` (`crates/extra/src/typed.rs`),
-> resolved in the renderer's component set (`names_for`) from the matched entry's
-> `field.*`. `resolve` is the only reader of D-5 for naming:
+> itself: `Specs { bracket, paren, tick, quote }` +
+> `Specs::resolve(Option<&FieldConfig>)` (`crates/extra/src/typed.rs`), named
+> `PositionalNames` until `S2-3.1` renamed the "canonical extras" vocabulary to
+> **specs**, resolved in the renderer's component set (`specs_for`) from the
+> matched entry's `field.*`. `resolve` is the only reader of D-5 for naming:
 >
 > - `field.bracket.bare` / `field.paren.bare` name the two groups;
 > - `field.specs.tick` / `field.specs.quote` name the two items;

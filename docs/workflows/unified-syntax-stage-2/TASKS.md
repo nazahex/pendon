@@ -320,8 +320,9 @@ is an identity at this point).
       **Done 2026-10-28** — the plan's premise ("`field.*` replaces them" already)
       was wrong: `ExtrasOptions` _was_ the live naming path (`to_attributes`), and
       golden 15 froze its effect (`id`/`level`/`author`/`summary`). So the
-      replacement was built before the deletion — `PositionalNames { bracket,
-      paren, tick, quote }` + `PositionalNames::resolve(Option<&FieldConfig>)` in
+      replacement was built before the deletion — `Specs { bracket,
+      paren, tick, quote }` (`PositionalNames` until `S2-3.1`) +
+      `Specs::resolve(Option<&FieldConfig>)` in
       `crates/extra/src/typed.rs` (D-5 note in `DECISIONS.md`): the groups come
       from `field.bracket.bare` / `field.paren.bare`, the items from
       `field.specs.tick` / `field.specs.quote`, an entry with no `field.*` keeps
@@ -346,32 +347,95 @@ is an identity at this point).
 Entry: Phase 2 done. Leave when `{}` produces `specs.*` in the projection, is
 assignable, and the DOM renderers still emit valid `class`/`id`/`style`.
 
-- [ ] **S2-3.1 — Rename "canonical extras" to specs internally.** Dep: S2-2.7.
+- [x] **S2-3.1 — Rename "canonical extras" to specs internally.** Dep: S2-2.7.
       Files: `crates/extra/src/typed.rs`, `lib.rs`, `decorator.rs`.
       Do: type/field renames only (`CanonicalExtras` → `Specs`, etc.); no
       behaviour, no config change.
       Exit: workspace green, no output change.
+      **Done 2026-10-28** — the concept lives only as a _type_, so the rename is
+      `PositionalNames` → `Specs` (+ `Specs::new`/`resolve`), `NamesResolver` →
+      `SpecsResolver`, `ComponentSet::names_for(_opt)` → `specs_for(_opt)`, and
+      every `keys` binding that held one is now a `specs` binding, in
+      `crates/extra`, `renderer-solid` and the eight plugins that read it. The
+      prose follows: "positional naming" is "specs naming", and "positional keys"
+      is "specs". `Specs`'s doc now also carries the §6.1 **`default` /
+      `meaning`** table (`tick`/`quote`/`bracket.bare`/`paren.bare` → `slug` /
+      `title` / `slug` / `title`, and what each content _is_): an assigned field
+      keeps no semantics, so without a copy in code `S2-3.5` would delete the
+      last one. No behaviour, no config, no golden byte.
 - [ ] **S2-3.2 — Emit `specs.*`.** Dep: S2-3.1.
       Do: projection inserts `specs.tick`, `specs.quote`, `specs.class`,
       `specs.id`, `specs.style`; `k: v` stays `k`; duplicate `tick`/`quote`/`id`
       → error keeping the first (D-12); `class` accumulates and dedupes; `style`
       duplicates last-wins; `k` colliding with a built-in field → error.
       U: one table per D-12 rule.
+      Note: where the paths are _produced_ is not free. `project` is called with
+      `None` from the five renderer sites (`renderer-solid/src/node.rs` ×2,
+      `renderer-html/src/{utils,compact,pretty}.rs`), so a rendering-time mapping
+      has no `FieldConfig` and cannot tell an assigned name from a default one —
+      and an attribute-name mapping is unsound anyway, because `slug` (a
+      heading's auto slug), `title` (anchor head group, wiki, image) and `id`
+      (section / heading / cite ids) are emitted by plugins, not by a specs
+      position. So the default paths have to be produced where the config is
+      known (`to_attributes` + `Specs`, parse time); the ten plugins that read
+      `class` / `id` / `style` / tick / quote off the head, `plugin-extract`'s
+      field tables (`EXTRAS-INVENTORY.md`) and every golden then move with it.
+      **Shape landed 2026-10-28 (with S2-3.4)** — `to_attributes(head, specs)`
+      emits `specs.class` / `specs.id` / `specs.style` / `specs.tick` /
+      `specs.quote` (through `Specs`, so an assignment renames them) and every
+      fixture moved with it. **Still open: the D-12 rule table.** Today a
+      duplicate `tick`/`quote` is silent last-wins and a duplicate `id` is the
+      `DuplicateId` _warning_ (D-12 wants an `Error` keeping the first), `class`
+      accumulates without deduping, a duplicate `k` is silent last-wins (D-12
+      wants an `Error`), and the `k`-vs-built-in collision needs the element's
+      preset, i.e. Phase 4's wiring rather than `to_attributes`'.
 - [ ] **S2-3.3 — `field.specs.*` assignment.** Dep: S2-3.2.
       Do: assignment renames the paths; `backtick_key`/`quote_key` no longer exist
       (deleted in S2-2.8 — a config that still uses them fails to load, per D-16).
       Exit: the proposal's `field.specs.*` block produces its documented output;
       a test asserts the old key is a load error, not a warning.
-- [ ] **S2-3.4 — Renderer mapping for `specs.*`.** Dep: S2-3.2.
+- [x] **S2-3.4 — Renderer mapping for `specs.*`.** Dep: S2-3.2.
       Files: `crates/renderer-solid`, `crates/renderer-html` (and JSON/AST as
       needed).
       Do: solid → `class`/`classList`/`style`/`id` attributes; HTML → real
       `class`/`id`/`style` attributes; JSON/AST keep the dotted paths.
       Exit: one `.jsx` + one `.html` test per specs position.
+      **Done 2026-10-28** — `field::project` renames the three universal
+      positions (`universal_field` in `crates/extra::typed`) and sorts entries by
+      their **final** public path, because a node's `attrs` arrive name-sorted and
+      `specs.class` → `class` would otherwise move the attribute it writes. An
+      element assignment still wins (`cite-id` over `id`), which is why every
+      plugin that emits a head field itself now projects through
+      `Specs::dom_fields(items, …)`, and why `DecoratorLine`/`BoundDecorator`
+      carry the `specs` the line was parsed with. `renderer-html` prints the map;
+      `renderer-json`/`-ast` never rename (they keep the dotted path).
+      `renderer-solid` cannot spell `specs.tick=` — `a.b` is a member expression —
+      so a dotted field is emitted as a one-key spread, `<p {...{ "specs.tick":
+      "x" }}>`, which sets in the DOM exactly what HTML prints instead of emitting
+      invalid JSX (`is_jsx_attr_name`/`render_dotted_attr` in
+      `renderer-solid/src/node.rs`). Tests: five per renderer, one per specs
+      position (`specs_class_renders_as_the_dom_class`, `…_id`, `…_style`,
+      `specs_tick_keeps_its_dotted_name`, `specs_quote_keeps_its_dotted_name`).
+      Fixtures `10-decorator-blocks` and `14-marker` re-frozen: every moved byte is
+      a rename — `slug`/`title` → `bracket.bare`/`paren.bare` (D-7: an untyped
+      group has no preset), `slug`/`title` → `specs.tick`/`specs.quote` (marker
+      items), and the decorator's own `class` → `specs.class` in the event stream.
+      Not in this pass: `plugin-extract`'s tables and `EXTRAS-INVENTORY.md` still
+      name the pre-3.2 fields for the raw-decorator elements (blockquote, list,
+      marker, directive emit `specs.class` / `bracket.bare` verbatim because
+      extract reads the events, not the map) — Phase 4 rewrites those elements and
+      Phase 7 freezes the tables, so they move then ("Phase 4 before 7").
 - [ ] **S2-3.5 — Re-freeze and document specs.** Dep: S2-3.2 … S2-3.4.
       G: specs fixtures (class/style/id/tick/quote, assigned + unassigned).
       Do: `SYNTAX.md` §5/§6.3/§6.4 update, §14 entry for the old flat names.
       Exit: fixtures frozen, `crates/*/README.md` links updated, phase gate green.
+      Note: §6.1 is **rewritten** here, not reworded — its `default` / `meaning`
+      columns are the only prose copy of what each content is, and the code copy
+      is `Specs`'s doc (`crates/extra/src/typed.rs`). Re-derive the table from
+      that doc (`tick` = slug, `quote` = title, `bracket.bare` = bracket slot,
+      `paren.bare` = parentheses slot) instead of deleting the columns with the
+      section, and state each one's new default path (`specs.tick`,
+      `specs.quote`, …) so a reader can tell a default from an assignment.
 
 ## Phase 4 — elements, one at a time
 

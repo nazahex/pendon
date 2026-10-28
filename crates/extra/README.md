@@ -88,12 +88,22 @@ for interpreting the parsed properties.
   table **fails to compile** rather than at load. Voiding a preset is the
   entry's job: one `field.*` key in the matched `custom` entry disables the whole
   table for that entry (D-7, `FieldConfig::is_empty`).
-- **Positional names** — `PositionalNames` / `NamesResolver`: what each of the
-  head's four positional contents is called (`bracket`, `paren`, `tick`,
-  `quote`). [`PositionalNames::resolve`] is the only read side of the entry's
-  `field.*` naming (`field.bracket.bare` / `field.paren.bare` /
+- **Specs** — `Specs` / `SpecsResolver`: what each of the head's four
+  positional contents is called — the slot groups `bracket` / `paren` and the
+  specs items `tick` / `quote`. [`Specs::resolve`] is the only read side of the
+  entry's `field.*` naming (`field.bracket.bare` / `field.paren.bare` /
   `field.specs.tick` / `field.specs.quote` — §6.1, D-5); an entry that configures
-  nothing keeps the built-in `slug` / `title`.
+  nothing keeps the built-in `slug` / `title`. The type's doc also carries the
+  **`default` / `meaning`** table, because an assigned field keeps no semantics
+  of its own: a rename changes where a content lands, never what it is.
+- **The DOM projection** (`Specs::dom_fields(items, element)` +
+  `universal_field`, `src/typed.rs`) — the §6.3 boundary: the three universal
+  positions (`specs.class` / `specs.id` / `specs.style`) are written as the DOM
+  fields they name, the element's own assignment wins when it renames one (a
+  cite's `#id` → `cite-id`), and everything else keeps its dotted path
+  (`specs.tick`, `bracket.bare`). `dom_fields` returns borrowed
+  `(field, value)` pairs, and `project` applies the universal half on its own, so a
+  renderer that emits whatever the map holds is on the §6.3 side of the contract.
 
 ## The retired form
 

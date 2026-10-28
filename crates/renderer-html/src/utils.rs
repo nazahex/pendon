@@ -20,9 +20,10 @@ pub(crate) fn attr_bool(v: &Value, key: &str) -> bool {
 /// or a bare `name` for a flag (§6.3), matching what the JSX renderer emits.
 ///
 /// The fields come from the projection ([`pendon_extra::project`]), not from the
-/// node's raw `attrs` map (ADR-0014 rule 2): Phase 2 is its identity pass, so the
-/// bytes are unchanged, but `__`-prefixed internals are already gone and Phases
-/// 3–4 will fill the map with `specs.*` and each element's preset assignment.
+/// node's raw `attrs` map (ADR-0014 rule 2): `__`-prefixed internals are gone,
+/// `specs.*` is in the map, and the universal positions are already renamed to
+/// `class`/`id`/`style` (§6.3). Only Phase 4's per-element preset assignment is
+/// still missing.
 ///
 /// A fragment (`$fragment`, a nested `mdp` payload) is markup, not data: its node
 /// list is rendered to HTML and escaped into the attribute value, so a bound

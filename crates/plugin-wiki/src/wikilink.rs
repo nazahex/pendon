@@ -1,7 +1,7 @@
 use pendon_core::{Event, NodeKind};
 use pendon_extra::{
     emit_attr_warnings, parse_extras, to_attributes, warning_event, ExtrasAttr, ExtrasHead,
-    ExtrasMatch, ExtrasWarning, PositionalNames,
+    ExtrasMatch, ExtrasWarning, Specs,
 };
 
 use crate::options::WikiOptions;
@@ -99,7 +99,8 @@ fn emit_wikilink_extras(head: Option<&ExtrasHead>, out: &mut Vec<Event>) {
     let Some(head) = head else {
         return;
     };
-    let attrs = to_attributes(head, &PositionalNames::default());
+    let specs = Specs::default();
+    let attrs = to_attributes(head, &specs);
     emit_attr_warnings("wiki", &attrs, out);
 
     // §11 rule 3: the marker is the routing key of the instance; it is carried
@@ -114,18 +115,25 @@ fn emit_wikilink_extras(head: Option<&ExtrasHead>, out: &mut Vec<Event>) {
         }
     }
 
-    for (key, value) in &attrs.items {
-        if WIKI_OWNED_KEYS.contains(&key.as_str()) {
+    // §6.3: the link's own positions — `class` / `id` / `style` are the
+    // universal DOM fields and an extras `"title"` is the `title` this plugin
+    // produces itself (§7.5).
+    for (key, value) in specs.dom_fields(&attrs.items, &[(&specs.quote, "title")]) {
+        if WIKI_OWNED_KEYS.contains(&key) {
             out.push(warning_event(
                 "wiki",
-                &ExtrasWarning::OwnedKeyIgnored { key: key.clone() },
+                &ExtrasWarning::OwnedKeyIgnored {
+                    key: key.to_string(),
+                },
             ));
             continue;
         }
         match value {
-            ExtrasAttr::Flag => out.push(Event::AttributeFlag { name: key.clone() }),
+            ExtrasAttr::Flag => out.push(Event::AttributeFlag {
+                name: key.to_string(),
+            }),
             ExtrasAttr::Value(value) => out.push(Event::Attribute {
-                name: key.clone(),
+                name: key.to_string(),
                 value: value.literal(),
             }),
         }

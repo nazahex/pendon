@@ -1,5 +1,5 @@
 use pendon_core::{Event, NodeKind};
-use pendon_extra::{bind_decorators, BoundDecorator, PositionalNames};
+use pendon_extra::{bind_decorators, BoundDecorator, Specs};
 
 mod context;
 mod end;
@@ -71,9 +71,9 @@ pub fn process_with_options(events: &[Event], opts: MarkdownOptions) -> Vec<Even
     // they own, and a heading's decorator belongs to `plugin-section`, so
     // `markdown_target` declines those and leaves any still-present one in the
     // stream for the right binder. Its blocks carry no §11 component set, so the
-    // §6.1 positional keys stay the built-in `slug` / `title`.
-    let keys = |_: Option<&str>| PositionalNames::default();
-    let bindings = bind_decorators(events, &keys, markdown_target);
+    // §6.1 specs stay the built-in `slug` / `title`.
+    let specs = |_: Option<&str>| Specs::default();
+    let bindings = bind_decorators(events, &specs, markdown_target);
     let decorators: std::collections::HashMap<usize, &BoundDecorator> = bindings
         .bound
         .iter()

@@ -21,9 +21,10 @@ children, so a caption needs a template with <code>&#123;children&#125;</code> (
 <p>A marker without a legal type stays literal text: &#123;&#123;&#125;&#125;, &#123;&#123; note &#125;&#125;, &#123;&#123;a-b&#125;&#125; and
 an unterminated &#123;&#123;note are all text.
 </p>
-<p>§6.1/§10.1: the groups sit between <code>&#125;&#125;</code> and an adjacent extras head and beat a
-same-key body item (§6.2), while a malformed group is not consumed — the marker
-still renders and the group stays literal text (§4.3):
+<p>§6.1/§10.1: the groups sit between <code>&#125;&#125;</code> and an adjacent extras head. Each position
+lands in its own public field (the groups in <code>bracket.bare</code> / <code>paren.bare</code>, the
+items in <code>specs.tick</code> / <code>specs.quote</code>, D-7), so nothing collides; a malformed group
+is not consumed — the marker still renders and the group stays literal text (§4.3):
 </p>
-<Bibliography class="box" slug="refs" title="Cited sources" type="bibliography">Every reference cited above.</Bibliography><Bibliography type="bibliography">[unclosed(&quot;Cited&quot;) still a caption.</Bibliography>
+<Bibliography bracket.bare="refs" class="box" paren.bare="Cited sources" specs.quote="title-body" specs.tick="slug-body" type="bibliography">Every reference cited above.</Bibliography><Bibliography type="bibliography">[unclosed(&quot;Cited&quot;) still a caption.</Bibliography>
 </>); }

@@ -1,7 +1,7 @@
 // src/attrs.rs
 use crate::parser::Align;
 use pendon_core::Event;
-use pendon_extra::{to_attributes, ExtrasAttr, ExtrasHead, PositionalNames};
+use pendon_extra::{to_attributes, ExtrasAttr, ExtrasHead, Specs};
 
 /// The attributes of one table layer (table/caption/thead/tbody/tfoot/row/cell).
 ///
@@ -32,7 +32,8 @@ pub struct LayerAttrs {
 /// stay bare attributes. The marker is carried as a `type` property (first) so
 /// both renderers see it; an explicit `type:` prop keeps its own value.
 pub fn extras_to_layer(head: &ExtrasHead) -> LayerAttrs {
-    let parsed = to_attributes(head, &PositionalNames::default());
+    let specs = Specs::default();
+    let parsed = to_attributes(head, &specs);
     let mut layer = LayerAttrs {
         type_marker: head.type_marker.clone(),
         ..LayerAttrs::default()
@@ -40,19 +41,20 @@ pub fn extras_to_layer(head: &ExtrasHead) -> LayerAttrs {
 
     let mut styles: Vec<String> = Vec::new();
     let mut props: Vec<(String, String)> = Vec::new();
-    for (key, value) in &parsed.items {
-        match (key.as_str(), value) {
+    // §6.2: the extras slug (the resolved `tick` path) is the id fallback.
+    let extras_slug = parsed.value(&specs.tick).map(|value| value.literal());
+    // §6.3: a layer's own positions — `class` / `id` / `style` are the universal
+    // DOM fields and an extras `"title"` is the `title`.
+    for (key, value) in specs.dom_fields(&parsed.items, &[(&specs.quote, "title")]) {
+        if key == specs.tick {
+            continue;
+        }
+        match (key, value) {
             ("class", ExtrasAttr::Value(value)) => layer
                 .attrs
                 .classes
                 .extend(value.literal().split_whitespace().map(str::to_string)),
             ("id", ExtrasAttr::Value(value)) => layer.attrs.id = Some(value.literal()),
-            // §6.2: `slug` fills the id when nothing else did.
-            ("slug", ExtrasAttr::Value(value)) => {
-                if layer.attrs.id.is_none() {
-                    layer.attrs.id = Some(value.literal());
-                }
-            }
             ("style", ExtrasAttr::Value(value)) => styles.push(value.literal()),
             (name, ExtrasAttr::Value(value)) if name.starts_with("--") => {
                 styles.push(format!("{}:{}", name, value.literal()))
@@ -60,6 +62,9 @@ pub fn extras_to_layer(head: &ExtrasHead) -> LayerAttrs {
             (name, ExtrasAttr::Value(value)) => props.push((name.to_string(), value.literal())),
             (name, ExtrasAttr::Flag) => layer.flags.push(name.to_string()),
         }
+    }
+    if layer.attrs.id.is_none() {
+        layer.attrs.id = extras_slug;
     }
 
     if let Some(marker) = &layer.type_marker {

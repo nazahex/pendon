@@ -5,13 +5,13 @@
 use pendon_extra::{
     parse_directive_head, parse_extras, parse_type_marker, to_attributes, AttrValue, Attrs,
     DirectiveMatch, DirectiveSigil, ExtrasAttr, ExtrasError, ExtrasHead, ExtrasMatch,
-    ExtrasWarning, FieldConfig, Path, PositionalNames, Slot, SlotKind, SPREAD_KEY,
+    ExtrasWarning, FieldConfig, Path, Slot, SlotKind, Specs, SPREAD_KEY,
 };
 
 /// Parses `input` as a complete head and maps it to attributes.
 fn attrs_of(input: &str) -> (Vec<(String, ExtrasAttr)>, Vec<ExtrasWarning>) {
     let head = head_of(input);
-    let attrs = to_attributes(&head, &PositionalNames::default());
+    let attrs = to_attributes(&head, &Specs::default());
     (attrs.items, attrs.warnings)
 }
 
@@ -178,11 +178,11 @@ fn classes_accumulate_and_other_items_are_last_wins() {
         items,
         vec![
             (
-                "class".to_string(),
+                "specs.class".to_string(),
                 ExtrasAttr::Value(AttrValue::Str("a b".into()))
             ),
             (
-                "id".to_string(),
+                "specs.id".to_string(),
                 ExtrasAttr::Value(AttrValue::Str("second".into()))
             ),
             (
@@ -203,18 +203,18 @@ fn empty_items_are_ignored() {
 #[test]
 fn positional_names_default_to_slug_then_title() {
     let head = head_of("@@type{\"T\", .c, `s`}");
-    let keys: Vec<String> = to_attributes(&head, &PositionalNames::default())
+    let keys: Vec<String> = to_attributes(&head, &Specs::default())
         .items
         .into_iter()
         .map(|(key, _)| key)
         .collect();
-    assert_eq!(keys, vec!["class", "slug", "title"]);
+    assert_eq!(keys, vec!["specs.class", "specs.tick", "specs.quote"]);
 }
 
 #[test]
 fn positional_names_follow_the_item_names() {
     let head = head_of("@@type{`a`, \"L\"}");
-    let items = to_attributes(&head, &PositionalNames::new("anchorId", "label")).items;
+    let items = to_attributes(&head, &Specs::new("anchorId", "label")).items;
     assert_eq!(items[0].0, "anchorId");
     assert_eq!(items[1].0, "label");
 }
@@ -225,11 +225,8 @@ fn positional_names_follow_the_item_names() {
 #[test]
 fn positional_names_resolve_from_field_config() {
     // No entry at all, and an entry with no `field.*` key, are the same thing.
-    assert_eq!(PositionalNames::resolve(None), PositionalNames::default());
-    assert_eq!(
-        PositionalNames::resolve(Some(&FieldConfig::new())),
-        PositionalNames::default()
-    );
+    assert_eq!(Specs::resolve(None), Specs::default());
+    assert_eq!(Specs::resolve(Some(&FieldConfig::new())), Specs::default());
 
     let mut partial = FieldConfig::new();
     partial.assign_slot(
@@ -237,13 +234,16 @@ fn positional_names_resolve_from_field_config() {
         SlotKind::Bare,
         Some(Path::from_dotted("level").unwrap()),
     );
-    let names = PositionalNames::resolve(Some(&partial));
+    let names = Specs::resolve(Some(&partial));
     assert_eq!(names.paren, "level");
     // D-7: the positions the entry left alone fall back to their own qualified
     // spelling, never to a name the user chose.
     assert_eq!(names.bracket, "bracket.bare");
     assert_eq!(names.tick, "specs.tick");
     assert_eq!(names.quote, "specs.quote");
+    assert_eq!(names.class, "specs.class");
+    assert_eq!(names.id, "specs.id");
+    assert_eq!(names.style, "specs.style");
 
     let mut all = FieldConfig::new();
     all.assign_slot(
@@ -261,12 +261,15 @@ fn positional_names_resolve_from_field_config() {
     all.assign_specs("quote", Some(Path::from_dotted("blurb").unwrap()))
         .unwrap();
     assert_eq!(
-        PositionalNames::resolve(Some(&all)),
-        PositionalNames {
+        Specs::resolve(Some(&all)),
+        Specs {
             bracket: "label".into(),
             paren: "kind".into(),
             tick: "ref".into(),
             quote: "blurb".into(),
+            class: "specs.class".into(),
+            id: "specs.id".into(),
+            style: "specs.style".into(),
         }
     );
 }
@@ -278,11 +281,11 @@ fn css_vars_and_style_props_merge_into_one_style_attribute() {
         items,
         vec![
             (
-                "class".to_string(),
+                "specs.class".to_string(),
                 ExtrasAttr::Value(AttrValue::Str("a".into()))
             ),
             (
-                "style".to_string(),
+                "specs.style".to_string(),
                 ExtrasAttr::Value(AttrValue::Str(
                     "--tone: red; color: blue; --size: 2rem".into()
                 ))
@@ -297,17 +300,18 @@ fn duplicate_keys_collapse_to_one_attribute() {
     let (items, warnings) = attrs_of("@@type{`s`, slug: \"other\"}");
     assert_eq!(
         items,
-        vec![(
-            "slug".to_string(),
-            ExtrasAttr::Value(AttrValue::Str("other".into()))
-        )]
+        vec![
+            (
+                "specs.tick".to_string(),
+                ExtrasAttr::Value(AttrValue::Str("s".into()))
+            ),
+            (
+                "slug".to_string(),
+                ExtrasAttr::Value(AttrValue::Str("other".into()))
+            )
+        ]
     );
-    assert_eq!(
-        warnings,
-        vec![ExtrasWarning::Overridden {
-            key: "slug".to_string()
-        }]
-    );
+    assert!(warnings.is_empty());
 }
 
 #[test]
@@ -316,7 +320,7 @@ fn class_props_accumulate_with_class_items() {
     assert_eq!(
         items,
         vec![(
-            "class".to_string(),
+            "specs.class".to_string(),
             ExtrasAttr::Value(AttrValue::Str("a text-lg b".into()))
         )]
     );
@@ -326,7 +330,7 @@ fn class_props_accumulate_with_class_items() {
 #[test]
 fn flags_stay_bare_in_the_dom_fallback() {
     let head = head_of("@@type{isBar, role: tab}");
-    let attrs = to_attributes(&head, &PositionalNames::default());
+    let attrs = to_attributes(&head, &Specs::default());
     assert_eq!(
         attrs.to_dom(),
         vec![
@@ -358,7 +362,7 @@ fn escapes_are_consumed() {
 fn the_head_wins_over_extras() {
     let extras = {
         let head = head_of("@@type{\"Extras\", href: \"evil\"}");
-        to_attributes(&head, &PositionalNames::default())
+        to_attributes(&head, &Specs::default())
     };
 
     let mut construct = Attrs::default();
@@ -368,14 +372,9 @@ fn the_head_wins_over_extras() {
     assert_eq!(merged.value("title"), Some(&AttrValue::Str("Head".into())));
     assert_eq!(
         merged.warnings,
-        vec![
-            ExtrasWarning::Overridden {
-                key: "title".to_string()
-            },
-            ExtrasWarning::OwnedKeyIgnored {
-                key: "href".to_string()
-            },
-        ]
+        vec![ExtrasWarning::OwnedKeyIgnored {
+            key: "href".to_string()
+        },]
     );
 }
 
@@ -393,19 +392,19 @@ fn spec_worked_example() {
         items,
         vec![
             (
-                "class".to_string(),
+                "specs.class".to_string(),
                 ExtrasAttr::Value(AttrValue::Str("extra class".into()))
             ),
             (
-                "id".to_string(),
+                "specs.id".to_string(),
                 ExtrasAttr::Value(AttrValue::Str("id".into()))
             ),
             (
-                "slug".to_string(),
+                "specs.tick".to_string(),
                 ExtrasAttr::Value(AttrValue::Str("slug-foo".into()))
             ),
             (
-                "title".to_string(),
+                "specs.quote".to_string(),
                 ExtrasAttr::Value(AttrValue::Str("Title Foo".into()))
             ),
             (
@@ -418,7 +417,7 @@ fn spec_worked_example() {
                 ExtrasAttr::Value(AttrValue::Bool(true))
             ),
             (
-                "style".to_string(),
+                "specs.style".to_string(),
                 ExtrasAttr::Value(AttrValue::Str("--style-var: 2rem".into()))
             ),
             ("isBar".to_string(), ExtrasAttr::Flag),
@@ -543,35 +542,35 @@ fn groups_must_be_adjacent() {
 #[test]
 fn groups_map_through_the_positional_keys() {
     let head = head_of("@@aside[intro](\"T\"){.c, `body-slug`, slug: \"p\"}");
-    let attrs = to_attributes(&head, &PositionalNames::default());
+    let attrs = to_attributes(&head, &Specs::default());
     let keys: Vec<String> = attrs.items.iter().map(|(key, _)| key.clone()).collect();
-    // class, then the group keys, and the colliding body items are dropped.
-    assert_eq!(keys, vec!["class", "slug", "title"]);
+    // class, then the groups in order, then the slug item and slug prop (no collision now).
     assert_eq!(
-        attrs.value("slug").map(AttrValue::literal),
+        keys,
+        vec![
+            "specs.class",
+            "bracket.bare",
+            "paren.bare",
+            "specs.tick",
+            "slug"
+        ]
+    );
+    assert_eq!(
+        attrs.value("bracket.bare").map(AttrValue::literal),
         Some("intro".to_string())
     );
     assert_eq!(
-        attrs.value("title").map(AttrValue::literal),
+        attrs.value("paren.bare").map(AttrValue::literal),
         Some("T".to_string())
     );
-    assert_eq!(
-        attrs
-            .warnings
-            .iter()
-            .filter(|warning| matches!(warning, ExtrasWarning::Overridden { .. }))
-            .count(),
-        2,
-        "{:?}",
-        attrs.warnings
-    );
+    assert_eq!(attrs.warnings.len(), 0, "{:?}", attrs.warnings);
 
     // The names follow the entry's `field.*` config like every other positional.
     let head = head_of("@@note[n](\"T\")");
-    let names = PositionalNames {
+    let names = Specs {
         bracket: "level".into(),
         paren: "summary".into(),
-        ..PositionalNames::default()
+        ..Specs::default()
     };
     let attrs = to_attributes(&head, &names);
     assert_eq!(
@@ -585,9 +584,9 @@ fn groups_map_through_the_positional_keys() {
 
     // Without a body the groups still emit, in §6.4 order.
     let head = head_of("@@[s](\"t\")");
-    let attrs = to_attributes(&head, &PositionalNames::default());
+    let attrs = to_attributes(&head, &Specs::default());
     let keys: Vec<String> = attrs.items.iter().map(|(key, _)| key.clone()).collect();
-    assert_eq!(keys, vec!["slug", "title"]);
+    assert_eq!(keys, vec!["bracket.bare", "paren.bare"]);
 }
 
 /// Nested `{ … }` / `[ … ]` prop values — the shared-syntax foundation the
@@ -597,7 +596,7 @@ mod nested_values {
 
     fn prop_value(input: &str, key: &str) -> AttrValue {
         let head = head_of(input);
-        let attrs = to_attributes(&head, &PositionalNames::default());
+        let attrs = to_attributes(&head, &Specs::default());
         attrs
             .value(key)
             .unwrap_or_else(|| panic!("no value for {key} in {input:?}"))

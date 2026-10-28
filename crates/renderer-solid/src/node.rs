@@ -352,15 +352,22 @@ fn render_text_or_children(v: &Value, out: &mut String, ctx: &Ctx) {
 /// `mdp` payload) reaches this branch too, so it emits `name={(<>…</>)}`.
 fn render_attrs(v: &Value, out: &mut String, skipped: &[&str], ctx: &Ctx) {
     // The fields come from the projection, not from the node's own `attrs` map
-    // (ADR-0014 rule 2). Phase 2 is its identity pass, so this emits the same
-    // attributes in the same order as before — but internals (`__`-prefixed,
-    // §11 rule 3) are already gone, and Phase 3/4 will fill the map with
-    // `specs.*` and each element's preset assignment instead of a copy of the
-    // node.
+    // (ADR-0014 rule 2): internals (`__`-prefixed, §11 rule 3) are gone, `specs.*`
+    // is in, and `project` has already renamed the universal positions to
+    // `class`/`id`/`style` (§6.3). Phase 4 adds each element's preset assignment
+    // on top of the same map.
     for (name, value) in pendon_extra::project(v, None).attrs() {
         // `name` is the AST node name, not an attribute — the template path
         // skips it in `generate_spread_attrs` for the same reason.
         if name == "name" || skipped.contains(&name.as_str()) {
+            continue;
+        }
+        // A **public** field path may nest (`specs.tick`, `bracket.bare`, §6.3),
+        // and JSX reads `a.b=` as a member expression rather than an attribute
+        // name, so such a field is emitted as a one-key spread
+        // ([`render_dotted_attr`]) instead of `name=…`.
+        if !is_jsx_attr_name(&name) {
+            render_dotted_attr(&name, &value, out, ctx);
             continue;
         }
         out.push(' ');
@@ -415,6 +422,56 @@ fn render_attrs(v: &Value, out: &mut String, skipped: &[&str], ctx: &Ctx) {
             // `Bool(true)` was already emitted as a bare flag above.
             Value::Bool(true) => {}
         }
+    }
+}
+
+/// Whether `name` can be written as a JSX attribute name.
+///
+/// The public field map is dotted (`specs.tick`, `bracket.bare`, §6.3/S2-3.4), so
+/// a field name is not automatically an attribute name. Hyphens and a namespace
+/// colon are legal in JSX attribute names (`cite-id`, `xlink:href`), which is why
+/// only the rest is a failure.
+fn is_jsx_attr_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | ':'))
+}
+
+/// Emits one dotted public field as a one-key spread: `{...{ "specs.tick": "…" }}`.
+///
+/// `specs.tick="x"` is not valid JSX — `a.b=` parses as a member expression — but
+/// the field map's spelling is the contract (ADR-0014 rule 1), so the name is
+/// kept verbatim as a computed key instead of being rewritten. Solid's spread
+/// sets it as an attribute, so the compiled output and `renderer-html`'s
+/// `specs.tick="x"` agree, and JSON/AST keep the path untouched.
+fn render_dotted_attr(name: &str, value: &Value, out: &mut String, ctx: &Ctx) {
+    out.push_str(" {...{ ");
+    out.push_str(&json_string_literal(name));
+    out.push_str(": ");
+    out.push_str(&js_value(value, ctx));
+    out.push_str(" }}");
+}
+
+/// One field value as a JS expression — the form a spread key needs, where no
+/// JSX attribute shorthand exists (no bare flag, no quoted text).
+fn js_value(value: &Value, ctx: &Ctx) -> String {
+    if let Value::String(text) = value {
+        if let Some(payload) = pendon_core::jsx_attr_payload(text) {
+            return if is_jsx_expression_token(payload) {
+                payload.to_string()
+            } else {
+                format!("({payload})")
+            };
+        }
+    }
+    match value {
+        Value::String(text) => json_string_literal(text),
+        Value::Bool(true) => "true".to_string(),
+        Value::Bool(false) => "false".to_string(),
+        Value::Null => "null".to_string(),
+        Value::Number(_) => value.to_string(),
+        Value::Object(_) | Value::Array(_) => to_js_literal(value, ctx),
     }
 }
 

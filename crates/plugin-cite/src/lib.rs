@@ -805,19 +805,24 @@ fn parse_cite_extra_attrs(
 /// already set is kept and the extras value is reported as dropped. `class`
 /// accumulates (§6.4) and bare flags stay bare attributes (§6.3).
 fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead, options: &CiteOptions) {
-    // §6.1/§11 rule 5: the entry answering this marker names the extras keys.
-    let keys = options.custom.names_for(head.type_marker.as_deref());
-    let parsed = to_attributes(head, &keys);
+    // §6.1/§11 rule 5: the entry answering this marker names the extras specs.
+    let specs = options.custom.specs_for(head.type_marker.as_deref());
+    let parsed = to_attributes(head, &specs);
     for warning in &parsed.warnings {
         extra.warnings.push(pendon_extra::warning_message(warning));
     }
 
     // §6.2: `#id` > extras `slug`; both feed the `cite-id` slot.
-    let extras_id = parsed.value("id").map(|value| value.literal());
-    let extras_slug = parsed.value(&keys.tick).map(|value| value.literal());
+    let extras_id = parsed.value(&specs.id).map(|value| value.literal());
+    let extras_slug = parsed.value(&specs.tick).map(|value| value.literal());
 
-    for (key, value) in &parsed.items {
-        if key == "id" || key == &keys.tick {
+    // §6.3: the citation's own positions — `class` / `style` are the universal
+    // DOM fields, `#id` feeds `cite-id` and an extras `"title"` is the `title`.
+    for (key, value) in specs.dom_fields(
+        &parsed.items,
+        &[(&specs.id, "cite-id"), (&specs.quote, "title")],
+    ) {
+        if key == "cite-id" || key == specs.tick {
             continue;
         }
         match value {
@@ -827,7 +832,7 @@ fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead, options: &Ci
                         "`{key}` was dropped because the construct head already sets it"
                     ));
                 } else {
-                    extra.flags.push(key.clone());
+                    extra.flags.push(key.to_string());
                 }
             }
             ExtrasAttr::Value(value) => {
@@ -855,7 +860,7 @@ fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead, options: &Ci
                     ));
                     continue;
                 }
-                extra.data.push((key.clone(), text));
+                extra.data.push((key.to_string(), text));
             }
         }
     }

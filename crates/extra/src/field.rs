@@ -406,16 +406,18 @@ impl FieldMap {
 ///    emitting one fails the suite instead of leaking it (every key the pipeline
 ///    produces today — authored `k: v`, `type`, `name`, `level`, `src`, … —
 ///    obeys the rules);
-/// 3. `config`'s `field.override.<path>` renames an entry **as it is written**,
-///    so the renamed field keeps the position of the field it replaced (D-4).
-///    No override exists until Phase 4, so `None` is what every caller passes
-///    today.
+/// 3. `config`'s `field.override.<path>` renames an entry **as it is written**
+///    (D-4). No override exists until Phase 4, so `None` is what every caller
+///    passes today;
+/// 4. the entries are ordered by their **public** path, so the §6.3 rename
+///    `specs.class` → `class` writes the same attribute in the same place.
 pub fn project(node: &serde_json::Value, config: Option<&FieldConfig>) -> FieldMap {
     let mut map = FieldMap::new();
     let Some(attrs) = node.get("attrs").and_then(serde_json::Value::as_object) else {
         return map;
     };
     let overrides = config.map(FieldConfig::overrides);
+    let mut entries: Vec<(Path, &serde_json::Value)> = Vec::new();
     for (key, value) in attrs {
         if key.starts_with("__") {
             continue;
@@ -428,12 +430,30 @@ pub fn project(node: &serde_json::Value, config: Option<&FieldConfig>) -> FieldM
             .and_then(|table| table.get(&path))
             .cloned()
             .unwrap_or(path);
+        // §6.3/S2-3.4: a **universal** specs path is written as the DOM field it
+        // names (`specs.class` → `class`). The element-specific positions
+        // (`specs.tick`, `specs.quote`, the slot groups) keep their dotted path:
+        // what a slug or a title means is the element's business (§7), and each
+        // plugin projects those before the node is built (`Specs::dom_fields`).
+        let target = match crate::typed::universal_field(&target.dotted()) {
+            Some(field) => {
+                Path::from_dotted(field).expect("a universal specs field name is a valid path")
+            }
+            None => target,
+        };
+        entries.push((target, value));
+    }
+    // The map is ordered by the **public** path, not by the node's spelling: a
+    // node arrives name-ordered (`attrs` is a sorted map), so renaming
+    // `specs.class` → `class` must not move the attribute it writes.
+    entries.sort_by_cached_key(|(path, _)| path.dotted());
+    for (path, value) in entries {
         // One attribute is one entry, so the only structural clash left is an
         // override renaming onto a path the node already carries. The load-time
         // checks (`FieldConfig::add_override`) own the user-facing error; a clash
         // leaves the map untouched instead of panicking a renderer.
-        if let Err(error) = map.insert(target, AttrValue::from_json(value)) {
-            debug_assert!(false, "projecting `{key}` failed: {error}");
+        if let Err(error) = map.insert(path, AttrValue::from_json(value)) {
+            debug_assert!(false, "projecting an attribute failed: {error}");
         }
     }
     map
@@ -468,7 +488,7 @@ fn nested(entries: &[(&Path, &AttrValue)], depth: usize) -> Vec<(String, AttrVal
 ///
 /// Written once because two things build a `specs.*` path: the config parser
 /// (`field.specs.tick`) and the naming fallback an unassigned specs position
-/// keeps ([`crate::PositionalNames`]).
+/// keeps ([`crate::Specs`]).
 pub const SPECS_NAMESPACE: &str = "specs";
 
 /// The five specs positions a field can be assigned to (§6.3, D-5).

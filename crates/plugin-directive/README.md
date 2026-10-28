@@ -58,7 +58,7 @@ template = "<DirectiveDefault {...attrs}>{children}</DirectiveDefault>"
 
 `primary_layer()` is `directive`.
 
-### Positional names (§6.1, D-5)
+### Specs ((§6.1, D-5))
 
 A directive head uses all four: `field.bracket.bare` (default `slug`) for
 `[….]`, `field.paren.bare` (default `title`) for `(…)`, and

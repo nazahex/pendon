@@ -35,13 +35,13 @@ let jsx = render_solid_with_hints(&events, hints);
   `render_attrs`, so extras reach the fallback element (no silent data loss,
   §12.3). `ListItem` (`<li>`) is the one gap (pending L2/L3, §9.3).
   `render_attrs` emits the node's **projection** — `pendon_extra::project(node,
-  None).attrs()`, ADR-0014 rule 2 — rather than the raw `attrs` map: Phase 2 is
-  its identity pass, so the bytes are unchanged, and Phases 3–4 will fill the
-  map with `specs.*` and each element's preset assignment. Per-element reads
+  None).attrs()`, ADR-0014 rule 2 — rather than the raw `attrs` map. The map is
+  the public vocabulary: `__`-prefixed internals are gone, `specs.*` is in it, and
+  the universal positions are already renamed to `class`/`id`/`style` (§6.3).
+  Phase 4 fills in each element's preset assignment. Per-element reads
   (`level` on a heading, `header` on a cell, the skip lists) still name their own
   field — Phase 4 moves them as the element's preset lands — while `name` is
-  skipped everywhere because it is the `Element` node's tag, and `__`-prefixed
-  internals never reach the map at all (§11 rule 3).
+  skipped everywhere because it is the `Element` node's tag.
 - **`template.rs`** — expands a component `template` (`{children}`, `{attrs.x}`,
   `{text}`) and validates it: a non-void element opened without `{children}` or
   `{text}` is a **hard error** at config load (§11 rule 6). Both `{...attrs}`
@@ -78,6 +78,16 @@ it is emitted as a JSX expression that keeps the markup parseable. Its nodes are
 rendered exactly as page nodes are — including their own attrs, and their
 components' imports: `collect_fragment_nodes` walks every fragment in the stream
 so a payload's `~?!!…` figure still contributes its `Figure` import.
+
+### Attribute names
+
+The fields come from the projection, so a name is a **path**, not automatically a
+JSX attribute name. `specs.class`/`specs.id`/`specs.style` are already renamed to
+`class`/`id`/`style` by `pendon_extra::project` (§6.3), and a dotted path
+(`specs.tick`, `bracket.bare`, an assigned `heading.anchor`) is emitted as a
+one-key spread — `<p {...{ "specs.tick": "x" }}>` — because `a.b=` would parse as a
+member expression. The path survives verbatim into the DOM, matching what
+`renderer-html` prints and what JSON/AST keep.
 
 ## Usage
 

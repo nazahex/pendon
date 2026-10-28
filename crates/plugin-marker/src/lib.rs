@@ -188,8 +188,8 @@ fn scan_marker(
     }
 
     // §6.1/§11 rule 5: the entry answering this marker `type` names the
-    // extras positional keys; the groups map through the same keys.
-    let keys = options.custom.names_for(Some(marker.type_name.as_str()));
+    // extras specs; the groups map through the same specs.
+    let specs = options.custom.specs_for(Some(marker.type_name.as_str()));
 
     // §4.1: the extras head must be adjacent; a malformed one is left alone
     // (the marker still renders, §4.3).
@@ -200,14 +200,14 @@ fn scan_marker(
             marker
                 .warnings
                 .push(warning_message(&ExtrasWarning::Overridden {
-                    key: keys.bracket.clone(),
+                    key: specs.bracket.clone(),
                 }));
         }
         if group_parentheses.is_some() && head.parentheses.is_some() {
             marker
                 .warnings
                 .push(warning_message(&ExtrasWarning::Overridden {
-                    key: keys.paren.clone(),
+                    key: specs.paren.clone(),
                 }));
         }
         if group_bracket.is_some() {
@@ -216,7 +216,7 @@ fn scan_marker(
         if group_parentheses.is_some() {
             head.parentheses = group_parentheses.clone();
         }
-        let parsed = to_attributes(&head, &keys);
+        let parsed = to_attributes(&head, &specs);
         for warning in &parsed.warnings {
             marker.warnings.push(warning_message(warning));
         }
@@ -234,7 +234,7 @@ fn scan_marker(
             parentheses: group_parentheses,
             ..ExtrasHead::default()
         };
-        let parsed = to_attributes(&head, &keys);
+        let parsed = to_attributes(&head, &specs);
         for warning in &parsed.warnings {
             marker.warnings.push(warning_message(warning));
         }
@@ -499,13 +499,13 @@ mod tests {
             &paragraph("{{note}}@@noteX{.hero}"),
             &MarkerOptions::default(),
         );
-        assert_eq!(attr(&adjacent, "class").as_deref(), Some("hero"));
+        assert_eq!(attr(&adjacent, "specs.class").as_deref(), Some("hero"));
 
         let spaced = run(
             &paragraph("{{note}} @@noteX{.hero}"),
             &MarkerOptions::default(),
         );
-        assert_eq!(attr(&spaced, "class"), None);
+        assert_eq!(attr(&spaced, "specs.class"), None);
         assert!(text_of(&spaced).contains("@@noteX"), "{}", text_of(&spaced));
     }
 
@@ -529,14 +529,14 @@ mod tests {
             &paragraph("{{note}}@@noteX{.hero, level: 2, --tone: \"red\", isOpen}"),
             &MarkerOptions::default(),
         );
-        assert_eq!(attr(&out, "class").as_deref(), Some("hero"));
+        assert_eq!(attr(&out, "specs.class").as_deref(), Some("hero"));
         assert_eq!(attr(&out, "level").as_deref(), Some("2"));
-        assert_eq!(attr(&out, "style").as_deref(), Some("--tone: red"));
+        assert_eq!(attr(&out, "specs.style").as_deref(), Some("--tone: red"));
         assert!(flag(&out, "isOpen"));
     }
 
     /// §6.1/§10.1: the positional groups sit directly after `}}`, before any
-    /// extras head, and map through the marker type's keys.
+    /// extras head, and map through the marker type's specs.
     #[test]
     fn groups_follow_the_marker_type() {
         // Groups without an extras head still become attributes.
@@ -545,8 +545,8 @@ mod tests {
             &MarkerOptions::default(),
         );
         assert_eq!(attr(&out, "type").as_deref(), Some("note"));
-        assert_eq!(attr(&out, "slug").as_deref(), Some("intro"));
-        assert_eq!(attr(&out, "title").as_deref(), Some("A title"));
+        assert_eq!(attr(&out, "bracket.bare").as_deref(), Some("intro"));
+        assert_eq!(attr(&out, "paren.bare").as_deref(), Some("A title"));
         assert!(text_of(&out).contains("trailing"));
 
         // The groups precede the extras head: {{type}}[…] (…)@@head{…}.
@@ -554,16 +554,16 @@ mod tests {
             &paragraph("{{note}}[intro](\"T\")@@noteX{.hero}"),
             &MarkerOptions::default(),
         );
-        assert_eq!(attr(&out, "slug").as_deref(), Some("intro"));
-        assert_eq!(attr(&out, "title").as_deref(), Some("T"));
-        assert_eq!(attr(&out, "class").as_deref(), Some("hero"));
+        assert_eq!(attr(&out, "bracket.bare").as_deref(), Some("intro"));
+        assert_eq!(attr(&out, "paren.bare").as_deref(), Some("T"));
+        assert_eq!(attr(&out, "specs.class").as_deref(), Some("hero"));
 
         // Adjacency: a space before `[` keeps the rest literal.
         let out = run(
             &paragraph("{{note}} [intro] trailing"),
             &MarkerOptions::default(),
         );
-        assert_eq!(attr(&out, "slug"), None);
+        assert_eq!(attr(&out, "bracket.bare"), None);
         assert!(text_of(&out).contains("[intro]"), "{}", text_of(&out));
     }
 
@@ -575,11 +575,11 @@ mod tests {
             &paragraph("{{note}}[mine]@@noteX[theirs]{}"),
             &MarkerOptions::default(),
         );
-        assert_eq!(attr(&out, "slug").as_deref(), Some("mine"));
+        assert_eq!(attr(&out, "bracket.bare").as_deref(), Some("mine"));
         assert!(
             warnings(&out)
                 .iter()
-                .any(|message| message.contains("slug")),
+                .any(|message| message.contains("bracket.bare")),
             "{:?}",
             warnings(&out)
         );
@@ -591,7 +591,7 @@ mod tests {
             &MarkerOptions::default(),
         );
         assert_eq!(attr(&out, "type").as_deref(), Some("note"));
-        assert_eq!(attr(&out, "slug"), None);
+        assert_eq!(attr(&out, "bracket.bare"), None);
         assert!(text_of(&out).contains("[unclosed"), "{}", text_of(&out));
     }
 

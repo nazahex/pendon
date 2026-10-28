@@ -134,16 +134,20 @@ fn parse_heading_head(raw_text: &str, options: &HeadingOptions) -> HeadingHead {
         cursor = next;
         type_marker = head.type_marker.clone();
         // §6.1/§11 rule 5: the entry answering this `type` names the extras
-        // positional names (`tick` for the slug, `quote` for the title).
-        let keys = options.custom.names_for(head.type_marker.as_deref());
-        let parsed = to_attributes(&head, &keys);
+        // specs (`tick` for the slug, `quote` for the title).
+        let specs = options.custom.specs_for(head.type_marker.as_deref());
+        let parsed = to_attributes(&head, &specs);
         for warning in &parsed.warnings {
             warnings.push(pendon_extra::warning_message(warning));
         }
-        let extras_id = parsed.value("id").map(|value| value.literal());
-        let extras_slug = parsed.value(&keys.tick).map(|value| value.literal());
-        for (key, value) in &parsed.items {
-            if key == "id" || key == &keys.tick {
+        let extras_id = parsed.value(&specs.id).map(|value| value.literal());
+        let extras_slug = parsed.value(&specs.tick).map(|value| value.literal());
+        // §6.3: the heading's own positions — `class` / `id` / `style` are the
+        // universal DOM fields, and an extras `"title"` is the heading's `title`
+        // (the `("…")` head group of §7.4 owns that field, so the extras value
+        // is dropped when both are present, §6.2).
+        for (key, value) in specs.dom_fields(&parsed.items, &[(&specs.quote, "title")]) {
+            if key == "id" || key == specs.tick {
                 continue;
             }
             match value {
@@ -153,7 +157,7 @@ fn parse_heading_head(raw_text: &str, options: &HeadingOptions) -> HeadingHead {
                             "`{key}` was dropped because the construct head already sets it"
                         ));
                     } else {
-                        flags.push(key.clone());
+                        flags.push(key.to_string());
                     }
                 }
                 ExtrasAttr::Value(value) => {
@@ -176,7 +180,7 @@ fn parse_heading_head(raw_text: &str, options: &HeadingOptions) -> HeadingHead {
                         ));
                         continue;
                     }
-                    attrs.insert(key.clone(), text);
+                    attrs.insert(key.to_string(), text);
                 }
             }
         }

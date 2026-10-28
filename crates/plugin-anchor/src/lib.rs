@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
-    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead, FieldName,
-    NamesResolver, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag,
+    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead, FieldName, Preset, Slot,
+    SlotContract, SlotKind, SlotPos, SlotTag, SpecsResolver,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 
@@ -127,8 +127,8 @@ fn emit_text(text: &str, options: &AnchorOptions, out: &mut Vec<Event>) {
 
         if chars[cursor] == '[' && !is_image_syntax {
             if let Some(link) = parse_link(&chars, cursor) {
-                let keys = |target: Option<&str>| options.custom.names_for(target);
-                let built = build_attributes(&link.target, link.extras.as_ref(), &keys);
+                let specs = |target: Option<&str>| options.custom.specs_for(target);
+                let built = build_attributes(&link.target, link.extras.as_ref(), &specs);
                 flush_text(&mut normal, out);
 
                 if let Some(message) = built.conflict.as_ref() {
@@ -218,7 +218,7 @@ struct AnchorAttrs {
 fn build_attributes(
     encoded_target: &str,
     extras: Option<&ExtrasHead>,
-    keys: NamesResolver,
+    specs: SpecsResolver,
 ) -> AnchorAttrs {
     let (encoded_url, title) = encoded_target
         .split_once('\u{0}')
@@ -301,14 +301,18 @@ fn build_attributes(
     let mut flags = Vec::new();
     let mut warnings = Vec::new();
     if let Some(head) = extras {
-        let resolved = keys(head.type_marker.as_deref());
-        let parsed = to_attributes(head, &resolved);
+        let specs = specs(head.type_marker.as_deref());
+        let parsed = to_attributes(head, &specs);
         for warning in &parsed.warnings {
             warnings.push(pendon_extra::warning_message(warning));
         }
-        let positional_id = parsed.value(&resolved.tick).map(|value| value.literal());
-        for (key, value) in &parsed.items {
-            if key == &resolved.tick {
+        let specs_id = parsed.value(&specs.tick).map(|value| value.literal());
+        // §6.3: the anchor's own positions — an extras `"title"` is the link's
+        // `title`, and `class` / `id` / `style` are the universal DOM fields.
+        // The extras slug (`specs.tick`) is the id fallback below, never an
+        // attribute of its own.
+        for (key, value) in specs.dom_fields(&parsed.items, &[(&specs.quote, "title")]) {
+            if key == specs.tick {
                 continue;
             }
             if key == "href" {
@@ -324,7 +328,7 @@ fn build_attributes(
                             "`{key}` was dropped because the construct head already sets it"
                         ));
                     } else {
-                        flags.push(key.clone());
+                        flags.push(key.to_string());
                     }
                     continue;
                 }
@@ -353,9 +357,9 @@ fn build_attributes(
                 ));
                 continue;
             }
-            attrs.insert(key.clone(), text);
+            attrs.insert(key.to_string(), text);
         }
-        if let Some(id) = positional_id {
+        if let Some(id) = specs_id {
             if attrs.contains_key("id") {
                 warnings.push(
                     "extras `slug` was dropped because the element already has an id".to_string(),

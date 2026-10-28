@@ -58,8 +58,8 @@ pub struct BlockquoteOptions {
 /// node.
 pub fn process(events: &[Event], options: &BlockquoteOptions) -> Vec<Event> {
     // §9.1: a decorator line directly above the quote decorates it too.
-    let keys = |target: Option<&str>| options.custom.names_for(target);
-    let bindings = bind_decorators(events, &keys, quote_target);
+    let specs = |target: Option<&str>| options.custom.specs_for(target);
+    let bindings = bind_decorators(events, &specs, quote_target);
     let decorators: HashMap<usize, &BoundDecorator> = bindings
         .bound
         .iter()
@@ -215,7 +215,7 @@ fn emit_quote(
                     type_marker = head.type_marker.clone();
                     inner = to_attributes(
                         &head,
-                        &options.custom.names_for(head.type_marker.as_deref()),
+                        &options.custom.specs_for(head.type_marker.as_deref()),
                     );
                     body.push(Event::Text(rest.trim_start_matches(' ').to_string()));
                 }
@@ -348,7 +348,7 @@ mod tests {
         assert_eq!(element(&out).as_deref(), Some("blockquote"), "{out:?}");
         assert_eq!(attr(&out, "__layer").as_deref(), Some("blockquote"));
         assert_eq!(attr(&out, "type").as_deref(), Some("bqA"));
-        assert_eq!(attr(&out, "class").as_deref(), Some("x"));
+        assert_eq!(attr(&out, "specs.class").as_deref(), Some("x"));
         assert!(text(&out).contains("body"));
         // The `>` marker is gone and the paragraph wrapper with it.
         assert!(!text(&out).contains('>'), "{:?}", text(&out));
@@ -375,7 +375,7 @@ mod tests {
         // renderer's to apply (it answers every instance of the layer).
         assert_eq!(element(&out).as_deref(), Some("blockquote"), "{out:?}");
         assert_eq!(attr(&out, "__layer").as_deref(), Some("blockquote"));
-        assert_eq!(attr(&out, "class").as_deref(), Some("u"));
+        assert_eq!(attr(&out, "specs.class").as_deref(), Some("u"));
         assert!(!text(&out).contains("@@"));
         assert!(text(&out).contains("quoted"));
     }
@@ -386,7 +386,7 @@ mod tests {
         let out = run("@@bqB{.outer}\n\n> @@bqA{.inner} body\n");
         assert_eq!(attr(&out, "type").as_deref(), Some("bqA"), "{out:?}");
         assert_eq!(attr(&out, "type").as_deref(), Some("bqA"));
-        assert_eq!(attr(&out, "class").as_deref(), Some("inner"));
+        assert_eq!(attr(&out, "specs.class").as_deref(), Some("inner"));
     }
 
     /// §11 rule 3 + D8: an unclaimed type renders the built-in element.
@@ -396,7 +396,7 @@ mod tests {
         assert!(custom(&out).is_none(), "{out:?}");
         assert_eq!(element(&out).as_deref(), Some("blockquote"));
         assert_eq!(attr(&out, "type").as_deref(), Some("bqZ"));
-        assert_eq!(attr(&out, "class").as_deref(), Some("z"));
+        assert_eq!(attr(&out, "specs.class").as_deref(), Some("z"));
     }
 
     /// A plain quote keeps its text and gains no `type`.

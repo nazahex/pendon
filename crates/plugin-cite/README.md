@@ -297,7 +297,7 @@ references_scope = "cited" # only cited frontmatter references
 
 Any other value is a config error that names the two valid options.
 
-### Positional names (§6.1, D-5)
+### Specs ((§6.1, D-5))
 
 An entry renames the §6.1 positional slots through its `field.*` keys —
 `field.specs.tick` / `field.specs.quote` for a `` `slug` `` / `"title"` item. An

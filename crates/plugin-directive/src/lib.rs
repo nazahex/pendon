@@ -116,18 +116,18 @@ pub(crate) fn resolve_head(
         ..ParsedDirective::default()
     };
 
-    let keys = options.custom.names_for(head.type_marker.as_deref());
+    let specs = options.custom.specs_for(head.type_marker.as_deref());
 
     let mut head_attrs = Attrs::default();
     if let Some(bracket) = &head.bracket {
         head_attrs.push(
-            keys.bracket.clone(),
+            specs.bracket.clone(),
             ExtrasAttr::Value(AttrValue::Str(bracket.clone())),
         );
     }
     if let Some(parentheses) = &head.parentheses {
         head_attrs.push(
-            keys.paren.clone(),
+            specs.paren.clone(),
             ExtrasAttr::Value(AttrValue::Str(parentheses.clone())),
         );
     }
@@ -139,7 +139,7 @@ pub(crate) fn resolve_head(
             rest: after,
         } => {
             consumed = rest.len() - after.len();
-            to_attributes(&extras_head, &keys)
+            to_attributes(&extras_head, &specs)
         }
         ExtrasMatch::Malformed { error, .. } => {
             // §4.3: a malformed head is never dropped nor partially applied.
@@ -323,15 +323,15 @@ mod tests {
         assert!(!text.contains("::"));
     }
 
-    /// §10.2/§10.4: `[bracket]` → `slug`, `("title")` → `title`, and the extras
+    /// §10.2/§10.4: `[bracket]` → `bracket.bare`, `("title")` → `paren.bare`, and the extras
     /// head contributes the rest.
     #[test]
     fn inline_head_slots_and_extras_map_to_attributes() {
         let out = run("::note[slug-1](\"A title\")@@note{.box, #i, isOpen} body::\n");
-        assert_eq!(attr(&out, "slug").as_deref(), Some("slug-1"));
-        assert_eq!(attr(&out, "title").as_deref(), Some("A title"));
-        assert_eq!(attr(&out, "id").as_deref(), Some("i"));
-        assert_eq!(attr(&out, "class").as_deref(), Some("box"));
+        assert_eq!(attr(&out, "bracket.bare").as_deref(), Some("slug-1"));
+        assert_eq!(attr(&out, "paren.bare").as_deref(), Some("A title"));
+        assert_eq!(attr(&out, "specs.id").as_deref(), Some("i"));
+        assert_eq!(attr(&out, "specs.class").as_deref(), Some("box"));
         assert!(out
             .iter()
             .any(|event| matches!(event, Event::AttributeFlag { name } if name == "isOpen")));

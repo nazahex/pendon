@@ -123,39 +123,67 @@ pub struct ExtrasHead {
     pub items: Vec<ExtrasItem>,
 }
 
-/// The public field each positional content of a head lands in (§6.1).
+/// The **specs** of an extras head: the public field each of its positional
+/// contents lands in (§5, §6.1).
 ///
-/// A head has at most four positional contents — the `[…]` / `(…)` **groups** and
-/// the `` `…` `` / `"…"` **items** — and each of them lands in exactly one field.
-/// The built-in names are `slug` / `title`; an entry's `field.*` keys rename them
-/// (D-5): `field.bracket.bare`, `field.paren.bare`, `field.specs.tick`,
-/// `field.specs.quote`. [`resolve`](Self::resolve) is the only place that reads
-/// those keys for naming.
+/// A head carries at most four positional contents — the `[...]` / `(...)` **slot
+/// groups** and the `` `...` `` / `"..."` **specs items** — and each lands in exactly
+/// one field. The two vocabularies are named together here because
+/// [`to_attributes`] maps a whole head in one pass, and because both answer the
+/// same question: *where does this content go?*
+///
+/// | content        | field (`field.*` key)                | default      | meaning                                            |
+/// | -------------- | ------------------------------------ | ------------ | -------------------------------------------------- |
+/// | `` `x` `` tick | `field.specs.tick`                   | `specs.tick` | the construct's short identifier (its slug)         |
+/// | `"x"` quote    | `field.specs.quote`                  | `specs.quote`| the construct's human-readable title                |
+/// | `[x]` bracket  | `field.bracket.bare`                 | `bracket.bare`| the content of the bracket slot                     |
+/// | `("x")` paren  | `field.paren.bare`                   | `paren.bare` | the content of the parentheses slot                 |
+/// | `.class`       | `field.specs.class`                  | `specs.class`| CSS class list                                      |
+/// | `#id`          | `field.specs.id`                     | `specs.id`   | element ID                                          |
+/// | `style:`       | `field.specs.style`                  | `specs.style`| inline style declarations                           |
+///
+/// The `meaning` column is the one piece of this table that exists **only**
+/// here: an assigned field carries no semantics of its own, so a rename never
+/// changes what the content *is*. The `default` column is
+/// [`Default`] below — the `specs.*` paths a construct keeps when its
+/// `custom` entry configures nothing (D-7).
+///
+/// An entry's `field.*` keys rename those fields (D-5);
+/// [`resolve`](Self::resolve) is the only place that reads them for naming.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PositionalNames {
-    /// `[…]` — `field.bracket.bare`.
+pub struct Specs {
+    /// `[...]` — `field.bracket.bare`.
     pub bracket: String,
-    /// `(…)` — `field.paren.bare`.
+    /// `(...)` — `field.paren.bare`.
     pub paren: String,
-    /// `` `…` `` — `field.specs.tick`.
+    /// `` `...` `` — `field.specs.tick`.
     pub tick: String,
-    /// `"…"` — `field.specs.quote`.
+    /// `"..."` — `field.specs.quote`.
     pub quote: String,
+    /// `.class` / `class: "x"` — `field.specs.class`.
+    pub class: String,
+    /// `#id` — `field.specs.id`.
+    pub id: String,
+    /// `style:` / `--var` — `field.specs.style`.
+    pub style: String,
 }
 
-impl Default for PositionalNames {
+impl Default for Specs {
     fn default() -> Self {
         Self {
-            bracket: "slug".to_string(),
-            paren: "title".to_string(),
-            tick: "slug".to_string(),
-            quote: "title".to_string(),
+            bracket: "bracket.bare".to_string(),
+            paren: "paren.bare".to_string(),
+            tick: "specs.tick".to_string(),
+            quote: "specs.quote".to_string(),
+            class: "specs.class".to_string(),
+            id: "specs.id".to_string(),
+            style: "specs.style".to_string(),
         }
     }
 }
 
-impl PositionalNames {
-    /// The two **item** names, leaving the groups at their built-ins (§6.1).
+impl Specs {
+    /// The two **specs item** names, leaving the slot groups at their built-ins (§6.1).
     pub fn new(tick: impl Into<String>, quote: impl Into<String>) -> Self {
         Self {
             tick: tick.into(),
@@ -164,15 +192,15 @@ impl PositionalNames {
         }
     }
 
-    /// The names the matched `custom` entry configures (D-5, D-7).
+    /// The specs the matched `custom` entry configures (D-5, D-7).
     ///
     /// `None` — no entry, or an entry that configured no `field.*` key — keeps
     /// every built-in name, which is the D-7 "preset is alive" case. Otherwise
     /// each name is the entry's assignment, and a position it left **unassigned**
     /// falls back to its own qualified spelling: `bracket.bare` / `paren.bare` for
-    /// the groups (D-7) and `specs.tick` / `specs.quote` for the items (§6.3,
-    /// S2-3.2). A name the user chose is therefore never silently reused for an
-    /// unnamed position, and an unnamed value is never lost.
+    /// the slot groups (D-7) and `specs.tick` / `specs.quote` for the specs items
+    /// (§6.3, S2-3.2). A name the user chose is therefore never silently reused
+    /// for an unnamed position, and an unnamed value is never lost.
     pub fn resolve(config: Option<&FieldConfig>) -> Self {
         let Some(config) = config.filter(|config| !config.is_empty()) else {
             return Self::default();
@@ -182,7 +210,67 @@ impl PositionalNames {
             paren: slot_name(config, Slot::Paren, SlotKind::Bare),
             tick: specs_name(config, "tick"),
             quote: specs_name(config, "quote"),
+            class: specs_name(config, "class"),
+            id: specs_name(config, "id"),
+            style: specs_name(config, "style"),
         }
+    }
+}
+
+impl Specs {
+    /// Projects a head's attribute paths onto the field names `element` reads
+    /// (§6.3).
+    ///
+    /// The three **universal** positions become their DOM names — the resolved
+    /// [`class`](Self::class) / [`id`](Self::id) / [`style`](Self::style) paths,
+    /// whatever `field.specs.*` renamed them to, are written as `class` / `id` /
+    /// `style` — unless `element` reads that position under a name of its own: a
+    /// citation calls its `#id` `cite-id`. The positions only an element can
+    /// interpret are named by `element` as `(this specs path, the field it feeds)`
+    /// pairs — a heading says `(&specs.quote, "title")`, an anchor the same.
+    /// Every other key is a public field of its own (`k: v` stays `k`, D-12), so
+    /// it is returned unchanged.
+    ///
+    /// A position `element` does not name keeps its dotted path, which is what
+    /// the JSON/AST renderers carry and what a phase-4 preset fills in.
+    pub fn dom_fields<'a>(
+        &'a self,
+        items: &'a [(String, ExtrasAttr)],
+        element: &[(&str, &'a str)],
+    ) -> Vec<(&'a str, &'a ExtrasAttr)> {
+        items
+            .iter()
+            .map(|(key, value)| {
+                // The element's own reading wins: a citation calls its `#id`
+                // `cite-id`, and the universal name is only the fallback.
+                let field = match element.iter().find(|(path, _)| *path == key.as_str()) {
+                    Some((_, field)) => *field,
+                    None if key == &self.class => "class",
+                    None if key == &self.id => "id",
+                    None if key == &self.style => "style",
+                    None => key.as_str(),
+                };
+                (field, value)
+            })
+            .collect()
+    }
+}
+
+/// The DOM field a **universal** specs path is written as (§6.3): `specs.class`
+/// → `class`, `specs.id` → `id`, `specs.style` → `style`.
+///
+/// `tick` / `quote` and the two slot groups are not universal — what a slug or a
+/// title means is the element's business (§7) — so an element names them through
+/// [`Specs::dom_fields`]. This is the default-path-only spelling the projection
+/// ([`crate::field::project`]) can apply without a `FieldConfig`; a path
+/// `field.specs.*` renamed is projected by the plugin that resolved it.
+pub fn universal_field(key: &str) -> Option<&'static str> {
+    let key = key.strip_prefix(SPECS_NAMESPACE)?.strip_prefix('.')?;
+    match key {
+        "class" => Some("class"),
+        "id" => Some("id"),
+        "style" => Some("style"),
+        _ => None,
     }
 }
 
@@ -955,15 +1043,15 @@ fn is_key(text: &str) -> bool {
 // ----------------------------------------------------- extras → attributes
 
 /// Maps a head onto attributes in the deterministic §6.4 order: `class`, `id`,
-/// the positional names (`bracket`, `paren`, `tick`, then `quote`), then every
-/// remaining prop and flag in source order with `style` where the first
+/// the positional specs (`bracket`, `paren`, `tick`, then `quote`), then every
+/// remaining prop and flag in source order with `specs.style` where the first
 /// `style:` prop or `--var` item appeared.
 ///
-/// A positional **group** (`[…]` / `(…)` of §6.1) wins over a same-key item of
-/// the `{…}` body: the item is dropped with an `Overridden` warning (§6.2
-/// head-wins style). A `class` / `id` collision is left to the §6.4 collapse
+/// A positional **group** (`[...]` / `(...)` of §6.1) wins over a same-key item of
+/// the `{...}` body: the item is dropped with an `Overridden` warning (§6.2
+/// head-wins style). A `specs.class` / `specs.id` collision is left to the §6.4 collapse
 /// below, where the later group value wins at the first occurrence's position.
-pub fn to_attributes(head: &ExtrasHead, names: &PositionalNames) -> Attrs {
+pub fn to_attributes(head: &ExtrasHead, specs: &Specs) -> Attrs {
     let mut classes: Vec<String> = Vec::new();
     let mut id: Option<String> = None;
     let mut slug: Option<String> = None;
@@ -974,23 +1062,23 @@ pub fn to_attributes(head: &ExtrasHead, names: &PositionalNames) -> Attrs {
     let mut warnings = Vec::new();
 
     // §6.1: the positional groups of the head itself, mapped through their
-    // names. They occupy the §6.4 slot before the body's positional items and
+    // specs. They occupy the §6.4 slot before the body's positional items and
     // win every key collision with them.
     let mut group_keys: Vec<&str> = Vec::new();
     let mut groups: Vec<(String, ExtrasAttr)> = Vec::new();
     if let Some(bracket) = &head.bracket {
         groups.push((
-            names.bracket.clone(),
+            specs.bracket.clone(),
             ExtrasAttr::Value(AttrValue::Str(bracket.clone())),
         ));
-        group_keys.push(&names.bracket);
+        group_keys.push(&specs.bracket);
     }
     if let Some(parentheses) = &head.parentheses {
         groups.push((
-            names.paren.clone(),
+            specs.paren.clone(),
             ExtrasAttr::Value(AttrValue::Str(parentheses.clone())),
         ));
-        group_keys.push(&names.paren);
+        group_keys.push(&specs.paren);
     }
 
     for item in &head.items {
@@ -1003,18 +1091,18 @@ pub fn to_attributes(head: &ExtrasHead, names: &PositionalNames) -> Attrs {
                 }
             }
             ExtrasItem::Slug(value) => {
-                if group_keys.contains(&names.tick.as_str()) {
+                if group_keys.contains(&specs.tick.as_str()) {
                     warnings.push(ExtrasWarning::Overridden {
-                        key: names.tick.clone(),
+                        key: specs.tick.clone(),
                     });
                 } else {
                     slug = Some(value.clone());
                 }
             }
             ExtrasItem::Title(value) => {
-                if group_keys.contains(&names.quote.as_str()) {
+                if group_keys.contains(&specs.quote.as_str()) {
                     warnings.push(ExtrasWarning::Overridden {
-                        key: names.quote.clone(),
+                        key: specs.quote.clone(),
                     });
                 } else {
                     title = Some(value.clone());
@@ -1059,20 +1147,20 @@ pub fn to_attributes(head: &ExtrasHead, names: &PositionalNames) -> Attrs {
     let mut items = Vec::new();
     if !classes.is_empty() {
         items.push((
-            "class".to_string(),
+            specs.class.clone(),
             ExtrasAttr::Value(AttrValue::Str(classes.join(" "))),
         ));
     }
     if let Some(id) = id {
-        items.push(("id".to_string(), ExtrasAttr::Value(AttrValue::Str(id))));
+        items.push((specs.id.clone(), ExtrasAttr::Value(AttrValue::Str(id))));
     }
     items.extend(groups);
     if let Some(slug) = slug {
-        items.push((names.tick.clone(), ExtrasAttr::Value(AttrValue::Str(slug))));
+        items.push((specs.tick.clone(), ExtrasAttr::Value(AttrValue::Str(slug))));
     }
     if let Some(title) = title {
         items.push((
-            names.quote.clone(),
+            specs.quote.clone(),
             ExtrasAttr::Value(AttrValue::Str(title)),
         ));
     }
@@ -1081,7 +1169,7 @@ pub fn to_attributes(head: &ExtrasHead, names: &PositionalNames) -> Attrs {
     for index in 0..=rest.len() {
         if index == style_pos && !style.is_empty() {
             items.push((
-                "style".to_string(),
+                specs.style.clone(),
                 ExtrasAttr::Value(AttrValue::Str(style.join("; "))),
             ));
         }
@@ -1290,7 +1378,7 @@ mod tests {
     #[test]
     fn the_marker_becomes_the_internal_number_attribute() {
         let (parsed, _) = head("@@headingA{foo: \"bar\"}%%%numberB");
-        let attrs = to_attributes(&parsed, &PositionalNames::default());
+        let attrs = to_attributes(&parsed, &Specs::default());
         let value = attrs.value("__number").expect("a __number value");
         assert_eq!(
             value.literal(),

@@ -84,7 +84,7 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## In progress
 
-- [ ] **Stage 2 — Phases 0–2 done; Phase 3 is next.** Docs live in
+- [ ] **Stage 2 — Phases 0–2 done; Phase 3 in progress (`S2-3.1` + `S2-3.4` done).** Docs live in
       [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md).
       **Phase 0 complete 2026-10-28**: D-1…D-17 signed (D-16 = clean total
       replacement: no compat, no warnings, no migration doc, old configs fail
@@ -135,15 +135,31 @@ exactly one `export const headings` line each (no bytes removed), and
       golden bytes moved — that is the proof. `S2-2.8` done: the four naming
       keys are gone (a leftover `backtick_key`/`quote_key`/`bracket_key`/
       `parentheses_key` is a load error, one test each) and their job is now
-      `field.*` — `PositionalNames::resolve` reads `field.bracket.bare` /
+      `field.*` — `Specs::resolve` reads `field.bracket.bare` /
       `field.paren.bare` / `field.specs.tick` / `field.specs.quote` off the
       matched entry (which now carries its `FieldConfig` instead of a bespoke
       naming struct). Fixture 15 and `sandbox/{directive,ultimate}` moved to
       `field.*` with **byte-identical** output. Fail-fast is complete: an unknown
       `custom` entry key and an unknown `[[task]]` key are both load errors
       (§13 = Error), and an unknown entry key test pins the closed vocabulary.
-      **Phase 2 complete.** Next: Phase 3 (`S2-3.1`).
-      No `MIGRATION.md` by policy.
+      **Phase 2 complete.**
+      `S2-3.1` done: "canonical extras" is now **specs** in code —
+      `PositionalNames` → `Specs`, `NamesResolver` → `SpecsResolver`,
+      `ComponentSet::names_for(_opt)` → `specs_for(_opt)`, and every `keys`
+      binding that held one is a `specs` binding. Renames only: workspace green,
+      zero output moved. The four `default`/`meaning` rows §6.1 carries now also
+      live on `Specs`'s doc, because an assigned field has no semantics of its
+      own — otherwise `S2-3.5`'s rewrite would delete the last copy.
+      `S2-3.2` (shape) + `S2-3.4` done: the head emits `specs.class` / `specs.id` /
+      `specs.style` / `specs.tick` / `specs.quote` (through `Specs`, so an
+      assignment renames them) and `project` maps the three **universal** positions
+      back to `class` / `id` / `style`, sorting entries by the final public path so
+      nothing moves; `renderer-solid` emits a dotted path as a one-key spread
+      (`{...{ "specs.tick": "x" }}`) because JSX has no `a.b=`, `renderer-html`
+      prints it verbatim, JSON/AST keep it. Fixtures 10 and 14 re-frozen, one test
+      per specs position in each renderer. Next: `S2-3.2`'s **D-12 rule table**
+      (duplicates as `Error` keeping the first, `class` dedupe, `k` collisions),
+      then `S2-3.5`.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden
@@ -221,7 +237,7 @@ exactly one `export const headings` line each (no bytes removed), and
   scratch copy — the gate never depends on a sandbox staying in sync.
 
 - **§11 threading gaps** (from the positional-keys pass):
-  - `plugin-table`: `extras_to_layer(head)` still uses `PositionalNames::default()`;
+  - `plugin-table`: `extras_to_layer(head)` still uses `Specs::default()`;
     thread `TableOptions` into the 7-layer head scan.
   - `plugin-wiki`: `WikiOptions` carries no `ComponentSet`, so extras stay on the
     built-in `slug`/`title`; add `[task.wiki.custom]` to lift this.

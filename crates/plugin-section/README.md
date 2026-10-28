@@ -56,7 +56,7 @@ template = "<DocSection {...attrs}>{children}</DocSection>"
 `[task.section.custom.section]` are equivalent. Without a component the built-in
 `<section>` element is used.
 
-### Positional names (§6.1, D-5)
+### Specs ((§6.1, D-5))
 
 An entry renames the §6.1 positional slots through its `field.*` keys —
 `field.specs.tick` / `field.specs.quote` for a `` `slug` `` / `"title"` item. An

@@ -3,8 +3,8 @@ use pendon_core::{
     Pipeline, Severity,
 };
 use pendon_extra::{
-    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead, FieldName,
-    PositionalNames, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag,
+    scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead, FieldName, Preset, Slot,
+    SlotContract, SlotKind, SlotPos, SlotTag, Specs,
 };
 use pendon_plugin_markdown::process as process_markdown;
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
@@ -653,13 +653,13 @@ fn build_parsed_image(
     let mut attrs = match extras.as_ref() {
         Some(head) => {
             // §6.1/§11 rule 5: the entry answering this marker names the extras
-            // positional keys, across the `img` and `figure` layers.
-            let keys = options
+            // specs, across the `img` and `figure` layers.
+            let specs = options
                 .img
-                .names_for_opt(head.type_marker.as_deref())
-                .or_else(|| options.figure.names_for_opt(head.type_marker.as_deref()))
+                .specs_for_opt(head.type_marker.as_deref())
+                .or_else(|| options.figure.specs_for_opt(head.type_marker.as_deref()))
                 .unwrap_or_default();
-            image_attrs_from_head(head, &mut flags, &mut warnings, &keys)
+            image_attrs_from_head(head, &mut flags, &mut warnings, &specs)
         }
         None => ImageAttrs::default(),
     };
@@ -703,19 +703,21 @@ fn image_attrs_from_head(
     head: &ExtrasHead,
     flags: &mut Vec<String>,
     warnings: &mut Vec<String>,
-    keys: &PositionalNames,
+    specs: &Specs,
 ) -> ImageAttrs {
-    let parsed = to_attributes(head, keys);
+    let parsed = to_attributes(head, specs);
     for warning in &parsed.warnings {
         warnings.push(pendon_extra::warning_message(warning));
     }
 
     let mut attrs = ImageAttrs::default();
-    for (key, value) in &parsed.items {
-        if key == "id" || key == &keys.tick {
+    // §6.3: the image's own positions — `class` / `id` / `style` are the
+    // universal DOM fields and an extras `"title"` is the `title`.
+    for (key, value) in specs.dom_fields(&parsed.items, &[(&specs.quote, "title")]) {
+        if key == "id" || key == specs.tick {
             continue;
         }
-        match (key.as_str(), value) {
+        match (key, value) {
             ("class", ExtrasAttr::Value(value)) => attrs
                 .classes
                 .extend(value.literal().split_whitespace().map(str::to_string)),
@@ -728,8 +730,8 @@ fn image_attrs_from_head(
 
     // §6.2: `#id` beats the extras `slug` (the resolved `tick` name).
     attrs.id = parsed
-        .value("id")
-        .or_else(|| parsed.value(&keys.tick))
+        .value(&specs.id)
+        .or_else(|| parsed.value(&specs.tick))
         .map(|value| value.literal());
     attrs
 }

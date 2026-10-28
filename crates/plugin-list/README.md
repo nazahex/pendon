@@ -80,7 +80,7 @@ template = "<LI {...attrs}>{children}</LI>"
 
 `primary_layer()` is `list`; `layers()` is `["list", "unordered", "ordered"]`.
 
-### Positional names (§6.1, D-5)
+### Specs ((§6.1, D-5))
 
 An entry renames the §6.1 positional slots through its `field.*` keys —
 `field.specs.tick` / `field.specs.quote` for a `` `slug` `` / `"title"` item. An

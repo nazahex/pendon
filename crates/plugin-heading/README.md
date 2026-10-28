@@ -146,7 +146,7 @@ Without a custom component the plugin emits a `Heading` node with `level`, the
 optional `id` (or fallback `slug`), `raw_title` and the extras attributes
 (§6.4). The heading text is the node's content; nothing is prepended to it.
 
-### Positional names (§6.1, D-5)
+### Specs ((§6.1, D-5))
 
 An entry renames the §6.1 positional slots through its `field.*` keys —
 `field.specs.tick` / `field.specs.quote` for a `` `slug` `` / `"title"` item. An

@@ -13,7 +13,8 @@ fn main() {}
 ```
 
 §9.1/§6.1: a decorator line carries the positional groups too — the typed form and
-the untyped `@@[…]` spelling, whose slots default to `slug` / `title`:
+the untyped `@@[…]` spelling, whose slots land in their own public fields
+(`bracket.bare` / `paren.bare`, D-7):
 
 @@aside[intro]("Aside title"){.lead}
 A paragraph decorated by a typed group head.

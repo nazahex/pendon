@@ -50,7 +50,7 @@ let events = process_with_options(&parsed, opts);
 
 `WikiOptions` fields: `link_prefix: Option<String>` and `latex: Option<LatexOptions>`.
 
-### Positional names (§6.1, D-5)
+### Specs ((§6.1, D-5))
 
 An entry renames the §6.1 positional slots through its `field.*` keys —
 `field.specs.tick` / `field.specs.quote` — and an entry that configures none

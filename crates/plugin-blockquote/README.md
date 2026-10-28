@@ -57,7 +57,7 @@ let jsx = render_solid_with_hints(&markdown(&events), solid_hints(&options).as_r
 `primary_layer()` is `blockquote` — the key `[[task.blockquote.custom]]`
 addresses.
 
-### Positional names (§6.1, D-5)
+### Specs ((§6.1, D-5))
 
 An entry renames the §6.1 positional slots through its `field.*` keys —
 `field.specs.tick` / `field.specs.quote` for a `` `slug` `` / `"title"` item. An
