@@ -30,5 +30,5 @@ lands in its own public field (the groups in <code>bracket.bare</code> / <code>p
 items in <code>specs.tick</code> / <code>specs.quote</code>, D-7), so nothing collides; a malformed group
 is not consumed — the marker still renders and the group stays literal text (§4.3):
 </p>
-<Bibliography bracket.bare="refs" class="box" paren.bare="Cited sources" specs.quote="title-body" specs.tick="slug-body" type="bibliography">Every reference cited above.</Bibliography><Bibliography type="bibliography">[unclosed(&quot;Cited&quot;) still a caption.</Bibliography>
+<Bibliography {...{ "bracket.bare": "refs" }} class="box" {...{ "paren.bare": "Cited sources" }} {...{ "specs.quote": "title-body" }} {...{ "specs.tick": "slug-body" }} type="bibliography">Every reference cited above.</Bibliography><Bibliography type="bibliography">[unclosed(&quot;Cited&quot;) still a caption.</Bibliography>
 </>); }

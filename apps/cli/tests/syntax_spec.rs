@@ -115,6 +115,39 @@ fn assert_side_outputs(stem: &str, dir: &Path) {
     }
 }
 
+/// Fails when a rendered `.jsx` spells a **dotted attribute name** (`specs.tick="…"`),
+/// which is not JSX: `a.b=` parses as a member expression.
+///
+/// §6.3 fixes how a dotted path is written — the one-key spread
+/// `{...{ "specs.tick": "…" }}` — for the built-in element path and the component
+/// `{...attrs}` path alike (S2-3.6), so a regression in either one is caught here
+/// on **every** fixture rather than only where a dotted field happens to be
+/// asserted.
+fn assert_no_dotted_attribute_name(stem: &str, jsx: &str) {
+    // An attribute position is whitespace (or `<`) followed by a name and `=`.
+    for (index, line) in jsx.lines().enumerate() {
+        let mut rest = line;
+        while let Some(at) = rest.find([' ', '<']) {
+            let candidate = rest[at + 1..].trim_start();
+            let name: String = candidate
+                .chars()
+                .take_while(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | ':' | '.'))
+                .collect();
+            let after = &candidate[name.len()..];
+            // `=` is required: a dotted path is never a bare flag, and a prose
+            // mention (`… see specs.tick here`) is not an attribute position.
+            if name.contains('.') && after.starts_with('=') {
+                panic!(
+                    "{stem}.jsx line {}: `{name}` is not a JSX attribute name — a dotted \
+                     field is written as `{{...{{ \"{name}\": … }}}}` (§6.3):\n  {line}",
+                    index + 1
+                );
+            }
+            rest = &rest[at + 1..];
+        }
+    }
+}
+
 /// Renders the fixture and compares it — page and side files — with the
 /// checked-in golden.
 fn assert_fixture(stem: &str) {
@@ -122,6 +155,7 @@ fn assert_fixture(stem: &str) {
     let expected =
         fs::read_to_string(&golden_path).unwrap_or_else(|error| panic!("{stem}.jsx: {error}"));
     let (dir, actual) = render(stem);
+    assert_no_dotted_attribute_name(stem, &actual);
 
     if actual == expected {
         assert_side_outputs(stem, &dir);
@@ -150,6 +184,19 @@ fn assert_fixture(stem: &str) {
          Run `pendon run -F` inside a copy of the fixture project to refresh the golden, \
          then re-read the diff to make sure the new output is the intended behaviour."
     );
+}
+
+/// The guard itself: the one-key spread and a prose mention pass, an attribute
+/// spelled with a dot does not.
+#[test]
+fn the_dotted_attribute_guard_catches_the_invalid_spelling() {
+    assert_no_dotted_attribute_name("probe", "<p {...{ \"specs.tick\": \"x\" }} class=\"c\">");
+    assert_no_dotted_attribute_name("probe", "<p>see specs.tick here</p>");
+
+    let caught = std::panic::catch_unwind(|| {
+        assert_no_dotted_attribute_name("probe", "<X specs.tick=\"x\" />");
+    });
+    assert!(caught.is_err(), "the guard missed `specs.tick=\"x\"`");
 }
 
 /// §16.3 fixture 01: all item kinds, ordering, duplicates, escaping (§5–§6).

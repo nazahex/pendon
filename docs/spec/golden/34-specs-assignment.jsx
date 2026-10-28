@@ -6,7 +6,7 @@ The entry below assigns all five, so every content lands exactly where it was pu
 — no <code>class</code> / <code>id</code> / <code>style</code> rename (§6.3 rule 1) and no default path left
 behind (§6.1):
 </p>
-<p><MoveA bar.id="john-foo" foo.class="price-detail" foo.style="--width: 200px" href="/pricing" slug="price_slug" title="Price Title" type="moveA">Moved</MoveA>
+<p><MoveA {...{ "bar.id": "john-foo" }} {...{ "foo.class": "price-detail" }} {...{ "foo.style": "--width: 200px" }} href="/pricing" slug="price_slug" title="Price Title" type="moveA">Moved</MoveA>
 </p>
 <p>The same item kinds on an entry that assigns nothing keep the default paths:
 <code>class</code> / <code>id</code> / <code>style</code> are the DOM fields they name (§6.3), and the anchor reads

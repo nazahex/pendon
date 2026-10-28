@@ -35,6 +35,12 @@ value). Read them as living examples.
 (`pendon run -F`), and compares the output byte-for-byte. This means the goldens
 cover config loading and the full CLI path, not just the parsers.
 
+Every render is also checked for **well-formedness before comparison**
+(`assert_no_dotted_attribute_name`): a `.jsx` may not spell a dotted field as an
+attribute name (`specs.tick="x"`), because `a.b=` is a member expression in JSX.
+The one-key spread `{...{ "specs.tick": "x" }}` is the only spelling (§6.3), so a
+fixture cannot freeze invalid output and pass.
+
 ```bash
 cargo test -p pendon --test syntax_spec      # 28 fixtures, none #[ignore]d
 ```

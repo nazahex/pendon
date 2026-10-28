@@ -505,6 +505,15 @@ JSX reads `a.b=` as a member expression, not as an attribute name, so
 the computed key. The compiled JSX sets the attribute the HTML renderer prints,
 so both DOM targets agree and the JSON/AST keep the path untouched.
 
+The rule is the same for a **custom component**: `{...attrs}` in a `template`
+spells a dotted field as that one-key spread too
+(`<Bibliography {...{ "bracket.bare": "refs" }} …>`), so a field is written
+identically whether a component claims the node or the fallback element renders
+it. It is never regrouped into a nested prop — `specs={{ tick: … }}` would make
+Solid the only renderer that reshapes the path and would set `[object Object]` on
+a built-in element; a template that wants nesting spells it itself
+(`{attrs.specs.tick}` reads the flat path).
+
 ### 6.4 Emission order (deterministic)
 
 A head's contents are assigned into the public field map in this canonical order,

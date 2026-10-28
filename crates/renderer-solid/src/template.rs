@@ -2,7 +2,7 @@ use serde_json::Value;
 use std::collections::BTreeSet;
 
 use crate::imports::ComponentTemplate;
-use crate::node::{is_jsx_expression_token, to_js_literal};
+use crate::node::{is_jsx_attr_name, is_jsx_expression_token, render_dotted_attr, to_js_literal};
 use crate::resolve::Ctx;
 use pendon_core::{json_attr_payload, jsx_attr_payload};
 
@@ -183,6 +183,19 @@ fn generate_spread_attrs(
         // component that leaves a slot unset does not emit `k=""`. `alt` is the
         // one exception — an empty `alt=""` marks a decorative image.
         if key != "alt" && matches!(val, Value::String(s) if s.is_empty()) {
+            continue;
+        }
+
+        // §6.3: a public field is a **path** (`specs.tick`, `bracket.bare`), and
+        // JSX reads `a.b=` as a member expression rather than an attribute name,
+        // so a dotted field reaches a component exactly as it reaches a built-in
+        // element — as the one-key spread that keeps the path as the computed key
+        // ([`render_dotted_attr`]). Writing the name verbatim would emit
+        // `<X specs.tick="…">`, which is not JSX at all.
+        if !is_jsx_attr_name(key) {
+            let mut part = String::new();
+            render_dotted_attr(key, val, &mut part, ctx);
+            parts.push(part);
             continue;
         }
 

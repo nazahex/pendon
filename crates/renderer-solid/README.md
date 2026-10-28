@@ -89,6 +89,14 @@ one-key spread — `<p {...{ "specs.tick": "x" }}>` — because `a.b=` would par
 member expression. The path survives verbatim into the DOM, matching what
 `renderer-html` prints and what JSON/AST keep.
 
+One helper covers both paths: `render_attrs` for the built-in elements and
+`generate_spread_attrs` for a component template's `{...attrs}` (§6.3, `S2-3.6`),
+so a component receives `<Bibliography {...{ "bracket.bare": "refs" }} …>`, never
+the invalid `<Bibliography bracket.bare="refs">`. A dotted field is never
+regrouped into a nested prop ([D-18](../../docs/workflows/unified-syntax-stage-2/DECISIONS.md));
+the golden harness rejects any rendered `.jsx` that spells one as a plain
+attribute name.
+
 ## Usage
 
 ```bash

@@ -240,6 +240,20 @@ exactly one `export const headings` line each (no bytes removed), and
       paths. New test `a_head_inside_an_item_is_content`. The inventory half of
       the exit is `S2-7.2`'s (it rewrites every table anyway). 761 tests. Next:
       `S2-4.10` (section) / `S2-4.4` (cite).
+      `S2-3.6` done — a gap `S2-3.4` left on the **component** path: the
+      `{...attrs}` spread in `template.rs` still wrote a dotted key verbatim, so
+      `14-marker.jsx` had been freezing `<Bibliography bracket.bare="refs" …
+      specs.tick="…">`, which is not JSX at all (`a.b=` is a member expression).
+      `node::{is_jsx_attr_name, render_dotted_attr}` are now `pub(crate)` and the
+      template path calls them, so one helper spells a public path for both the
+      built-in elements and a component. Goldens `14-marker` and
+      `34-specs-assignment` re-frozen; every moved byte is a dotted name becoming
+      a one-key spread, positions untouched. Guarded twice: a renderer unit test
+      (`a_component_receives_a_dotted_field_as_a_one_key_spread`) and a harness
+      check on **every** fixture render (`assert_no_dotted_attribute_name`,
+      self-tested) so invalid JSX cannot be frozen again. Rejected nested props
+      `specs={{ … }}` recorded as **D-18**; §6.3 + the solid README say "one rule,
+      two paths". 763 tests. Next: `S2-4.4` (cite).
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden
@@ -340,3 +354,9 @@ exactly one `export const headings` line each (no bytes removed), and
   `25`, `28`, `30`, `31`): `export const headings` is now automatic instead of
   depending on the deleted `plugin-extract-heading`. No other byte moved; `32`
   and `33` are new (the latter also freezes side files in `NN-name.out/`).
+- Stage 2 re-froze `14-marker` twice (`S2-4.9` both type sources, `S2-3.6` the
+  component-path dotted fields) and `34-specs-assignment` (`S2-3.6`, its three
+  `moveA` fields). The `S2-3.6` diff is dotted attribute names becoming the
+  `{...{ "path": … }}` spread, nothing else — the harness now rejects a dotted
+  attribute name on every fixture, so that class of invalid JSX cannot be frozen
+  again.

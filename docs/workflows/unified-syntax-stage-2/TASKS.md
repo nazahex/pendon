@@ -473,6 +473,34 @@ assignable, and the DOM renderers still emit valid `class`/`id`/`style`.
       READMEs replaced the copy-pasted "keeps `slug` / `title` / `class` / `id` /
       `style`" sentence (wrong since S2-3.2) with a link to §6.1. No other golden
       moved; gate green: fmt, clippy (no new warnings), 751 tests.
+- [x] **S2-3.6 — Dotted fields on the component path.** Dep: S2-3.4. `§6.3`
+      Do: make the component `{...attrs}` spread spell a dotted path the way the
+      built-in elements already do.
+      G: a fixture whose component carries `specs.*` / `bracket.*` fields.
+      Exit: no `.jsx` in the repo contains a dotted attribute name.
+      **Done 2026-10-28 — S2-3.4 fixed one of the two paths.** `node.rs` emitted
+      `{...{ "specs.tick": "x" }}`, but `template.rs`'s `generate_spread_attrs`
+      (the custom-component `{...attrs}` spread) still wrote `key` verbatim, so a
+      component received `<Bibliography bracket.bare="refs" … specs.tick="…">` —
+      **not JSX at all** (`a.b=` is a member expression), and that invalid line had
+      been frozen into `14-marker.jsx` since S2-3.4. The fix is the rule, not a new
+      one: `render_dotted_attr` / `is_jsx_attr_name` became `pub(crate)` and the
+      template path calls them, so a field is spelled identically whether a
+      component claims the node or the fallback element renders it. Fixtures
+      `14-marker` (`bracket.bare`, `paren.bare`, `specs.quote`, `specs.tick`) and
+      `34-specs-assignment` (`bar.id`, `foo.class`, `foo.style`) are the `G:` box;
+      every moved byte is one dotted name becoming a one-key spread, positions
+      unchanged. New unit test
+      `a_component_receives_a_dotted_field_as_a_one_key_spread`, plus a guard in
+      the golden harness (`assert_no_dotted_attribute_name`, run on **every**
+      fixture render, self-tested by
+      `the_dotted_attribute_guard_catches_the_invalid_spelling`) so no future
+      golden can freeze an invalid name. **Rejected:** a nested props object
+      (`specs={{ tick: … }}`) — it would make solid the only renderer of the three
+      that regroups the path, break parity with `renderer-html`'s
+      `specs.tick="…"` and JSON/AST's path, and set `[object Object]` on a
+      built-in element, which shares `render_attrs` ([D-18](DECISIONS.md)). 763
+      tests.
 
 ## Phase 4 — elements, one at a time
 

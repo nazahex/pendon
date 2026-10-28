@@ -367,6 +367,7 @@ fn render_attrs(v: &Value, out: &mut String, skipped: &[&str], ctx: &Ctx) {
         // name, so such a field is emitted as a one-key spread
         // ([`render_dotted_attr`]) instead of `name=…`.
         if !is_jsx_attr_name(&name) {
+            out.push(' ');
             render_dotted_attr(&name, &value, out, ctx);
             continue;
         }
@@ -431,7 +432,7 @@ fn render_attrs(v: &Value, out: &mut String, skipped: &[&str], ctx: &Ctx) {
 /// a field name is not automatically an attribute name. Hyphens and a namespace
 /// colon are legal in JSX attribute names (`cite-id`, `xlink:href`), which is why
 /// only the rest is a failure.
-fn is_jsx_attr_name(name: &str) -> bool {
+pub(crate) fn is_jsx_attr_name(name: &str) -> bool {
     !name.is_empty()
         && name
             .chars()
@@ -445,8 +446,15 @@ fn is_jsx_attr_name(name: &str) -> bool {
 /// kept verbatim as a computed key instead of being rewritten. Solid's spread
 /// sets it as an attribute, so the compiled output and `renderer-html`'s
 /// `specs.tick="x"` agree, and JSON/AST keep the path untouched.
-fn render_dotted_attr(name: &str, value: &Value, out: &mut String, ctx: &Ctx) {
-    out.push_str(" {...{ ");
+///
+/// One helper for **both** paths (§6.3): the built-in elements in
+/// [`render_attrs`] and a component template's `{...attrs}` spread
+/// (`template::generate_spread_attrs`), so a field is spelled the same way
+/// whether a component claims the node or the fallback element renders it.
+///
+/// Emits no leading whitespace — the caller puts the spread where it belongs.
+pub(crate) fn render_dotted_attr(name: &str, value: &Value, out: &mut String, ctx: &Ctx) {
+    out.push_str("{...{ ");
     out.push_str(&json_string_literal(name));
     out.push_str(": ");
     out.push_str(&js_value(value, ctx));

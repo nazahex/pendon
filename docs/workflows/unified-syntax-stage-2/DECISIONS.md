@@ -621,6 +621,44 @@ they hide the failure they were meant to signal.
 
 ---
 
+## D-18 — A dotted field reaches a component as a one-key spread, never as a nested prop
+
+**Context.** A public field is a _path_ (§6.3, [ADR-0014](../../decisions/0014-field-model.md) rule 1):
+`specs.tick`, `bracket.bare`, an assigned `heading.anchor`. S2-3.4 fixed how a
+**built-in element** spells one — `{...{ "specs.tick": "x" }}`, because `a.b=` is
+a member expression in JSX — but the component path (`{...attrs}` in a
+`template`) still wrote the name verbatim and produced invalid JSX. The obvious
+alternative is to regroup the path into a nested prop,
+`specs={{ tick: "x" }}`, which reads better in a component (`props.specs.tick`).
+
+**Decision.** One spelling, both paths: the one-key spread, with the path kept as
+the computed key. `renderer-solid` has a single helper
+(`node::render_dotted_attr`) that `render_attrs` (elements) and
+`template::generate_spread_attrs` (components) both call.
+
+**Why the nested prop loses.**
+
+- **Three renderers must agree.** `renderer-html` writes `specs.tick="x"` (a legal
+  HTML attribute name) and `renderer-json`/`-ast` keep the path; regrouping only
+  in Solid makes the compiled output stop matching the HTML one.
+- **`render_attrs` is shared.** A dotted field can also reach a built-in element,
+  where an object-valued prop sets `[object Object]` — nesting would need two
+  rules for one field.
+- **The shape would be invented.** `bracket` / `paren` are slot qualifiers
+  (§6.1), not objects, and a regrouped `specs` prop can collide with a real one.
+- **The flat spelling is what everything else speaks.** `FieldMap` is a flat list
+  of dotted paths, and a template's explicit `{attrs.specs.tick}` already resolves
+  against that flat key — so the spread and the explicit binding agree.
+
+A template author who prefers nesting can shape it themselves
+(`specs={{ tick: {attrs.specs.tick} }}`); that is a template's call, not a
+renderer's.
+
+**Consequence.** A golden harness guard rejects any rendered `.jsx` with a dotted
+attribute name (`S2-3.6`), so the invalid spelling cannot be frozen again.
+
+---
+
 ## Objectives — answered at sign-off (2026-10-28)
 
 Each answer is binding for the phase that owns it; where an answer contradicts the
@@ -703,6 +741,7 @@ proposal, the answer wins and `SYNTAX.md` records the corrected rule.
 | D-15     | settled | 2026-10-28 — subsections in place, no renumbering                           |
 | D-16     | settled | owner policy 2026-10-28: clean total replacement, no compat                 |
 | D-17     | settled | 2026-10-28                                                                  |
+| D-18     | settled | 2026-10-28 — one-key spread on both paths; nested props rejected            |
 
 **Phase 0 exit met 2026-10-28.** Every decision above is `settled` and every
 objective below is answered. Baseline before Phase 1: `cargo test --workspace`

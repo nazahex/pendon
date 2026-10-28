@@ -310,6 +310,46 @@ mod tests {
         );
     }
 
+    /// §6.3 / S2-3.6: a **component** receives a dotted field exactly the way a
+    /// built-in element does. The `{...attrs}` spread used to write the path
+    /// verbatim — `<NoteAside specs.tick="…">` — which is not JSX at all, because
+    /// `a.b=` parses as a member expression.
+    #[test]
+    fn a_component_receives_a_dotted_field_as_a_one_key_spread() {
+        let mut events = vec![Event::StartNode(NodeKind::Document)];
+        events.extend(pendon_core::element_open("span"));
+        events.push(Event::Attribute {
+            name: "__layer".to_string(),
+            value: "marker".to_string(),
+        });
+        events.push(Event::Attribute {
+            name: "type".to_string(),
+            value: "aside".to_string(),
+        });
+        events.push(Event::Attribute {
+            name: "specs.tick".to_string(),
+            value: "listing-1".to_string(),
+        });
+        events.push(pendon_core::element_close("span"));
+        events.push(Event::EndNode(NodeKind::Document));
+
+        let hints = SolidRenderHints {
+            templates: vec![ComponentTemplate::new_layer(
+                "marker",
+                Vec::new(),
+                "<NoteAside {...attrs} />",
+                Vec::new(),
+            )],
+            ..SolidRenderHints::default()
+        };
+        let output = render_solid_with_hints(&events, Some(&hints));
+        assert!(
+            output.contains("<NoteAside {...{ \"specs.tick\": \"listing-1\" }} type=\"aside\" />"),
+            "output = {output}"
+        );
+        assert!(!output.contains("specs.tick=\""), "output = {output}");
+    }
+
     /// §11 rule 3: a `__`-prefixed key is an internal marker (`__plugin_kind`),
     /// never a real attribute. It must not reach the output even on a plain
     /// `Element` node, where the template path's `{...attrs}` filter does not
