@@ -1,4 +1,4 @@
-export const headings = [{"id":"slug-section","level":2,"text":"Section A"},{"id":"bare-section-b","level":2,"text":"Bare Section B"}];
+export const headings = [{"id":"slug-section","level":1,"subheadings":[{"id":"bare-section-b","level":2,"text":"Bare Section B"}],"text":"Section A"}];
 export default function PendonView() { return (<>
 <section>
 <p>§9.5: a decorator line above a heading decorates the <strong>section</strong>, not the
@@ -7,7 +7,7 @@ head above it would be redundant:
 </p>
 </section>
 <section id="slug-section" type="sectionA">
-<h2 class="lead" title="Head title" type="headingX">Section A</h2>
+<h1 class="lead" title="Head title" type="headingX">Section A</h1>
 <p>The section id is the first of <code>#sectionID</code> &gt; <code>slug-section</code> &gt; <code>[slug]</code> &gt; extras
 slug &gt; the slug of the title; the heading yields its own id to the section.
 </p>

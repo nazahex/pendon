@@ -17,8 +17,8 @@ use crate::fields::element_of_layer;
 /// name it next to the node's attributes.
 pub const INNER_TEXT: &str = "inner_text";
 
-/// Outline depth: a heading's `level`, a section's open-section count, `1`
-/// elsewhere.
+/// Outline depth: a heading's own `depth` attribute, a section's
+/// open-section count, `1` elsewhere.
 pub const DEPTH: &str = "depth";
 
 /// One element occurrence, as the extractor sees it.
@@ -46,7 +46,11 @@ impl ElementNode {
     pub fn available(&self) -> Vec<String> {
         let mut names: Vec<String> = self.attrs.iter().map(|(key, _)| key.clone()).collect();
         names.push(INNER_TEXT.to_string());
-        names.push(DEPTH.to_string());
+        // A heading carries `depth` as its own attribute (§7.4), so it is already
+        // listed in emission order; only the derived case appends it.
+        if !names.iter().any(|name| name == DEPTH) {
+            names.push(DEPTH.to_string());
+        }
         names
     }
 
@@ -101,9 +105,9 @@ pub fn scan(events: &[Event]) -> Vec<ElementNode> {
                 let depth = match element {
                     "heading" => attrs
                         .iter()
-                        .find(|(key, _)| key == "level")
+                        .find(|(key, _)| key == "depth")
                         .and_then(|(_, value)| value.parse::<u8>().ok())
-                        .map(|level| level.clamp(1, 6))
+                        .map(|depth| depth.clamp(1, 6))
                         .unwrap_or(1),
                     "section" => sections.max(1),
                     _ => 1,

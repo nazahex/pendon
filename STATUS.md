@@ -272,6 +272,27 @@ exactly one `export const headings` line each (no bytes removed), and
       rewritten, `26-cite-scope` / `27-bind-mdp` / `33-extract-scopes` (+ its
       side files) re-frozen, new `35-cite-fields` is the "simpler version"
       config. 769 tests. Next: `S2-4.6` (heading).
+      `S2-4.6` done — the heading reads `#[slug]("title")` through `parse_slots` +
+      `parse_extras` + `HEAD.assign` like the anchor and cite, so **the `#`
+      immediately before the bracket is the tag** (D-11): `##[slug]` is depth 1,
+      `######[]()` depth 5, and a run with no bracket keeps its whole length
+      (`## Title` stays depth 2). `level` → `depth`, `raw_title` is **gone** (the
+      visible text is the node's content, `inner_text`; the head's quoted paren is
+      `title`), the extras tick/quote still fill in for a missing head slot
+      (§6.2's `#id` > `[slug]` > extras slug > auto slug, via
+      `Specs::dom_fields`' element table), and a plain heading now carries an
+      anchor `id`. Cascade: the core/`plugin-markdown` emit `depth` and every
+      `level` reader moved — `renderer-solid`'s `<h*>` (which skips `depth` and
+      `slug`), `renderer-html`'s two writers, `plugin-number`'s natural depth,
+      `plugin-section`'s level test, `plugin-extract`'s heading preset
+      (`depth`/`title`; `depth` is no longer appended twice) and
+      `renderer-solid`'s outline. Fixtures: `06`/`22`/`27`/`28`/`30` re-frozen
+      (depth renumbered, `id`/`slug` now published), `21` byte-identical thanks to
+      the tick fallback, `31` re-sourced (`##[slug]` → `###[slug]`,
+      `##("Title")` → `###[]("Title")` — a lone paren is not a head any more),
+      `32` gained a headed `Foo Bar` because a headless row is now only
+      `depth`+`inner_text`. §7.4 rewritten, `plugin-heading` README and the
+      inventory's heading table/preset migrated. 776 tests.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden

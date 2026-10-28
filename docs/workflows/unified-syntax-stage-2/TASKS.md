@@ -668,7 +668,7 @@ README. If an element has nothing to delete, say so in the commit message.
       directive _reject_ a decorator, the line binds to the first block of the
       body — the invariant the test pins is the one that must survive that change.
       §10.3 gained one sentence stating that `type` is the head's, not extras'.
-- [ ] **S2-4.6 — Heading.** Dep: S2-4.2. `§7.4`
+- [x] **S2-4.6 — Heading.** Dep: S2-4.2. `§7.4`
       Do: `#` tag (the `#` immediately before `[` is the tag; the rest is depth,
       so today's `##[…]` becomes depth 1 — state this in §7.4);
       `bracket.bare→slug`, `paren.quote→title`; rename `level`→`depth`,
@@ -680,6 +680,23 @@ README. If an element has nothing to delete, say so in the commit message.
       G: heading fixture incl. `######[]()`, numbered-via-`number` replacement.
       Exit: preset assignment = `slug`, `depth`, `inner_text`; `plugin-heading`
       has no numbering code left.
+      **Done 2026-10-28.** The head is `parse_slots` + `parse_extras` +
+      `HEAD.assign` (D-11 tag = the `#` before the bracket, so `##[slug]` is
+      depth 1 and `######[]()` depth 5; no bracket → the whole run is the depth).
+      `level` is `depth`, the text-derived `raw_title` is gone (that is
+      `inner_text`, the node's content) and the head's `("title")` is `title`;
+      `slug` is `[slug]` > extras `specs.tick` > a slug of the text, `id` is
+      `#id` > `slug` (§6.2, read through `Specs::dom_fields`' element table so a
+      `field.specs.*` move stays the author's). Preset assignment is `slug` /
+      `title` (the exit box's `depth`/`inner_text` are fields, not slot-derived —
+      §7.4 says so) and the crate holds no numbering code. Cascade: `level` →
+      `depth` in `plugin-markdown`, `renderer-html` (×2), `renderer-solid`
+      (`<h*>`, which now skips `depth`/`slug`, plus the outline), `plugin-number`
+      (`natural_depth`), `plugin-section` and `plugin-extract` (heading preset →
+      `depth`, `title`; `depth` is not appended twice any more). Fixtures `06`,
+      `22`, `27`, `28`, `30`, `31`, `32` re-frozen; `21` unchanged (the extras
+      tick still becomes the slug); `31` re-sourced to keep its prose depths.
+      776 tests.
 - [ ] **S2-4.7 — Image.** Dep: S2-4.2. `§7.1`
       Do: `!` tag; `bracket.bare→alt`, `paren.bare→src`; delete the marker-
       modifier run (`?`, `~`, `w<digits>`, `h<digits>`) and the `!!` figure

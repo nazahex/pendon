@@ -12,7 +12,7 @@ format = "solid"
 type = ["*"]
 name = "HeadingDefault"
 imports = "import { HeadingDefault } from '@comp/Base'"
-template = '<HeadingDefault level="{attrs.level}" {...attrs}>{children}</HeadingDefault>'
+template = '<HeadingDefault depth="{attrs.depth}" {...attrs}>{children}</HeadingDefault>'
 
 # R.2: Special handling for components of type 'TypeA'
 [[task.heading.custom]]

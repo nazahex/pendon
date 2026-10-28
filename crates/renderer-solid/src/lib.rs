@@ -611,7 +611,7 @@ mod tests {
             Event::StartNode(NodeKind::Document),
             Event::StartNode(NodeKind::Heading),
             Event::Attribute {
-                name: "level".to_string(),
+                name: "depth".to_string(),
                 value: "2".to_string(),
             },
             Event::Attribute {
@@ -619,8 +619,8 @@ mod tests {
                 value: format!("{}{}", pendon_core::JSON_ATTR_PREFIX, "[\"1\",\"a\"]"),
             },
             Event::Attribute {
-                name: "raw_title".to_string(),
-                value: "Title".to_string(),
+                name: "slug".to_string(),
+                value: "title".to_string(),
             },
             Event::Text("Title".to_string()),
             Event::EndNode(NodeKind::Heading),
@@ -632,6 +632,6 @@ mod tests {
             output.contains("<h2 number={[\"1\", \"a\"]}>"),
             "output = {output}"
         );
-        assert!(!output.contains("raw_title"), "output = {output}");
+        assert!(!output.contains("slug=\"title\""), "output = {output}");
     }
 }

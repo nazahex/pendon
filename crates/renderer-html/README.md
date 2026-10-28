@@ -34,7 +34,7 @@ structure the AST renderer produces.
   writers — `render_attrs_except` and `Link`'s tail — read the node's
   **projection** (`pendon_extra::project(node, None)`, ADR-0014 rule 2), which
   never contains one, so they have no prefix test of their own. An element that
-  writes a specific field itself (`href`/`title` on `Link`, `level`/`id` on
+  writes a specific field itself (`href`/`title` on `Link`, `depth`/`id` on
   `Heading`, `start` on a list) still reads that field from the node; Phase 4
   moves each of those to the projection as the element's preset lands.
 - Attribute **names** are public field paths: `specs.class`/`specs.id`/`specs.style`

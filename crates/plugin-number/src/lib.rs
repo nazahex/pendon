@@ -244,16 +244,17 @@ fn lower_selector(selector: &Selector) -> Selector {
     }
 }
 
-/// The depth an element has without a `%%` marker: a heading's `level`, 1 for
-/// everything else (§7.2: "elements without a natural depth are depth 1").
+/// The depth an element has without a `%%` marker: a heading's own `depth`
+/// (§7.4), 1 for everything else (§7.2: "elements without a natural depth are
+/// depth 1").
 fn natural_depth(kind: &NodeKind, attrs: &BTreeMap<String, String>) -> u8 {
     if !matches!(kind, NodeKind::Heading) {
         return 1;
     }
     attrs
-        .get("level")
-        .and_then(|level| level.parse::<u8>().ok())
-        .map(|level| level.clamp(1, 6))
+        .get("depth")
+        .and_then(|depth| depth.parse::<u8>().ok())
+        .map(|depth| depth.clamp(1, 6))
         .unwrap_or(1)
 }
 
@@ -579,7 +580,7 @@ mod tests {
                 value: "heading".to_string(),
             },
             Event::Attribute {
-                name: "level".to_string(),
+                name: "depth".to_string(),
                 value: level.to_string(),
             },
         ];

@@ -3,23 +3,28 @@
 Heading parsing and custom-component plugin for Pendon.
 
 `pendon-plugin-heading` turns a heading line into a structured `Heading` node with
-an id, extras attributes and a `raw_title`, and routes it to a §11 component. It
+its depth, slug, title and extras attributes, and routes it to a §11 component. It
 runs **before** `markdown` (§7.4 of [`SYNTAX.md`](../../docs/spec/SYNTAX.md));
 numbering is not part of it any more — [`plugin-number`](../plugin-number/README.md)
 owns `attrs.number` (ADR-0010).
 
 ## What This Plugin Does
 
-- Extracts custom IDs from the `[id]` prefix syntax in heading text
-- Parses extra classes, IDs, key-value attributes and flags from a `{…}` extras head
-- Emits the §11 layer tag `__layer = "heading"` in both modes
-- Auto-generates URL-safe slugs as fallback IDs when no custom ID is provided
-- Supports custom Solid components with full attribute access, including `raw_title`
-- Strips all extras syntax from visible heading text in both standard and custom modes
+- Reads the §7.4 head `#[slug]("title")` and the §11 `{…}` / `@@type{…}` extras
+  head that follows it, in one pass over the raw heading line
+- Publishes `depth`: the `#` run **minus the one hash the tag spends** (D-11)
+- Publishes `slug` (the head's `[slug]`, else the extras `` `tick` ``, else a slug
+  of `inner_text`), `title` (the head's `("title")`) and `id` (§6.2's chain
+  `#id` > `[slug]` > extras tick > auto slug)
+- Emits the §11 layer tag `__layer = "heading"` in both modes, so
+  `plugin-number` and `plugin-extract` can tell the element kind from the stream
+- Strips the head from the visible text in both standard and custom modes; the
+  visible text is the node's **content** (`inner_text`), never an attribute
+- Routes the node to a §11 component through `@@type{…}`
 - Declares its slot contract and preset assignment as data (`pub const HEAD`,
   `crates/extra`'s `ElementHead`) — the single copy of §7.4's
-  `bracket.bare`/`paren.quote` mapping; `depth` and `inner_text` are fields of the
-  element but are not slot-derived, so they are not in the table
+  `bracket.bare`/`paren.quote` mapping; `depth` and `inner_text` are fields of
+  the element but are not slot-derived, so they are not in the table
 
 ## Recommended Plugin Order
 
@@ -52,47 +57,61 @@ style = ["decimal", "decimal", "lower-alpha"]
 `[[task.heading.number]]` belongs to `plugin-number`, not to this crate; see its
 README for styles, depth and the `%%numberType` marker.
 
-## Heading Extras Syntax
+## The Heading Head
 
-A heading head touches the `#` run; the extras head is a single `{…}` block
-further items may follow inside it.
-
-### Custom ID
-
-```md
-##[introduction] Introduction to the Topic
+```ebnf
+heading = "#"(1..6) [ "[" bracket "]" [ "(" paren ")" ] ] extras? text
 ```
 
-Produces `<h2 id="introduction">` (or custom component with `id="introduction"`).
+The head is one unit that touches the `#` run (§4.1). **The `#` immediately before
+the bracket is the tag** (D-11), so the rest of the run is the depth:
 
-### Classes and ID in the extras head
+| source                 | depth | rendered (standard mode)   |
+| ---------------------- | ----- | -------------------------- |
+| `## Title`             | 2     | `<h2 id="title">`          |
+| `#[slug] Title`        | 1     | `<h1 id="slug">`           |
+| `###[slug]("T") Title` | 2     | `<h2 id="slug" title="T">` |
+| `######[]() Title`     | 5     | `<h5 id="title">`          |
 
-```md
-##{.hero, .featured} Featured Section
+A run with no bracket claims nothing and keeps its whole length; a claimed head
+never goes below depth 1. `("Title")` written without a bracket is **text**, not a
+head (§4.3). The extras head follows the slots adjacently, and the whitespace
+between the head and the text belongs to the head (it is not part of the text).
 
-##[intro]{.hero, .dark} Introduction
-```
-
-The first heading has `class="hero featured"`; the second has `id="intro"` and
-`class="hero dark"` (§6.2: the `[slug]` head beats a positional slug).
-
-### Key-Value Attributes
-
-```md
-##[intro]{data-section: "overview", --accent: "blue"} Overview
-```
-
-Produces heading with `data-section="overview"` and `style="--accent: blue;"`.
-
-### Full Combined Syntax
+### Slug and title
 
 ```md
-##[intro]("Heading X"){.hero, .dark, data-section: "overview", --accent: "blue"} Introduction
+##[introduction]("Heading X")@@type{`slug-extras`, .hero} Introduction
 ```
 
-`[slug]`, `("title")` and the extras head are all optional and must be adjacent,
-in that order. The retired `[.class]` bracket and `{key: value}` blocks written
-apart from the head are literal text.
+`slug="intro"`-style fields come from the preset: `bracket.bare` → `slug`,
+`paren.quote` → `title` (§6.5). The extras tick loses to the head's `[slug]` and
+is reported (§6.2). With no `[slug]`, an extras tick at its default path
+`specs.tick` **is** the fallback slug — §6.2's chain is `#id` > `[slug]` > extras
+tick > a slug of the text:
+
+```md
+##@@headingX{`slug-extras`, .fancy} Extras tick
+```
+
+`<h2 class="fancy" id="slug-extras" type="headingX">Extras tick</h2>` — no
+bracket, so no tag: the depth stays 2.
+
+### Classes, id, style and props
+
+```md
+##[intro]{.hero, .dark, #explicit, --accent: "blue", data-section: "overview"} Introduction
+```
+
+`<h1 class="hero dark" data-section="overview" id="explicit" style="--accent: blue">`:
+`class` accumulates (§6.4), an extras `#id` beats the head's slug (§6.2), `--x`
+merges into `style`, and any other pair is an attribute of its own. A bare item is
+an attribute flag (§6.3), not an attribute with an empty value.
+
+### Removed forms
+
+The `[.class]` bracket and a `{key: value}` block written apart from the head are
+literal text (§14).
 
 ## Numbering
 
@@ -128,57 +147,65 @@ coming from the same module are merged into a single `import` statement.
 
 ### Available Template Attributes
 
-| Attribute           | Description                                                                  |
-| :------------------ | :--------------------------------------------------------------------------- |
-| `{attrs.level}`     | Heading level as string (`"2"`, `"3"`, etc.)                                 |
-| `{attrs.id}`        | Custom ID from `[id]` syntax                                                 |
-| `{attrs.slug}`      | Auto-generated slug (only when no custom ID is provided)                     |
-| `{attrs.number}`    | Written by `plugin-number` when a `number` block selects the heading (array) |
-| `{attrs.raw_title}` | Heading text after the head, extras stripped                                 |
-| `{attrs.class}`     | Space-separated class list from the extras head                              |
-| `{attrs.data-*}`    | Any extra data attributes from `{key: val}`                                  |
-| `{attrs.style}`     | Inline style string from `{--var: val}`                                      |
-| `{children}`        | Heading inline content (the head stripped, nothing prepended)                |
+| Attribute        | Description                                                                  |
+| :--------------- | :--------------------------------------------------------------------------- |
+| `{attrs.depth}`  | The depth as a string (`"1"`…`"6"`, §7.4)                                    |
+| `{attrs.id}`     | extras `#id` > `[slug]` > extras tick > auto slug (§6.2)                     |
+| `{attrs.slug}`   | The same fallback chain, always slug-shaped                                  |
+| `{attrs.title}`  | The head's `("title")`                                                       |
+| `{attrs.number}` | Written by `plugin-number` when a `number` block selects the heading (array) |
+| `{attrs.class}`  | Space-separated class list from the extras head                              |
+| `{attrs.type}`   | The `@@type` marker (§11 rule 3)                                             |
+| `{attrs.*}`      | Any other extras pair, under its own name                                    |
+| `{attrs.style}`  | Inline style string from `{--var: val}`                                      |
+| `{children}`     | The visible heading text (the head stripped, nothing prepended)              |
 
 ### Standard Mode Behavior
 
-Without a custom component the plugin emits a `Heading` node with `level`, the
-optional `id` (or fallback `slug`), `raw_title` and the extras attributes
-(§6.4). The heading text is the node's content; nothing is prepended to it.
+Without a custom component the plugin emits a `Heading` node with `depth`, `id`,
+`slug`, `title` (when the head has one) and the extras attributes and flags
+(§6.3). The built-in `<hN>` reads `depth` and prints every other attribute except
+`slug`, which is a template-only read (§11 rule 3). The heading text is the
+node's content; nothing is prepended to it.
 
 ### Specs (§6.1, D-5)
 
 An entry renames the §6.1 positional slots through its `field.*` keys —
-`field.specs.tick` / `field.specs.quote` for a `` `slug` `` / `"title"` item, and
+`field.specs.tick` / `field.specs.quote` for a tick / quote item, and
 `field.specs.class` / `.id` / `.style` for a `.x` / `#x` / `style:` item. An
-entry that configures none keeps the §6.1 default paths;
-once it configures one the preset is void as a whole (D-7). An assignment also
+entry that configures none keeps the §6.1 default paths; once it assigns a
+`field.<slot>.<kind>` row the preset is void as a whole (D-7), a `field.specs.*`
+key alone voids nothing. An assignment also
 **moves** the position: the assigned path is the author's own public field,
 which this element neither reads nor renames (`Specs::element_path` answers
 `None`, §6.1). The table is in
 [`docs/spec/SYNTAX.md` §6.1](../../docs/spec/SYNTAX.md).
 
-Only the **extras** head is affected: the heading's own `[slug]` bracket (§7.4
-`id`) and `("title")` parentheses are fixed slots and are not renamed.
+Only the **extras** head is affected: the `[slug]` bracket and `("title")`
+parentheses are §7.4's fixed slots and are not renamed. The element reads the
+`specs.tick` and `specs.quote` positions into `slug` / `title` only while the
+matched entry leaves them on their default paths — move one and it becomes a field
+of the author's own (D-7).
 
 ## Behavioral Notes
 
 - This plugin parses heading lines itself — it must run **before** `plugin-markdown`
-- Extras syntax (the `[id]` / `("title")` head and the `{…}` extras head) is stripped from visible text in all modes
-- The head must be adjacent: `## Title {.x}`, `##[id]{.class}` and `{key: val}` written apart are literal text
+- The head (`[slug]`, `("title")`, `{…}` / `@@type{…}`) is stripped from the visible text in all modes
+- The head must be adjacent: `## Title {.x}` and `{key: val}` written apart are literal text
 - Unquoted values in `{key: val}` are accepted (numbers, booleans stored as strings)
-- Slug generation uses lowercase alphanumeric characters and hyphens only
+- Slug generation lowercases and collapses every run of non-alphanumerics into one `-`
 - §9.5: with `section_owns_id = true` no `id`/`slug` is emitted (the section owns it)
-- Empty headings (after extras stripping) still receive an ID/slug
+- A heading whose text is empty still gets a slug from the head, never from nothing
 
 ## Scope and Limitations
 
-- Extras parsing is positional: `[slug]`, then `("title")`, then the `{…}` extras head
+- The head is positional: `[slug]`, then `("title")`, then the `{…}` extras head
+- A `("title")` needs its bracket; on its own it is text (§4.3)
 - Punctuation that does not start `(`, `{` or `@@` right after the head is literal text
 - Nested braces inside `{key: val}` are not supported
 - Comma-separated values inside attribute values are not supported (commas delimit pairs)
 - The plugin does not generate anchor links or permalink icons — use a custom component for those patterns
-- `raw_title` does not include inline formatting markers — it contains the plain text content after extras removal
+- `title` is the head's string, not the text: inline markup stays in `{children}`
 
 ## License
 

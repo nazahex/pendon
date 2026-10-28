@@ -59,19 +59,18 @@ pub fn render_node(v: &Value, out: &mut String, ctx: &Ctx) {
             "Heading" => {
                 let level = v
                     .get("attrs")
-                    .and_then(|a| a.get("level"))
+                    .and_then(|a| a.get("depth"))
                     .and_then(|l| l.as_str())
                     .unwrap_or("1");
                 out.push('<');
                 out.push('h');
                 out.push_str(level);
-                // `raw_title` / `slug` are template-only reads (§11 rule 3): the
-                // built-in `<h*>` fallback keeps the authored extras, including
-                // the `type` marker, but none of those. `number` is **not** one
-                // of them any more: `plugin-number` writes it for every element
-                // (ADR-0010), so the fallback prints it like any other attribute
-                // (`number={["1","a"]}`).
-                render_attrs(v, out, &["level", "raw_title", "slug"], ctx);
+                // `slug` is a template-only read (§11 rule 3): the built-in `<h*>`
+                // fallback keeps the authored extras, including the `type` marker,
+                // but not it. `number` is **not** one of them any more:
+                // `plugin-number` writes it for every element (ADR-0010), so the
+                // fallback prints it like any other attribute (`number={["1","a"]}`).
+                render_attrs(v, out, &["depth", "slug"], ctx);
                 out.push('>');
                 render_text_or_children(v, out, ctx);
                 out.push_str("</h");

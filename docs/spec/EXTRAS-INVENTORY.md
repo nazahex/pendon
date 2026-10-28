@@ -33,7 +33,7 @@ Two names exist on **every** extractable element and are not repeated per table:
 | field        | type   | meaning                                                              |
 | ------------ | ------ | -------------------------------------------------------------------- |
 | `inner_text` | text   | the node's text content, descendants concatenated, trimmed           |
-| `depth`      | number | outline nesting: a heading's `level`, a section's open-section count |
+| `depth`      | number | outline nesting: the heading's own, a section's open count, else `1` |
 
 Rules that hold for all rows:
 
@@ -122,18 +122,16 @@ Source: §10.2/§10.4 · `crates/plugin-directive` · goldens `15`/`16`.
 
 Source: §7.4/§11 · `crates/plugin-heading` · golden `06-heading`.
 
-| field        | type     | recommended | notes                                                   |
-| ------------ | -------- | ----------- | ------------------------------------------------------- |
-| `level`      | number   | yes         | `1..6`, the `#` run                                     |
-| `id`         | string   | yes         | section id > `#id` > `[slug]` > extras slug (§6.2)      |
-| `slug`       | string   | yes         | the heading's own slug (`[slug]` head or auto-slug)     |
-| `raw_title`  | string   | yes         | the head's `("title")`, before markdown                 |
-| `number`     | string[] | yes         | written by `plugin-number` (ADR-0010); structured array |
-| `type`       | string   | yes         | the `@@type` marker                                     |
-| `class`      | string   | no          | extras only                                             |
-| `title`      | string   | no          | extras `title:` loses to the head (§6.2)                |
-| `inner_text` | text     | yes         | the visible heading text                                |
-| `depth`      | number   | no          | equals `level` for a heading                            |
+| field        | type     | recommended | notes                                                     |
+| ------------ | -------- | ----------- | --------------------------------------------------------- |
+| `depth`      | number   | yes         | `1..6`: the `#` run, minus the `#` the head's tag spends  |
+| `id`         | string   | yes         | section id > `#id` > `[slug]` > extras slug (§6.2)        |
+| `slug`       | string   | yes         | the heading's own slug (`[slug]` head, extras tick, auto) |
+| `title`      | string   | yes         | the head's `("title")` (or the extras `"…"` fallback)     |
+| `number`     | string[] | yes         | written by `plugin-number` (ADR-0010); structured array   |
+| `type`       | string   | yes         | the `@@type` marker                                       |
+| `class`      | string   | no          | extras only                                               |
+| `inner_text` | text     | yes         | the visible heading text, never an attribute              |
 
 `number` is **reserved** once `plugin-number` runs (D-10): an extras
 `number: "auto"` is a diagnostic there, and the only `number` an extract sees is
@@ -228,18 +226,18 @@ extract surface until a table layer owns them.
 `recommended = true` extracts exactly these names, in this order, intersect
 `only`, minus `omit`:
 
-| element      | preset                                                             |
-| ------------ | ------------------------------------------------------------------ |
-| `anchor`     | `href`, `id`, `title`, `type`, `inner_text`                        |
-| `blockquote` | `type`, `id`, `class`, `inner_text`                                |
-| `cite`       | `reference_id`, `locator`, `citation_number`, `cite-id`, `type`    |
-| `directive`  | `type`, `id`, `level`, `summary`, `inner_text`                     |
-| `heading`    | `level`, `id`, `slug`, `raw_title`, `number`, `type`, `inner_text` |
-| `image`      | `src`, `alt`, `width`, `height`, `type`, `id`                      |
-| `list`       | `type`, `id`, `start`, `inner_text`                                |
-| `marker`     | `type`, `slug`, `id`, `title`, `inner_text`                        |
-| `section`    | `id`, `type`, `class`, `depth`                                     |
-| `table`      | `type`, `id`, `caption`                                            |
+| element      | preset                                                          |
+| ------------ | --------------------------------------------------------------- |
+| `anchor`     | `href`, `id`, `title`, `type`, `inner_text`                     |
+| `blockquote` | `type`, `id`, `class`, `inner_text`                             |
+| `cite`       | `reference_id`, `locator`, `citation_number`, `cite-id`, `type` |
+| `directive`  | `type`, `id`, `level`, `summary`, `inner_text`                  |
+| `heading`    | `depth`, `id`, `slug`, `title`, `number`, `type`, `inner_text`  |
+| `image`      | `src`, `alt`, `width`, `height`, `type`, `id`                   |
+| `list`       | `type`, `id`, `start`, `inner_text`                             |
+| `marker`     | `type`, `slug`, `id`, `title`, `inner_text`                     |
+| `section`    | `id`, `type`, `class`, `depth`                                  |
+| `table`      | `type`, `id`, `caption`                                         |
 
 A field in the preset that an element does not carry in a given instance is
 dropped from that row (§0), so one preset serves a whole document.

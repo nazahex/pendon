@@ -177,6 +177,13 @@ and duplicate the symbols.
 - **Inline directive head groups (`::note[slug]("level") …`)**. Inside `.md` the
   bracket/paren groups wear the inline link scopes instead of the `#positionalGroup`
   ones; the `.mdp` grammar scopes them correctly.
+- **Heading heads are scoped leniently.** `#headingN` scopes any run of
+  `[x]` / `(x)` groups touching the `#` run, and the breadcrumb depth is the `#`
+  count. §7.4 is stricter: one bracket plus _its_ paren (a lone `("title")` is
+  text, §4.3), and a claimed head spends one `#` on the tag (D-11), so
+  `###[slug]("Title")` is depth **2** although it scopes as `markup.heading.3`.
+  Colouring never depends on the depth, so this is cosmetic — the scanner reports
+  what the `#` run says.
 - **URLs** nest parentheses two levels deep; deeper nesting is not matched.
 - **Image container prefixes.** `p!…` / `d!…` only ever tag the marker from its
   `!`, so the prefix letter stays plain.

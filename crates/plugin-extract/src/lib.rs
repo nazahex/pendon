@@ -243,12 +243,12 @@ mod tests {
         Event::Text(chunk.to_string())
     }
 
-    /// A heading node: `__layer`, `level`, `id`, a `__number` and its text.
-    fn heading(level: &str, id: &str, ty: Option<&str>) -> Vec<Event> {
+    /// A heading node: `__layer`, `depth`, `id`, a `__number` and its text.
+    fn heading(depth: &str, id: &str, ty: Option<&str>) -> Vec<Event> {
         let mut events = vec![
             Event::StartNode(NodeKind::Heading),
             attribute("__layer", "heading"),
-            attribute("level", level),
+            attribute("depth", depth),
             attribute("id", id),
             attribute("__number", "[\"1\"]"),
         ];
@@ -304,7 +304,7 @@ mod tests {
         let events = vec![
             Event::StartNode(NodeKind::Heading),
             attribute("__layer", "heading"),
-            attribute("level", "1"),
+            attribute("depth", "1"),
             text("A "),
             Event::StartNode(NodeKind::Strong),
             text("bold"),
@@ -359,11 +359,10 @@ mod tests {
         assert_eq!(
             file.rows[0],
             serde_json::json!({
-                "level": "2",
+                "depth": 2,
                 "id": "intro",
                 "type": "HeadingA",
                 "inner_text": "Intro",
-                "depth": 2,
             })
         );
     }
@@ -447,10 +446,10 @@ mod tests {
         let mut first = block("heading", &[], &["out/x.json"], &["json"], None);
         first.only = vec!["id".to_string()];
         let mut second = block("heading", &[], &["out/x.json"], &["json"], None);
-        second.only = vec!["level".to_string()];
+        second.only = vec!["depth".to_string()];
         let output = run(&events, &options(vec![first, second]));
         assert_eq!(output.files.len(), 1);
-        assert_eq!(output.files[0].rows[0], serde_json::json!({"level": "2"}));
+        assert_eq!(output.files[0].rows[0], serde_json::json!({"depth": 2}));
     }
 
     #[test]
@@ -507,12 +506,12 @@ mod tests {
         let mut first = block("heading", &[], &[], &[], Some("headings"));
         first.only = vec!["id".to_string()];
         let mut second = block("heading", &[], &[], &[], Some("headings"));
-        second.only = vec!["level".to_string()];
+        second.only = vec!["depth".to_string()];
         let output = run(&events, &options(vec![first, second]));
         assert_eq!(output.exports.len(), 1);
         assert_eq!(
             output.exports[0].1,
-            serde_json::json!([{ "level": "2" }]),
+            serde_json::json!([{ "depth": 2 }]),
             "the later block's selection wins"
         );
     }

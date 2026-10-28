@@ -365,7 +365,7 @@ mod tests {
             Event::StartNode(NodeKind::Document),
             Event::StartNode(NodeKind::Heading),
             Event::Attribute {
-                name: "level".to_string(),
+                name: "depth".to_string(),
                 value: "2".to_string(),
             },
             Event::Attribute {

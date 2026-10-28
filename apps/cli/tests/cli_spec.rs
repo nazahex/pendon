@@ -214,7 +214,7 @@ fn ast_format_with_markdown_plugin_heading() {
 }
 
 #[test]
-fn ast_format_heading_has_level_attr() {
+fn ast_format_heading_has_depth_attr() {
     let mut cmd = cargo_bin_cmd!("pendon");
     let input = "## Subtitle\n";
 
@@ -227,7 +227,7 @@ fn ast_format_heading_has_level_attr() {
         .success()
         .stdout(
             predicate::str::contains("\"type\":\"Heading\"")
-                .and(predicate::str::contains("\"level\":\"2\"")),
+                .and(predicate::str::contains("\"depth\":\"2\"")),
         );
 }
 

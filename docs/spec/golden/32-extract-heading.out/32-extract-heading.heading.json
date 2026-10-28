@@ -1,36 +1,27 @@
 [
   {
     "depth": 1,
-    "inner_text": "Lorem Isum",
-    "level": "1",
-    "raw_title": "Lorem Isum"
+    "inner_text": "Lorem Isum"
   },
   {
     "depth": 2,
     "inner_text": "Foo Bar",
-    "level": "2",
-    "raw_title": "Foo Bar"
+    "title": "Foo Bar"
   },
   {
     "depth": 2,
-    "inner_text": "Bar Foo",
-    "level": "2",
-    "raw_title": "Bar Foo"
+    "inner_text": "Bar Foo"
   },
   {
     "depth": 1,
-    "inner_text": "Markdown Comment",
-    "level": "1"
+    "inner_text": "Markdown Comment"
   },
   {
     "depth": 1,
-    "inner_text": "Hiz",
-    "level": "1",
-    "raw_title": "Hiz"
+    "inner_text": "Hiz"
   },
   {
     "depth": 1,
-    "inner_text": "Bind Comment",
-    "level": "1"
+    "inner_text": "Bind Comment"
   }
 ]

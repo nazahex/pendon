@@ -278,10 +278,10 @@ mod tests {
     }
 
     /// The core parser emits the `#` run as its own chunk, so the marker has to
-    /// be consumed for every level: only `#` used to be recognised, which leaked
+    /// be consumed for every depth: only `#` used to be recognised, which leaked
     /// the `##` of every deeper heading into the rendered text.
     #[test]
-    fn heading_marker_is_stripped_for_every_level() {
+    fn heading_marker_is_stripped_for_every_depth() {
         let cases = [
             ("# One\n", "One"),
             ("## Two\n", "Two"),
@@ -290,20 +290,20 @@ mod tests {
         for (source, expected) in cases {
             let events = run_markdown(source, MarkdownOptions::default());
 
-            let levels: Vec<&String> = events
+            let depths: Vec<&String> = events
                 .iter()
                 .filter_map(|event| match event {
-                    Event::Attribute { name, value } if name == "level" => Some(value),
+                    Event::Attribute { name, value } if name == "depth" => Some(value),
                     _ => None,
                 })
                 .collect();
             assert_eq!(
-                levels.len(),
+                depths.len(),
                 1,
-                "exactly one level attribute for {source:?}: {levels:?}"
+                "exactly one depth attribute for {source:?}: {depths:?}"
             );
             let hashes = source.chars().take_while(|&c| c == '#').count().to_string();
-            assert_eq!(levels[0], &hashes, "level attribute for {source:?}");
+            assert_eq!(depths[0], &hashes, "depth attribute for {source:?}");
 
             let text = heading_text(&events).expect("heading text");
             assert_eq!(text.trim(), expected, "marker leaked for {source:?}");

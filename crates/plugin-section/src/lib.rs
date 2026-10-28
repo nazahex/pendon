@@ -490,12 +490,12 @@ fn heading_chain(raw: &str, level: usize, options: &SectionOptions) -> HeadInfo 
     }
 }
 
-/// The level attribute of the heading that starts at `start` (§7.4). Defaults to
-/// 1 when the attribute is missing.
+/// The `depth` attribute of the heading that starts at `start` (§7.4). Defaults
+/// to 1 when the attribute is missing.
 fn heading_level(events: &[Event], start: usize) -> usize {
     for event in events.iter().skip(start + 1) {
         match event {
-            Event::Attribute { name, value } if name == "level" => {
+            Event::Attribute { name, value } if name == "depth" => {
                 return value.parse().unwrap_or(1);
             }
             Event::Attribute { .. } | Event::AttributeFlag { .. } => continue,

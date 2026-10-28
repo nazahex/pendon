@@ -47,7 +47,7 @@ fn render_node(v: &Value, out: &mut String) {
                 out.push_str("</blockquote>\n");
             }
             "Heading" => {
-                let level = attr_str(v, "level").unwrap_or("1");
+                let level = attr_str(v, "depth").unwrap_or("1");
                 out.push('<');
                 out.push('h');
                 out.push_str(level);

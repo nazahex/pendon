@@ -1,7 +1,8 @@
 use pendon_core::{Event, NodeKind};
 use pendon_extra::{
-    issue_event, scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasIssue, FieldName,
-    Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag, SpecsKey,
+    issue_event, parse_extras, parse_slots, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
+    ExtrasIssue, ExtrasMatch, FieldName, Preset, Slot, SlotContract, SlotKind, SlotMatch, SlotPos,
+    SlotTag, SpecsKey,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use regex::Regex;
@@ -25,12 +26,19 @@ const SLOTS: &[SlotPos] = &[
 /// §7.4's preset assignment: `bracket.bare` → `slug`, `paren.quote` → `title`.
 ///
 /// `depth` and `inner_text` are part of the element's *fields* but not of this
-/// table: neither comes from a slot (`depth` is the heading level, `inner_text`
+/// table: neither comes from a slot (`depth` is the §7.4 `#` run, `inner_text`
 /// the Markdown body), so there is no position to assign.
 const PRESET: &[Preset] = &[
     Preset::new(Slot::Bracket, SlotKind::Bare, FieldName::new("slug")),
     Preset::new(Slot::Paren, SlotKind::Quote, FieldName::new("title")),
 ];
+
+/// §6.1/§6.2: the `specs.*` positions heading reads into a field of its own — the
+/// extras tick is the id chain's third link (`#id` > head slug > extras slug) and
+/// the extras quote is the fallback of the head's `("title")`. Both count only
+/// while the matched entry keeps the position on its default path; a
+/// `field.specs.<k>` assignment moves it out of reach (`Specs::element_path`).
+const ELEMENT_READS: &[(SpecsKey, &str)] = &[(SpecsKey::Tick, "slug"), (SpecsKey::Quote, "title")];
 
 /// The tag that claims heading's head (D-11), the positions it claims, and their
 /// fallback-to-preset assignment (§6.1, §6.5, D-7).
@@ -66,196 +74,254 @@ pub struct HeadingCustomNode {
 
 // --- Extra Attributes Parsing ---
 
-/// The heading head: `[slug]`, `("title")` and the §11 `{…}` / `@@type{…}`
-/// extras (§7.4).
+/// The heading head: the `#[slug …](… "title" …)` slots and the §11 `{…}` /
+/// `@@type{…}` extras attached to them (§7.4).
+#[derive(Debug, Default)]
 struct HeadingHead {
-    /// Element id. `#id` > `[slug]` > extras slug (§6.2).
-    id: Option<String>,
-    /// class, head props and resolved extras: `head wins` (§6.2).
+    /// `bracket.bare` — or wherever the preset's row moved (§6.1, §6.5). The
+    /// heading's public id field; it falls back to a slug of `inner_text`.
+    slug: Option<String>,
+    /// `paren.quote`: the heading's `title` attribute.
+    title: Option<String>,
+    /// Every other claimed position, under its (possibly moved) field name: a
+    /// position the preset does not name keeps its slot-qualified path
+    /// (`bracket.tick`, `paren.bare`, …, D-7).
+    values: BTreeMap<String, String>,
+    /// `class` / `id` / `style` and the extras head's own fields: head wins
+    /// (§6.2, §6.3).
     attrs: BTreeMap<String, String>,
     /// Bare flags of the extras head (§6.3).
     flags: Vec<String>,
-    /// The `@@type{…}` marker, when present: the §11 routing key (rule 3).
-    type_marker: Option<String>,
     /// §13 diagnostics raised while resolving the head.
     issues: Vec<ExtrasIssue>,
-    /// Characters of the input consumed by the head.
+    /// The head claimed the `#` tag, so the depth is the run **minus one**
+    /// (§7.4, D-11).
+    tagged: bool,
+    /// Bytes of the input consumed by the head, counted from the tag.
     consumed: usize,
 }
 
-/// Parses the optional head of a heading.
-///
-/// §4.1: the head touches the `#` run, so nothing is trimmed from the front.
-/// The whitespace that separates the head from the heading text belongs to the
-/// head and never becomes part of the title (§7.4).
-///
-/// Input examples: `[foo]("Title")@@heading{…} Foo` and `@@heading{…} Foo`.
-/// The retired pre-§11 forms (`[.class]`, `{key: value}`) are literal text
-/// (§14). Returns the id, the attributes, the flags and how much of the input
-/// the head consumed.
-fn parse_heading_head(raw_text: &str, options: &HeadingOptions) -> HeadingHead {
-    let chars: Vec<char> = raw_text.chars().collect();
-    let mut cursor = 0;
-    let mut head_id: Option<String> = None;
-    let mut attrs = BTreeMap::new();
-    let mut issues: Vec<ExtrasIssue> = Vec::new();
+/// What a heading's text starts with (§4.3, §7.4).
+#[derive(Debug)]
+enum Read {
+    /// Nothing to claim: the text stays text.
+    Literal,
+    /// Head-shaped but illegal: an `Error`, and the text stays literal (§4.3).
+    Malformed(String),
+    /// A head, and how much of the input it owns.
+    Head(Box<HeadingHead>),
+}
 
-    // §7.4: an optional `[slug]` head, adjacent to the `#` run.
-    if chars.get(cursor) == Some(&'[') {
-        if let Some(close) = find_char(&chars, cursor + 1, ']') {
-            let content: String = chars[cursor + 1..close].iter().collect();
-            let trimmed = content.trim();
-            // A `.`-bracket (or `#`-bracket) is not a slug head: literal text.
-            if !trimmed.is_empty() && !trimmed.starts_with('.') && !trimmed.starts_with('#') {
-                head_id = Some(trimmed.to_string());
-                cursor = close + 1;
-            }
+/// Reads a heading head at the start of `rest` — the `#` tag, the slots (§5.2–
+/// §5.3) and the §11 extras head attached to the closing delimiter.
+///
+/// §7.4 / D-11: the `#` **immediately before `[` is the tag**, and the rest of
+/// the run is the depth — so `###[slug]` is a depth-2 heading and `######[]()` a
+/// depth-5 one. A run with no bracket claims nothing (`## Title`), which keeps
+/// the tag and the depth in one run instead of adding a second sigil.
+fn read_head(rest: &str, options: &HeadingOptions) -> Read {
+    debug_assert!(rest.starts_with('#'), "the tag is the last `#` of the run");
+
+    let (pair, mut consumed, tagged) = match parse_slots(rest) {
+        SlotMatch::Slots { pair, rest: after } if pair.tag == SlotTag::Heading => {
+            (Some(pair), rest.len() - after.len(), true)
         }
+        // §4.3 / D-2: tagged and slot-shaped but illegal.
+        SlotMatch::Malformed { error, .. } => return Read::Malformed(error.to_string()),
+        // No bracket after the run: `#` is depth only. An extras head still
+        // attaches to the run itself (`###@@type{…} Title`, §4.1).
+        _ => (None, 1, false),
+    };
+
+    // §4.1: the extras head must touch the closing delimiter (or the run).
+    let extras = match parse_extras(&rest[consumed..]) {
+        ExtrasMatch::Head { head, rest: after } => {
+            consumed = rest.len() - after.len();
+            Some(head)
+        }
+        ExtrasMatch::Absent { .. } | ExtrasMatch::Malformed { .. } => None,
+    };
+
+    if pair.is_none() && extras.is_none() {
+        return Read::Literal;
     }
 
-    // §7.4: an optional `("title")` head, adjacent to the slug. It is a
-    // separate attribute, never the heading text.
-    if chars.get(cursor) == Some(&'(') {
-        if let Some(close) = find_matching_paren(&chars, cursor) {
-            let content: String = chars[cursor + 1..close].iter().collect();
-            let title = content.trim().trim_matches('"').trim_matches('\'');
-            if !title.is_empty() {
-                attrs.insert("title".to_string(), title.to_string());
-            }
-            cursor = close + 1;
-        }
-    }
+    // §6.5 / D-7: the preset is voided by the **matched** entry, never by
+    // another entry's `field.*`. No extras head means no `type` marker, which is
+    // exactly the entry the renderer will pick (the layer default).
+    let marker = extras.as_ref().and_then(|head| head.type_marker.as_deref());
+    let matched = options.custom.field_for(marker);
 
-    // §7.4/§11: an adjacent `{…}` / `@@type{…}` head attaches to the heading.
-    // The retired `{key: value}` block is literal text (§14).
-    let mut flags = Vec::new();
-    let mut type_marker = None;
-    if let Some((head, next)) = scan_extras_chars(&chars, cursor) {
-        cursor = next;
-        type_marker = head.type_marker.clone();
-        // §6.1/§11 rule 5: the entry answering this `type` names the extras
-        // specs (`tick` for the slug, `quote` for the title).
-        let specs = options.custom.specs_for(head.type_marker.as_deref());
-        let parsed = to_attributes(&head, &specs);
-        issues.extend(parsed.issues.iter().cloned());
-        let id = specs.element_path(SpecsKey::Id);
-        let tick = specs.element_path(SpecsKey::Tick);
-        let extras_id = id
-            .and_then(|path| parsed.value(path))
-            .map(|value| value.literal());
-        let extras_slug = tick
-            .and_then(|path| parsed.value(path))
-            .map(|value| value.literal());
-        // §6.3: the heading's own positions — `class` / `id` / `style` are the
-        // universal DOM fields, and an extras `"title"` is the heading's `title`
-        // (the `("…")` head group of §7.4 owns that field, so the extras value
-        // is dropped when both are present, §6.2). A `field.specs.*` assignment
-        // moves the position out of the element's reach.
-        for (key, value) in specs.dom_fields(&parsed.items, &[(SpecsKey::Quote, "title")]) {
-            if key == "id" || tick == Some(key) {
-                continue;
-            }
-            match value {
-                ExtrasAttr::Flag => {
-                    if attrs.contains_key(key) {
-                        issues.push(ExtrasIssue::warning(format!(
-                            "`{key}` was dropped because the construct head already sets it"
-                        )));
-                    } else {
-                        flags.push(key.to_string());
+    let mut head = HeadingHead {
+        tagged,
+        ..HeadingHead::default()
+    };
+    let mut head_keys: Vec<String> = Vec::new();
+    if let Some(pair) = &pair {
+        // §6.5: `bracket.bare → slug`, `paren.quote → title`; every other
+        // position is a bare field (D-7).
+        let fields = HEAD.assign(pair, matched).unwrap_or_else(|error| {
+            // The entry's assignments contradict each other (one path is a
+            // prefix of another), so they cannot all be published. A config
+            // clash is the author's bug: say so and keep the preset.
+            head.issues.push(ExtrasIssue::error(format!(
+                "the matched entry's `field.*` assignments clash ({error}); the preset is kept"
+            )));
+            HEAD.assign(pair, None)
+                .expect("an untouched preset cannot clash")
+        });
+        // The names this construct's own head produced; an extras item spelling
+        // one loses (§6.2).
+        for (path, value) in fields.iter() {
+            let name = path.dotted();
+            let text = value.literal();
+            head_keys.push(name.clone());
+            match name.as_str() {
+                // §7.4's preset names, and only those: a moved or renamed
+                // position (`field.bracket.bare = "label"`) publishes a field of
+                // the author's own, which the heading neither reads nor renames
+                // (D-4, §6.1).
+                "slug" => {
+                    let slug = text.trim();
+                    if !slug.is_empty() {
+                        head.slug = Some(slug.to_string());
                     }
                 }
-                ExtrasAttr::Value(value) => {
-                    let text = value.literal();
-                    // §6.4: `class` accumulates, head classes first.
-                    if key == "class" {
-                        match attrs.get("class") {
-                            Some(head) if !head.is_empty() => {
-                                attrs.insert("class".to_string(), format!("{head} {text}"));
-                            }
-                            _ => {
-                                attrs.insert("class".to_string(), text);
-                            }
+                "title" => {
+                    let title = text.trim();
+                    if !title.is_empty() {
+                        head.title = Some(title.to_string());
+                    }
+                }
+                _ => {
+                    head.values.insert(name, text);
+                }
+            }
+        }
+    }
+
+    if let Some(extras) = extras {
+        merge_heading_extras(&mut head, &extras, options, &head_keys);
+    }
+    head.consumed = consumed;
+    Read::Head(Box::new(head))
+}
+
+/// Merges a §7.4 extras head into the heading's attributes.
+///
+/// The construct side wins (§6.2): an item that spells a name the head already
+/// produced (`slug`, `title`, a slot field) is dropped and reported, `class`
+/// accumulates (§6.4) and bare flags stay bare attributes (§6.3). The two
+/// positional fallbacks (`ELEMENT_READS`) fill in only what the head left unset,
+/// so the extras tick can still become the `slug` (§6.2's id chain).
+fn merge_heading_extras(
+    head: &mut HeadingHead,
+    extras: &ExtrasHead,
+    options: &HeadingOptions,
+    head_keys: &[String],
+) {
+    // §6.1/§11 rule 5: the entry answering this marker names the extras specs.
+    let specs = options.custom.specs_for(extras.type_marker.as_deref());
+    let parsed = to_attributes(extras, &specs);
+    head.issues.extend(parsed.issues.iter().cloned());
+
+    // §6.2: an extras item that spells a name the heading's own head produced
+    // loses — the head is the construct, the extras only decorate it.
+    let mut items = Vec::with_capacity(parsed.items.len());
+    for (key, value) in parsed.items.iter() {
+        if head_keys.iter().any(|head| head == key) {
+            head.issues.push(ExtrasIssue::warning(format!(
+                "`{key}` was dropped because the construct head already sets it"
+            )));
+            continue;
+        }
+        items.push((key.clone(), value.clone()));
+    }
+
+    // §6.3: `class` / `id` / `style` are the universal DOM fields; §6.2 adds the
+    // two positions *this* element reads into its own fields — the extras tick is
+    // the id chain's third link and the extras quote its `title` fallback. Both
+    // only count while the position keeps its default path (§6.1), which is
+    // exactly what `dom_fields`'s element table checks.
+    for (key, value) in specs.dom_fields(&items, ELEMENT_READS) {
+        match value {
+            ExtrasAttr::Flag => {
+                if head.attrs.contains_key(key) {
+                    head.issues.push(ExtrasIssue::warning(format!(
+                        "`{key}` was dropped because the construct head already sets it"
+                    )));
+                } else {
+                    head.flags.push(key.to_string());
+                }
+            }
+            ExtrasAttr::Value(value) => {
+                let text = value.literal();
+                match key {
+                    // §7.4/§6.2: the head's `[slug]` wins over the extras slug,
+                    // which is the fallback; either way the field is published
+                    // once, as `slug`.
+                    "slug" => match &head.slug {
+                        Some(_) => head.issues.push(ExtrasIssue::warning(
+                            "`slug` was dropped because the construct head already sets it",
+                        )),
+                        None if !text.trim().is_empty() => {
+                            head.slug = Some(text.trim().to_string())
                         }
-                        continue;
+                        None => {}
+                    },
+                    // §7.4: `("title")` is the head's; an extras `"title"` only
+                    // fills in for it.
+                    "title" => match &head.title {
+                        Some(_) => head.issues.push(ExtrasIssue::warning(
+                            "`title` was dropped because the construct head already sets it",
+                        )),
+                        None if !text.trim().is_empty() => {
+                            head.title = Some(text.trim().to_string())
+                        }
+                        None => {}
+                    },
+                    // §6.4: `class` accumulates, head classes first.
+                    "class" => match head.attrs.get("class") {
+                        Some(head_class) if !head_class.is_empty() => {
+                            head.attrs
+                                .insert("class".to_string(), format!("{head_class} {text}"));
+                        }
+                        _ => {
+                            head.attrs.insert("class".to_string(), text);
+                        }
+                    },
+                    _ => {
+                        if head.attrs.contains_key(key) {
+                            head.issues.push(ExtrasIssue::warning(format!(
+                                "`{key}` was dropped because the construct head already sets it"
+                            )));
+                        } else {
+                            head.attrs.insert(key.to_string(), text);
+                        }
                     }
-                    if attrs.contains_key(key) {
-                        issues.push(ExtrasIssue::warning(format!(
-                            "`{key}` was dropped because the construct head already sets it"
-                        )));
-                        continue;
-                    }
-                    attrs.insert(key.to_string(), text);
                 }
             }
         }
-        // §6.2: `#id` > `[slug]` > extras slug.
-        match extras_id {
-            Some(id) => {
-                if head_id.is_some() {
-                    issues.push(ExtrasIssue::warning(
-                        "extras `#id` replaced the `[slug]` head (§6.2)",
-                    ));
-                }
-                head_id = Some(id);
-            }
-            None => {
-                if head_id.is_none() {
-                    head_id = extras_slug;
-                }
-            }
-        }
-    }
-
-    // §7.4: the whitespace that separates the head from the heading text
-    // belongs to the head, so it never becomes part of the title.
-    while matches!(chars.get(cursor), Some(' ' | '\t')) {
-        cursor += 1;
     }
 
     // §11 rule 3: the marker is the routing key of the instance; it is carried
     // as a `type` attribute so a `{attrs.type}` template can read it back. An
     // explicit `type:` prop keeps its own value.
-    if let Some(marker) = &type_marker {
-        attrs
+    if let Some(marker) = &extras.type_marker {
+        head.attrs
             .entry("type".to_string())
             .or_insert_with(|| marker.clone());
     }
-
-    HeadingHead {
-        id: head_id,
-        attrs,
-        flags,
-        type_marker,
-        issues,
-        consumed: cursor,
-    }
 }
 
-/// Finds the `)` matching the `(` at `start`, counting nested pairs.
-fn find_matching_paren(chars: &[char], start: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    let mut i = start;
-    while i < chars.len() {
-        match chars[i] {
-            '(' => depth += 1,
-            ')' if depth == 1 => return Some(i),
-            ')' => depth -= 1,
-            _ => {}
-        }
-        i += 1;
-    }
-    None
-}
-
-fn find_char(chars: &[char], mut index: usize, wanted: char) -> Option<usize> {
-    while index < chars.len() {
-        if chars[index] == wanted {
-            return Some(index);
-        }
-        index += 1;
-    }
-    None
+/// §7.4: the `slug` fallback — `inner_text`, lowercased, with every run of
+/// non-alphanumerics collapsed into a `-`.
+fn slug_of(inner_text: &str, slug_regex: &Regex) -> Option<String> {
+    let slug = slug_regex
+        .replace_all(&inner_text.trim().to_lowercase(), "-")
+        .trim_matches('-')
+        .to_string();
+    (!slug.is_empty()).then_some(slug)
 }
 
 // --- Main Processor ---
@@ -269,18 +335,18 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
         if matches!(&events[i], Event::StartNode(NodeKind::Heading)) {
             let start_idx = i;
             let mut end_idx = start_idx + 1;
-            let mut heading_level: usize = 1;
+            let mut run_depth: usize = 1;
             let mut raw_text = String::new();
             let mut inner_events = Vec::new();
             let mut text_indices = Vec::new();
 
-            // 1. Collect heading content and extract level attribute
+            // 1. Collect the heading's text and the `#` run the core recorded.
             while end_idx < events.len()
                 && !matches!(events[end_idx], Event::EndNode(NodeKind::Heading))
             {
                 match &events[end_idx] {
-                    Event::Attribute { name, value } if name == "level" => {
-                        heading_level = value.parse().unwrap_or(1);
+                    Event::Attribute { name, value } if name == "depth" => {
+                        run_depth = value.parse().unwrap_or(1);
                     }
                     Event::Text(t) => {
                         raw_text.push_str(t);
@@ -292,25 +358,45 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
                 end_idx += 1;
             }
 
-            // Core preserves the Markdown marker as text; remove it before
-            // parsing heading extras and computing the displayed title.
-            let marker_len = raw_text
+            // 2. §7.4 / D-11: the core keeps the `#` run as text, and the **last
+            // `#` of the run is the tag** that claims the head — so a heading
+            // with a head is one depth shallower than its run (`###[slug]` is
+            // depth 2, `#######[]()` depth 6). A run without a bracket keeps its
+            // whole length as depth (`## Title`).
+            let hashes = raw_text
                 .chars()
                 .take_while(|character| *character == '#')
                 .count();
-            let marker_len = if marker_len == heading_level {
-                marker_len + usize::from(raw_text.as_bytes().get(marker_len) == Some(&b' '))
+            let mut head = HeadingHead::default();
+            let mut consumed = hashes;
+            if hashes > 0 {
+                match read_head(&raw_text[hashes - 1..], options) {
+                    Read::Head(read) => {
+                        consumed = hashes - 1 + read.consumed;
+                        head = *read;
+                    }
+                    // §4.3: a malformed head is literal text with an `Error`.
+                    Read::Malformed(message) => head.issues.push(ExtrasIssue::error(message)),
+                    Read::Literal => {}
+                }
+            }
+            let depth = if head.tagged {
+                // §7.4: a claimed head spends one `#` on the tag, so the depth
+                // never falls below 1 (`#[slug]` is still an `<h1>`).
+                hashes.saturating_sub(1).max(1)
             } else {
-                0
+                run_depth.max(hashes)
             };
-            let head = parse_heading_head(&raw_text[marker_len..], options);
-            let custom_id = head.id.clone();
-            let extra_attrs = head.attrs.clone();
-            let consumed_len = marker_len + head.consumed;
 
-            // 3. Strip the entire extras prefix from Text events
-            if consumed_len > 0 {
-                let mut remaining = consumed_len;
+            // §7.4: the whitespace that separates the head from the heading text
+            // belongs to the head, so it never becomes part of `inner_text`.
+            while matches!(raw_text.as_bytes().get(consumed), Some(b' ' | b'\t')) {
+                consumed += 1;
+            }
+
+            // 3. Strip the head from the Text events: it is a head, not content.
+            if consumed > 0 {
+                let mut remaining = consumed;
                 for idx in text_indices {
                     if remaining == 0 {
                         break;
@@ -328,17 +414,38 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
                 inner_events.retain(|e| !matches!(e, Event::Text(t) if t.is_empty()));
             }
 
-            // 4. §11 rule 3 / D-3a: the node always stays a `Heading` — which
-            // entry answers it is decided by the renderer from the whole
-            // document. A configured `heading` layer therefore puts *every*
-            // heading in component mode: the template attributes (`raw_title`,
-            // the marker) are emitted. Numbering is `plugin-number`'s job
-            // (ADR-0010); this plugin no longer counts anything.
-            let component_mode = !options.custom.is_empty();
-            let node_kind = NodeKind::Heading;
+            // 4. §7.4: the element's fields. `slug` is the bracket, else a slug
+            // of `inner_text`; `id` is an extras `#id` (§6.3) and falls back to
+            // the slug (§6.2); `depth` is the run without its tag. `inner_text`
+            // itself is the node's content, never an attribute (§7.4).
+            let inner_text = raw_text[consumed..].to_string();
+            let mut attrs = head.attrs.clone();
+            for (name, value) in &head.values {
+                attrs.insert(name.clone(), value.clone());
+            }
+            if let Some(title) = &head.title {
+                attrs.insert("title".to_string(), title.clone());
+            }
+            attrs.insert("depth".to_string(), depth.to_string());
+            // §9.5: when the section owns the ids, the heading emits neither.
+            if !options.section_owns_id {
+                if let Some(slug) = head
+                    .slug
+                    .clone()
+                    .or_else(|| slug_of(&inner_text, &slug_regex))
+                {
+                    attrs
+                        .entry("id".to_string())
+                        .or_insert_with(|| slug.clone());
+                    attrs.insert("slug".to_string(), slug);
+                }
+            }
 
-            // 5. Emit StartNode, the §11 layer tag and the §13 warnings.
-            out.push(Event::StartNode(node_kind.clone()));
+            // 5. Emit StartNode, the §11 layer tag, the §13 diagnostics and the
+            // fields. There is one emission path: what a Solid template reads is
+            // what the AST/JSON renderers carry. Numbering is `plugin-number`'s
+            // job (ADR-0010); this plugin no longer counts anything.
+            out.push(Event::StartNode(NodeKind::Heading));
             // §11 rule 3 / D-3a: every node names the layer that owns it, in both
             // modes, so whole-document consumers (`plugin-number`,
             // `plugin-extract`) can tell the element kind from the event stream.
@@ -349,89 +456,20 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
             for issue in &head.issues {
                 out.push(issue_event("heading", issue));
             }
-
-            // 6. Emit attributes based on rendering mode
-            if component_mode {
-                // Component mode: everything a Solid template may read, plus the
-                // `type` the renderer routes on.
-                if let Some(marker) = &head.type_marker {
-                    out.push(Event::Attribute {
-                        name: "type".to_string(),
-                        value: marker.clone(),
-                    });
-                }
+            for (name, value) in &attrs {
                 out.push(Event::Attribute {
-                    name: "level".to_string(),
-                    value: heading_level.to_string(),
+                    name: name.clone(),
+                    value: value.clone(),
                 });
-
-                // Emit id: explicit custom_id or auto-generated slug. §9.5: when
-                // the section owns the ids, neither is emitted.
-                if !options.section_owns_id {
-                    if let Some(id) = &custom_id {
-                        out.push(Event::Attribute {
-                            name: "id".to_string(),
-                            value: id.clone(),
-                        });
-                    } else {
-                        let clean_text = raw_text[consumed_len..].trim();
-                        let slug = slug_regex
-                            .replace_all(&clean_text.to_lowercase(), "-")
-                            .trim_matches('-')
-                            .to_string();
-                        if !slug.is_empty() {
-                            out.push(Event::Attribute {
-                                name: "slug".to_string(),
-                                value: slug,
-                            });
-                        }
-                    }
-                }
-
-                // raw_title: heading text without any extras prefix
-                let raw_title = raw_text[consumed_len..].trim().to_string();
-                out.push(Event::Attribute {
-                    name: "raw_title".to_string(),
-                    value: raw_title,
-                });
-
-                // Emit all extra attributes (class, qux, nor, etc.)
-                for (key, value) in &extra_attrs {
-                    out.push(Event::Attribute {
-                        name: key.clone(),
-                        value: value.clone(),
-                    });
-                }
-            } else {
-                // Standard mode: emit level, id, and all extra attributes
-                out.push(Event::Attribute {
-                    name: "level".to_string(),
-                    value: heading_level.to_string(),
-                });
-                if let Some(id) = custom_id {
-                    if !options.section_owns_id {
-                        out.push(Event::Attribute {
-                            name: "id".to_string(),
-                            value: id,
-                        });
-                    }
-                }
-                for (key, value) in &extra_attrs {
-                    out.push(Event::Attribute {
-                        name: key.clone(),
-                        value: value.clone(),
-                    });
-                }
             }
-
-            // §6.3: a bare extras flag stays a bare attribute, in both modes.
+            // §6.3: a bare extras flag stays a bare attribute.
             for name in &head.flags {
                 out.push(Event::AttributeFlag { name: name.clone() });
             }
 
-            // 7. Emit inner children and closing EndNode
+            // 6. Emit inner children and closing EndNode
             out.extend(inner_events);
-            out.push(Event::EndNode(node_kind));
+            out.push(Event::EndNode(NodeKind::Heading));
 
             i = end_idx + 1;
             continue;
@@ -474,6 +512,8 @@ pub fn primary_layer() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pendon_extra::{FieldConfig, Path};
+    use pendon_renderer_solid::TypedComponent;
 
     /// §7.4's preset, position by position (S2-2.5). `slug` is the slot value and
     /// `title` the paren's quote; `depth`/`inner_text` are not slot-derived, so
@@ -506,125 +546,249 @@ mod tests {
         assert_eq!(HEAD.preset_for(Slot::Bracket, SlotKind::Quote), None);
     }
 
-    fn consumed_len(text: &str, head: &HeadingHead) -> usize {
-        assert!(head.consumed <= text.chars().count());
-        head.consumed
+    /// §6.2: the extras slug is the id chain's third link (`#id` > head slug >
+    /// extras slug), so it becomes the heading's `slug` when no `[slug]` head
+    /// exists — and loses, with a warning, when one does.
+    #[test]
+    fn the_extras_slug_fills_in_for_a_missing_head_slug() {
+        let (_, head) = head_of("#@@headingX{`slug-a`, .fancy} A typed heading");
+        assert_eq!(head.slug.as_deref(), Some("slug-a"));
+        assert_eq!(head.attrs.get("class").map(String::as_str), Some("fancy"));
+
+        let (_, head) = head_of("#[head-slug]@@headingX{`extras-slug`}");
+        assert_eq!(head.slug.as_deref(), Some("head-slug"));
+        assert!(head.issues.iter().any(|i| i.message.contains("`slug`")));
     }
 
+    /// §6.1: once the matched entry moves the tick position, the item is a field
+    /// of the author's own and no longer feeds the slug.
     #[test]
-    fn parses_the_slug_head_adjacent_to_the_marker() {
-        let text = "[foo-bar] Foo";
-        let head = parse_heading_head(text, &HeadingOptions::default());
-        assert_eq!(head.id.as_deref(), Some("foo-bar"));
-        assert_eq!(consumed_len(text, &head), "[foo-bar] ".len());
+    fn a_moved_tick_position_is_not_the_slug() {
+        let mut field = FieldConfig::new();
+        field
+            .assign_specs(
+                "tick",
+                Some(Path::from_dotted("meta.slug").expect("a path")),
+            )
+            .expect("a known specs key");
+        let options = HeadingOptions {
+            custom: ComponentSet::from_entries([TypedComponent::typed(
+                ["headingX"],
+                HeadingCustomNode {
+                    name: "HeadingX".into(),
+                    template: "<HeadingX>{children}</HeadingX>".into(),
+                    imports: Vec::new(),
+                },
+            )
+            .with_field(field)]),
+            ..HeadingOptions::default()
+        };
+        let (_, head) = head_of_with("#@@headingX{`moved`} Title", &options);
+        assert_eq!(head.slug, None);
+        assert_eq!(
+            head.attrs.get("meta.slug").map(String::as_str),
+            Some("moved")
+        );
+        assert_eq!(head.attrs.get("specs.tick"), None);
+    }
+
+    /// Reads a head that must parse; returns what it consumed and the result.
+    fn head_of(text: &str) -> (String, HeadingHead) {
+        head_of_with(text, &HeadingOptions::default())
+    }
+
+    /// [`head_of`] with an explicit option set.
+    fn head_of_with(text: &str, options: &HeadingOptions) -> (String, HeadingHead) {
+        match read_head(text, options) {
+            Read::Head(head) => (text[..head.consumed].to_string(), *head),
+            Read::Malformed(message) => panic!("malformed head: {message}"),
+            Read::Literal => panic!("not a head: {text:?}"),
+        }
+    }
+
+    /// §7.4: the bracket is `slug` and the paren quote `title`; both are consumed,
+    /// so neither becomes part of `inner_text`.
+    #[test]
+    fn parses_the_slug_and_title_head() {
+        let (consumed, head) = head_of("#[foo](\"Boom\")");
+        assert_eq!(consumed, "#[foo](\"Boom\")");
+        assert_eq!(head.slug.as_deref(), Some("foo"));
+        assert_eq!(head.title.as_deref(), Some("Boom"));
         assert!(head.issues.is_empty(), "{:?}", head.issues);
     }
 
-    /// §14: the retired `[.class]` / `{key: value}` forms are literal text.
+    /// D-7: the preset names `bracket.bare` and `paren.quote` only, so a claimed
+    /// position it leaves unassigned stays a field of the author's, under its
+    /// qualified name.
+    #[test]
+    fn an_unpreset_position_keeps_its_qualified_name() {
+        let (_, head) = head_of("#[foo](/bar)");
+        assert_eq!(head.slug.as_deref(), Some("foo"));
+        assert_eq!(head.title, None);
+        assert_eq!(
+            head.values.get("paren.bare").map(String::as_str),
+            Some("/bar")
+        );
+    }
+
+    /// §14: the retired `[.class]` / `{key: value}` forms are literal text, and a
+    /// `.`-bracket is not a head either.
     #[test]
     fn the_retired_legacy_forms_are_literal_text() {
-        let text = "[foo-bar][.extra]{ qux: \"anu\" } Foo";
-        let head = parse_heading_head(text, &HeadingOptions::default());
-        assert_eq!(head.id.as_deref(), Some("foo-bar"));
+        assert!(matches!(
+            read_head("#[foo-bar][.extra]", &HeadingOptions::default()),
+            Read::Head(_)
+        ));
+        // `[.extra]` follows the head as text, so only the slug is consumed.
+        let (consumed, head) = head_of("#[foo-bar][.extra]{ qux: \"anu\" } Foo");
+        assert_eq!(consumed, "#[foo-bar]");
+        assert_eq!(head.slug.as_deref(), Some("foo-bar"));
         assert_eq!(head.attrs.get("class"), None);
         assert_eq!(head.attrs.get("qux"), None);
         assert!(head.issues.is_empty(), "{:?}", head.issues);
-        assert_eq!(consumed_len(text, &head), "[foo-bar]".len());
 
-        // A `.`-bracket alone is not a head either.
-        let head = parse_heading_head("[.extra] Foo", &HeadingOptions::default());
-        assert_eq!(head.id, None);
-        assert_eq!(head.consumed, 0);
+        // A `.`-bracket alone is a slug, not a class: §14 retired the class
+        // bracket, it did not narrow the slug one.
+        let (_, head) = head_of("#[.extra] Foo");
+        assert_eq!(head.slug.as_deref(), Some(".extra"));
+        assert_eq!(head.attrs.get("class"), None);
     }
 
-    /// §4.1: `@@type {…}` is not a head, and neither is a spaced head.
+    /// §4.1: a spaced extras head is not a head.
     #[test]
     fn a_spaced_head_is_literal_text() {
-        let text = "@@heading {.c} Title";
-        let head = parse_heading_head(text, &HeadingOptions::default());
-        assert!(head.attrs.is_empty());
-        assert_eq!(head.flags, Vec::<String>::new());
-        // Only the separator space is consumed.
-        assert_eq!(consumed_len(text, &head), 0);
-    }
-
-    #[test]
-    fn parses_the_title_head_apart_from_the_text() {
-        let text = "[foo](\"Boom\") Foo Bar";
-        let head = parse_heading_head(text, &HeadingOptions::default());
-        assert_eq!(head.id.as_deref(), Some("foo"));
-        assert_eq!(head.attrs.get("title").map(String::as_str), Some("Boom"));
-        assert_eq!(consumed_len(text, &head), "[foo](\"Boom\") ".len());
-        assert!(head.issues.is_empty(), "{:?}", head.issues);
+        assert!(matches!(
+            read_head("#@@heading {.c}", &HeadingOptions::default()),
+            Read::Literal
+        ));
+        // …while the adjacent one is.
+        let (consumed, head) = head_of("#@@heading{.c}");
+        assert_eq!(consumed, "#@@heading{.c}");
+        assert_eq!(head.attrs.get("class").map(String::as_str), Some("c"));
     }
 
     #[test]
     fn extras_attach_to_the_heading_element() {
-        let text = "@@heading{.c,isFoo} Title";
-        let head = parse_heading_head(text, &HeadingOptions::default());
-        assert_eq!(head.id, None);
+        let (consumed, head) = head_of("#@@heading{.c,isFoo}");
+        assert_eq!(consumed, "#@@heading{.c,isFoo}");
+        assert_eq!(head.slug, None);
         assert_eq!(head.attrs.get("class").map(String::as_str), Some("c"));
         assert_eq!(head.flags, vec!["isFoo".to_string()]);
-        assert_eq!(consumed_len(text, &head), "@@heading{.c,isFoo} ".len());
     }
 
     #[test]
-    fn a_bare_head_attaches_like_the_prefixed_one() {
-        let head = parse_heading_head("[slug]{.extra}", &HeadingOptions::default());
-        assert_eq!(head.id.as_deref(), Some("slug"));
+    fn a_bare_head_attaches_like_the_tagged_one() {
+        let (_, head) = head_of("#[slug]{.extra}");
+        assert_eq!(head.slug.as_deref(), Some("slug"));
         assert_eq!(head.attrs.get("class").map(String::as_str), Some("extra"));
     }
 
+    /// §6.2: an extras `#id` beats the head slug, and both are published — the
+    /// processor's `id` fallback then keeps the explicit one.
     #[test]
-    fn id_precedence_is_hash_id_then_slug_then_extras_slug() {
-        let head = parse_heading_head("[slug]@@heading{`extras-slug`}", &HeadingOptions::default());
-        assert_eq!(head.id.as_deref(), Some("slug"));
-
-        let head = parse_heading_head("[slug]@@heading{#explicit}", &HeadingOptions::default());
-        assert_eq!(head.id.as_deref(), Some("explicit"));
-        assert!(head.issues.iter().any(|i| i.message.contains("#id")));
-
-        let head = parse_heading_head("@@heading{`extras-slug`}", &HeadingOptions::default());
-        assert_eq!(head.id.as_deref(), Some("extras-slug"));
+    fn an_extras_id_beats_the_head_slug() {
+        let (_, head) = head_of("#[slug]@@heading{#explicit}");
+        assert_eq!(head.slug.as_deref(), Some("slug"));
+        assert_eq!(head.attrs.get("id").map(String::as_str), Some("explicit"));
+        assert!(head.issues.is_empty(), "{:?}", head.issues);
     }
 
+    /// §6.2: the head wins over a same-named extras item, with a warning.
     #[test]
     fn head_title_wins_over_extras_title() {
-        let head = parse_heading_head(
-            "[slug](\"Head\")@@heading{\"Extras\"}",
-            &HeadingOptions::default(),
-        );
-        assert_eq!(head.attrs.get("title").map(String::as_str), Some("Head"));
+        let (_, head) = head_of("#[slug](\"Head\")@@heading{title: \"Extras\"}");
+        assert_eq!(head.title.as_deref(), Some("Head"));
         assert!(head.issues.iter().any(|i| i.message.contains("`title`")));
+    }
+
+    /// §6.4: `class` accumulates inside one head.
+    #[test]
+    fn class_accumulates() {
+        let (_, head) = head_of("#[slug]{.a, .b}");
+        assert_eq!(head.attrs.get("class").map(String::as_str), Some("a b"));
     }
 
     #[test]
     fn malformed_extras_stay_literal_text() {
-        let text = "@@heading{`unterminated} Foo";
-        let head = parse_heading_head(text, &HeadingOptions::default());
-        assert_eq!(head.id, None);
+        let (consumed, head) = head_of("#[foo]@@heading{`unterminated}");
+        assert_eq!(consumed, "#[foo]");
+        assert_eq!(head.slug.as_deref(), Some("foo"));
         assert!(head.attrs.is_empty());
-        assert_eq!(head.consumed, 0);
+    }
+
+    /// §4.3: tagged and slot-shaped but illegal is an `Error`, not a silent
+    /// fallback.
+    #[test]
+    fn a_malformed_head_is_an_error() {
+        match read_head("#[\"unclosed] Foo", &HeadingOptions::default()) {
+            Read::Malformed(_) => {}
+            other => panic!("an unterminated quote must be malformed, got {other:?}"),
+        }
+    }
+
+    /// §7.4 / D-11: the last `#` of the run is the tag, so a claimed head is one
+    /// depth shallower than its run; a run with no bracket keeps its whole length.
+    #[test]
+    fn the_tag_spends_one_hash_of_the_run() {
+        for (source, depth) in [
+            ("# Title", "1"),
+            ("## Title", "2"),
+            ("###### Title", "6"),
+            ("#[slug] Title", "1"),
+            ("##[slug] Title", "1"),
+            ("###[slug](\"T\"){.c} Title", "2"),
+            ("######[]() Title", "5"),
+            // An extras head attaches to the run without claiming a bracket.
+            ("###@@t{.c} Title", "3"),
+        ] {
+            assert_eq!(
+                attr(
+                    &process(&heading(source), &HeadingOptions::default()),
+                    "depth"
+                )
+                .as_deref(),
+                Some(depth),
+                "{source}"
+            );
+        }
+    }
+
+    /// §7.4: `inner_text` is the node's text, never an attribute, and `slug`
+    /// falls back to a slug of it.
+    #[test]
+    fn the_slug_falls_back_to_the_heading_text() {
+        let out = process(&heading("## A Fine Head!"), &HeadingOptions::default());
+        assert_eq!(attr(&out, "slug").as_deref(), Some("a-fine-head"));
+        assert_eq!(attr(&out, "id").as_deref(), Some("a-fine-head"));
+        assert_eq!(attr(&out, "inner_text"), None);
+        assert_eq!(attr(&out, "raw_title"), None);
+        assert!(out
+            .iter()
+            .any(|e| matches!(e, Event::Text(text) if text == "A Fine Head!")));
+    }
+
+    /// §9.5: when the section owns the ids, the heading emits neither `id` nor
+    /// `slug`.
+    #[test]
+    fn the_section_owns_the_id() {
+        let options = HeadingOptions {
+            section_owns_id: true,
+            ..HeadingOptions::default()
+        };
+        let out = process(&heading("##[own] Title"), &options);
+        assert_eq!(attr(&out, "id"), None);
+        assert_eq!(attr(&out, "slug"), None);
+        assert_eq!(attr(&out, "depth").as_deref(), Some("1"));
     }
 
     #[test]
     fn process_emits_extras_attributes_and_flags() {
-        let events = vec![
-            Event::StartNode(NodeKind::Heading),
-            Event::Attribute {
-                name: "level".to_string(),
-                value: "2".to_string(),
-            },
-            Event::Text("##[foo]@@heading{.c,isFoo} Title".to_string()),
-            Event::EndNode(NodeKind::Heading),
-        ];
-        let out = process(&events, &HeadingOptions::default());
-        assert!(out.iter().any(
-            |e| matches!(e, Event::Attribute { name, value } if name == "id" && value == "foo")
-        ));
-        assert!(out.iter().any(
-            |e| matches!(e, Event::Attribute { name, value } if name == "class" && value == "c")
-        ));
+        let out = process(
+            &heading("##[foo]@@heading{.c,isFoo} Title"),
+            &HeadingOptions::default(),
+        );
+        assert_eq!(attr(&out, "id").as_deref(), Some("foo"));
+        assert_eq!(attr(&out, "class").as_deref(), Some("c"));
         assert!(out
             .iter()
             .any(|e| matches!(e, Event::AttributeFlag { name } if name == "isFoo")));
@@ -638,19 +802,11 @@ mod tests {
 
     #[test]
     fn process_keeps_the_head_title_off_the_text() {
-        let events = vec![
-            Event::StartNode(NodeKind::Heading),
-            Event::Attribute {
-                name: "level".to_string(),
-                value: "3".to_string(),
-            },
-            Event::Text("###(\"Boom\") Body".to_string()),
-            Event::EndNode(NodeKind::Heading),
-        ];
-        let out = process(&events, &HeadingOptions::default());
-        assert!(out.iter().any(
-            |e| matches!(e, Event::Attribute { name, value } if name == "title" && value == "Boom")
-        ));
+        // §7.4: the paren needs its bracket (`[]`); `("Boom")` alone is text.
+        let out = process(&heading("###[](\"Boom\") Body"), &HeadingOptions::default());
+        assert_eq!(attr(&out, "title").as_deref(), Some("Boom"));
+        assert_eq!(attr(&out, "depth").as_deref(), Some("2"));
+        assert_eq!(attr(&out, "inner_text"), None);
         assert!(out
             .iter()
             .any(|e| matches!(e, Event::Text(text) if text == "Body")));
@@ -661,16 +817,7 @@ mod tests {
     /// more (the legacy `auto_number` / `number_style` behaviour is gone).
     #[test]
     fn no_heading_path_produces_a_number() {
-        let events = vec![
-            Event::StartNode(NodeKind::Heading),
-            Event::Attribute {
-                name: "level".to_string(),
-                value: "2".to_string(),
-            },
-            Event::Text("## Title".to_string()),
-            Event::EndNode(NodeKind::Heading),
-        ];
-        let out = process(&events, &HeadingOptions::default());
+        let out = process(&heading("## Title"), &HeadingOptions::default());
         assert!(!out
             .iter()
             .any(|event| matches!(event, Event::Attribute { name, .. } if name == "number")));
@@ -681,5 +828,28 @@ mod tests {
         assert!(out.iter().any(
             |event| matches!(event, Event::Attribute { name, value } if name == "__layer" && value == HEADING_LAYER)
         ));
+    }
+
+    /// A heading event stream as `plugin-markdown` writes it: the core's `depth`
+    /// attribute plus the `#` run as text.
+    fn heading(source: &str) -> Vec<Event> {
+        let depth = source.chars().take_while(|c| *c == '#').count();
+        vec![
+            Event::StartNode(NodeKind::Heading),
+            Event::Attribute {
+                name: "depth".to_string(),
+                value: depth.to_string(),
+            },
+            Event::Text(source.to_string()),
+            Event::EndNode(NodeKind::Heading),
+        ]
+    }
+
+    /// The first `Attribute` of `name`.
+    fn attr(events: &[Event], name: &str) -> Option<String> {
+        events.iter().find_map(|event| match event {
+            Event::Attribute { name: key, value } if key == name => Some(value.clone()),
+            _ => None,
+        })
     }
 }

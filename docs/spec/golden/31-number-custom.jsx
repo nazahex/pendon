@@ -6,7 +6,7 @@ export default function PendonView() { return (<>
 block and carries its own depth (<code>%</code> count − 1). It always beats the element&#39;s
 own numbering, so the same counter can run across headings, anchors and images.
 </p>
-<Heading foo="bar" id="slug-heading" level={2} number={["I", "a"]} raw_title="Title Heading - I.a (depth 2, so the missing parent counts as I)" title="Title Heading" type="HeadingA">Title Heading - I.a (depth 2, so the missing parent counts as I)</Heading><p><a href="/foo" number={["II"]} type="AnchorA">link</a> will be numbered II.
+<Heading depth={2} foo="bar" id="slug-heading" number={["I", "a"]} slug="slug-heading" title="Title Heading" type="HeadingA">Title Heading - I.a (depth 2, so the missing parent counts as I)</Heading><p><a href="/foo" number={["II"]} type="AnchorA">link</a> will be numbered II.
 </p>
 <p><a href="/foo" number={["II", "a"]} type="AnchorA">link</a> will be numbered II.a.
 </p>
@@ -35,5 +35,5 @@ own numbering, so the same counter can run across headings, anchors and images.
 <img alt="image foo" number={["A", "a", "I", "i", "1", "1"]} src="/foo.png" />
 <p>Will be numbered A.a.I.i.1.1.
 </p>
-<Heading id="slug" level={2} number={["IV"]} raw_title="Will Be Numbered IV">Will Be Numbered IV</Heading><Heading level={2} number={["IV", "a", "1"]} raw_title="Will Be Numbered IV.a.1 (number depth 3, even though heading depth is 2)" slug="will-be-numbered-iv-a-1-number-depth-3-even-though-heading-depth-is-2">Will Be Numbered IV.a.1 (number depth 3, even though heading depth is 2)</Heading><Heading level={2} number={["A"]} raw_title="Will Be Numbered A" slug="will-be-numbered-a" title="Title" type="HeadingA">Will Be Numbered A</Heading><Heading level={3} number={["A", "a"]} raw_title="Will Be Numbered A.a" slug="will-be-numbered-a-a" type="HeadingA">Will Be Numbered A.a</Heading><Heading level={2} number={["B"]} raw_title="Will Be Numbered B" slug="will-be-numbered-b" type="HeadingA">Will Be Numbered B</Heading>
+<Heading depth={2} id="slug" number={["IV"]} slug="slug">Will Be Numbered IV</Heading><Heading depth={2} id="will-be-numbered-iv-a-1-number-depth-3-even-though-heading-depth-is-2" number={["IV", "a", "1"]} slug="will-be-numbered-iv-a-1-number-depth-3-even-though-heading-depth-is-2">Will Be Numbered IV.a.1 (number depth 3, even though heading depth is 2)</Heading><Heading depth={2} id="will-be-numbered-a" number={["A"]} slug="will-be-numbered-a" title="Title" type="HeadingA">Will Be Numbered A</Heading><Heading depth={3} id="will-be-numbered-a-a" number={["A", "a"]} slug="will-be-numbered-a-a" type="HeadingA">Will Be Numbered A.a</Heading><Heading depth={2} id="will-be-numbered-b" number={["B"]} slug="will-be-numbered-b" type="HeadingA">Will Be Numbered B</Heading>
 </>); }

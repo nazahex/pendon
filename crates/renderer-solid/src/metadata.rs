@@ -131,7 +131,7 @@ fn collect(
     sections: &[Option<String>],
 ) {
     let attrs = node.get("attrs");
-    let level = attr(attrs, "level")
+    let level = attr(attrs, "depth")
         .and_then(|level| level.parse::<usize>().ok())
         .unwrap_or(1)
         .max(1);
@@ -290,16 +290,16 @@ mod tests {
             "type": "Section",
             "attrs": { "id": "lorem" },
             "children": [
-                { "type": "Heading", "text": "Lorem", "attrs": { "level": "1" } },
+                { "type": "Heading", "text": "Lorem", "attrs": { "depth": "1" } },
                 {
                     "type": "Section",
                     "attrs": { "id": "foo" },
                     "children": [
-                        { "type": "Heading", "text": "Foo", "attrs": { "level": "2" } },
-                        { "type": "Heading", "text": "Deep", "attrs": { "level": "3" } }
+                        { "type": "Heading", "text": "Foo", "attrs": { "depth": "2" } },
+                        { "type": "Heading", "text": "Deep", "attrs": { "depth": "3" } }
                     ]
                 },
-                { "type": "Heading", "text": "Back", "attrs": { "level": "2" } }
+                { "type": "Heading", "text": "Back", "attrs": { "depth": "2" } }
             ]
         }]));
 
@@ -319,9 +319,9 @@ mod tests {
     #[test]
     fn the_id_chain_falls_back_to_the_heading_itself() {
         let v = document(json!([
-            { "type": "Heading", "text": "One", "attrs": { "level": "2", "id": "explicit" } },
-            { "type": "Heading", "text": "Two", "attrs": { "level": "2", "slug": "auto-slug" } },
-            { "type": "Heading", "text": "Three Words!", "attrs": { "level": "2" } }
+            { "type": "Heading", "text": "One", "attrs": { "depth": "2", "id": "explicit" } },
+            { "type": "Heading", "text": "Two", "attrs": { "depth": "2", "slug": "auto-slug" } },
+            { "type": "Heading", "text": "Three Words!", "attrs": { "depth": "2" } }
         ]));
 
         let headings = extract_headings(&v).expect("an outline");
@@ -341,8 +341,8 @@ mod tests {
     #[test]
     fn an_authored_number_prefix_is_not_part_of_the_text() {
         let v = document(json!([
-            { "type": "Heading", "text": "1.2. Intro", "attrs": { "level": "2" } },
-            { "type": "Heading", "text": "42 Things", "attrs": { "level": "2" } }
+            { "type": "Heading", "text": "1.2. Intro", "attrs": { "depth": "2" } },
+            { "type": "Heading", "text": "42 Things", "attrs": { "depth": "2" } }
         ]));
 
         let headings = extract_headings(&v).expect("an outline");
@@ -358,7 +358,7 @@ mod tests {
     fn inline_children_contribute_their_text() {
         let v = document(json!([{
             "type": "Heading",
-            "attrs": { "level": "2" },
+            "attrs": { "depth": "2" },
             "children": [
                 { "type": "Text", "text": "Hello " },
                 { "type": "Strong", "children": [{ "type": "Text", "text": "World" }] }

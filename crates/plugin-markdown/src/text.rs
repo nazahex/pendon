@@ -475,7 +475,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
                     ctx.skip_para_close = ctx.skip_para_close.saturating_add(1);
 
                     ctx.out.push(Event::Attribute {
-                        name: "level".to_string(),
+                        name: "depth".to_string(),
                         value: hashes.to_string(),
                     });
 
@@ -554,10 +554,10 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
     if ctx.in_heading {
         if !ctx.heading_prefix_consumed {
             if line.chars().all(|c| c == '#') {
-                let level = line.chars().count();
+                let depth = line.chars().count();
                 ctx.out.push(Event::Attribute {
-                    name: "level".to_string(),
-                    value: level.to_string(),
+                    name: "depth".to_string(),
+                    value: depth.to_string(),
                 });
                 return;
             }

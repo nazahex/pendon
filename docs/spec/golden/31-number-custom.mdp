@@ -2,7 +2,7 @@
 block and carries its own depth (`%` count − 1). It always beats the element's
 own numbering, so the same counter can run across headings, anchors and images.
 
-##[slug-heading]("Title Heading")@@HeadingA{foo: "bar"}%%%numberB Title Heading - I.a (depth 2, so the missing parent counts as I)
+###[slug-heading]("Title Heading")@@HeadingA{foo: "bar"}%%%numberB Title Heading - I.a (depth 2, so the missing parent counts as I)
 
 @[link](/foo)@@AnchorA%%numberB will be numbered II.
 
@@ -36,11 +36,11 @@ Will be numbered B.A.A.A.
 
 Will be numbered A.a.I.i.1.1.
 
-##[slug]%%numberB Will Be Numbered IV
+###[slug]%%numberB Will Be Numbered IV
 
 ##%%%%numberB Will Be Numbered IV.a.1 (number depth 3, even though heading depth is 2)
 
-##("Title")@@HeadingA Will Be Numbered A
+###[]("Title")@@HeadingA Will Be Numbered A
 
 ###@@HeadingA Will Be Numbered A.a
 

@@ -69,10 +69,10 @@ pub fn recommended(element: &str) -> &'static [&'static str] {
         ],
         "directive" => &["type", "id", "level", "summary", "inner_text"],
         "heading" => &[
-            "level",
+            "depth",
             "id",
             "slug",
-            "raw_title",
+            "title",
             "number",
             "type",
             "inner_text",

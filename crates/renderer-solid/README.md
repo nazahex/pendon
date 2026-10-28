@@ -39,7 +39,7 @@ let jsx = render_solid_with_hints(&events, hints);
   the public vocabulary: `__`-prefixed internals are gone, `specs.*` is in it, and
   the universal positions are already renamed to `class`/`id`/`style` (§6.3).
   Phase 4 fills in each element's preset assignment. Per-element reads
-  (`level` on a heading, `header` on a cell, the skip lists) still name their own
+  (`depth` on a heading, `header` on a cell, the skip lists) still name their own
   field — Phase 4 moves them as the element's preset lands — while `name` is
   skipped everywhere because it is the `Element` node's tag.
 - **`template.rs`** — expands a component `template` (`{children}`, `{attrs.x}`,

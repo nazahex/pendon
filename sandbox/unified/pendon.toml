@@ -40,7 +40,7 @@ name = "HeadingXY"
 imports = "import { HeadingXY } from '@comp/Heading'"
 # `number` is written by `plugin-number` as an array (ADR-0010); `{...attrs}`
 # spreads it as a real JS value, so the template must not stringify it.
-template = "<HeadingXY level={\"{attrs.level}\"} type={\"{attrs.type}\"} {...attrs}>{children}</HeadingXY>"
+template = "<HeadingXY depth={\"{attrs.depth}\"} type={\"{attrs.type}\"} {...attrs}>{children}</HeadingXY>"
 
 [[task.heading.custom]]
 name = "HeadingDefault"

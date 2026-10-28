@@ -689,19 +689,36 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
 ### 7.4 Heading (`plugin-heading`)
 
 ```ebnf
-heading  = "#"(1..6) [ "[" slug "]" ] [ "(" title ")" ] extras? text
+heading  = "#"(1..6) [ "[" bracket "]" [ "(" paren ")" ] ] extras? text
 extras   = §5 extras-head                       # the shared {…} / @@type{…} head
 ```
 
-- `[slug]` and `("title")` are both optional and independent, and the whole head
-  MUST touch the `#` run (§4.1); the extras head follows them adjacently.
+- **The tag and the depth share one run (D-11).** The `#` **immediately before the
+  bracket is the tag** that claims the head, and the hashes in front of it are the
+  depth: `##[slug]` is a **depth-1** heading, `######[]()` a depth-5 one. A run
+  with no bracket claims nothing and keeps its whole length, so `## Title` is
+  depth 2. A claimed head never goes below depth 1: `#[slug]` is still `<h1>`.
+- The head MUST touch the `#` run (§4.1) and the extras head follows it
+  adjacently: `###[slug]("Title")@@type{…} Title`.
+- `[slug]` and `("title")` are both optional and independent — but the parentheses
+  belong to the bracket: `("Title")` written without one is not a head at all
+  (§4.3), it is text.
 - `("title")` is **not** the `innerText`; it is a separate attribute.
 - Whitespace between the head and the heading text is consumed by the head (it
-  MUST NOT become part of the title).
-- Extras attach to the heading element; extras `slug` is ignored when `[slug]`
-  exists.
+  MUST NOT become part of the title, nor of `inner_text`).
+- **Fields.** `depth` (`1..6`), `slug`, `title`, `id`, the extras attributes and
+  `inner_text` (the visible text — the node's content, never an attribute).
+  `slug` falls back to a slug of `inner_text`; `id` is the extras `#id`, else the
+  `[slug]`, else the extras `` `tick` `` — which the element reads through
+  `specs.tick` while that position keeps its default path (§6.1, §6.2) — else the
+  auto slug.
+- Extras attach to the heading element; the construct head wins over an extras
+  slot filling the same field (§6.2, e.g. an extras `` `tick` `` when `[slug]`
+  exists).
+- With `plugin-section` owning the outline the heading emits **neither** `id` nor
+  `slug`; the id transfers to the section (§9.5).
 - The heading does **not** number itself: `[[task.heading.number]]` and
-  `%%numberType` are `plugin-number`'s (§10.5), which reads `level` as the
+  `%%numberType` are `plugin-number`'s (§10.5), which reads `depth` as the
   natural depth and writes `attrs.number`. An authored `number:` prop passes
   through untouched when no block selects the heading.
 
@@ -1042,7 +1059,7 @@ number-system = "decimal" | "lower-roman"  | "upper-roman"
   ```
 
 - **Depth.** An element without a natural depth is depth 1 (a heading uses its
-  `level`). The two kinds of block differ here:
+  own `depth`, §7.4). The two kinds of block differ here:
   - **Element blocks** are relative: the **smallest depth is decided across the
     whole document**, so a `##` written after `###` sections renumbers them and
     `style[0]` is the group's smallest occurring depth, not necessarily 1.
@@ -1236,8 +1253,9 @@ per-plugin text hacking.
 When no custom component claims a layer, the built-in renderers emit the element
 with the node's attributes, so no extras are silently dropped. `renderer-solid`
 (`crates/renderer-solid/src/node.rs`) calls `render_attrs` for `Paragraph`
-(`<p>`), `Blockquote` (`<blockquote>`), `Heading` (`<h*>`, skipping the internal
-`level`), `Section` (`<section>`), `CodeFence` (`<pre>`, skipping `raw_html`),
+(`<p>`), `Blockquote` (`<blockquote>`), `Heading` (`<h*>`, which reads `depth`
+and skips the template-only `slug`), `Section` (`<section>`), `CodeFence`
+(`<pre>`, skipping `raw_html`),
 `BulletList` (`<ul>`) and `OrderedList` (`<ol>`, where `start` is emitted
 numerically); the HTML/JSON/AST renderers mirror this. The fallback path emits
 `id`, `class` and `style` and passes the remaining keys as attributes.
@@ -1609,8 +1627,8 @@ omit        = [<field>, …]
    is dropped, never emitted empty, even when `only` names it. Internal `__`-keys
    never ship; an author's extras key passes through under its own name.
 5. **Two names exist on every element:** `inner_text` (the node's text,
-   descendants concatenated, trimmed) and `depth` (a heading's `level`, a
-   section's open-section count).
+   descendants concatenated, trimmed) and `depth` (the heading's own, a section's
+   open-section count, `1` elsewhere).
 6. **One destination path = one array.** Blocks listing several `output`s write
    the _same_ rows to each; several blocks resolving to one path overwrite it —
    the later value wins, at the position the first block gave it. `output` and
@@ -1621,7 +1639,8 @@ omit        = [<field>, …]
    non-solid task drops the binding and keeps the files. Two blocks exporting one
    name leave the later value only (D-6).
 8. **Rows are flat and one per occurrence, in document order.** Nothing is nested:
-   a heading row carries `level`/`depth` and a consumer builds the tree. (The
+   a heading row carries `depth` and the fields of its head; a consumer builds the
+   tree. (The
    _nested_ `headings` outline of §20 is separate and automatic.)
 9. **Written after the page renders, atomically.** A failed render leaves no side
    file behind; a block that matched nothing writes no file and registers no

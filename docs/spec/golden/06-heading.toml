@@ -13,7 +13,7 @@ format = "solid"
 type = ["headingX", "headingY"]
 name = "HeadingXY"
 imports = "import { HeadingXY } from '@comp/Heading'"
-template = "<HeadingXY level={\"{attrs.level}\"} type={\"{attrs.type}\"} number={\"{attrs.number}\"} {...attrs}>{children}</HeadingXY>"
+template = "<HeadingXY depth={\"{attrs.depth}\"} type={\"{attrs.type}\"} number={\"{attrs.number}\"} {...attrs}>{children}</HeadingXY>"
 
 [[task.heading.custom]]
 name = "HeadingDefault"

@@ -203,9 +203,10 @@ pub fn parse(input: &str, options: &Options) -> Vec<Event> {
                     if current_line_len == 0 && !in_code_fence && !in_html_comment && !in_bind_block
                     {
                         events.push(Event::StartNode(NodeKind::Heading));
-                        // attach heading level attribute
+                        // §7.4: the `#` run is the heading's `depth` (the tag
+                        // that may claim a head is taken off it by the plugin).
                         events.push(Event::Attribute {
-                            name: "level".to_string(),
+                            name: "depth".to_string(),
                             value: n.to_string(),
                         });
                         in_heading = true;

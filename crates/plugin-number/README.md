@@ -59,8 +59,8 @@ value a system cannot represent, e.g. roman past 3999) falls back to `decimal`.
 
 ## Depth
 
-- **Element numbering**: the element's own depth — a heading's `level`, 1 for
-  everything else that has no natural depth.
+- **Element numbering**: the element's own depth — a heading's `depth` (§7.4), 1
+  for everything else that has no natural depth.
 - **Marker numbering**: `%`-count − 1, computed **once** by `crates/extra`
   (`%%` → 1 … `%%%%%%%` → 6) and carried in `__number`; this crate never counts
   `%`. A marker **always** beats the element's own numbering, and its depth is

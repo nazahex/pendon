@@ -18,7 +18,7 @@ fn block_custom_body() -> Vec<Event> {
         Event::Text("\n".into()),
         Event::StartNode(NodeKind::Heading),
         Event::Attribute {
-            name: "level".into(),
+            name: "depth".into(),
             value: "1".into(),
         },
         Event::Text("Title".into()),
