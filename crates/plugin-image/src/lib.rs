@@ -5,6 +5,7 @@ use pendon_core::{
 use pendon_extra::{
     issue_event, scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
     ExtrasIssue, FieldName, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag, Specs,
+    SpecsKey,
 };
 use pendon_plugin_markdown::process as process_markdown;
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
@@ -710,9 +711,12 @@ fn image_attrs_from_head(
 
     let mut attrs = ImageAttrs::default();
     // §6.3: the image's own positions — `class` / `id` / `style` are the
-    // universal DOM fields and an extras `"title"` is the `title`.
-    for (key, value) in specs.dom_fields(&parsed.items, &[(&specs.quote, "title")]) {
-        if key == "id" || key == specs.tick {
+    // universal DOM fields and an extras `"title"` is the `title`. A position a
+    // `field.specs.*` assignment moved is a field of the author's own, so the
+    // image neither renames it nor reads it (§6.2).
+    let tick = specs.element_path(SpecsKey::Tick);
+    for (key, value) in specs.dom_fields(&parsed.items, &[(SpecsKey::Quote, "title")]) {
+        if key == "id" || tick == Some(key) {
             continue;
         }
         match (key, value) {
@@ -726,10 +730,11 @@ fn image_attrs_from_head(
         }
     }
 
-    // §6.2: `#id` beats the extras `slug` (the resolved `tick` name).
-    attrs.id = parsed
-        .value(&specs.id)
-        .or_else(|| parsed.value(&specs.tick))
+    // §6.2: `#id` beats the extras `slug` (the tick position, at its default path).
+    attrs.id = specs
+        .element_path(SpecsKey::Id)
+        .and_then(|path| parsed.value(path))
+        .or_else(|| tick.and_then(|path| parsed.value(path)))
         .map(|value| value.literal());
     attrs
 }

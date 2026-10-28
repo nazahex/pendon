@@ -53,7 +53,7 @@ pub use typed::{
     parse_directive_head, parse_extras, parse_extras_body, parse_type_marker, read_number_mark,
     read_positional_groups, to_attributes, universal_field, Attrs, DirectiveHead, DirectiveMatch,
     DirectiveSigil, ExtrasAttr, ExtrasError, ExtrasHead, ExtrasIssue, ExtrasItem, ExtrasMatch,
-    IssueSeverity, NumberMark, Specs,
+    IssueSeverity, NumberMark, Specs, SpecsKey,
 };
 
 /// Resolves the §6.1 [`Specs`] for a node's `type` marker (§11 rule 5).

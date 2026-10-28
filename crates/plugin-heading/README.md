@@ -149,9 +149,13 @@ optional `id` (or fallback `slug`), `raw_title` and the extras attributes
 ### Specs ((§6.1, D-5))
 
 An entry renames the §6.1 positional slots through its `field.*` keys —
-`field.specs.tick` / `field.specs.quote` for a `` `slug` `` / `"title"` item. An
-entry that configures none keeps `slug` / `title`; once it configures one the
-preset is void as a whole (D-7). The table is in
+`field.specs.tick` / `field.specs.quote` for a `` `slug` `` / `"title"` item, and
+`field.specs.class` / `.id` / `.style` for a `.x` / `#x` / `style:` item. An
+entry that configures none keeps `slug` / `title` / `class` / `id` / `style`;
+once it configures one the preset is void as a whole (D-7). An assignment also
+**moves** the position: the assigned path is the author's own public field,
+which this element neither reads nor renames (`Specs::element_path` answers
+`None`, §6.1). The table is in
 [`docs/spec/SYNTAX.md` §6.1](../../docs/spec/SYNTAX.md).
 
 Only the **extras** head is affected: the heading's own `[slug]` bracket (§7.4

@@ -1,7 +1,7 @@
 use pendon_core::{Event, NodeKind};
 use pendon_extra::{
     issue_event, scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasIssue, FieldName,
-    Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag,
+    Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag, SpecsKey,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use regex::Regex;
@@ -138,14 +138,21 @@ fn parse_heading_head(raw_text: &str, options: &HeadingOptions) -> HeadingHead {
         let specs = options.custom.specs_for(head.type_marker.as_deref());
         let parsed = to_attributes(&head, &specs);
         issues.extend(parsed.issues.iter().cloned());
-        let extras_id = parsed.value(&specs.id).map(|value| value.literal());
-        let extras_slug = parsed.value(&specs.tick).map(|value| value.literal());
+        let id = specs.element_path(SpecsKey::Id);
+        let tick = specs.element_path(SpecsKey::Tick);
+        let extras_id = id
+            .and_then(|path| parsed.value(path))
+            .map(|value| value.literal());
+        let extras_slug = tick
+            .and_then(|path| parsed.value(path))
+            .map(|value| value.literal());
         // §6.3: the heading's own positions — `class` / `id` / `style` are the
         // universal DOM fields, and an extras `"title"` is the heading's `title`
         // (the `("…")` head group of §7.4 owns that field, so the extras value
-        // is dropped when both are present, §6.2).
-        for (key, value) in specs.dom_fields(&parsed.items, &[(&specs.quote, "title")]) {
-            if key == "id" || key == specs.tick {
+        // is dropped when both are present, §6.2). A `field.specs.*` assignment
+        // moves the position out of the element's reach.
+        for (key, value) in specs.dom_fields(&parsed.items, &[(SpecsKey::Quote, "title")]) {
+            if key == "id" || tick == Some(key) {
                 continue;
             }
             match value {

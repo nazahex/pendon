@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
     issue_event, scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
-    ExtrasIssue, FieldName, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag, SpecsResolver,
+    ExtrasIssue, FieldName, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag, SpecsKey,
+    SpecsResolver,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 
@@ -300,13 +301,19 @@ fn build_attributes(
         let specs = specs(head.type_marker.as_deref());
         let parsed = to_attributes(head, &specs);
         issues.extend(parsed.issues.iter().cloned());
-        let specs_id = parsed.value(&specs.tick).map(|value| value.literal());
+        // §6.2/§6.3: the tick position feeds the id fallback **while it keeps its
+        // default path**; `field.specs.tick = "x"` moves it to a field of the
+        // author's own, which the anchor then does not read.
+        let tick = specs.element_path(SpecsKey::Tick);
+        let specs_id = tick
+            .and_then(|path| parsed.value(path))
+            .map(|value| value.literal());
         // §6.3: the anchor's own positions — an extras `"title"` is the link's
-        // `title`, and `class` / `id` / `style` are the universal DOM fields.
-        // The extras slug (`specs.tick`) is the id fallback below, never an
+        // `title` (at the default path), and `class` / `id` / `style` are the
+        // universal DOM fields. The extras slug is the id fallback below, never an
         // attribute of its own.
-        for (key, value) in specs.dom_fields(&parsed.items, &[(&specs.quote, "title")]) {
-            if key == specs.tick {
+        for (key, value) in specs.dom_fields(&parsed.items, &[(SpecsKey::Quote, "title")]) {
+            if tick == Some(key) {
                 continue;
             }
             if key == "href" {
@@ -499,6 +506,7 @@ fn flush_text(normal: &mut String, out: &mut Vec<Event>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pendon_extra::{FieldConfig, Path};
     use pendon_renderer_solid::TypedComponent;
 
     /// §7.2's preset, position by position (S2-2.5). This is the element's
@@ -758,6 +766,11 @@ mod tests {
     fn emit(text: &str) -> Emitted {
         let mut out = Vec::new();
         emit_text(text, &AnchorOptions::default(), &mut out);
+        collect(out)
+    }
+
+    /// Collects the attributes, bare flags, diagnostics and text of one event run.
+    fn collect(out: Vec<Event>) -> Emitted {
         let mut emitted = Emitted {
             attrs: Vec::new(),
             flags: Vec::new(),
@@ -824,6 +837,82 @@ mod tests {
             "{:?}",
             emitted.diagnostics
         );
+    }
+
+    /// §6.3 — the proposal's "Assign specs fields": an assigned specs position is
+    /// a **public field of the author's own**. The element neither renames it to
+    /// `class` / `id` / `style` / `title` nor reads it as its slug (§6.2), so all
+    /// five positions land exactly where the entry put them, and the default
+    /// paths they left stay empty.
+    #[test]
+    fn an_assigned_specs_path_is_a_field_of_its_own() {
+        let mut field = FieldConfig::new();
+        for (position, path) in [
+            (SpecsKey::Tick, "slug"),
+            (SpecsKey::Quote, "title"),
+            (SpecsKey::Class, "foo.class"),
+            (SpecsKey::Id, "bar.id"),
+            (SpecsKey::Style, "foo.style"),
+        ] {
+            field
+                .assign_specs(
+                    position.key(),
+                    Some(Path::from_dotted(path).expect("a dotted path")),
+                )
+                .expect("a known specs key");
+        }
+        let options = AnchorOptions {
+            custom: ComponentSet::from_entries([TypedComponent::typed(
+                ["reference"],
+                AnchorCustomNode {
+                    name: "Reference".into(),
+                    template: "<Reference>{children}</Reference>".into(),
+                    imports: Vec::new(),
+                },
+            )
+            .with_field(field)]),
+        };
+        let mut out = Vec::new();
+        emit_text(
+            "[foo](/x)@@reference{`john-foo`, \"Price Title\", .cta, #main, style: \"color: red\"}",
+            &options,
+            &mut out,
+        );
+        let emitted = collect(out);
+        assert_eq!(value(&emitted, "href"), Some("/x"));
+        assert_eq!(value(&emitted, "slug"), Some("john-foo"));
+        assert_eq!(value(&emitted, "title"), Some("Price Title"));
+        assert_eq!(value(&emitted, "foo.class"), Some("cta"));
+        assert_eq!(value(&emitted, "bar.id"), Some("main"));
+        assert_eq!(value(&emitted, "foo.style"), Some("color: red"));
+        // Nothing was captured by the element: no DOM rename, no id fallback, and
+        // no second copy under a default name (§6.2, §6.3 rule 2).
+        for key in ["class", "id", "style", "specs.tick", "specs.quote"] {
+            assert!(value(&emitted, key).is_none(), "{key}: {:?}", emitted.attrs);
+        }
+
+        // A move to a name the element has no use for is published just the same,
+        // and the position's default path stays idle.
+        let mut field = FieldConfig::new();
+        field
+            .assign_specs("quote", Some(Path::from_dotted("meta.title").unwrap()))
+            .unwrap();
+        let options = AnchorOptions {
+            custom: ComponentSet::from_entries([TypedComponent::typed(
+                ["reference"],
+                AnchorCustomNode {
+                    name: "Reference".into(),
+                    template: "<Reference>{children}</Reference>".into(),
+                    imports: Vec::new(),
+                },
+            )
+            .with_field(field)]),
+        };
+        let mut out = Vec::new();
+        emit_text("[foo](/x)@@reference{\"Price Title\"}", &options, &mut out);
+        let emitted = collect(out);
+        assert_eq!(value(&emitted, "meta.title"), Some("Price Title"));
+        assert!(value(&emitted, "title").is_none(), "{:?}", emitted.attrs);
     }
 
     /// D-12's built-in collision: an extras `k: v` naming a field the element

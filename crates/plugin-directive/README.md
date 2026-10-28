@@ -63,7 +63,10 @@ template = "<DirectiveDefault {...attrs}>{children}</DirectiveDefault>"
 A directive head uses all four: `field.bracket.bare` (default `slug`) for
 `[….]`, `field.paren.bare` (default `title`) for `(…)`, and
 `field.specs.tick` / `field.specs.quote` (defaults `slug` / `title`) for the
-`{…}` items. An entry that configures none keeps every default (D-7).
+`{…}` items. An entry that configures none keeps every default (D-7). A
+`field.specs.<k>` assignment moves the position out of the element's reach: the
+assigned path is the author's public field, never read as a slug / title and
+never renamed to a DOM field (§6.1).
 
 ## Rust API
 

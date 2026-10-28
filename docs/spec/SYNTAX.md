@@ -308,6 +308,24 @@ unassigned falls back to its own qualified name (`bracket.bare`, `paren.bare`,
 `specs.tick`, `specs.quote`), never to a name the author chose for another
 position. There is no separate naming key (§14).
 
+#### A moved position is the author's own field
+
+`field.specs.<k>` moves a **position**, not just its spelling. There are five
+(`tick`, `quote`, `class`, `id`, `style` — `SPECS_KEYS` in
+`crates/extra::field`), and only their **default** paths carry meaning: at
+`specs.tick` / `specs.quote` the content is a construct's slug or title, at
+`specs.class` / `specs.id` / `specs.style` it is the element's class list, its id
+and its inline style (§6.3).
+
+Once an entry assigns a position elsewhere (`field.specs.quote = "_note"`,
+`field.specs.id = "foo.id"`), that content is a **public field of the author's
+own**: nothing is published at the default path any more, the element neither
+reads it (the anchor's id fallback, a citation's `cite-id`, a heading's `title`)
+nor renames it (`specs.class` → `class`), and no other element gains a meaning
+for the assigned name. `Specs::element_path` in `crates/extra::typed` is that
+boundary: it answers the default path for an unassigned position and `None` for
+a moved one.
+
 Every `@@` head may carry the `[x]` / `("x")` groups between its type and its
 `{…}` body (`@@type[x]("y"){…}`, `@@type[x]("y")`, `@@[x]("y")`), each part
 adjacent (§4.1). Markers place the groups directly after `}}`, before any
@@ -341,7 +359,9 @@ emitted):
 
 Additionally, a plugin that owns an element id (`heading`, `image`, `anchor`,
 `cite`, table/cell layers) MUST use `slug` as `id` when no explicit `#id` is
-present: `#id` > head slug > extras slug.
+present: `#id` > head slug > extras slug. The **extras** slug counts only while
+the tick position keeps its default path — `field.specs.tick = "x"` publishes
+the item as `x`, and an element id has no `x` to read (§6.1).
 
 ### 6.3 Value typing (IR mapping)
 
@@ -418,15 +438,19 @@ keeps rendering `k={""}`.
 A public field is a **path** ([ADR-0014](../decisions/0014-field-model.md) rule 1),
 so a renderer has to decide what the attribute is _called_. Two rules:
 
-1. **A universal position becomes its DOM field.** `specs.class` → `class`,
-   `specs.id` → `id`, `specs.style` → `style` (`universal_field` in
+1. **A position's _default_ path becomes its DOM field.** `specs.class` →
+   `class`, `specs.id` → `id`, `specs.style` → `style` (`universal_field` in
    `crates/extra::typed`, applied by `project`). It is a rename only: the map is
    ordered by the _public_ path (§6.4), so `class` is written where `specs.class`
-   sat. An **element assignment wins** — a `field.specs.id` that names `cite-id`
-   is written `cite-id` and never `id`, because only the element knows what its
-   id _is_ (§7). That is why an element projects its own head through
+   sat. The rename belongs to the **default** path, not to the position: with
+   `field.specs.class = "foo.class"` the item is written `foo.class` and never
+   `class`, because the author already named it (§6.1). An **element assignment
+   wins** the same way — a `field.specs.id` that names `cite-id` is written
+   `cite-id` and never `id`, because only the element knows what its id _is_
+   (§7). That is why an element projects its own head through
    `Specs::dom_fields(items, …)` instead of leaving the universal path to the
-   renderer.
+   renderer: both halves (`Specs::element_path` / `universal_field`) test the
+   _path_, so a moved position falls through untouched.
 2. **Every other path keeps its dotted spelling** — `specs.tick`, `specs.quote`,
    the slot groups `bracket.bare` / `paren.bare`, and an assigned
    `heading.anchor`. A cross-element position has no DOM meaning (§6.1), and the
@@ -707,7 +731,7 @@ marker         = "-" | "*" | "+" | DIGIT+ "."
 - Ordered list start offsets follow CommonMark behavior (first item number); extras cannot currently override this value.
 - Decorator lines that fail to bind to a valid list trigger a `Severity::Warning` diagnostic.
 - Item-level decorators (L2/L3) and nesting validation (L5) are defined in spec but not yet implemented.
-- Positional slots default to `` `slug` `` and `"title"` but can be renamed per entry via `field.specs.tick` and `field.specs.quote` (§6.1).
+- Positional slots default to `` `slug` `` and `"title"` but can be renamed per entry via `field.specs.tick` and `field.specs.quote` (§6.1); an assignment moves the position, so this layer stops reading it.
 - Unbound decorators outside of lists remain as ordinary block nodes to prevent silent data loss.
 
 ### 9.4 Layer mapping for lists
@@ -997,8 +1021,10 @@ Rules:
 4. `imports` is canonical. The legacy singular `import` is accepted with a
    deprecation `Severity::Warning` (see §14 OPEN-C2).
 5. Positional naming (per component, all layers): `field.specs.tick`,
-   `field.specs.quote` (§6.1). Directive heads additionally use
-   `field.bracket.bare`, `field.paren.bare`. A removed naming key is a load
+   `field.specs.quote` (§6.1) — plus `field.specs.class` / `.id` / `.style` for
+   the universal DOM positions. Directive heads additionally use
+   `field.bracket.bare`, `field.paren.bare`. An assignment moves the position,
+   so the element stops reading it (§6.1). A removed naming key is a load
    error, not a warning (§13, §14).
 6. `template` validation is a **hard error** when:
    - a non-void element is opened (`<X …>`) but the template contains neither a

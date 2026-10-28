@@ -392,11 +392,29 @@ assignable, and the DOM renderers still emit valid `class`/`id`/`style`.
       element's built-in list, so the wiring is **deferred to S2-4.1** — an
       anchor's `href:` is already an `Error`, the rest follow with their
       contracts.
-- [ ] **S2-3.3 — `field.specs.*` assignment.** Dep: S2-3.2.
+- [x] **S2-3.3 — `field.specs.*` assignment.** Dep: S2-3.2.
       Do: assignment renames the paths; `backtick_key`/`quote_key` no longer exist
       (deleted in S2-2.8 — a config that still uses them fails to load, per D-16).
       Exit: the proposal's `field.specs.*` block produces its documented output;
       a test asserts the old key is a load error, not a warning.
+      **Done 2026-10-28** — an assignment is a **move**, not a rename:
+      `SpecsKey` (`Tick`/`Quote`/`Class`/`Id`/`Style`) names the five positions,
+      `Specs::path` says where one is published and the new
+      `Specs::element_path` answers the **default** path only while it is
+      unassigned (`None` once moved). Every element's own read goes through
+      `element_path` (`plugin-anchor` / `-cite` / `-heading` / `-image` /
+      `-section` / `-table` / `-wiki`), and `Specs::dom_fields` matches the
+      element pairs on the **path**, so a moved position is neither consumed as
+      an id/title nor renamed to `class`/`id`/`style` — `foo.class` /
+      `bar.id` / `foo.style` come out verbatim in solid, html and json while the
+      default paths stay empty and the built-in `<a>` keeps `class`/`id`/`title`.
+      Tests: `specs_keys_cover_the_specs_vocabulary`,
+      `every_specs_position_moves_with_field_specs`,
+      `dom_fields_projects_only_default_paths` (`crates/extra`),
+      `an_assigned_specs_path_is_a_field_of_its_own` (`plugin-anchor`) and
+      `anchor_options_carry_the_entry_specs` (CLI: the entry's assignment reaches
+      `AnchorOptions`); the removed-key load error is
+      `each_removed_naming_key_is_a_load_error`.
 - [x] **S2-3.4 — Renderer mapping for `specs.*`.** Dep: S2-3.2.
       Files: `crates/renderer-solid`, `crates/renderer-html` (and JSON/AST as
       needed).

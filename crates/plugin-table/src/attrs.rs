@@ -1,7 +1,7 @@
 // src/attrs.rs
 use crate::parser::Align;
 use pendon_core::Event;
-use pendon_extra::{to_attributes, ExtrasAttr, ExtrasHead, Specs};
+use pendon_extra::{to_attributes, ExtrasAttr, ExtrasHead, Specs, SpecsKey};
 
 /// The attributes of one table layer (table/caption/thead/tbody/tfoot/row/cell).
 ///
@@ -41,12 +41,16 @@ pub fn extras_to_layer(head: &ExtrasHead) -> LayerAttrs {
 
     let mut styles: Vec<String> = Vec::new();
     let mut props: Vec<(String, String)> = Vec::new();
-    // §6.2: the extras slug (the resolved `tick` path) is the id fallback.
-    let extras_slug = parsed.value(&specs.tick).map(|value| value.literal());
+    // §6.2: the extras slug (the tick position, at its default path) is the id
+    // fallback; a `field.specs.*` assignment moves it out of the layer's reach.
+    let tick = specs.element_path(SpecsKey::Tick);
+    let extras_slug = tick
+        .and_then(|path| parsed.value(path))
+        .map(|value| value.literal());
     // §6.3: a layer's own positions — `class` / `id` / `style` are the universal
     // DOM fields and an extras `"title"` is the `title`.
-    for (key, value) in specs.dom_fields(&parsed.items, &[(&specs.quote, "title")]) {
-        if key == specs.tick {
+    for (key, value) in specs.dom_fields(&parsed.items, &[(SpecsKey::Quote, "title")]) {
+        if tick == Some(key) {
             continue;
         }
         match (key, value) {

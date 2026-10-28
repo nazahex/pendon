@@ -5,7 +5,7 @@ use std::path::Path;
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
     issue_event, scan_extras_chars, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
-    ExtrasIssue, FieldName, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag,
+    ExtrasIssue, FieldName, Preset, Slot, SlotContract, SlotKind, SlotPos, SlotTag, SpecsKey,
 };
 use pendon_renderer_solid::{
     layer_templates, ComponentSet, DataExport, ImportEntry, SolidRenderHints,
@@ -806,17 +806,25 @@ fn merge_cite_extras(extra: &mut CiteExtraAttrs, head: &ExtrasHead, options: &Ci
     let parsed = to_attributes(head, &specs);
     extra.issues.extend(parsed.issues.iter().cloned());
 
-    // §6.2: `#id` > extras `slug`; both feed the `cite-id` slot.
-    let extras_id = parsed.value(&specs.id).map(|value| value.literal());
-    let extras_slug = parsed.value(&specs.tick).map(|value| value.literal());
+    // §6.2/§6.3: `#id` > extras `slug`; both feed the `cite-id` slot **while the
+    // position keeps its default path** — a `field.specs.*` assignment publishes it
+    // as a field of the author's own, which the citation no longer reads.
+    let id = specs.element_path(SpecsKey::Id);
+    let tick = specs.element_path(SpecsKey::Tick);
+    let extras_id = id
+        .and_then(|path| parsed.value(path))
+        .map(|value| value.literal());
+    let extras_slug = tick
+        .and_then(|path| parsed.value(path))
+        .map(|value| value.literal());
 
     // §6.3: the citation's own positions — `class` / `style` are the universal
     // DOM fields, `#id` feeds `cite-id` and an extras `"title"` is the `title`.
     for (key, value) in specs.dom_fields(
         &parsed.items,
-        &[(&specs.id, "cite-id"), (&specs.quote, "title")],
+        &[(SpecsKey::Id, "cite-id"), (SpecsKey::Quote, "title")],
     ) {
-        if key == "cite-id" || key == specs.tick {
+        if key == "cite-id" || tick == Some(key) {
             continue;
         }
         match value {

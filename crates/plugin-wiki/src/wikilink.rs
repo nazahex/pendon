@@ -1,7 +1,7 @@
 use pendon_core::{Event, NodeKind};
 use pendon_extra::{
     emit_attr_issues, issue_event, parse_extras, to_attributes, ExtrasAttr, ExtrasHead,
-    ExtrasIssue, ExtrasMatch, Specs,
+    ExtrasIssue, ExtrasMatch, Specs, SpecsKey,
 };
 
 use crate::options::WikiOptions;
@@ -118,7 +118,7 @@ fn emit_wikilink_extras(head: Option<&ExtrasHead>, out: &mut Vec<Event>) {
     // §6.3: the link's own positions — `class` / `id` / `style` are the
     // universal DOM fields and an extras `"title"` is the `title` this plugin
     // produces itself (§7.5).
-    for (key, value) in specs.dom_fields(&attrs.items, &[(&specs.quote, "title")]) {
+    for (key, value) in specs.dom_fields(&attrs.items, &[(SpecsKey::Quote, "title")]) {
         if WIKI_OWNED_KEYS.contains(&key) {
             out.push(issue_event("wiki", &ExtrasIssue::owned_key(key)));
             continue;

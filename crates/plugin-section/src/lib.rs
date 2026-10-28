@@ -48,7 +48,7 @@ use std::collections::HashMap;
 use pendon_core::{ensure_unique, slugify, Event, NodeKind, Severity};
 use pendon_extra::{
     bind_decorators, issue_event, scan_extras_chars, to_attributes, Attrs, BoundDecorator,
-    ExtrasAttr, Specs,
+    ExtrasAttr, Specs, SpecsKey,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
@@ -366,10 +366,23 @@ fn open_section(
 
 /// §9.5: the section id — `#sectionID` > decorator slug > `[slug]` > heading
 /// extras slug > the slug of the heading title.
+///
+/// The decorator's `#id` and slug contribute **only at their default paths**
+/// (§6.3): a `field.specs.*` assignment makes them fields of the author's own,
+/// published by [`emit_decorator_attrs`] rather than consumed here.
 fn section_id(decorator: Option<&BoundDecorator>, chain: &HeadInfo) -> String {
-    let deco_id = decorator.and_then(|d| d.attrs.value(&d.specs.id).map(|value| value.literal()));
-    let deco_slug =
-        decorator.and_then(|d| d.attrs.value(&d.specs.tick).map(|value| value.literal()));
+    let deco_id = decorator.and_then(|d| {
+        d.specs
+            .element_path(SpecsKey::Id)
+            .and_then(|path| d.attrs.value(path))
+            .map(|value| value.literal())
+    });
+    let deco_slug = decorator.and_then(|d| {
+        d.specs
+            .element_path(SpecsKey::Tick)
+            .and_then(|path| d.attrs.value(path))
+            .map(|value| value.literal())
+    });
     deco_id
         .or(deco_slug)
         .or_else(|| chain.slug_head.clone())
@@ -381,8 +394,9 @@ fn section_id(decorator: Option<&BoundDecorator>, chain: &HeadInfo) -> String {
 /// consumed by the id chain), in canonical order (§6.4) with its `specs.*` paths
 /// projected (§6.3).
 fn emit_decorator_attrs(attrs: &Attrs, specs: &Specs, out: &mut Vec<Event>) {
+    let tick = specs.element_path(SpecsKey::Tick);
     for (name, value) in specs.dom_fields(&attrs.items, &[]) {
-        if name == "id" || name == specs.tick {
+        if name == "id" || tick == Some(name) {
             continue;
         }
         match value {
@@ -455,8 +469,15 @@ fn heading_chain(raw: &str, level: usize, options: &SectionOptions) -> HeadInfo 
     if let Some((head, next)) = scan_extras_chars(&chars, cursor) {
         let specs = options.section.specs_for(head.type_marker.as_deref());
         let parsed = to_attributes(&head, &specs);
-        extras_id = parsed.value(&specs.id).map(|value| value.literal());
-        extras_slug = parsed.value(&specs.tick).map(|value| value.literal());
+        // §6.2/§6.3: both feed the id chain at their **default** paths only.
+        extras_id = specs
+            .element_path(SpecsKey::Id)
+            .and_then(|path| parsed.value(path))
+            .map(|value| value.literal());
+        extras_slug = specs
+            .element_path(SpecsKey::Tick)
+            .and_then(|path| parsed.value(path))
+            .map(|value| value.literal());
         cursor = next;
     }
 

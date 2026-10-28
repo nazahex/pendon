@@ -126,11 +126,12 @@ pub struct ExtrasHead {
 /// The **specs** of an extras head: the public field each of its positional
 /// contents lands in (§5, §6.1).
 ///
-/// A head carries at most four positional contents — the `[...]` / `(...)` **slot
-/// groups** and the `` `...` `` / `"..."` **specs items** — and each lands in exactly
-/// one field. The two vocabularies are named together here because
-/// [`to_attributes`] maps a whole head in one pass, and because both answer the
-/// same question: *where does this content go?*
+/// A head carries at most seven positional contents — the `[...]` / `(...)` **slot
+/// groups**, the `` `...` `` / `"..."` **specs items**, and the `.class` / `#id` /
+/// `style:` items — and each lands in exactly one field. The vocabularies are
+/// named together here because [`to_attributes`] maps a whole head in one pass,
+/// and because all of them answer the same question: *where does this content
+/// go?* The five `specs.*` rows are the [`SpecsKey`] positions.
 ///
 /// | content        | field (`field.*` key)                | default      | meaning                                            |
 /// | -------------- | ------------------------------------ | ------------ | -------------------------------------------------- |
@@ -145,10 +146,15 @@ pub struct ExtrasHead {
 /// The `meaning` column is the one piece of this table that exists **only**
 /// here: an assigned field carries no semantics of its own, so a rename never
 /// changes what the content *is*. The `default` column is
-/// [`Default`] below — the `specs.*` paths a construct keeps when its
+/// [`SpecsKey::default_path`] — the `specs.*` paths a construct keeps when its
 /// `custom` entry configures nothing (D-7).
 ///
-/// An entry's `field.*` keys rename those fields (D-5);
+/// A **path** is not a **position**: once `field.specs.<k>` moves a position
+/// elsewhere, the assigned path is the author's own public field, and the
+/// element stops reading the content at all — see [`SpecsKey`] and
+/// [`element_path`](Self::element_path).
+///
+/// An entry's `field.*` keys move those contents (D-5);
 /// [`resolve`](Self::resolve) is the only place that reads them for naming.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Specs {
@@ -173,11 +179,11 @@ impl Default for Specs {
         Self {
             bracket: "bracket.bare".to_string(),
             paren: "paren.bare".to_string(),
-            tick: "specs.tick".to_string(),
-            quote: "specs.quote".to_string(),
-            class: "specs.class".to_string(),
-            id: "specs.id".to_string(),
-            style: "specs.style".to_string(),
+            tick: specs_path(SpecsKey::Tick).dotted(),
+            quote: specs_path(SpecsKey::Quote).dotted(),
+            class: specs_path(SpecsKey::Class).dotted(),
+            id: specs_path(SpecsKey::Id).dotted(),
+            style: specs_path(SpecsKey::Style).dotted(),
         }
     }
 }
@@ -208,48 +214,129 @@ impl Specs {
         Self {
             bracket: slot_name(config, Slot::Bracket, SlotKind::Bare),
             paren: slot_name(config, Slot::Paren, SlotKind::Bare),
-            tick: specs_name(config, "tick"),
-            quote: specs_name(config, "quote"),
-            class: specs_name(config, "class"),
-            id: specs_name(config, "id"),
-            style: specs_name(config, "style"),
+            tick: specs_name(config, SpecsKey::Tick),
+            quote: specs_name(config, SpecsKey::Quote),
+            class: specs_name(config, SpecsKey::Class),
+            id: specs_name(config, SpecsKey::Id),
+            style: specs_name(config, SpecsKey::Style),
+        }
+    }
+}
+
+/// One of the five **specs positions** (§6.1, [`crate::field::SPECS_KEYS`]).
+///
+/// A position is what an element may attach meaning to — a construct's slug, its
+/// title, an element id, its class list, its inline style. A *path* is where that
+/// content is published, and `field.specs.<k>` moves it (§6.1, D-5).
+///
+/// Only the **default** path carries meaning: once an entry assigns a position
+/// elsewhere (`field.specs.quote = "_extra-note"`), the content is the author's
+/// own public field, and the element neither reads it (§6.2) nor renames it
+/// (§6.3) — see [`Specs::element_path`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpecsKey {
+    /// `` `x` `` — `field.specs.tick`, default path `specs.tick`.
+    Tick,
+    /// `"x"` — `field.specs.quote`, default path `specs.quote`.
+    Quote,
+    /// `.x` / `class: "x"` — `field.specs.class`, default path `specs.class`.
+    Class,
+    /// `#x` — `field.specs.id`, default path `specs.id`.
+    Id,
+    /// `style:` / `--var` — `field.specs.style`, default path `specs.style`.
+    Style,
+}
+
+impl SpecsKey {
+    /// The `<k>` in the `field.specs.<k>` config key (§7, D-5).
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Tick => "tick",
+            Self::Quote => "quote",
+            Self::Class => "class",
+            Self::Id => "id",
+            Self::Style => "style",
+        }
+    }
+
+    /// The path a position keeps when no `field.specs.<k>` assigns it: the one
+    /// spelling that carries element meaning (§6.1, §6.3).
+    pub fn default_path(self) -> &'static str {
+        match self {
+            Self::Tick => "specs.tick",
+            Self::Quote => "specs.quote",
+            Self::Class => "specs.class",
+            Self::Id => "specs.id",
+            Self::Style => "specs.style",
         }
     }
 }
 
 impl Specs {
-    /// Projects a head's attribute paths onto the field names `element` reads
-    /// (§6.3).
+    /// The resolved path of `position` — the entry's assignment or, when it left
+    /// the position alone, its [`default_path`](SpecsKey::default_path).
+    pub fn path(&self, position: SpecsKey) -> &str {
+        match position {
+            SpecsKey::Tick => &self.tick,
+            SpecsKey::Quote => &self.quote,
+            SpecsKey::Class => &self.class,
+            SpecsKey::Id => &self.id,
+            SpecsKey::Style => &self.style,
+        }
+    }
+
+    /// The path an **element** may read `position` from: the
+    /// [`default`](SpecsKey::default_path) spelling, or `None` when the entry
+    /// moved the position with `field.specs.<k>` (D-5).
     ///
-    /// The three **universal** positions become their DOM names — the resolved
-    /// [`class`](Self::class) / [`id`](Self::id) / [`style`](Self::style) paths,
-    /// whatever `field.specs.*` renamed them to, are written as `class` / `id` /
-    /// `style` — unless `element` reads that position under a name of its own: a
-    /// citation calls its `#id` `cite-id`. The positions only an element can
-    /// interpret are named by `element` as `(this specs path, the field it feeds)`
-    /// pairs — a heading says `(&specs.quote, "title")`, an anchor the same.
-    /// Every other key is a public field of its own (`k: v` stays `k`, D-12), so
-    /// it is returned unchanged.
+    /// The assignment *is* the rename (§6.1), so a moved position is published
+    /// under the name the author chose and nothing else: with
+    /// `field.specs.quote = "_extra-note"` an anchor's `"…"` item is the
+    /// `_extra-note` field — not its `title` attribute, and not a second copy
+    /// under both names.
+    pub fn element_path(&self, position: SpecsKey) -> Option<&'static str> {
+        let default = position.default_path();
+        (self.path(position) == default).then_some(default)
+    }
+
+    /// Projects a head's attribute paths onto the field names its element and the
+    /// DOM use (§6.3).
+    ///
+    /// Three steps, in order:
+    ///
+    /// 1. `element` names the positions this element interprets as `(position,
+    ///    the field it feeds)` pairs — a citation reads its [`Id`](SpecsKey::Id)
+    ///    position into `cite-id`, a heading its [`Quote`](SpecsKey::Quote) into
+    ///    `title`. Only a position that still sits on its
+    ///    [`default path`](Self::element_path) matches, so a `field.specs.<k>`
+    ///    assignment is never captured by the element.
+    /// 2. The **universal** positions written as their DOM field:
+    ///    `specs.class` / `specs.id` / `specs.style` → `class` / `id` / `style`
+    ///    ([`universal_field`]). A moved path is not one of them, so `foo.class`
+    ///    stays `foo.class`.
+    /// 3. Every other key is a public field of its own (`k: v` stays `k`,
+    ///    D-12), returned unchanged — `specs.tick`, `bracket.bare`, an assigned
+    ///    path.
     ///
     /// A position `element` does not name keeps its dotted path, which is what
     /// the JSON/AST renderers carry and what a phase-4 preset fills in.
     pub fn dom_fields<'a>(
-        &'a self,
+        &self,
         items: &'a [(String, ExtrasAttr)],
-        element: &[(&str, &'a str)],
+        element: &[(SpecsKey, &'a str)],
     ) -> Vec<(&'a str, &'a ExtrasAttr)> {
         items
             .iter()
             .map(|(key, value)| {
-                // The element's own reading wins: a citation calls its `#id`
-                // `cite-id`, and the universal name is only the fallback.
-                let field = match element.iter().find(|(path, _)| *path == key.as_str()) {
-                    Some((_, field)) => *field,
-                    None if key == &self.class => "class",
-                    None if key == &self.id => "id",
-                    None if key == &self.style => "style",
-                    None => key.as_str(),
-                };
+                // The element's own reading wins at the default path; the
+                // universal DOM field is the next fallback, and a key that is
+                // neither is already a field of its own.
+                let field = element
+                    .iter()
+                    .find(|(position, _)| self.element_path(*position) == Some(key.as_str()))
+                    .map(|(_, field)| *field)
+                    .or_else(|| universal_field(key))
+                    .unwrap_or(key.as_str());
                 (field, value)
             })
             .collect()
@@ -262,8 +349,9 @@ impl Specs {
 /// `tick` / `quote` and the two slot groups are not universal — what a slug or a
 /// title means is the element's business (§7) — so an element names them through
 /// [`Specs::dom_fields`]. This is the default-path-only spelling the projection
-/// ([`crate::field::project`]) can apply without a `FieldConfig`; a path
-/// `field.specs.*` renamed is projected by the plugin that resolved it.
+/// ([`crate::field::project`]) can apply without a `FieldConfig`. A path
+/// `field.specs.*` assigned is **not** universal: `foo.class` stays `foo.class`
+/// (§6.3 rule 2, [`Specs::element_path`]).
 pub fn universal_field(key: &str) -> Option<&'static str> {
     let key = key.strip_prefix(SPECS_NAMESPACE)?.strip_prefix('.')?;
     match key {
@@ -284,16 +372,16 @@ fn slot_name(config: &FieldConfig, slot: Slot, kind: SlotKind) -> String {
 }
 
 /// One specs position's assigned name, or its `specs.<k>` spelling (§6.3).
-fn specs_name(config: &FieldConfig, key: &str) -> String {
-    match config.specs().get(key) {
+fn specs_name(config: &FieldConfig, key: SpecsKey) -> String {
+    match config.specs().get(key.key()) {
         Some(Some(path)) => path.dotted(),
         _ => specs_path(key).dotted(),
     }
 }
 
 /// `<specs>.<k>` as a [`Path`]; the one place the namespace literal is built.
-fn specs_path(key: &str) -> Path {
-    Path::from_segments(&[SPECS_NAMESPACE, key])
+fn specs_path(key: SpecsKey) -> Path {
+    Path::from_segments(&[SPECS_NAMESPACE, key.key()])
         .expect("`specs` and its keys are valid path segments")
 }
 

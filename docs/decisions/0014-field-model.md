@@ -30,7 +30,10 @@ taxonomy.
    _Public_ is the **field map**, built once per element at the end of the
    pipeline from (a) built-in fields, (b) slot values under their active
    assignment, (c) `specs.*` / `number.*`, (d) `k: v` at top level. Dotted paths
-   are the public truth.
+   are the public truth. An assignment **moves** a position rather than aliasing
+   it: `field.specs.<k> = "x"` publishes `x` alone, the default path stays
+   empty, and no element attaches the position's meaning to `x` (S2-3.3,
+   §6.1 of the spec).
 2. **Renderers and `extract` both read the public map.** Neither recomputes a
    name and neither reads internals.
 3. **Overrides apply at the projection boundary only.** `field.override.<path>`

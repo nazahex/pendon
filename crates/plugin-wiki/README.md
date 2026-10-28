@@ -53,8 +53,12 @@ let events = process_with_options(&parsed, opts);
 ### Specs ((§6.1, D-5))
 
 An entry renames the §6.1 positional slots through its `field.*` keys —
-`field.specs.tick` / `field.specs.quote` — and an entry that configures none
-keeps `slug` / `title` (D-7). `plugin-wiki` does not read them yet (see below).
+`field.specs.tick` / `field.specs.quote` / `.class` / `.id` / `.style` — and an
+entry that configures none keeps `slug` / `title` / `class` / `id` / `style`
+(D-7). The infobox link reads the **quote** position into its `title` while that
+position keeps its default path; a `field.specs.quote` assignment publishes the
+author's own field and the link stops reading it (§6.1). `plugin-wiki` does not
+read the other positions yet (see below).
 
 > **Not yet wired:** `plugin-wiki`'s `WikiOptions` carries no `ComponentSet`, so
 > a `[task.wiki.custom]` key is not read yet and the extras stay on the built-in

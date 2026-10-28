@@ -85,7 +85,7 @@ exactly one `export const headings` line each (no bytes removed), and
 ## In progress
 
 - [ ] **Stage 2 — Phases 0–2 done; Phase 3 in progress (`S2-3.1`, `S2-3.2`,
-      `S2-3.4` done).** Docs live in
+      `S2-3.3`, `S2-3.4` done).** Docs live in
       [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md).
       **Phase 0 complete 2026-10-28**: D-1…D-17 signed (D-16 = clean total
       replacement: no compat, no warnings, no migration doc, old configs fail
@@ -166,8 +166,17 @@ exactly one `export const headings` line each (no bytes removed), and
       `ExtrasIssue::owned_key` carries the built-in-field rule as an `Error`
       naming `field.override.<k>` — `plugin-anchor`'s `href` uses it, the other
       elements get theirs with their contracts (`S2-4.1`). Fixture `01` re-frozen
-      (`foo="one"`, `id="dup"`, plus a new positional-duplicate line). Next:
-      `S2-3.3` (the `field.specs.*` assignment), then `S2-3.5`.
+      (`foo="one"`, `id="dup"`, plus a new positional-duplicate line). `S2-3.3` done:
+      an assignment is a **move**, not a rename — `SpecsKey` names the five
+      positions, `Specs::path` where one is published, and `Specs::element_path`
+      answers the default path only while it is unassigned, so every element's own
+      read (`anchor`'s tick→id, a citation's `cite-id`, a heading's `title`) goes
+      `None` once `field.specs.<k>` moved it and `dom_fields` (which matches on the
+      **path**) leaves `foo.class` / `bar.id` / `foo.style` verbatim — no element
+      meaning, no universal rename, default path empty. Verified end-to-end in a
+      three-format sandbox (solid / html / json); tests in `crates/extra`,
+      `plugin-anchor` and the CLI config path
+      (`anchor_options_carry_the_entry_specs`). Next: `S2-3.5`.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden

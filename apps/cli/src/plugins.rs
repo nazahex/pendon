@@ -1118,6 +1118,7 @@ pub fn load_custom_registry(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pendon_extra::SpecsKey;
 
     /// The component a task config wires into one layer for a `type` marker: a
     /// literal entry beats the layer default (§11 rule 3). The real decision is
@@ -1259,6 +1260,40 @@ default = "DocHeading"
             &node.imports[0],
             ImportEntry::Structured { module, .. } if module == "@/components/DocHeading"
         ));
+    }
+
+    /// §6.3 (S2-3.3): an entry's `field.specs.*` block travels with it into the
+    /// plugin's layer set, so `specs_for(marker)` answers the entry that owns the
+    /// marker — and the entry's assignment, not the built-in default.
+    #[test]
+    fn anchor_options_carry_the_entry_specs() {
+        let cfg: AnchorTaskConfig = toml::from_str(
+            r#"
+[[custom]]
+type = ["anchorA"]
+name = "AnchorDefault"
+template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
+field.specs.tick = "slug"
+field.specs.quote = "title"
+field.specs.class = "foo.class"
+field.specs.id = "bar.id"
+field.specs.style = "foo.style"
+"#,
+        )
+        .expect("valid anchor config");
+        let options = build_anchor_options(Some(&cfg)).expect("valid anchor options");
+        let specs = options.custom.specs_for(Some("anchorA"));
+        let paths: Vec<&str> = [
+            SpecsKey::Tick,
+            SpecsKey::Quote,
+            SpecsKey::Class,
+            SpecsKey::Id,
+            SpecsKey::Style,
+        ]
+        .into_iter()
+        .map(|key| specs.path(key))
+        .collect();
+        assert_eq!(paths, ["slug", "title", "foo.class", "bar.id", "foo.style"]);
     }
 
     /// §11: `custom` is the canonical key, `[[custom]]` addresses the primary

@@ -5,7 +5,7 @@
 use pendon_extra::{
     parse_directive_head, parse_extras, parse_type_marker, to_attributes, AttrValue, Attrs,
     DirectiveMatch, DirectiveSigil, ExtrasAttr, ExtrasError, ExtrasHead, ExtrasIssue, ExtrasMatch,
-    FieldConfig, IssueSeverity, Path, Slot, SlotKind, Specs, SPREAD_KEY,
+    FieldConfig, IssueSeverity, Path, Slot, SlotKind, Specs, SpecsKey, SPECS_KEYS, SPREAD_KEY,
 };
 
 /// Parses `input` as a complete head and maps it to attributes.
@@ -341,6 +341,153 @@ fn positional_names_resolve_from_field_config() {
             style: "specs.style".into(),
         }
     );
+}
+
+/// `SpecsKey` is the one place a position's default path is spelled (§6.3): it
+/// covers exactly the `field.specs.<k>` vocabulary and agrees with [`Specs`].
+#[test]
+fn specs_keys_cover_the_specs_vocabulary() {
+    let keys = [
+        SpecsKey::Tick,
+        SpecsKey::Quote,
+        SpecsKey::Class,
+        SpecsKey::Id,
+        SpecsKey::Style,
+    ];
+    let names: Vec<&str> = keys.iter().map(|key| key.key()).collect();
+    assert_eq!(names, SPECS_KEYS);
+    let default = Specs::default();
+    for key in keys {
+        assert_eq!(default.path(key), key.default_path(), "{}", key.key());
+        // Unassigned, the position is readable by its element…
+        assert_eq!(default.element_path(key), Some(key.default_path()));
+    }
+}
+
+/// §6.3/§11 + D-5: `field.specs.<k>` assigns the **path** a position is
+/// published at, and all five positions move the same way. The assignment *is*
+/// the rename, so the default path — the only one carrying element meaning —
+/// goes idle, and no other position moves with it.
+#[test]
+fn every_specs_position_moves_with_field_specs() {
+    let positions = [
+        SpecsKey::Tick,
+        SpecsKey::Quote,
+        SpecsKey::Class,
+        SpecsKey::Id,
+        SpecsKey::Style,
+    ];
+    // One head per position, so an item can never be mistaken for another.
+    let items = [
+        ("`s`", "specs.tick"),
+        ("\"T\"", "specs.quote"),
+        (".c", "specs.class"),
+        ("#i", "specs.id"),
+        ("style: \"color: red\"", "specs.style"),
+    ];
+    for (position, (item, default)) in positions.into_iter().zip(items) {
+        let source = format!("@@type{{{item}}}");
+        assert_eq!(position.default_path(), default);
+        assert_eq!(
+            keys_of(&source, &Specs::default()),
+            vec![default.to_string()]
+        );
+
+        let target = format!("assigned.{}", position.key());
+        let mut config = FieldConfig::new();
+        config
+            .assign_specs(position.key(), Some(Path::from_dotted(&target).unwrap()))
+            .expect("every specs key is assignable");
+        let specs = Specs::resolve(Some(&config));
+        assert_eq!(
+            keys_of(&source, &specs),
+            vec![target.clone()],
+            "{}",
+            position.key()
+        );
+        // §6.3: the element may no longer read the moved position…
+        assert_eq!(specs.element_path(position), None, "{}", position.key());
+        // …and nothing else moved.
+        for other in positions {
+            if other != position {
+                assert_eq!(specs.path(other), other.default_path());
+                assert_eq!(specs.element_path(other), Some(other.default_path()));
+            }
+        }
+    }
+}
+
+/// §6.3's projection in its three steps: the element's own reading first, the
+/// universal DOM field next, everything else verbatim — and **none** of them for
+/// a position `field.specs.*` assigned, because the author's name is already the
+/// public field.
+#[test]
+fn dom_fields_projects_only_default_paths() {
+    let default = Specs::default();
+    // 1. The universal three become their DOM fields…
+    assert_eq!(
+        projected("@@type{.c, #i, style: \"color: red\"}", &default, &[]),
+        ["class", "id", "style"]
+    );
+    // …while an element names the positions only it interprets…
+    assert_eq!(
+        projected(
+            "@@type{`s`, \"T\"}",
+            &default,
+            &[(SpecsKey::Tick, "id"), (SpecsKey::Quote, "title")]
+        ),
+        ["id", "title"]
+    );
+    // …and a pair for a different position leaves the item alone.
+    assert_eq!(
+        projected("@@type{\"T\"}", &default, &[(SpecsKey::Id, "cite-id")]),
+        ["specs.quote"]
+    );
+    // 2. A position the entry moved keeps the assigned spelling: no DOM rename,
+    //    and the element's pair no longer matches it.
+    let mut config = FieldConfig::new();
+    config
+        .assign_specs("class", Some(Path::from_dotted("foo.class").unwrap()))
+        .unwrap();
+    config
+        .assign_specs("id", Some(Path::from_dotted("bar.id").unwrap()))
+        .unwrap();
+    let assigned = Specs::resolve(Some(&config));
+    assert_eq!(
+        projected("@@type{.c, #i}", &assigned, &[(SpecsKey::Id, "cite-id")]),
+        ["bar.id", "foo.class"]
+    );
+    // 3. The positions it left alone still project as usual.
+    assert_eq!(
+        projected(
+            "@@type{`s`, style: \"color: red\"}",
+            &assigned,
+            &[(SpecsKey::Tick, "id")]
+        ),
+        ["id", "style"]
+    );
+}
+
+/// The public paths a head's items land on.
+fn keys_of(source: &str, specs: &Specs) -> Vec<String> {
+    to_attributes(&head_of(source), specs)
+        .items
+        .into_iter()
+        .map(|(key, _)| key)
+        .collect()
+}
+
+/// The field each item of `source` projects to, sorted (the order is §6.4's,
+/// pinned elsewhere).
+fn projected(source: &str, specs: &Specs, element: &[(SpecsKey, &'static str)]) -> Vec<String> {
+    let items = to_attributes(&head_of(source), specs).items;
+    let mut fields: Vec<String> = specs
+        .dom_fields(&items, element)
+        .into_iter()
+        .map(|(field, _)| field.to_string())
+        .collect();
+    fields.sort();
+    fields
 }
 
 #[test]
