@@ -258,7 +258,7 @@ enum Document {
 /// needs the context, so this is the only stage that comes first.
 pub fn prelude(events: Vec<Event>, config: &ChainConfig) -> Vec<Event> {
     if config.has("micromatter") {
-        pendon_plugin_micromatter::process(&events)
+        pendon_plugin_frontmatter::process(&events)
     } else {
         events
     }

@@ -55,7 +55,7 @@ fn html_ignores_frontmatter_block() {
     let input = "---\ntitle: \"Demo\"\ndraft: false\n---\n\n# Hello\n";
     let (_code, out, _err) = run_cli(
         input,
-        &["--plugin", "micromatter,markdown", "--format", "html"],
+        &["--plugin", "frontmatter,markdown", "--format", "html"],
     );
     assert!(!contains("---").eval(&out));
     assert!(contains("<h1>Hello</h1>").eval(&out));

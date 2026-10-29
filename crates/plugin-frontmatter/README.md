@@ -1,4 +1,4 @@
-# pendon-plugin-micromatter
+# pendon-plugin-frontmatter
 
 Micromatter is a frontmatter parser for Pendon that uses full YAML parsing. It emits a `Frontmatter` node with a single `data` attribute containing normalized JSON, so renderers can expose the data without re-parsing.
 

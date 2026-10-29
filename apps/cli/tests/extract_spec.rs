@@ -96,7 +96,7 @@ fn p1_scoped_files_and_an_overridden_export() {
 name = "Extract"
 input = "./src/doc.mdp"
 output = "./out/doc.jsx"
-plugin = "micromatter,cite,extract,markdown"
+plugin = "frontmatter,cite,extract,markdown"
 format = "solid"
 
 [[task.cite.extract]]
@@ -170,7 +170,7 @@ fn a_dynamic_side_path_is_written_per_page() {
 name = "Extract"
 input = "./src/[slug]/doc.mdp"
 output = "./out/[slug]/doc.jsx"
-plugin = "micromatter,cite,extract,markdown"
+plugin = "frontmatter,cite,extract,markdown"
 format = "solid"
 
 [[task.cite.extract]]
@@ -211,7 +211,7 @@ fn a_static_side_path_is_overwritten_not_merged() {
 name = "Extract"
 input = "./src/[slug]/doc.mdp"
 output = "./out/[slug]/doc.jsx"
-plugin = "micromatter,cite,extract,markdown"
+plugin = "frontmatter,cite,extract,markdown"
 format = "solid"
 
 [[task.cite.extract]]
@@ -249,7 +249,7 @@ fn export_is_dropped_for_a_non_solid_task() {
 name = "Extract"
 input = "./src/doc.mdp"
 output = "./out/doc.html"
-plugin = "micromatter,cite,extract,markdown"
+plugin = "frontmatter,cite,extract,markdown"
 format = "html"
 
 [[task.cite.extract]]
@@ -283,7 +283,7 @@ fn an_extract_export_overrides_the_automatic_frontmatter() {
 name = "Extract"
 input = "./src/doc.mdp"
 output = "./out/doc.jsx"
-plugin = "micromatter,section,heading,number,markdown,extract"
+plugin = "frontmatter,section,heading,number,markdown,extract"
 format = "solid"
 
 [[task.heading.extract]]
@@ -326,7 +326,7 @@ fn a_deleted_side_file_is_rewritten_on_the_next_run() {
 name = "Extract"
 input = "./src/doc.mdp"
 output = "./out/doc.jsx"
-plugin = "micromatter,cite,extract,markdown"
+plugin = "frontmatter,cite,extract,markdown"
 format = "solid"
 
 [[task.cite.extract]]

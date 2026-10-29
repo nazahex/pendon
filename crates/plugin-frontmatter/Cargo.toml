@@ -1,5 +1,5 @@
 [package]
-name = "pendon-plugin-micromatter"
+name = "pendon-plugin-frontmatter"
 version = "0.0.1"
 authors = ["Pendon Contributors"]
 edition = "2021"

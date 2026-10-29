@@ -243,7 +243,7 @@ pub fn process_single_file(
                 });
             }
             // P.1.b: a block's `export` is the same `export const` mechanism, and
-            // it is registered after the bind payloads so a `micromatter.extract`
+            // it is registered after the bind payloads so a `frontmatter.extract`
             // payload wins over the automatic `frontmatter` export it duplicates.
             // Every other task format ignores `export` (docs/issues/plugin-extract.md).
             if !state.extract.exports.is_empty() {

@@ -759,7 +759,7 @@ fn number_block(
 /// (`docs/spec/EXTRAS-INVENTORY.md`).
 ///
 /// The five elements §1 lists as in scope but without a layer tag (`wiki`,
-/// `codeblock`, `latex`, `bind`, `micromatter`) are absent on purpose: naming one
+/// `codeblock`, `latex`, `bind`, `frontmatter`) are absent on purpose: naming one
 /// is a config error (`build_extract_options`) instead of a block that silently
 /// matches nothing.
 pub const EXTRACT_ELEMENTS: [&str; 10] = [
@@ -780,7 +780,7 @@ pub const EXTRACT_ELEMENTS: [&str; 10] = [
 /// export). A block under one of these names is a config *error*, not a silent
 /// no-op — the section is unknown to the schema, so it has to be caught here
 /// before §13's generic unknown-key warning.
-pub const UNEXTRACTABLE_ELEMENTS: [&str; 5] = ["wiki", "codeblock", "latex", "bind", "micromatter"];
+pub const UNEXTRACTABLE_ELEMENTS: [&str; 5] = ["wiki", "codeblock", "latex", "bind", "frontmatter"];
 
 /// Every extraction block of a task, in the order the sections are read.
 ///
