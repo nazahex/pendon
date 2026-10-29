@@ -84,7 +84,7 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## In progress
 
-- [ ] **Stage 2 — Phases 0–3 done; Phase 4 in progress (`S2-4.1` done).** Docs live in
+- [ ] **Stage 2 — Phases 0–4 done; Phase 5 in progress (`S2-5.1` done).** Docs live in
       [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md).
       **Phase 0 complete 2026-10-28**: D-1…D-17 signed (D-16 = clean total
       replacement: no compat, no warnings, no migration doc, old configs fail
@@ -324,8 +324,27 @@ exactly one `export const headings` line each (no bytes removed), and
       stay on the `<th>` (§8/OPEN-E1, now resolved in §15). New fixture
       `36-table-slots` (every layer with `[slug]("t"){.c}%%%numberA`);
       `09-table-layers` + `21-extras-forms` re-frozen. 777 tests (31 fixtures).
-      **Phase 4 is closed** — `S2-4.12` (bare-field universality) is the next
-      Phase-4 item, then Phase 5 (`@@` mandatory).
+      **`S2-4.12` done — every head reads whole.** The audit is a contract test,
+      not prose: `apps/cli/tests/slot_heads_spec.rs` walks every slot element ×
+      every position and fails if one is unclaimed or if a six-value head loses a
+      value in the pipeline. It found one real drop — the **built-in citation
+      markup** published only `reference_id` / `locator` and threw away the other
+      four, so `bracket.tick`, `paren.bare`, `paren.quote` and `paren.tick` never
+      reached the page. Raw markup cannot spread a dotted key, so they are written
+      as `data-<slot>-<kind>` (`data-bracket-tick`, the `<img>` convention), which
+      §7.3 documents as the one escape hatch. Fixtures `37-head-slots-inline`
+      (anchor + image + cite) and `38-head-slots-block` (heading + block image).
+      **Phase 4 is closed** — Phase 5 opened with `S2-5.1`.
+      **`S2-5.1` done — `@@` is mandatory, and first.** A decorator line is now
+      only a line whose head carries the sigil: `parse_decorator_line` rejects a
+      bare `{…}`, `DecoratorLine::explicit` is deleted, and the binder drops every
+      unconsumed decorator with a `Warning` (no ambiguous spelling is left in the
+      stream). The head order was already `@@type` → slot → `{…}` → `%%`, so a
+      type-after-the-body line (`@@{.a}aside`) is literal text, which keeps the
+      rule one-way. "Attached, or separated by one blank line" is untouched.
+      Fixtures `39-decorator-order` (all four parts land on the quote) and
+      `40-decorator-needs-at` (the bare head renders literally, the quote keeps
+      nothing). 787 tests, 35 fixtures.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden
@@ -400,7 +419,11 @@ exactly one `export const headings` line each (no bytes removed), and
   enclosing section's id — §6.2/§9.5), and `sandbox/number/` is a
   pre-implementation sketch with no source. `sandbox/{image,unified,universal,multi}`
   are the ones that still track `HEAD`. A golden is the contract; a sandbox is a
-  scratch copy — the gate never depends on a sandbox staying in sync.
+  scratch copy — the gate never depends on a sandbox staying in sync. Since
+  `S2-5.1`, a few sandbox **sources** (`sandbox/heading`, the L-section of
+  `sandbox/ultimate`) still spell decorators as a bare `{…}` line, which now
+  renders literally; they are part of the same maintainer replay, not a
+  regression of this change.
 
 - **§11 threading gaps** (from the positional-keys pass):
   - `plugin-table`: `extras_to_layer(head)` still uses `Specs::default()`;
@@ -417,8 +440,8 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## Golden & freeze status (see [`docs/spec/golden/README.md`](docs/spec/golden/README.md))
 
-- Golden fixtures `01–12`, `14–16`, `21–28`, `30–35` are frozen and green; none
-  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (30 fixtures) is the gate.
+- Golden fixtures `01–12`, `14–16`, `21–28`, `30–40` are frozen and green; none
+  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (35 fixtures) is the gate.
 - Phase 3 re-froze `06-heading` (it loses the numbers `plugin-heading` used to
   compute and keeps its authored `number:` props) and `28-type-selectors`
   (dropped `auto_number`, no output change).
@@ -449,3 +472,6 @@ exactly one `export const headings` line each (no bytes removed), and
 - `S2-4.11` moved `09-table-layers` and `21-extras-forms` (a `<td>` no longer
   receives the column's `class`/`type` — §8/OPEN-E1) and added `36-table-slots`,
   the seven-layer proof that every table layer reads `[…]("…"){…}%%numberType`.
+- `S2-5.1` moved **no** fixture: every golden already spelled its decorators with
+  `@@`. `39-decorator-order` and `40-decorator-needs-at` are new and freeze the
+  mandatory sigil from both sides.

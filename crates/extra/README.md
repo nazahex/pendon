@@ -31,8 +31,10 @@ for interpreting the parsed properties.
   the shared **emit** pass that turns a parsed head into event attributes. It is
   not data binding — that is `plugin-bind` (§12.2, ADR-0005).
 - **Decorator binder** — `parse_decorator_line` / `bind_decorators`
-  (`src/decorator.rs`): a standalone extras line binds to the _next_ block node
-  through a caller-supplied `target` callback. See
+  (`src/decorator.rs`): a standalone `@@`-prefixed extras line binds to the
+  _next_ block node through a caller-supplied `target` callback. The `@@` sigil
+  is mandatory (D-10, ADR-0013): a bare `{…}` line is literal text, and the head
+  reads in one order (`@@type` → slot → `{specs}` → `%%numbering`). See
   [`docs/decisions/0002-decorator-binder.md`](../../docs/decisions/0002-decorator-binder.md).
 - **Typed values** — `AttrValue { Str, Int, Float, Bool, Raw, Object, Array, JsxExpr, Null }` and
   `classify_scalar` (§6.3, ADR-0005). Numbers parse as numbers (a component

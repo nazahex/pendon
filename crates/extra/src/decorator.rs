@@ -2,8 +2,11 @@
 //!
 //! A decorator line is a line whose entire content is `@@type{…}` / `@@{…}`
 //! (optional leading indentation, nothing after the head, §4.3 for the literal
-//! cases). It decorates the **next block node** at the same nesting level and is
-//! consumed: it MUST NOT be rendered.
+//! cases). The `@@` sigil is **mandatory** (D-10, ADR-0013): a bare `{…}` line is
+//! literal text, never a decorator, because without `@@` a head is only ever
+//! *adjacent* to its construct. The head itself keeps one order — `@@type` → slot
+//! → `{specs}` → `%%numbering` (§5). A decorator decorates the **next block
+//! node** at the same nesting level and is consumed: it MUST NOT be rendered.
 //!
 //! This module owns the rule and the event-level mechanics (finding the line,
 //! dropping the paragraph the core parser wrapped it in, the
@@ -49,14 +52,6 @@ pub struct DecoratorLine {
     /// The specs the head's positions were resolved with (§6.1, D-5): the
     /// consumer projects `specs.*` paths through it (§6.3).
     pub specs: Specs,
-    /// Whether the line carried the explicit `@@` sigil.
-    ///
-    /// §9.1 makes the bare `@@`-less `{…}` spelling a decorator only when it can
-    /// actually bind: `{…}` alone is ambiguous with literal text (a bare head at
-    /// the start of a line), so a bare line with **no following block** stays
-    /// literal instead of being dropped. The explicit `@@…` forms are decorators
-    /// whatever follows, so they are still dropped with a warning (§9.1).
-    pub explicit: bool,
 }
 
 /// A decorator bound to the block node at `target_index` of
@@ -101,12 +96,16 @@ pub struct Bindings {
 
 /// §9.1: scans one line as a decorator.
 ///
-/// Returns `None` for a blank line, for a line that is not a head at all and for
-/// a malformed head (§4.3 keeps those literal). Trailing text after the head
-/// also disqualifies the line: a decorator is the line's *entire* content.
+/// The `@@` sigil is mandatory (D-10, ADR-0013): a line that opens with a bare
+/// `{…}` head is literal text — an adjacent head needs a construct to touch, and
+/// a line of its own has none — so it never configures the block below it.
+/// Returns `None` for a blank line, for a line without `@@`, for a line that is
+/// not a head at all and for a malformed head (§4.3 keeps those literal).
+/// Trailing text after the head also disqualifies the line: a decorator is the
+/// line's *entire* content.
 pub fn parse_decorator_line(line: &str, specs: SpecsResolver) -> Option<DecoratorLine> {
     let trimmed = line.trim();
-    if trimmed.is_empty() {
+    if !trimmed.starts_with("@@") {
         return None;
     }
     let ExtrasMatch::Head { head, rest } = parse_extras(trimmed) else {
@@ -121,7 +120,6 @@ pub fn parse_decorator_line(line: &str, specs: SpecsResolver) -> Option<Decorato
         type_marker: head.type_marker.clone(),
         attrs: to_attributes(&head, &specs),
         specs,
-        explicit: trimmed.starts_with("@@"),
     })
 }
 
@@ -294,10 +292,9 @@ fn leading_decorator_split(inner: &[Event], specs: SpecsResolver) -> Option<usiz
 /// A decorator whose following block `target` **declines** is left in the
 /// stream: several plugins bind decorators over the same stream (§9.1–§9.4:
 /// `plugin-list`, `plugin-blockquote`, `plugin-markdown`), so a binder must
-/// never steal a line that belongs to another plugin's binder. Only an
-/// **explicit** `@@`-prefixed decorator with no following block at all is
-/// dropped; a bare `@@`-less `{…}` head is ambiguous with literal text, so with
-/// no block to bind it stays in the stream (see [`DecoratorLine::explicit`]).
+/// never steal a line that belongs to another plugin's binder. A decorator with
+/// no following block at all is dropped with a warning; every decorator line
+/// carries `@@`, so there is no ambiguous spelling left in the stream.
 ///
 /// A run of decorator lines binds its **last** line; the earlier ones are
 /// dropped as [`DecoratorDrop::Overridden`]. When any line of the run is
@@ -382,14 +379,10 @@ pub fn bind_decorators(
             // so the run is left in place for another plugin's binder to claim.
             // Dropping it here would steal the decorator from its real owner.
             Some(None) => pending.clear(),
-            // No block node follows at all. An explicit `@@…` decorator is
-            // dropped with a warning; a bare `{…}` head is only a decorator when
-            // it can bind (§9.1), so it is left in the stream as literal text.
+            // No block node follows at all: the decorator is dropped with a
+            // warning (§9.1).
             None => {
                 for (line, span) in pending.drain(..) {
-                    if !line.explicit {
-                        continue;
-                    }
                     dropped.push(DroppedDecorator {
                         type_marker: line.type_marker,
                         reason: DecoratorDrop::NoFollowingBlock,
@@ -400,9 +393,6 @@ pub fn bind_decorators(
         }
     }
     for (line, span) in pending.drain(..) {
-        if !line.explicit {
-            continue;
-        }
         dropped.push(DroppedDecorator {
             type_marker: line.type_marker,
             reason: DecoratorDrop::NoFollowingBlock,
@@ -509,16 +499,28 @@ mod tests {
         );
     }
 
-    /// §3/§9.1: the `@@` prefix is optional and a type-only head is a decorator.
+    /// §3/§9.1/D-10: `@@` is mandatory, so the sigil alone is what makes a
+    /// line a decorator; a type-only head still decorates.
     #[test]
-    fn bare_and_type_only_decorators_are_recognised() {
-        let bindings = bind("{.u}\n\n- one\n");
-        assert_eq!(bindings.bound.len(), 1);
-        assert_eq!(bindings.bound[0].type_marker, None);
-
+    fn a_type_only_decorator_is_recognised() {
         let bindings = bind("@@unorderedA\n\n- one\n");
         assert_eq!(bindings.bound.len(), 1);
         assert_eq!(bindings.bound[0].type_marker.as_deref(), Some("unorderedA"));
+    }
+
+    /// §9.1/D-10 (S2-5.1): a bare head line is literal text, never a decorator —
+    /// it does not configure the block below it, raises no diagnostic and stays
+    /// in the stream exactly as written.
+    #[test]
+    fn a_bare_head_line_is_literal_text() {
+        let bindings = bind("{.u}\n\n- one\n");
+        assert!(bindings.bound.is_empty(), "{:?}", bindings.bound);
+        assert!(bindings.dropped.is_empty(), "{:?}", bindings.dropped);
+        assert!(
+            texts(&bindings.events).contains("{.u}"),
+            "{:?}",
+            bindings.events
+        );
     }
 
     /// §9.1: only the **last** decorator of a run applies.
@@ -553,16 +555,16 @@ mod tests {
         assert!(!texts(&bindings.events).contains("@@"));
     }
 
-    /// §9.1: a bare `{…}` head with no following block is ambiguous with literal
-    /// text (a bare head at the start of a line), so it stays literal instead of
-    /// being dropped. Only the explicit `@@…` forms are unambiguous decorators.
+    /// §9.1/D-10: the head order is `@@type` → slot → `{specs}` → `%%numbering`.
+    /// A type written after the body is not a head at all, so the whole line is
+    /// literal text and decorates nothing.
     #[test]
-    fn a_bare_head_without_a_following_block_stays_literal() {
-        let bindings = bind("{foo}\n");
-        assert!(bindings.bound.is_empty());
+    fn a_type_after_the_body_is_literal_text() {
+        let bindings = bind("@@{.a}aside\n\n- one\n");
+        assert!(bindings.bound.is_empty(), "{:?}", bindings.bound);
         assert!(bindings.dropped.is_empty(), "{:?}", bindings.dropped);
         assert!(
-            texts(&bindings.events).contains("{foo}"),
+            texts(&bindings.events).contains("@@{.a}aside"),
             "{:?}",
             bindings.events
         );
@@ -634,11 +636,34 @@ mod tests {
         assert!(parse_decorator_line("plain text", &specs).is_none());
         assert!(parse_decorator_line("@@{.a", &specs).is_none());
         assert!(parse_decorator_line("@@{.a} tail", &specs).is_none());
+        // §9.1/D-10: `@@` is mandatory — a bare head is not a decorator line.
+        assert!(parse_decorator_line("{.a}", &specs).is_none());
+        assert!(parse_decorator_line("  {\"Title\"}", &specs).is_none());
+        // Nor is a head whose type is not first (`type`-last is literal text).
+        assert!(parse_decorator_line("@@{.a}aside", &specs).is_none());
 
         let line = parse_decorator_line("  @@note{.a}", &specs).expect("decorator line");
         assert_eq!(line.indent, 2);
         assert_eq!(line.type_marker.as_deref(), Some("note"));
         assert!(line.attrs.has("specs.class"));
+    }
+
+    /// §5/§9.1: a decorator reads the whole head in the one canonical order —
+    /// `@@type` → slot → `{specs}` → `%%numbering` — and every part survives.
+    #[test]
+    fn a_decorator_reads_the_head_in_canonical_order() {
+        let specs = |_: Option<&str>| Specs::default();
+        let line = parse_decorator_line("@@aside[intro](\"T\"){.box}%%%numberA", &specs)
+            .expect("decorator line");
+        assert_eq!(line.type_marker.as_deref(), Some("aside"));
+        assert!(line.attrs.has("bracket.bare"));
+        assert!(line.attrs.has("paren.bare"));
+        assert!(line.attrs.has("specs.class"));
+        let number = line.attrs.value("__number").expect("a numbering marker");
+        assert_eq!(
+            number.literal(),
+            "{\"depth\":2,\"type\":\"numberA\"}".to_string()
+        );
     }
 
     /// §9.1/§6.1: `@@type[…](…){…}` and the untyped `@@[…]` are decorator
@@ -669,7 +694,6 @@ mod tests {
 
         let line = parse_decorator_line("@@[intro](\"T\")", &specs).expect("decorator line");
         assert_eq!(line.type_marker, None);
-        assert!(line.explicit, "the bare form must not go ambiguous");
         assert!(line.attrs.has("bracket.bare"));
         assert!(line.attrs.has("paren.bare"));
 

@@ -806,25 +806,46 @@ README. If an element has nothing to delete, say so in the commit message.
       `[slug]("t"){.c}%%%numberA`); `09-table-layers` and `21-extras-forms`
       re-frozen by the `<td>`s losing the column's `class`/`type`, prose updated.
       777 tests (31 fixtures).
-- [ ] **S2-4.12 — Bare-field universality.** Dep: S2-4.2 … S2-4.11.
+- [x] **S2-4.12 — Bare-field universality.** Dep: S2-4.2 … S2-4.11.
       Do: assert that _any_ uncontracted slot content survives as slot-qualified
       bare fields (`bracket.tick`, `paren.quote`, …) on every element, and that
       nothing is silently dropped.
       G: one "kitchen sink" fixture per element group (inline + block).
       Exit: no element drops slot content without a diagnostic.
+      **Done 2026-10-29** — the contract audit is
+      `apps/cli/tests/slot_heads_spec.rs` (all four slot elements claim all six
+      positions, and a six-value head keeps all six with no diagnostic); the
+      fixtures are `37-head-slots-inline` (anchor + image + cite) and
+      `38-head-slots-block` (heading + block image). One real drop was found and
+      fixed: the **built-in citation markup** published only `reference_id` /
+      `locator` and discarded `parts.values`, so `bracket.tick`, `paren.bare`,
+      `paren.quote` and `paren.tick` vanished — raw markup cannot spread a dotted
+      key, so it now writes them as `data-<slot>-<kind>` (§6.5, §7.3).
 
 ## Phase 5 — decorator unification
 
 Entry: Phase 4 done except the table head; D-10 settled. Leave when `@@` is
 mandatory and first, five receivers work, and both rejection paths warn.
 
-- [ ] **S2-5.1 — `@@` mandatory, and first.** Dep: S2-4.12.
+- [x] **S2-5.1 — `@@` mandatory, and first.** Dep: S2-4.12.
       Files: `crates/extra/src/decorator.rs`, `lib.rs`.
       Do: decorator order becomes `@@type` → slot → `{specs}` → `%%numbering`;
       the old `type`-last / no-`@@` form stops being a decorator (literal text,
       §14 entry); keep the "attached or separated by one line" tolerance.
       G: decorator ordering fixture (valid) + old form as literal (invalid).
       Exit: a decorator missing `@@` never configures the block below it.
+      **Done 2026-10-29** — `parse_decorator_line` requires `@@`, so
+      `DecoratorLine::explicit` is gone and the binder drops every unconsumed
+      decorator with a warning instead of leaving the bare spelling in the
+      stream. Head order was already `@@type` → slot → `{…}` → `%%` (S2-3.x), so
+      "type-last" keeps working as a _negative_: `@@{.a}aside` is not a head and
+      the line stays literal. The attached/one-blank-line tolerance is unchanged.
+      Unit tests: `a_bare_head_line_is_literal_text`,
+      `a_type_after_the_body_is_literal_text`,
+      `a_decorator_reads_the_head_in_canonical_order` (all four parts of one
+      head). Goldens `39-decorator-order` (valid: every part lands on the quote)
+      and `40-decorator-needs-at` (invalid: the bare line renders literally and
+      the quote keeps no extras). §3/§5/§9.1/§9.5/§14 updated.
 - [ ] **S2-5.2 — Claim table.** Dep: S2-5.1.
       Do: implement D-10's order — `section` → `table` → `list` → `blockquote`
       → `paragraph`; one claim per receiver; unclaimed decorator is removed with

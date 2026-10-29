@@ -387,6 +387,19 @@ decorator — the proposal explicitly says no warning.
 pre-claim hook instead of special-casing inside the decorator scan. Fixtures:
 one per receiver + 3 rejection cases.
 
+**Implementation note (S2-5.1, 2026-10-29).** Rule 1 is in: `parse_decorator_line`
+now requires the `@@` prefix, so `DecoratorLine::explicit` is gone and the binder
+treats every leftover decorator the same way (dropped with a `Warning` when no
+block follows). The head order was already `@@type` → slot → `{specs}` →
+`%%numbering`, so rule 1 needed no parser change beyond the sigil: a
+type-after-the-body line (`@@{.a}aside`) never was a head, and it now has a name
+in §14. "Attached or one blank line apart" is unchanged — the tolerance lives in
+`split_leading_decorator_paragraphs` and in the binder's blank-text skip, neither
+of which this task touched. Rules 2–4 (claim table, rejection removal) are
+S2-5.2; until then a decorator whose target declines still stays in the stream
+for another binder. Fixtures `39-decorator-order` (positive: all four parts land)
+and `40-decorator-needs-at` (negative: the bare head is literal text).
+
 ---
 
 ## D-11 — Slot tag ambiguity and disabled elements

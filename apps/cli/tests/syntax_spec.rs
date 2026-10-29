@@ -434,3 +434,39 @@ fn golden_35_cite_fields() {
 fn golden_36_table_slots() {
     assert_fixture("36-table-slots");
 }
+
+/// §16.3 fixture 37: the **inline** element group reads its head whole
+/// (S2-4.12, D-7). Anchor, image and citation each carry all six positions —
+/// bare, quote and tick in both groups — so every value is either a preset field
+/// (`inner_text` / `href` / `title`, `alt` / `src`, `reference_id` / `locator`)
+/// or a slot-qualified bare field (`bracket.tick`, `paren.quote`, …). The
+/// built-in `<sup>` writes the four positions it has no prop for, so not one
+/// value is lost for want of a component.
+#[test]
+fn golden_37_head_slots_inline() {
+    assert_fixture("37-head-slots-inline");
+}
+
+/// §16.3 fixture 38: the **block** element group, same claim (S2-4.12, D-7) —
+/// a heading (whose fourth position is the `#` run, D-11) and a block image.
+#[test]
+fn golden_38_head_slots_block() {
+    assert_fixture("38-head-slots-block");
+}
+
+/// §16.3 fixture 39: the decorator's head order (S2-5.1, D-10, §9.1) —
+/// `@@type` → slot → `{specs}` → `%%numbering`, with every part landing on the
+/// decorated quote. The untyped `@@[slot]%%numberA` spelling proves the sigil,
+/// not the type, is what makes the line a decorator.
+#[test]
+fn golden_39_decorator_order() {
+    assert_fixture("39-decorator-order");
+}
+
+/// §16.3 fixture 40: `@@` is **mandatory** (S2-5.1, D-10, §9.1/§14) — a bare
+/// `{.lead, #nope}` line is literal text and never configures the block below
+/// it, while the same head with the sigil decorates the next quote.
+#[test]
+fn golden_40_decorator_needs_at() {
+    assert_fixture("40-decorator-needs-at");
+}

@@ -42,7 +42,7 @@ The one-key spread `{...{ "specs.tick": "x" }}` is the only spelling (§6.3), so
 fixture cannot freeze invalid output and pass.
 
 ```bash
-cargo test -p pendon --test syntax_spec      # 31 fixtures, none #[ignore]d
+cargo test -p pendon --test syntax_spec      # 35 fixtures, none #[ignore]d
 ```
 
 ## Re-freezing (when output intentionally changes)
@@ -67,7 +67,7 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | 02 | `extras-literal`   | malformed heads → literal text, adjacency failures            |
 | 03 | `image`            | `!` tag + preset `alt`/`src`, bare slot fields, retired marker run |
 | 04 | `anchor`           | `@` tag vs untagged, six positions → preset, removed modifiers/external defaults |
-| 05 | `cite`             | `[^^](ref "loc")` + extras, retired forms stay literal        |
+| 05 | `cite`             | `[^reference "locator"]` + extras, retired forms stay literal  |
 | 06 | `heading`          | `[slug]` + `("title")` + extras, an authored `number:` passes through (numbering is `plugin-number`) |
 | 07 | `wiki`             | `[[…]]` + extras, `href` not overridable                      |
 | 08 | `table-decl`       | `\|-…-\|`, `\|\| caption \|\|`, decl head `[slug]`            |
@@ -94,19 +94,32 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | 34 | `specs-assignment` | `field.specs.*` as a **move** — one entry assigning all five positions next to an entry that assigns nothing (§6.1, §6.3) |
 | 35 | `cite-fields`      | cite under a `field.*` block: `reference_id`→tick, `locator`→quote, published as `ref_id`/`loc`/`no` with the ordinals unchanged (D-4, §7.3) |
 | 36 | `table-slots`      | one head grammar on every table layer: `[…]("…")` + `{specs}` + `%%numbering` on table/caption/th/tbody/row/cell/tfoot, column extras `<th>`-only (§8) |
+| 37 | `head-slots-inline` | S2-4.12 — the **inline** group reads its head whole: anchor, image and citation each carry all six positions (bare/quote/tick × bracket/paren), so a preset names some fields and the rest are slot-qualified bare fields; the built-in `<sup>` writes its four as `data-<slot>-<kind>` (D-7, §6.5, §7.3) |
+| 38 | `head-slots-block` | the same claim for the **block** group: a heading (its fourth position is the `#` run, D-11) and a block image, six positions each (§6.5, §7.1, §7.4) |
+| 39 | `decorator-order`  | S2-5.1 — a decorator reads one head order: `@@type` → slot → `{specs}` → `%%numbering`; every part lands on the quote, and the untyped `@@[slot]%%numberA` spelling proves the sigil (not the type) is what decorates (§9.1, D-10) |
+| 40 | `decorator-needs-at` | S2-5.1 — `@@` is mandatory: a bare `{.lead, #nope}` line is literal text and configures nothing, while the same head with the sigil decorates the next quote (§9.1, §14, D-10) |
 
 Fixtures 17–20 are covered by unit tests in the renderer/CLI crates rather than as
 golden files.
 
-## Three findings to keep in mind
+## Five findings to keep in mind
 
 - A `Link` node produced by the core lexer inside an extras head is rebuilt by
   `plugin-table` before the table is parsed, so a long `("title")` in the
   declaration line still works (fixture 08).
-- The cite head's location is the quoted string after the unquoted reference
-  (`[^^](book "hlm. 45")`); it fills the same `loc` slot as an extras `loc:` prop,
-  with the head winning (fixture 05).
+- The cite head is `[^reference_id "locator"]` — the caret is the tag and the
+  quoted bracket content is the locator, which fills the same `loc` slot as an
+  extras `loc:` prop, with the head winning (fixture 05).
 - `extract` reads the stream, so it must run **last**: with `extract` before
   `markdown` the source lines are not nodes yet and the rows are half-parsed
   (headings swallow the rest of the document). The validator only rejects an
   element plugin or `number` placed after it (fixture 32).
+- An element whose output is **raw markup** rather than a node cannot spread a
+  dotted key, so §6.3's dotted field is spelled `data-<slot>-<kind>` there — the
+  built-in citation is the only such element today (fixture 37). Node-emitting
+  elements keep the attribute and the renderer turns it into the one-key spread.
+- The `@@` sigil is what makes a **standalone** head a decorator, so a bare
+  `{…}` line is only ever literal text (fixture 40). The bare spelling stays
+  canonical where the head *touches* its construct (a table cell, a caption), and
+  a decorator head's order is fixed — `@@type` → slot → `{specs}` → `%%` — so a
+  type written after the body is not a head (fixture 39).

@@ -1,7 +1,8 @@
 # ADR-0013 — `@@` is the only decorator, and it comes first
 
-- Status: **Accepted** — D-10 settled by the owner 2026-10-28; implementation
-  lands in Phase 6 (`S2-6.x`) with the phase 1–3 head order already fixed
+- Status: **Accepted** — D-10 settled by the owner 2026-10-28; rule 1 (mandatory
+  `@@`) landed in `S2-5.1` (2026-10-29), the claim table in `S2-5.2`, the new
+  receivers in `S2-5.3` and the table head in `S2-5.4`
 - Depends on: [`0002`](0002-decorator-binder.md) (the binder),
   [`0003`](0003-positional-groups.md) (positional groups)
 - Spec: [`SYNTAX.md`](../spec/SYNTAX.md) §5.1 (head order), §6 (decorators), §14

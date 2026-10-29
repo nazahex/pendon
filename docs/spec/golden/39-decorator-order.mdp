@@ -1,0 +1,15 @@
+§9.1/D-10: a decorator line reads its head in exactly one order — `@@type` →
+slot → `{specs}` → `%%numbering` — and every part lands on the block it
+decorates:
+
+@@quoteA[intro]("Aside title"){.q, #q1, k: "v"}%%%numberA
+> a quote configured by one decorator line
+
+The `%%` run carries its own depth (`%%%` = depth 2), so the marker names a
+`[[task.number.custom]]` counter rather than the element's (§10.5).
+
+The sigil, not the type, is what makes a line a decorator: the untyped form
+carries a slot and a numbering marker just the same:
+
+@@[intro2]%%numberA
+> a quote decorated without a type

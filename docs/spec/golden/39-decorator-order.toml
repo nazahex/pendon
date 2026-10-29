@@ -1,0 +1,20 @@
+[[task]]
+name = "Golden 39"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "blockquote,number,markdown"
+format = "solid"
+
+# §9.2/§11: the blockquote primary layer, so the decorator's `type` and every
+# extra reach the component. `{...attrs}` is how a client reads `attrs.number`.
+[[task.blockquote.custom]]
+type = ["quoteA"]
+name = "QuoteA"
+imports = "import { QuoteA } from '@comp/Quote'"
+template = "<QuoteA {...attrs}>{children}</QuoteA>"
+
+# §10.5: the marker names this counter by its `%%numberType`, independently of
+# which element carries the marker.
+[[task.number.custom]]
+type = ["NumberA"]
+style = "upper-alpha"

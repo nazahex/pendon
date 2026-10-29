@@ -32,14 +32,20 @@ The golden set in [`../spec/golden/`](../spec/golden/) is copied into a temp
 project, rendered with the real CLI, and compared byte-for-byte.
 
 ```bash
-cargo test -p pendon --test syntax_spec          # 28 fixtures
+cargo test -p pendon --test syntax_spec          # 35 fixtures
 cargo test -p pendon --test extras_heads_spec    # extras on every element head
+cargo test -p pendon --test slot_heads_spec      # every slot position on every element
 ```
 
 `extras_heads_spec` is the **universality** audit (§6.1, D-12): one document per
 element head and decorator, all carrying the same head, so a construct that stops
 reading a specs position — or falls back to literal text — fails there instead of
 in a golden nobody re-read.
+
+`slot_heads_spec` is the same audit one layer down (§5.2, §6.5, D-7): it walks
+`Slot::ALL × SlotKind::ALL` against the four slot-contracting elements' contracts,
+then runs each element over a head with six distinct values and fails if one value
+— or one `Diagnostic` — is missing.
 
 A fixture may also freeze the **files** its render writes
 (`docs/spec/golden/NN-name.out/`): an `[[task.<element>.extract]]` block writes

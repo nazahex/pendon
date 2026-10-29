@@ -1,0 +1,6 @@
+[[task]]
+name = "Golden 40"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "blockquote,markdown"
+format = "solid"

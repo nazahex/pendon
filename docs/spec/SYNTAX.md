@@ -72,36 +72,36 @@ Implementation units that own this grammar:
 
 ## 3. Sigil inventory
 
-| Token                       | Meaning                            | Owner               | Status                          |
-| --------------------------- | ---------------------------------- | ------------------- | ------------------------------- |
-| `{…}`                       | extras head (canonical)            | `crates/extra`      | **current**                     |
-| `@@type{…}`                 | typed extras head                  | `crates/extra`      | **current**                     |
-| `@@type`                    | type-only head                     | `crates/extra`      | **current**                     |
-| `@@{…}`                     | untyped extras head (= `{…}`)      | `crates/extra`      | **current**                     |
-| `{}` / `@@{}`               | empty head                         | `crates/extra`      | **current**                     |
-| `` `x` `` / `"x"`           | positional slug / title            | `crates/extra`      | new                             |
-| `.x` `#x` `--x:v` `k:v` `k` | class / id / CSS var / prop / flag | `crates/extra`      | extended                        |
-| `{{type}}`                  | inline & block marker              | `plugin-marker`     | new (freed from `cite.section`) |
-| `::type` … `::`             | inline directive, 2–7 colons       | `plugin-directive`  | new                             |
-| `==type` … `==`             | block directive                    | `plugin-directive`  | new                             |
-| `@[k]("k")`                 | anchor head (tag + slots)          | `plugin-anchor`     | current (§7.2)                  |
-| `[k]` `("k")`               | construct head (slug / title)      | per-plugin          | existing                        |
-| `\|-…-\|`                   | table declaration line             | `plugin-table`      | new                             |
-| `\|\| cap \|\|`             | table caption line                 | `plugin-table`      | new                             |
-| `\|===\|`                   | table foot separator               | `plugin-table`      | existing (kept)                 |
-| `~?!` / `~?!!`              | image / figure marker              | `plugin-image`      | existing                        |
-| `[^ref "loc"]`              | citation (tag + slots)             | `plugin-cite`       | current (§7.3)                  |
-| `[[…]]`                     | wiki link                          | `plugin-wiki`       | existing                        |
-| `>`                         | blockquote                         | `plugin-blockquote` | current (decorator only, §9.2)  |
-| `-` `*` `+`                 | unordered list container           | `plugin-list`       | current (+extras)               |
-| `1.`                        | ordered list container             | `plugin-list`       | current (+extras)               |
-| `{{{lang[var] … }}}`        | data block                         | `plugin-bind`       | new (§19)                       |
-| `$var`                      | bound data reference (extras only) | `plugin-bind`       | new (§19)                       |
-| `$a.b[0]`                   | path into a bound value            | `plugin-bind`       | new (§19)                       |
-| `...$var`                   | spread/merge inside a `{…}` value  | `plugin-bind`       | new (§19)                       |
-| `{{{lang[var](../src/x)}}}` | external data block                | `plugin-bind`       | new (§19)                       |
-| `:::name`                   | legacy custom block                | `plugin-custom`     | superseded by `==type`          |
-| `@@`                        | _no other meaning_                 | —                   | reserved for Pendon             |
+| Token                       | Meaning                                        | Owner               | Status                          |
+| --------------------------- | ---------------------------------------------- | ------------------- | ------------------------------- |
+| `{…}`                       | extras head, **adjacent** to its construct     | `crates/extra`      | **current**                     |
+| `@@type{…}`                 | typed extras head (adjacent or decorator line) | `crates/extra`      | **current**                     |
+| `@@type`                    | type-only head                                 | `crates/extra`      | **current**                     |
+| `@@{…}`                     | untyped head on a **decorator line**           | `crates/extra`      | **current**                     |
+| `{}` / `@@{}`               | empty head                                     | `crates/extra`      | **current**                     |
+| `` `x` `` / `"x"`           | positional slug / title                        | `crates/extra`      | new                             |
+| `.x` `#x` `--x:v` `k:v` `k` | class / id / CSS var / prop / flag             | `crates/extra`      | extended                        |
+| `{{type}}`                  | inline & block marker                          | `plugin-marker`     | new (freed from `cite.section`) |
+| `::type` … `::`             | inline directive, 2–7 colons                   | `plugin-directive`  | new                             |
+| `==type` … `==`             | block directive                                | `plugin-directive`  | new                             |
+| `@[k]("k")`                 | anchor head (tag + slots)                      | `plugin-anchor`     | current (§7.2)                  |
+| `[k]` `("k")`               | construct head (slug / title)                  | per-plugin          | existing                        |
+| `\|-…-\|`                   | table declaration line                         | `plugin-table`      | new                             |
+| `\|\| cap \|\|`             | table caption line                             | `plugin-table`      | new                             |
+| `\|===\|`                   | table foot separator                           | `plugin-table`      | existing (kept)                 |
+| `~?!` / `~?!!`              | image / figure marker                          | `plugin-image`      | existing                        |
+| `[^ref "loc"]`              | citation (tag + slots)                         | `plugin-cite`       | current (§7.3)                  |
+| `[[…]]`                     | wiki link                                      | `plugin-wiki`       | existing                        |
+| `>`                         | blockquote                                     | `plugin-blockquote` | current (decorator only, §9.2)  |
+| `-` `*` `+`                 | unordered list container                       | `plugin-list`       | current (+extras)               |
+| `1.`                        | ordered list container                         | `plugin-list`       | current (+extras)               |
+| `{{{lang[var] … }}}`        | data block                                     | `plugin-bind`       | new (§19)                       |
+| `$var`                      | bound data reference (extras only)             | `plugin-bind`       | new (§19)                       |
+| `$a.b[0]`                   | path into a bound value                        | `plugin-bind`       | new (§19)                       |
+| `...$var`                   | spread/merge inside a `{…}` value              | `plugin-bind`       | new (§19)                       |
+| `{{{lang[var](../src/x)}}}` | external data block                            | `plugin-bind`       | new (§19)                       |
+| `:::name`                   | legacy custom block                            | `plugin-custom`     | superseded by `==type`          |
+| `@@`                        | _no other meaning_                             | —                   | reserved for Pendon             |
 
 `@@` is reserved: no plugin may claim it for another purpose.
 
@@ -232,6 +232,11 @@ ws          = 1*( " " | "\t" )
 
 - Item order is free; extras are completely optional. `{}` is a valid (empty)
   head: it adds no attribute and raises no warning.
+- `@@` is optional where the head is **adjacent** to its construct (a table cell,
+  a caption, a row's end-of-line head): `|{.x} text |` and `|@@cellA{.x} text |`
+  are the same head. A head that stands **alone on a line** is a decorator line
+  (§9.1), and there the sigil is mandatory: `{.x}` on its own line is literal
+  text, `@@{.x}` decorates the block below it (D-10, §14).
 - Duplicate handling ([D-12](../workflows/unified-syntax-stage-2/DECISIONS.md)):
   two sources for one public path inside one head is a bug, not a merge, so it
   is a `Severity::Error` and the **first** value wins. That covers a repeated
@@ -557,6 +562,16 @@ plugin's crate (`ElementHead` in `crates/extra::preset`):
 - its **preset** — which field each claimed position lands in when the user
   configures nothing.
 
+**Every position is claimed.** A contract lists all six positions the grammar can
+carry — `bracket`/`paren` × `bare`/`quote`/`tick` (§5.2) — for all four
+slot-contracting elements (`anchor`, `cite`, `heading`, `image`). An element that
+claimed only the positions it had a name for would have to drop the rest of the
+head, so there is no uncontracted content at all: a position with no preset row
+is an ordinary field under its slot-qualified name (D-7), and
+`apps/cli/tests/slot_heads_spec.rs` fails if a contract is ever narrowed. Nor may
+a _markup_ drop one: an element whose built-in output has no prop for a field
+writes it anyway — the built-in citation spells it `data-<slot>-<kind>` (§7.3).
+
 The preset is what turns the groups and items of a _built-in_ construct into its
 own public fields (`@[inner](/u "t")` → `inner_text`, `href`, `title`); §7.x
 states each element's table, and the crate's `HEAD` constant is the copy the code
@@ -705,7 +720,14 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
 - Without a `cite` component the built-in markup is
   `<sup class="cite-ref"><a href="#citeref-1-book" id="cite-1">[1]</a></sup>`:
   the class and the two prefixes are fixed, because a site that wants its own
-  spelling configures a `Cite` component (§7.3 config above, §14).
+  spelling configures a `Cite` component (§7.3 config above, §14). The markup is
+  fixed, the fields are not: the four positions it has no prop for are written
+  anyway, as `data-<slot>-<kind>` (`bracket.tick` → `data-bracket-tick`). A
+  dotted path is not an attribute name in JSX (§6.3) and raw markup cannot spread
+  one, so the `data-` prefix — the convention the built-in `<img>` already uses
+  for a key it has no attribute for — is what keeps a citation head from losing
+  content (fixture 37). `reference_id` stays the `href`, `citation_number` the
+  label, and `locator` the `citations` binding (§20), as before.
 
 ### 7.4 Heading (`plugin-heading`)
 
@@ -824,10 +846,14 @@ Rules:
 
 ### 9.1 The decorator rule (general)
 
-A **decorator line** is a line whose entire content is a head — `type?{…}` with
-the `@@` sigil optional (§3, §9.3) — with optional leading indentation and no
-trailing text other than whitespace. It decorates the **next block node** at the
-same nesting level and is consumed (MUST NOT be rendered):
+A **decorator line** is a line whose entire content is an extras head **with the
+`@@` sigil** — `@@type{…}` / `@@{…}` / `@@type` — with optional leading
+indentation and no trailing text other than whitespace. The sigil is mandatory
+(D-10): it is what makes a standalone head a decorator, because without it a head
+only ever attaches to a construct it touches (§4.1). The head reads in one order —
+`@@type` → slot → `{specs}` → `%%numbering` (§5). A decorator decorates the
+**next block node** at the same nesting level and is consumed (MUST NOT be
+rendered):
 
 ````text
 @@{`intro`, .lead}
@@ -847,11 +873,14 @@ First paragraph with extras on the paragraph node.
 Positional groups (§6.1) are part of the head, between the type and the body:
 
 ```text
-@@aside[intro]("Aside title"){.lead}
-Decorated with the bracket / parentheses slots too.
+@@aside[intro]("Aside title"){.lead}%%%numberA
+Decorated with the bracket / parentheses slots, the specs, and a number marker.
 
 @@[intro]("Aside title")
 The untyped form: `@@` is required, so the line can never be a link.
+
+{.lead, #nope}
+A bare head on its own line is literal text — no `@@`, no decorator (§14).
 
 [intro](url)
 A paragraph line like this stays a link — without `@@` it is not a decorator.
@@ -859,9 +888,11 @@ A paragraph line like this stays a link — without `@@` it is not a decorator.
 
 - The decorator's `type` (when present) is the **type marker** of the decorated
   node and drives per-type component selection (§11).
-- The `@@` sigil is what separates a decorator from a link at the start of a
-  line: the groups need it (`@@[…]`), the bare forms do not gain it (`[…]` is
-  never a decorator, §4.1).
+- The `@@` sigil is what separates a decorator line from a link or a bare head at
+  the start of a line: the groups need it (`@@[…]`), and a `@@`-less line is
+  never a decorator — `[…]` stays a link (§4.1) and `{…}` stays literal text
+  (§14). `@@` first is also what keeps the head order unambiguous: a type written
+  after the body (`@@{.a}aside`) is not a head at all, so the line is literal.
 
 - A decorator applies to a **paragraph** or a **code fence** (`plugin-markdown`),
   a **list container** (§9.3) or a **blockquote** (§9.2). A decorator line above
@@ -869,9 +900,8 @@ A paragraph line like this stays a link — without `@@` it is not a decorator.
   heads (§8); neither is a `plugin-markdown` target. Anything else (inline
   constructs) uses the adjacent form (§4.1).
 - If no following block exists (end of input, or the next sibling is not a
-  block), an **explicit** `@@…` decorator is dropped with a `Severity::Warning`.
-  A bare `@@`-less `{…}` line is ambiguous with literal text (§4.3), so when it
-  has no block to bind it stays literal instead of being dropped.
+  block), the decorator is dropped with a `Severity::Warning`. Every decorator
+  line carries `@@`, so there is no ambiguous spelling that stays in the stream.
 - Consecutive decorators: only the **last** one applies; earlier ones are
   dropped with a `Severity::Warning` (MAY be an error later).
 - Indentation MUST be `<=` the indentation of the decorated block; a decorator
@@ -964,7 +994,7 @@ and a `<--->` child is exactly one deeper than its parent. `depth` is a public
 field, so a component receives it as a prop and the built-in `<section>` prints it
 as an attribute.
 
-- A decorator line directly above a heading — `@@type{…}` / `{…}` (optional
+- A decorator line directly above a heading — `@@type{…}` / `@@{…}` (optional
   indentation; a blank line before the heading is allowed) — decorates the
   **section**, not the heading: the heading already owns its extras on its `#`
   run (§7.4). That decorator is the section's head in every respect but spelling
@@ -1361,6 +1391,7 @@ Config-load errors MUST abort the build before any file is processed.
 | automatic external-URL `target="_blank"` / `rel="noopener"`             | —                                                                                    | **not syntax** (D-16, §7.2): the anchor no longer classifies URLs, and no config key restores it — write `target` / `rel` in the extras when a link needs them.                                                                                                                                                   |
 | untagged `[text](url)` anchor                                           | `@[text](url)`                                                                       | **not syntax** (D-16, §7.2): the slot tag is mandatory, because the bracket and paren are universal (§5.2). Without it the text is an ordinary CommonMark link and a trailing extras head stays literal text.                                                                                                     |
 | blockquote inner head (`> @@type{…} content`)                           | decorator line above the quote                                                       | **not syntax** (D-16, §9.2): a quote has no head, so everything inside `>` is content and `@@type{…}` written there is literal text. The decorator line (§9.1) is the only way to configure a quote.                                                                                                              |
+| bare / `type`-last decorator line (`{…}` on its own line, `@@{…}type`)  | `@@type` → slot → `{specs}` → `%%numbering`                                          | **not syntax** (D-16, §9.1): the `@@` sigil is mandatory on a decorator line and the type is its first part, so `{.lead}` alone is literal text and `@@{.a}aside` is not a head at all. Neither configures the block below it; the bare head is still canonical where it **touches** its construct (§5, §8).      |
 | `backtick_key` / `quote_key` / `bracket_key` / `parentheses_key`        | `field.specs.tick` / `field.specs.quote` / `field.bracket.bare` / `field.paren.bare` | **removed** (D-16): the four naming keys are gone from the loader, so a config that still uses them **fails to load** with an unknown-key error (§13) — no alias, no deprecation. Naming is `field.*` only (§6.1); an entry that configures none keeps the seven default paths (`specs.tick` … `paren.bare`).     |
 | `[^^](ref "loc")` cite head                                             | `[^ref "loc"]`                                                                       | **not syntax** (D-16, §7.3): the caret is the slot tag and sits inside the bracket, so the old form's second caret becomes the reference. A `cite` head without `reference_id` is an `Error`, not a citation.                                                                                                     |
 | `[task.cite]` `citation_class` / `ref_id_prefix` / `citation_id_prefix` | a `Cite` component                                                                   | **removed** (D-16, §7.3): the built-in `<sup>` markup's class and prefixes are constants; a site that wants its own spelling configures the component. The three keys are unknown now, so a config that still sets them **fails to load** (§13).                                                                  |
@@ -1485,7 +1516,8 @@ grammar, so it does not drift as phases land.
 
 1. Every §3 sigil is either implemented or explicitly retired.
 2. No extras data is dropped silently: any node that parses extras MUST emit them as
-   attributes, with or without a custom component.
+   attributes, with or without a custom component. The same holds for a slot head —
+   every position it carries becomes a field, preset-named or slot-qualified (§6.5).
 3. A `template` that would drop children fails the build at config load.
 4. All §16 fixtures are green (none ignored) except fixtures explicitly deferred
    with a separate spec note.

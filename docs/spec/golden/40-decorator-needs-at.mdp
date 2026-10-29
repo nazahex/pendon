@@ -1,0 +1,13 @@
+§9.1/D-10: `@@` is mandatory. A bare head line is **literal text** — it has no
+construct touching it, so it is not a decorator and never configures the block
+below it (§14):
+
+{.lead, #nope}
+
+> a quote that keeps no extras
+
+The same head with the sigil does decorate the next block, so the two spellings
+are not interchangeable:
+
+@@{.lead, #nope}
+> a quote that gets both
