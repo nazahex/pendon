@@ -22,6 +22,10 @@ let jsx = render_solid_with_hints(&events, hints);
   one default per layer, and `layer_templates`, which turns a layer's set into
   renderer hints tagged with the §11 layer they answer (§11 rule 3). The plugin
   registers **what each entry answers**; nothing is chosen here.
+  The set also carries **config-only** entries (`ConfigEntry`, D-8): an entry
+  that names no component still answers the `field_for` / `modifier_for` /
+  `specs_for` lookups, so an element accepts `field.*` and a §5.4 modifier run
+  without a custom component — it just never emits a template.
 - **`resolve.rs`** — §11 resolution, decided **once per document**
   ([ADR-0008](../../docs/decisions/0008-type-selectors.md) `D-3a`). It groups the
   hints by layer, collects the `type` markers the AST occurs (fragments included)

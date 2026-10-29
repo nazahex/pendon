@@ -2,9 +2,10 @@ use std::collections::BTreeMap;
 
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
-    issue_event, parse_extras, parse_slots, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
-    ExtrasIssue, ExtrasMatch, FieldConfig, FieldName, Preset, Slot, SlotContract, SlotError,
-    SlotKind, SlotMatch, SlotPair, SlotPos, SlotTag, SpecsKey, SpecsResolver,
+    append_class, issue_event, modifier_contributions, parse_extras, parse_slots, to_attributes,
+    ElementHead, ExtrasAttr, ExtrasHead, ExtrasIssue, ExtrasMatch, FieldConfig, FieldName,
+    ModifierConfig, Preset, Slot, SlotContract, SlotError, SlotKind, SlotMatch, SlotPair, SlotPos,
+    SlotTag, SpecsKey, SpecsResolver,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 
@@ -218,12 +219,19 @@ fn read_head(rest: &str, options: &AnchorOptions) -> Read {
     let specs = |target: Option<&str>| options.custom.specs_for(target);
     // §6.5 / D-7: the preset is voided by the **matched** entry, never by another
     // entry's `field.*`.
+    let marker = extras.as_ref().and_then(|head| head.type_marker.as_deref());
     let matched = extras
         .as_ref()
         .and_then(|head| options.custom.field_for(head.type_marker.as_deref()));
 
     Read::Anchor {
-        parts: build_attributes(&pair, extras.as_ref(), &specs, matched),
+        parts: build_attributes(
+            &pair,
+            extras.as_ref(),
+            &specs,
+            matched,
+            options.custom.modifier_for(marker),
+        ),
         consumed,
     }
 }
@@ -255,6 +263,7 @@ fn build_attributes(
     extras: Option<&ExtrasHead>,
     specs: SpecsResolver,
     field: Option<&FieldConfig>,
+    modifier: Option<&ModifierConfig>,
 ) -> AnchorParts {
     let mut parts = AnchorParts::default();
     let mut issues = Vec::new();
@@ -340,8 +349,52 @@ fn build_attributes(
         }
     }
 
+    // §5.4 / D-9: the bracket's modifier run. It contributes last, so every field
+    // the head or the extras already produced wins — a modifier is configuration,
+    // the head is authored text.
+    merge_modifiers(&mut parts, pair, modifier, &mut issues);
+
     parts.issues = issues;
     parts
+}
+
+/// Merges `pair`'s modifier run into the link's fields (§5.4, D-9).
+///
+/// `class` accumulates (§6.4); every other contributed field is dropped with a
+/// warning when the element already carries it, and an unusable merge (D-9's
+/// `Severity::Error` tier) drops the whole run.
+fn merge_modifiers(
+    parts: &mut AnchorParts,
+    pair: &SlotPair,
+    config: Option<&ModifierConfig>,
+    issues: &mut Vec<ExtrasIssue>,
+) {
+    let fields = match modifier_contributions(config, pair) {
+        Ok(fields) => fields,
+        Err(error) => {
+            issues.push(ExtrasIssue::error(error.message().to_string()));
+            return;
+        }
+    };
+    for field in fields {
+        if field.is_flag() {
+            if parts.values.contains_key(&field.name) {
+                issues.push(ExtrasIssue::modifier_dropped(&field.name));
+            } else {
+                parts.flags.push(field.name);
+            }
+            continue;
+        }
+        let text = field.text();
+        if field.name == "class" {
+            let classes = append_class(parts.values.get("class").map(String::as_str), &text);
+            parts.values.insert("class".to_string(), classes);
+        } else if parts.values.contains_key(&field.name) {
+            issues.push(ExtrasIssue::modifier_dropped(&field.name));
+        } else {
+            parts.values.insert(field.name, text);
+        }
+    }
 }
 
 fn emit_anchor(parts: AnchorParts, out: &mut Vec<Event>) {
@@ -375,7 +428,7 @@ fn flush_text(normal: &mut String, out: &mut Vec<Event>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pendon_extra::{FieldConfig, Path};
+    use pendon_extra::{AttrValue, FieldConfig, Path};
     use pendon_renderer_solid::TypedComponent;
 
     /// §7.2's preset, position by position (S2-2.5). This is the element's
@@ -696,6 +749,166 @@ mod tests {
             .attrs
             .iter()
             .find_map(|(key, value)| (key == name).then_some(value.as_str()))
+    }
+
+    // --- §5.4 slot modifiers (S2-6.2, D-9) --------------------------------
+
+    /// Runs `text` through the emitter with `options`.
+    fn emit_with(text: &str, options: &AnchorOptions) -> Emitted {
+        let mut out = Vec::new();
+        emit_text(text, options, &mut out);
+        collect(out)
+    }
+
+    /// An anchor layer whose **default** entry carries `config`: every anchor
+    /// without a `type` marker resolves to it, exactly as a real config would.
+    fn modifier_options(config: ModifierConfig) -> AnchorOptions {
+        AnchorOptions {
+            custom: ComponentSet::from_entries([TypedComponent::default_component(
+                AnchorCustomNode {
+                    name: "Anchor".into(),
+                    template: "<Anchor>{children}</Anchor>".into(),
+                    imports: Vec::new(),
+                },
+            )
+            .with_modifier(config)]),
+        }
+    }
+
+    /// One contribution, as config writes it.
+    fn field(name: &str, value: AttrValue) -> (Path, AttrValue) {
+        (Path::from_dotted(name).expect("a valid path"), value)
+    }
+
+    /// The proposal's own symbol pair (D-9): `?` and `!` both write `rel` and
+    /// `soo.baz`; `!` also adds a bare flag.
+    fn proposal_modifiers() -> ModifierConfig {
+        let mut config = ModifierConfig::new();
+        config.define(
+            '?',
+            vec![
+                field("rel", AttrValue::Str("nofollow".into())),
+                field("soo.baz", AttrValue::Str("wax".into())),
+                field("class", AttrValue::Str("external".into())),
+            ],
+        );
+        config.define(
+            '!',
+            vec![
+                field("rel", AttrValue::Str("noopener".into())),
+                field("soo.baz", AttrValue::Str("wax".into())),
+                field("isNew", AttrValue::Bool(true)),
+            ],
+        );
+        config
+    }
+
+    /// The prefix a structured value travels with (§6.3 transport): the array is
+    /// real JSON in the event stream, so `plugin-extract` reads an array.
+    fn structured(json: &str) -> String {
+        format!("{}{}", pendon_core::JSON_ATTR_PREFIX, json)
+    }
+
+    /// D-9's worked example, end to end: `|?!` writes both symbols' fields, and
+    /// two contributions to one path become an array in written order.
+    #[test]
+    fn a_modifier_run_contributes_the_fields_its_symbols_define() {
+        let options = modifier_options(proposal_modifiers());
+        let emitted = emit_with("@[docs |?!](https://example.com)", &options);
+        assert_eq!(value(&emitted, "href"), Some("https://example.com"));
+        assert_eq!(
+            value(&emitted, "rel"),
+            Some(structured("[\"nofollow\",\"noopener\"]").as_str())
+        );
+        assert_eq!(
+            value(&emitted, "soo.baz"),
+            Some(structured("[\"wax\",\"wax\"]").as_str())
+        );
+        assert_eq!(value(&emitted, "class"), Some("external"));
+        // A `true` contribution is a bare flag, never `isNew="isNew"` (§6.3).
+        assert!(
+            emitted.flags.contains(&"isNew".to_string()),
+            "{:?}",
+            emitted.attrs
+        );
+        assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
+        // The run is consumed: it is configuration, not link text.
+        assert_eq!(emitted.text, "docs");
+    }
+
+    /// A symbol with no config is legal and silent (S2-6.1): Pendon ships no
+    /// modifier of its own, so `|?` means nothing until an entry defines it.
+    #[test]
+    fn an_unconfigured_symbol_contributes_nothing() {
+        let emitted = emit_with(
+            "@[docs |?xyz](https://example.com)",
+            &modifier_options(ModifierConfig::new()),
+        );
+        assert_eq!(value(&emitted, "href"), Some("https://example.com"));
+        assert!(value(&emitted, "rel").is_none(), "{:?}", emitted.attrs);
+        assert!(emitted.flags.is_empty(), "{:?}", emitted.flags);
+        assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
+        assert_eq!(emitted.text, "docs");
+
+        // Same text, no config at all — the shipped default.
+        let emitted = emit("@[docs |?!](https://example.com)");
+        assert!(value(&emitted, "rel").is_none(), "{:?}", emitted.attrs);
+        assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
+    }
+
+    /// A modifier is configuration, the head is authored text: a field the
+    /// element already carries wins, and the drop is reported.
+    #[test]
+    fn the_heads_own_field_wins_over_the_modifier() {
+        let options = modifier_options(proposal_modifiers());
+        let emitted = emit_with(
+            "@[docs |?!](https://example.com)@@anchor{rel: \"ugc\"}",
+            &options,
+        );
+        assert_eq!(value(&emitted, "rel"), Some("ugc"));
+        assert!(
+            emitted.mentions("from the modifier run"),
+            "{:?}",
+            emitted.diagnostics
+        );
+        // Only the losing field is dropped — the rest of the run still lands.
+        assert_eq!(value(&emitted, "class"), Some("external"));
+    }
+
+    /// §6.4 / D-12: `class` is the one field that accumulates instead of
+    /// clashing, so a modifier adds tokens to the head's classes.
+    #[test]
+    fn a_modifier_class_accumulates_on_the_heads_classes() {
+        let options = modifier_options(proposal_modifiers());
+        let emitted = emit_with(
+            "@[docs |?](https://example.com)@@anchor{.hero, .external}",
+            &options,
+        );
+        assert_eq!(value(&emitted, "class"), Some("hero external"));
+        assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
+    }
+
+    /// D-9's `Severity::Error` tier: two contributions that cannot be nested
+    /// (`rel` beside `rel.x`) drop the **whole** run — no partial projection.
+    #[test]
+    fn an_irreconcilable_merge_drops_the_whole_run() {
+        let mut config = ModifierConfig::new();
+        config.define('?', vec![field("rel", AttrValue::Str("nofollow".into()))]);
+        config.define('!', vec![field("rel.x", AttrValue::Str("noopener".into()))]);
+        let emitted = emit_with(
+            "@[docs |?!](https://example.com)",
+            &modifier_options(config),
+        );
+        assert!(value(&emitted, "rel").is_none(), "{:?}", emitted.attrs);
+        assert!(value(&emitted, "rel.x").is_none(), "{:?}", emitted.attrs);
+        assert!(
+            emitted.errors_on("cannot contribute"),
+            "{:?}",
+            emitted.diagnostics
+        );
+        // The link itself is untouched — only the run is void.
+        assert_eq!(value(&emitted, "href"), Some("https://example.com"));
+        assert_eq!(emitted.text, "docs");
     }
 
     #[test]

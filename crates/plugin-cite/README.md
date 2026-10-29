@@ -354,6 +354,18 @@ processor keeps reading `reference_id` / `locator` (D-4).
 The complete example is golden `35-cite-fields`; the unconfigured preset is
 `05-cite`.
 
+## Slot modifiers (§5.4, D-9)
+
+The bracket's `|…` run contributes configured fields to the citation (§5.4,
+[ADR-0017](../../docs/decisions/0017-slot-modifiers.md)). The run is **pure
+configuration**, so it contributes last: a field the node already carries wins
+with a `Warning`, `class` accumulates (§6.4) and a `true` contribution becomes a
+bare attribute. The run never writes the reference or the locator, so citation
+identity and numbering are unaffected. A symbol with no
+`bracket.modifier."<symbol>"` config contributes nothing, and a config-only entry
+(no `name` / `template`) is enough to define one (D-8) — the built-in `<sup>`
+keeps rendering. Golden `43-slot-modifiers` is the end-to-end example.
+
 ## Behavioral Notes
 
 - Citation syntax `[^…]` must appear as raw text — it is processed **before** markdown parsing

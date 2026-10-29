@@ -105,8 +105,14 @@ attributes under their slot-qualified names, so a content is never dropped
 (D-7); a `field.<slot>.<kind>` key in the entry moves a position to a field of
 the author's own and voids the three preset rows for that entry (§6.1, §6.5).
 
-The bracket's `|…` run is the §5.4 slot-modifier run: parsed and carried, but it
-contributes nothing until the modifier config lands. Pendon ships no modifier.
+The bracket's `|…` run is the §5.4 slot-modifier run: every symbol contributes
+the fields its `bracket.modifier."<symbol>"` table names, in written order
+(§5.4, [ADR-0017](../../docs/decisions/0017-slot-modifiers.md)). The run is pure
+configuration, so it contributes **last**: a field the head or the extras already
+produced wins and the losing contribution is a `Warning`, while `class`
+accumulates (§6.4). A symbol with no config contributes nothing — Pendon ships no
+modifier — and a config-only entry (no `name` / `template`) is enough to define
+one (D-8).
 
 ## Extra Attributes
 

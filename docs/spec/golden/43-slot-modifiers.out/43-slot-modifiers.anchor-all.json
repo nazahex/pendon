@@ -1,0 +1,42 @@
+[
+  {
+    "class": "external",
+    "depth": 1,
+    "href": "https://example.com/two",
+    "inner_text": "two symbols",
+    "rel": [
+      "nofollow",
+      "noopener"
+    ],
+    "soo.baz": [
+      "wax",
+      "wax"
+    ]
+  },
+  {
+    "class": "hero external",
+    "depth": 1,
+    "href": "https://example.com/class",
+    "inner_text": "class accumulates",
+    "rel": "nofollow",
+    "soo.baz": "wax",
+    "type": "anchor"
+  },
+  {
+    "class": "external",
+    "depth": 1,
+    "href": "https://example.com/head",
+    "inner_text": "head wins",
+    "rel": "ugc",
+    "soo.baz": [
+      "wax",
+      "wax"
+    ],
+    "type": "anchor"
+  },
+  {
+    "depth": 1,
+    "href": "https://example.com/none",
+    "inner_text": "unknown symbols"
+  }
+]

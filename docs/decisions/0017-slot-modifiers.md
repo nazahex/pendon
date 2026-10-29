@@ -1,15 +1,20 @@
 # ADR-0017 — Slot modifiers merge in written order
 
-- Status: **Accepted** — D-9 settled by the owner 2026-10-28; implementation
-  lands in Phase 2 (`S2-2.5`, `S2-2.6`)
+- Status: **Accepted** — D-9 settled by the owner 2026-10-28; implemented in
+  Phase 6 (`S2-6.1`…`S2-6.4`, 2026-10-29): config in
+  `apps/cli/src/components.rs`, merge in `crates/extra/src/modifier.rs`, the four
+  slot elements wired (anchor, image, heading, cite), frozen by golden
+  `43-slot-modifiers`
 - Depends on: [`0012`](0012-universal-slots.md) (the slot parser),
   [`0014`](0014-field-model.md) (the public field map the result lands in)
 - Spec: [`SYNTAX.md`](../spec/SYNTAX.md) §5.4 (modifier run), §13 (merge errors)
 - Design:
   [`workflows/unified-syntax-stage-2/DECISIONS.md`](../workflows/unified-syntax-stage-2/DECISIONS.md)
   D-9
-- Evidence: `crates/extra/src/slot.rs` modifier tests; the two-symbol `rel`
-  fixture
+- Evidence: `crates/extra/src/modifier.rs` (config + merge tests),
+  `crates/extra/src/slot.rs` (run order/dedupe), and golden
+  [`43-slot-modifiers`](../spec/golden/43-slot-modifiers.mdp) — the two-symbol
+  `rel` array, `soo.baz`, `class` accumulation and head-wins, end to end
 
 ## Context
 

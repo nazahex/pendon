@@ -1,8 +1,8 @@
 use pendon_core::{Event, NodeKind};
 use pendon_extra::{
-    issue_event, parse_extras, parse_slots, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
-    ExtrasIssue, ExtrasMatch, FieldName, Preset, Slot, SlotContract, SlotKind, SlotMatch, SlotPos,
-    SlotTag, SpecsKey,
+    append_class, issue_event, modifier_contributions, parse_extras, parse_slots, to_attributes,
+    ElementHead, ExtrasAttr, ExtrasHead, ExtrasIssue, ExtrasMatch, FieldName, ModifierConfig,
+    Preset, Slot, SlotContract, SlotKind, SlotMatch, SlotPair, SlotPos, SlotTag, SpecsKey,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use regex::Regex;
@@ -200,11 +200,58 @@ fn read_head(rest: &str, options: &HeadingOptions) -> Read {
         }
     }
 
-    if let Some(extras) = extras {
-        merge_heading_extras(&mut head, &extras, options, &head_keys);
+    if let Some(extras) = &extras {
+        merge_heading_extras(&mut head, extras, options, &head_keys);
+    }
+    // §5.4 / D-9: the bracket's modifier run contributes last, so every field the
+    // head or the extras already produced wins (§6.2).
+    if let Some(pair) = &pair {
+        merge_modifiers(&mut head, pair, options.custom.modifier_for(marker));
     }
     head.consumed = consumed;
     Read::Head(Box::new(head))
+}
+
+/// Merges `pair`'s modifier run into the heading's fields (§5.4, D-9).
+///
+/// `class` accumulates (§6.4); every other contributed field is dropped with a
+/// warning when the element already carries it, and an unusable merge (D-9's
+/// `Severity::Error` tier) drops the whole run.
+fn merge_modifiers(head: &mut HeadingHead, pair: &SlotPair, config: Option<&ModifierConfig>) {
+    let fields = match modifier_contributions(config, pair) {
+        Ok(fields) => fields,
+        Err(error) => {
+            head.issues
+                .push(ExtrasIssue::error(error.message().to_string()));
+            return;
+        }
+    };
+    for field in fields {
+        let carried = head.attrs.contains_key(&field.name)
+            || (field.name == "slug" && head.slug.is_some())
+            || (field.name == "title" && head.title.is_some());
+        if field.is_flag() {
+            if carried {
+                head.issues.push(ExtrasIssue::modifier_dropped(&field.name));
+            } else {
+                head.flags.push(field.name);
+            }
+            continue;
+        }
+        let text = field.text();
+        if field.name == "class" {
+            let classes = append_class(head.attrs.get("class").map(String::as_str), &text);
+            head.attrs.insert("class".to_string(), classes);
+        } else if carried {
+            head.issues.push(ExtrasIssue::modifier_dropped(&field.name));
+        } else if field.name == "slug" {
+            head.slug = Some(text);
+        } else if field.name == "title" {
+            head.title = Some(text);
+        } else {
+            head.attrs.insert(field.name, text);
+        }
+    }
 }
 
 /// Merges a §7.4 extras head into the heading's attributes.
@@ -512,7 +559,7 @@ pub fn primary_layer() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pendon_extra::{FieldConfig, Path};
+    use pendon_extra::{AttrValue, FieldConfig, Path};
     use pendon_renderer_solid::TypedComponent;
 
     /// §7.4's preset, position by position (S2-2.5). `slug` is the slot value and
@@ -604,6 +651,51 @@ mod tests {
             Read::Malformed(message) => panic!("malformed head: {message}"),
             Read::Literal => panic!("not a head: {text:?}"),
         }
+    }
+
+    // --- §5.4 slot modifiers (S2-6.2, D-9) --------------------------------
+
+    /// §5.4 / D-9: the bracket's modifier run contributes its configured fields
+    /// to the heading, `class` included, and a `true` contribution is a bare
+    /// flag (§6.3). Pendon ships no symbol of its own, so nothing else happens.
+    #[test]
+    fn a_modifier_run_contributes_configured_fields() {
+        let mut modifier = ModifierConfig::new();
+        modifier.define(
+            '?',
+            vec![
+                (
+                    Path::from_dotted("class").unwrap(),
+                    AttrValue::Str("fancy".into()),
+                ),
+                (
+                    Path::from_dotted("outlined").unwrap(),
+                    AttrValue::Bool(true),
+                ),
+            ],
+        );
+        let options = HeadingOptions {
+            custom: ComponentSet::from_entries([TypedComponent::default_component(
+                HeadingCustomNode {
+                    name: "DocHeading".into(),
+                    template: "<DocHeading>{children}</DocHeading>".into(),
+                    imports: Vec::new(),
+                },
+            )
+            .with_modifier(modifier)]),
+            section_owns_id: false,
+        };
+        // The run is consumed with the bracket: it is configuration, not slug.
+        let (consumed, head) = head_of_with("#[foo |?] Title", &options);
+        assert_eq!(consumed, "#[foo |?]");
+        assert_eq!(head.slug.as_deref(), Some("foo"));
+        assert_eq!(head.attrs.get("class").map(String::as_str), Some("fancy"));
+        assert!(
+            head.flags.contains(&"outlined".to_string()),
+            "{:?}",
+            head.flags
+        );
+        assert!(head.issues.is_empty(), "{:?}", head.issues);
     }
 
     /// §7.4: the bracket is `slug` and the paren quote `title`; both are consumed,

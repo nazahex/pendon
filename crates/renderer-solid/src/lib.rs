@@ -10,7 +10,7 @@ mod node;
 mod resolve;
 mod template;
 
-pub use components::{layer_templates, ComponentSet, TypedComponent};
+pub use components::{layer_templates, ComponentSet, ConfigEntry, TypedComponent};
 pub use imports::{ComponentTemplate, DataExport, ExportSource, ImportEntry, SolidRenderHints};
 
 pub fn render_solid(events: &[Event]) -> String {

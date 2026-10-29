@@ -4,9 +4,9 @@ use std::path::Path;
 
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
-    issue_event, parse_extras, parse_slots, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
-    ExtrasIssue, ExtrasMatch, FieldName, Preset, Slot, SlotContract, SlotKind, SlotMatch, SlotPos,
-    SlotTag, SpecsKey,
+    issue_event, modifier_contributions, parse_extras, parse_slots, to_attributes, ElementHead,
+    ExtrasAttr, ExtrasHead, ExtrasIssue, ExtrasMatch, FieldName, ModifierConfig, Preset, Slot,
+    SlotContract, SlotKind, SlotMatch, SlotPair, SlotPos, SlotTag, SpecsKey,
 };
 use pendon_renderer_solid::{
     layer_templates, ComponentSet, DataExport, ImportEntry, SolidRenderHints,
@@ -843,9 +843,12 @@ fn read_head(rest: &str, ctx: &CitationContext) -> Read {
         );
     }
 
-    if let Some(head) = extras {
-        merge_cite_extras(&mut parts.extra, &head, options, &head_keys);
+    if let Some(head) = &extras {
+        merge_cite_extras(&mut parts.extra, head, options, &head_keys);
     }
+    // §5.4 / D-9: the bracket's modifier run contributes last, so every field the
+    // head or the extras already produced wins (§6.2).
+    merge_modifiers(&mut parts.extra, &pair, options.custom.modifier_for(marker));
     parts.extra.issues.extend(issues);
 
     Read::Cite {
@@ -968,6 +971,53 @@ fn merge_cite_extras(
     }
 }
 
+/// Merges `pair`'s modifier run into the citation's fields (§5.4, D-9).
+///
+/// `class` accumulates (§6.4); every other contributed field is dropped with a
+/// warning when the element already carries it, and an unusable merge (D-9's
+/// `Severity::Error` tier) drops the whole run.
+fn merge_modifiers(extra: &mut CiteExtraAttrs, pair: &SlotPair, config: Option<&ModifierConfig>) {
+    let fields = match modifier_contributions(config, pair) {
+        Ok(fields) => fields,
+        Err(error) => {
+            extra
+                .issues
+                .push(ExtrasIssue::error(error.message().to_string()));
+            return;
+        }
+    };
+    for field in fields {
+        if field.is_flag() {
+            if extra.has_key(&field.name) {
+                extra
+                    .issues
+                    .push(ExtrasIssue::modifier_dropped(&field.name));
+            } else {
+                extra.flags.push(field.name);
+            }
+            continue;
+        }
+        let text = field.text();
+        match field.name.as_str() {
+            "class" => {
+                for token in text.split_whitespace() {
+                    if !extra.classes.iter().any(|known| known == token) {
+                        extra.classes.push(token.to_string());
+                    }
+                }
+            }
+            "style" if !extra.has_key("style") => extra.extras_style = Some(text),
+            _ if extra.has_key(&field.name) => {
+                extra
+                    .issues
+                    .push(ExtrasIssue::modifier_dropped(&field.name));
+            }
+            "id" => extra.id = Some(text),
+            _ => extra.data.push((field.name, text)),
+        }
+    }
+}
+
 // --- Frontmatter Helpers ---
 
 fn extract_frontmatter(events: &[Event]) -> Option<Value> {
@@ -1051,6 +1101,7 @@ fn yaml_to_json(value: &serde_yaml::Value) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pendon_extra::{AttrValue, Path};
     use pendon_renderer_solid::TypedComponent;
 
     /// §7.3's preset, position by position (S2-4.4): the bracket carries the
@@ -1373,6 +1424,83 @@ mod tests {
             event,
             Event::Diagnostic { message, .. } if message.contains("needs a `reference_id`")
         )));
+    }
+
+    /// §5.4 / D-9: the bracket's modifier run contributes its configured fields
+    /// to the citation's node — `class` accumulates (§6.4), a bare `true` is a
+    /// flag (§6.3) — and the run never leaks into the reference or the locator.
+    #[test]
+    fn a_modifier_run_contributes_configured_fields() {
+        let mut modifier = ModifierConfig::new();
+        modifier.define(
+            '?',
+            vec![
+                (
+                    Path::from_dotted("rel").unwrap(),
+                    AttrValue::Str("nofollow".into()),
+                ),
+                (
+                    Path::from_dotted("class").unwrap(),
+                    AttrValue::Str("hero".into()),
+                ),
+                (Path::from_dotted("compact").unwrap(), AttrValue::Bool(true)),
+            ],
+        );
+        let mut options = CiteOptions::default();
+        options.custom =
+            ComponentSet::from_entries([TypedComponent::default_component(CiteCustomNode {
+                name: "Citation".into(),
+                template: "<Citation />".into(),
+                imports: Vec::new(),
+            })
+            .with_modifier(modifier)]);
+
+        let events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Frontmatter),
+            Event::Attribute {
+                name: "data".into(),
+                value: r#"{"references":{"book":{"title":"Book"}}}"#.into(),
+            },
+            Event::EndNode(NodeKind::Frontmatter),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text(r#"[^book |?]{.hero}"#.into()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let result = process(&events, &options);
+        assert!(
+            result.iter().any(|event| matches!(
+                event,
+                Event::Attribute { name, value } if name == "rel" && value == "nofollow"
+            )),
+            "{result:?}"
+        );
+        // The extras `class` and the modifier's merge without repeating a token.
+        assert!(
+            result.iter().any(|event| matches!(
+                event,
+                Event::Attribute { name, value } if name == "class" && value == "hero"
+            )),
+            "{result:?}"
+        );
+        assert!(
+            result.iter().any(|event| matches!(
+                event,
+                Event::AttributeFlag { name } if name == "compact"
+            )),
+            "{result:?}"
+        );
+        // The head still resolves: the run is configuration, not the reference.
+        assert!(
+            result.iter().any(|event| matches!(
+                event,
+                Event::Attribute { name, value }
+                    if name == "reference_id" && value == "book"
+            )),
+            "{result:?}"
+        );
     }
 
     #[test]

@@ -1,0 +1,40 @@
+[[task]]
+name = "Golden 43"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,anchor,image,heading,cite,extract,markdown"
+format = "solid"
+
+# §5.4 / D-9: a symbol means only what an entry says. These entries carry no
+# component — a modifier config is a definition on its own (D-8) — so each is
+# the layer default, and every occurrence of that layer resolves to it.
+[[task.anchor.custom]]
+bracket.modifier."?" = { rel = "nofollow", "soo.baz" = "wax", class = "external" }
+bracket.modifier."!" = { rel = "noopener", "soo.baz" = "wax" }
+
+[[task.image.custom]]
+bracket.modifier."?" = { loading = "lazy", class = "hero" }
+
+[[task.heading.custom]]
+bracket.modifier."?" = { class = "marked" }
+
+[task.cite]
+reference_source = "internal"
+
+# A `true` contribution becomes a bare attribute, never `compact="compact"`.
+[[task.cite.custom]]
+bracket.modifier."?" = { class = "cited", compact = true }
+
+# S2-6.4: a modifier's fields are ordinary fields of the occurrence. The preset
+# (`recommended = true`) keeps only the element's own rows, so it leaves them
+# out…
+[[task.anchor.extract]]
+output = "./out/[slug].anchor-preset.json"
+format = "json"
+recommended = true
+
+# …while a block with no preset reaches every field the node carries, the merged
+# `rel` array and the dotted `soo.baz` included.
+[[task.anchor.extract]]
+output = "./out/[slug].anchor-all.json"
+format = "json"

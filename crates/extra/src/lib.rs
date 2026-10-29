@@ -18,6 +18,9 @@
 //!   field vocabulary the projection emits and the map it fills (ADR-0014,
 //!   proposal §7), plus [`FieldName`] / [`Preset`] / [`ElementHead`], the
 //!   built-in slot→field assignment each element declares as data (§6.5, D-7).
+//! * [`modifier_contributions`] / [`ModifierConfig`] — the §5.4 slot modifier
+//!   run: what each symbol is configured to contribute and D-9's merge
+//!   (ADR-0017). Pendon ships no modifier of its own.
 //!
 //! The pre-§11 `[.class,#id]{key: value}` form is **removed** (§14): it is
 //! plain literal text and this crate has no parser for it.
@@ -25,12 +28,18 @@
 mod decorator;
 mod emit;
 mod field;
+mod modifier;
 mod preset;
 mod slot;
 mod typed;
 mod value;
 
 pub use emit::{emit_attr_issues, emit_attrs, issue_event, scan_extras_chars};
+
+pub use modifier::{
+    append_class, contributions as modifier_contributions, Contribution, ModifierConfig,
+    ModifierError,
+};
 
 pub use field::{
     project, validate_field_name, FieldConfig, FieldConfigError, FieldMap, FieldMapError,

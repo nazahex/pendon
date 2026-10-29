@@ -1,0 +1,51 @@
+---
+references:
+  book:
+    id: book
+    type: book
+    title: A Book
+---
+
+# Slot modifiers
+
+The bracket's `|…` run is **pure configuration** (§5.4, D-9): every symbol names
+a table in `pendon.toml` and contributes that table's fields to the element.
+Pendon ships no modifier of its own, so a symbol with no config contributes
+nothing and is not a diagnostic — and neither the entry nor the run needs a
+custom component to exist (D-8).
+
+@[two symbols |?!](https://example.com/two)
+
+`?` and `!` both write `rel` and `soo.baz`, so two contributions to one path
+become an array in **written** order — never sorted, and never deduplicated:
+`rel` is `["nofollow", "noopener"]` and `soo.baz` keeps both `"wax"` entries.
+
+@[class accumulates |?](https://example.com/class)@@anchor{.hero, .external}
+
+`class` is the one field that adds up instead of clashing (§6.4), and a token
+the element already carries is not repeated.
+
+@[head wins |?!](https://example.com/head)@@anchor{rel: "ugc"}
+
+A modifier is configuration, the head is authored text: `rel` stays `ugc` and
+the losing contribution is dropped with a warning.
+
+@[unknown symbols |xyz](https://example.com/none)
+
+`xyz` configures nothing, so this link carries exactly what its head does.
+
+![An image |?](https://x.test/a.webp)
+
+A block image reads the same run: `?` adds `class`, and `loading` is a prop the
+`<img>` has no attribute for, so it lands under the `data-` prefix (§6.3).
+
+Minim [^book "hlm. 45" |?]@@citeX{.hero} esse do ut anim proident.
+
+A citation reads the same run, and a `true` contribution is a **bare flag**
+(`compact`), never `compact="compact"` (§6.3). The run is configuration, so it
+never writes the reference or the locator: the citation still numbers as usual.
+
+#[mod-head |?]("Modifier heading")
+
+This heading and the one above differ only by the run: the entry defines no
+component, only a modifier contribution.

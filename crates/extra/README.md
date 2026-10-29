@@ -27,6 +27,13 @@ for interpreting the parsed properties.
   itself (§5.2–§5.4, ADR-0012, ADR-0017). `Slot::name` / `SlotKind::name` and
   their `from_name` inverses are the `field.<slot>.<kind>` config vocabulary, so
   a typo can never be read as a position.
+- **Slot modifiers** — `ModifierConfig` / `merge` / `contributions`
+  (`src/modifier.rs`): one entry's `bracket.modifier."<symbol>"` tables, turned
+  into the **public fields** a parsed run contributes (§5.4, D-9,
+  [ADR-0017](../../docs/decisions/0017-slot-modifiers.md)). Same path → array in
+  written order, object + object → deep merge, and an irreconcilable pair is a
+  `ModifierError` that drops the whole run. Pendon ships no modifier, so a symbol
+  with no config answers an empty list — legal, never a diagnostic.
 - **IR glue** — `scan_extras_chars` / `emit_attrs` / `warning_event` (`src/emit.rs`):
   the shared **emit** pass that turns a parsed head into event attributes. It is
   not data binding — that is `plugin-bind` (§12.2, ADR-0005).

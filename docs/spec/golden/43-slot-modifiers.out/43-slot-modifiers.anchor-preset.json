@@ -1,0 +1,20 @@
+[
+  {
+    "href": "https://example.com/two",
+    "inner_text": "two symbols"
+  },
+  {
+    "href": "https://example.com/class",
+    "inner_text": "class accumulates",
+    "type": "anchor"
+  },
+  {
+    "href": "https://example.com/head",
+    "inner_text": "head wins",
+    "type": "anchor"
+  },
+  {
+    "href": "https://example.com/none",
+    "inner_text": "unknown symbols"
+  }
+]

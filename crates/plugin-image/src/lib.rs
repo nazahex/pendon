@@ -9,9 +9,10 @@
 
 use pendon_core::{element_close, element_open, raw_inline, Event, NodeKind, Severity};
 use pendon_extra::{
-    issue_event, parse_extras, parse_slots, to_attributes, ElementHead, ExtrasAttr, ExtrasHead,
-    ExtrasIssue, ExtrasMatch, FieldConfig, FieldName, Preset, Slot, SlotContract, SlotError,
-    SlotKind, SlotMatch, SlotPair, SlotPos, SlotTag, SpecsKey,
+    append_class, issue_event, modifier_contributions, parse_extras, parse_slots, to_attributes,
+    ElementHead, ExtrasAttr, ExtrasHead, ExtrasIssue, ExtrasMatch, FieldConfig, FieldName,
+    ModifierConfig, Preset, Slot, SlotContract, SlotError, SlotKind, SlotMatch, SlotPair, SlotPos,
+    SlotTag, SpecsKey,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 
@@ -340,8 +341,51 @@ fn build_parts(
     if matched.is_none_or(FieldConfig::is_empty_slots) && !parts.has("alt") {
         parts.set("alt", String::new());
     }
+
+    // §5.4 / D-9: the bracket's modifier run contributes last, so every field the
+    // head or the extras already produced wins — a modifier is configuration, the
+    // head is authored text.
+    merge_modifiers(&mut parts, pair, options.img.modifier_for(marker));
+
     parts.consumed = consumed;
     parts
+}
+
+/// Merges `pair`'s modifier run into the image's fields (§5.4, D-9).
+///
+/// `class` accumulates (§6.4); every other contributed field is dropped with a
+/// warning when the element already carries it, and an unusable merge (D-9's
+/// `Severity::Error` tier) drops the whole run.
+fn merge_modifiers(parts: &mut ImageParts, pair: &SlotPair, config: Option<&ModifierConfig>) {
+    let mut issues = std::mem::take(&mut parts.issues);
+    let fields = match modifier_contributions(config, pair) {
+        Ok(fields) => fields,
+        Err(error) => {
+            issues.push(ExtrasIssue::error(error.message().to_string()));
+            parts.issues = issues;
+            return;
+        }
+    };
+    for field in fields {
+        if field.is_flag() {
+            if parts.has(&field.name) {
+                issues.push(ExtrasIssue::modifier_dropped(&field.name));
+            } else {
+                parts.flags.push(field.name);
+            }
+            continue;
+        }
+        let text = field.text();
+        if field.name == "class" {
+            let classes = append_class(parts.get("class"), &text);
+            parts.set("class", classes);
+        } else if parts.has(&field.name) {
+            issues.push(ExtrasIssue::modifier_dropped(&field.name));
+        } else {
+            parts.set(&field.name, text);
+        }
+    }
+    parts.issues = issues;
 }
 
 /// Merges a §7.1 extras head into the image's fields.
@@ -585,7 +629,7 @@ fn find_matching_end(events: &[Event], start_idx: usize, kind: NodeKind) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pendon_extra::{FieldConfig, Path};
+    use pendon_extra::{AttrValue, FieldConfig, Path};
     use pendon_renderer_solid::TypedComponent;
 
     /// §7.1's preset, position by position. This is the element's contract as
@@ -635,6 +679,52 @@ mod tests {
             Event::EndNode(NodeKind::Paragraph),
             Event::EndNode(NodeKind::Document),
         ]
+    }
+
+    // --- §5.4 slot modifiers (S2-6.2, D-9) --------------------------------
+
+    /// §5.4 / D-9: the run contributes its configured fields to the `<img>`,
+    /// `class` accumulates instead of clashing (§6.4), and a field the head
+    /// already set wins over the modifier.
+    #[test]
+    fn a_modifier_run_contributes_configured_fields() {
+        let mut modifier = ModifierConfig::new();
+        modifier.define(
+            '?',
+            vec![
+                (
+                    Path::from_dotted("loading").unwrap(),
+                    AttrValue::Str("lazy".into()),
+                ),
+                (
+                    Path::from_dotted("class").unwrap(),
+                    AttrValue::Str("hero".into()),
+                ),
+            ],
+        );
+        let options = ImageOptions {
+            img: ComponentSet::from_entries([TypedComponent::default_component(ImageCustomNode {
+                name: "AdvancedImage".into(),
+                template: "<AdvancedImage {...attrs} />".into(),
+                imports: Vec::new(),
+            })
+            .with_modifier(modifier)]),
+        };
+
+        // The extras set `loading` and one of the modifier's classes.
+        let events =
+            paragraph_events("![Alt |?](https://x.test/a.webp)@@imageX{loading: \"eager\", .hero}");
+        let out = process(&events, &options);
+        // The head wins `loading`…
+        assert_eq!(attr_value(&out, "loading").as_deref(), Some("eager"));
+        // …and `class` merges without repeating a token.
+        assert_eq!(attr_value(&out, "class").as_deref(), Some("hero"));
+
+        // The modifier alone: no extras head at all.
+        let events = paragraph_events("![Alt |?](https://x.test/a.webp)");
+        let out = process(&events, &options);
+        assert_eq!(attr_value(&out, "loading").as_deref(), Some("lazy"));
+        assert_eq!(attr_value(&out, "class").as_deref(), Some("hero"));
     }
 
     /// The attributes of the first `<img>` element, in emission order.

@@ -501,6 +501,16 @@ impl ExtrasIssue {
         ))
     }
 
+    /// §5.4: a modifier's field lost to one the element already carries.
+    ///
+    /// A modifier is configuration, the head is authored text — the element's own
+    /// value wins, exactly like an extras item facing a construct head (§6.2).
+    pub fn modifier_dropped(field: &str) -> Self {
+        Self::warning(format!(
+            "`{field}` from the modifier run was dropped because the element already carries it"
+        ))
+    }
+
     /// D-12's last rule: a `k: v` named like one of the element's **built-in**
     /// fields (`href` on an anchor, `src` on an image).
     ///

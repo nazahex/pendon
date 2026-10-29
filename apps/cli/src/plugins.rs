@@ -12,7 +12,8 @@ use pendon_plugin_marker::{MarkerCustomNode, MarkerOptions};
 use pendon_plugin_number::{NumberBlock, NumberOptions, NumberStyles};
 use pendon_plugin_section::{SectionCustomNode, SectionOptions};
 use pendon_renderer_solid::{
-    ComponentSet, ComponentTemplate, DataExport, ImportEntry, SolidRenderHints, TypedComponent,
+    ComponentSet, ComponentTemplate, ConfigEntry, DataExport, ImportEntry, SolidRenderHints,
+    TypedComponent,
 };
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -231,15 +232,10 @@ fn check_custom_node_removed(plugin: &str, legacy: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// A layer entry with no name, template or imports carries no component
-/// (D-8's fields-only entry); it still configures `field.*`.
-fn entry_is_configured(entry: &crate::components::ComponentEntry) -> bool {
-    entry.is_configured()
-}
-
 /// Loads one §11 layer as a component set: every entry of the layer with its
-/// `type` markers (§11 rule 3). A fields-only entry (D-8) carries no component
-/// and is skipped here — its `field.*` config is read from the component set.
+/// `type` markers (§11 rule 3). An entry that names no component is carried as
+/// a config-only entry (D-8), so its `field.*` and `bracket.modifier."…"` still
+/// reach the element — a modifier never needs a custom component.
 fn layer_set<C>(
     loaded: Option<&crate::components::LoadedComponents>,
     layer: &str,
@@ -249,19 +245,27 @@ fn layer_set<C>(
         return Ok(ComponentSet::new());
     };
     let mut entries = Vec::new();
-    for entry in set
-        .typed()
-        .iter()
-        .chain(set.default_entry())
-        .filter(|entry| entry_is_configured(entry))
-    {
-        entries.push(TypedComponent {
-            selectors: entry.selectors.clone(),
-            component: make(entry)?,
-            field: entry.field.clone(),
-        });
+    let mut configs = Vec::new();
+    for entry in set.typed().iter().chain(set.default_entry()) {
+        if entry.is_configured() {
+            entries.push(TypedComponent {
+                selectors: entry.selectors.clone(),
+                component: make(entry)?,
+                field: entry.field.clone(),
+                modifier: entry.modifier.clone(),
+            });
+        } else if entry.carries_config() {
+            // D-8: an entry that names no component still configures the
+            // element — `field.*` and `bracket.modifier."…"` reach the layer the
+            // element renders with, so a modifier needs no custom component.
+            configs.push(ConfigEntry {
+                selectors: entry.selectors.clone(),
+                field: entry.field.clone(),
+                modifier: entry.modifier.clone(),
+            });
+        }
     }
-    Ok(ComponentSet::from_entries(entries))
+    Ok(ComponentSet::from_entries(entries).with_configs(configs))
 }
 
 /// Rejects §11 layers this plugin cannot carry yet (§14: no silent drops).
@@ -1307,6 +1311,31 @@ names = ["TableHead"]
         ));
         assert!(node.caption.is_empty());
         assert!(node.cell.is_empty());
+    }
+
+    /// §5.4 / D-9 + D-8: a custom entry that names no component is **config**,
+    /// not a component — its `bracket.modifier."…"` tables reach the layer the
+    /// element renders with, and it adds no template, so the built-in element
+    /// still renders.
+    #[test]
+    fn a_config_only_entry_reaches_the_layer_without_a_template() {
+        let cfg: AnchorTaskConfig = toml::from_str(
+            r#"
+[[custom]]
+bracket.modifier."?" = { rel = "nofollow" }
+"#,
+        )
+        .expect("valid anchor config");
+        let options = build_anchor_options(Some(&cfg)).expect("valid anchor options");
+
+        assert!(options.custom.is_empty(), "no component, so no template");
+        assert!(
+            pendon_plugin_anchor::solid_hints(&options).is_none(),
+            "a config-only layer must not switch the emit path"
+        );
+        let modifier = options.custom.modifier_for(None).expect("the config");
+        assert_eq!(modifier.for_symbol('?').len(), 1);
+        assert!(modifier.for_symbol('!').is_empty());
     }
 
     /// An empty `custom` says nothing: D-8 makes the single-table form a load

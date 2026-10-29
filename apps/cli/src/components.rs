@@ -27,7 +27,7 @@ use std::fmt;
 use pendon_renderer_solid::ImportEntry;
 use pendon_types::Selector;
 
-use pendon_extra::{Path, Slot, SlotKind, SPECS_KEYS};
+use pendon_extra::{AttrValue, ModifierConfig, Path, Slot, SlotKind, SPECS_KEYS};
 
 use crate::plugins::parse_import_entries;
 
@@ -54,7 +54,7 @@ pub use pendon_extra::FieldConfig;
 
 /// One `custom` entry: the `type` selectors it answers, its imports and its
 /// template.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ComponentEntry {
     /// §11 selectors: literals plus `?` / `_` / `*`. Empty means "this is the
     /// layer default" (rule 2) — an explicit wildcard is a rule, not the
@@ -67,6 +67,9 @@ pub struct ComponentEntry {
     /// that configures no fields, which is what keeps the element's preset
     /// assignments alive (D-7).
     pub field: FieldConfig,
+    /// §5.4 / D-9 `bracket.modifier."<symbol>"` — what a bracket's modifier run
+    /// contributes to the element. Empty by default: Pendon ships no modifier.
+    pub modifier: ModifierConfig,
 }
 
 impl ComponentEntry {
@@ -82,6 +85,15 @@ impl ComponentEntry {
     /// public field names instead of a component.
     pub fn is_configured(&self) -> bool {
         self.name.is_some() || self.template.is_some() || !self.imports.is_empty()
+    }
+
+    /// True when the entry carries configuration that reaches no template:
+    /// `field.*` or a `bracket.modifier."…"` table.
+    ///
+    /// Two configs for one literal would silently drop one, so they clash — the
+    /// same rule two components for one literal follow (D-4, D-8).
+    pub fn carries_config(&self) -> bool {
+        !self.field.is_empty() || !self.modifier.is_empty()
     }
 
     /// Answers `type_marker` through a **literal** selector, or `None` when it
@@ -103,7 +115,7 @@ impl ComponentEntry {
 }
 
 /// The component set of one layer (§11 rule 1).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ComponentSet {
     layer: String,
     typed: Vec<ComponentEntry>,
@@ -175,7 +187,7 @@ impl ComponentSet {
 }
 
 /// Every layer's component set for one task-level plugin.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct PluginComponents {
     layers: BTreeMap<String, ComponentSet>,
 }
@@ -229,7 +241,7 @@ pub fn reject_unwired_layers(
 
 /// Result of loading one plugin's component config: the sets plus non-fatal
 /// deprecation notices (§11 rule 4).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct LoadedComponents {
     pub components: PluginComponents,
     pub warnings: Vec<String>,
@@ -238,11 +250,14 @@ pub struct LoadedComponents {
 /// Keys that mark a table as a component entry rather than a map of layers.
 ///
 /// `field` belongs here: `[task.anchor.custom]` with only `field.*` keys is a
-/// (field-only) **entry**, never a layer named `field` (D-8).
+/// (field-only) **entry**, never a layer named `field` (D-8). `bracket` is here
+/// for the same reason: it carries the §5.4 modifier tables and is not a layer.
 ///
 /// Every other key is a load error (D-16): an entry is a closed vocabulary, so a
 /// typo — or a removed key (§14) — can never be silently ignored.
-const ENTRY_KEYS: [&str; 6] = ["type", "name", "imports", "import", "template", "field"];
+const ENTRY_KEYS: [&str; 7] = [
+    "type", "name", "imports", "import", "template", "field", "bracket",
+];
 
 /// Loads the `custom` key of one task-level plugin.
 ///
@@ -363,8 +378,8 @@ fn check_duplicate_type(
     for known in entry.literal_types() {
         for other in set.typed().iter().filter(|other| other.matches_type(known)) {
             let both_components = entry.is_configured() && other.is_configured();
-            let both_field_configs = !entry.field.is_empty() && !other.field.is_empty();
-            if both_components || both_field_configs {
+            let both_configs = entry.carries_config() && other.carries_config();
+            if both_components || both_configs {
                 return Err(ConfigError(format!(
                     "{label}: duplicate `type` marker `{known}`"
                 )));
@@ -383,12 +398,20 @@ fn parse_entry(
     // load error, not a warning — a typo or a removed key (§14) must never be
     // dropped silently and leave the output looking configured.
     for key in table.keys() {
-        if !ENTRY_KEYS.contains(&key.as_str()) {
+        if ENTRY_KEYS.contains(&key.as_str()) {
+            continue;
+        }
+        // §5.4 / D-9 rule 5: a modifier run exists in a bracket only, so a
+        // `paren.modifier` table is not syntax (and not a typo either).
+        if Slot::from_name(key).is_some() {
             return Err(ConfigError(format!(
-                "{label}: unknown key `{key}`; a custom entry takes `type`, `name`, \
-                 `imports`, `template` and `field.*` keys (§11, D-16)"
+                "{label}: `{key}.modifier` is not syntax; modifiers are bracket-only (§5.4, D-9)"
             )));
         }
+        return Err(ConfigError(format!(
+            "{label}: unknown key `{key}`; a custom entry takes `type`, `name`, \
+             `imports`, `template`, `field.*` and `bracket.modifier.\"<symbol>\"` keys (§11, D-16)"
+        )));
     }
 
     let tokens: Vec<String> = match table.get("type") {
@@ -434,19 +457,24 @@ fn parse_entry(
         Some(value) => parse_field_config(label, value)?,
         None => FieldConfig::new(),
     };
+    let modifier = match table.get("bracket") {
+        Some(value) => parse_modifier_config(label, value)?,
+        None => ModifierConfig::new(),
+    };
     let entry = ComponentEntry {
         selectors,
         name,
         imports,
         template,
         field,
+        modifier,
     };
-    // D-8: an entry that carries neither a component nor a `field.*` key says
-    // nothing, so it is a load error rather than a silent no-op.
-    if !entry.is_configured() && entry.field.is_empty() {
+    // D-8: an entry that carries neither a component nor a `field.*` / modifier
+    // config says nothing, so it is a load error rather than a silent no-op.
+    if !entry.is_configured() && entry.field.is_empty() && entry.modifier.is_empty() {
         return Err(ConfigError(format!(
             "{label}: empty custom entry; give it a component (`name`, `template` or \
-             `imports`) or at least one `field.*` key"
+             `imports`), a `field.*` key or a `bracket.modifier.\"<symbol>\"` table"
         )));
     }
     Ok(entry)
@@ -531,6 +559,119 @@ fn parse_field_config(label: &str, value: &toml::Value) -> Result<FieldConfig, C
         }
     }
     Ok(config)
+}
+
+/// Parses an entry's `bracket.modifier."<symbol>"` tables (§5.4, D-9).
+///
+/// A symbol is **exactly one character**, quoted because a symbol is
+/// punctuation: `"?"`, `"~"`, `"|"`, `"Œ"`, `"\\"`, `"ئ"` are all valid and all
+/// mean only what this entry's config says. The symbol is never interpreted — a
+/// run of symbols with no config is legal and contributes nothing.
+///
+/// `bracket` is the only slot key: a modifier run lives in a bracket, so
+/// `paren.modifier` is rejected at the entry level ([`parse_entry`]).
+fn parse_modifier_config(label: &str, value: &toml::Value) -> Result<ModifierConfig, ConfigError> {
+    let table = value.as_table().ok_or_else(|| {
+        ConfigError(format!(
+            "{label}: `bracket` must be a table with a `modifier` key, found {}",
+            value.type_str()
+        ))
+    })?;
+    let mut config = ModifierConfig::new();
+    for (key, value) in table {
+        if key != "modifier" {
+            return Err(ConfigError(format!(
+                "{label}: `bracket.{key}` is not a modifier config key; use \
+                 `bracket.modifier.\"<symbol>\"` (D-5)"
+            )));
+        }
+        let symbols = value.as_table().ok_or_else(|| {
+            ConfigError(format!(
+                "{label}: `bracket.modifier` must be a table of quoted symbols, found {}",
+                value.type_str()
+            ))
+        })?;
+        for (symbol, contribution) in symbols {
+            let mut chars = symbol.chars();
+            let symbol = match (chars.next(), chars.next()) {
+                (Some(symbol), None) => symbol,
+                _ => {
+                    return Err(ConfigError(format!(
+                        "{label}: `bracket.modifier.\"{symbol}\"` is not a symbol; a modifier \
+                         symbol is exactly one character"
+                    )))
+                }
+            };
+            config.define(symbol, modifier_fields(label, symbol, contribution)?);
+        }
+    }
+    Ok(config)
+}
+
+/// One symbol's contribution: public field paths to values.
+///
+/// A dotted key (`"soo.baz" = "wax"`) and the nested spelling (`[bracket.modifier."?".soo]
+/// baz = "wax"`) are the same path — a table is a **path segment**, never an
+/// object value, because the field model is flat (ADR-0014). The same
+/// flattening `field.override` uses.
+fn modifier_fields(
+    label: &str,
+    symbol: char,
+    contribution: &toml::Value,
+) -> Result<Vec<(Path, AttrValue)>, ConfigError> {
+    if contribution.as_table().is_none() {
+        return Err(ConfigError(format!(
+            "{label}: `bracket.modifier.\"{symbol}\"` must be a table of fields, found {}",
+            contribution.type_str()
+        )));
+    }
+    let mut leaves = Vec::new();
+    flatten_override_paths(Vec::new(), contribution, &mut leaves);
+    let mut fields = Vec::with_capacity(leaves.len());
+    for (segments, value) in leaves {
+        let names: Vec<&str> = segments.iter().map(String::as_str).collect();
+        let path = Path::from_segments(&names).map_err(|error| {
+            ConfigError(format!(
+                "{label}: bracket.modifier.\"{symbol}\".{}: {error}",
+                segments.join(".")
+            ))
+        })?;
+        fields.push((path, modifier_value(label, symbol, &segments, value)?));
+    }
+    Ok(fields)
+}
+
+/// A contribution's value as the typed value a head would produce (§6.3).
+///
+/// A table is a path segment ([`modifier_fields`]), so only a scalar or an
+/// array of scalars reaches here; anything else — a date, or a table nested in
+/// an array — is a load error rather than a silently dropped field.
+fn modifier_value(
+    label: &str,
+    symbol: char,
+    segments: &[String],
+    value: &toml::Value,
+) -> Result<AttrValue, ConfigError> {
+    Ok(match value {
+        toml::Value::String(text) => AttrValue::Str(text.clone()),
+        toml::Value::Integer(number) => AttrValue::Int(*number),
+        toml::Value::Float(number) => AttrValue::Float(*number),
+        toml::Value::Boolean(flag) => AttrValue::Bool(*flag),
+        toml::Value::Array(items) => AttrValue::Array(
+            items
+                .iter()
+                .map(|item| modifier_value(label, symbol, segments, item))
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
+        other => {
+            return Err(ConfigError(format!(
+                "{label}: bracket.modifier.\"{symbol}\".{} must be a string, a number, a boolean \
+                 or an array, found {}",
+                segments.join("."),
+                other.type_str()
+            )))
+        }
+    })
 }
 
 /// One `field` family's sub-table (`field.specs`, `field.bracket`, …).
@@ -1351,6 +1492,124 @@ template = "<H>{{children}}</H>"
         let error = load("anchor", "anchor", Some(&custom)).unwrap_err();
         assert!(
             error.to_string().contains("unknown key `colour`"),
+            "{error}"
+        );
+    }
+
+    // --- §5.4 slot modifiers (S2-6.1, D-9, ADR-0017) ----------------------
+
+    /// S2-6.1: a symbol is **one UTF-8 character**, never one byte. `?`, `|`,
+    /// `Œ`, `\` and `ئ` are all valid and all mean only what the entry says —
+    /// Pendon ships no modifier of its own, so nothing is interpreted here.
+    #[test]
+    fn a_modifier_symbol_is_one_utf8_char() {
+        let custom = custom_of(
+            r#"
+            [[custom]]
+            name = "Anchor"
+            bracket.modifier."?" = { rel = "nofollow" }
+            bracket.modifier."|" = { rel = "nofollow" }
+            bracket.modifier."Œ" = { rel = "nofollow" }
+            bracket.modifier."\\" = { rel = "nofollow" }
+            bracket.modifier."ئ" = { rel = "nofollow" }
+            "#,
+        );
+        let loaded = load("anchor", "anchor", Some(&custom)).expect("loads");
+        let entry = loaded
+            .components
+            .layer("anchor")
+            .unwrap()
+            .default_entry()
+            .expect("the default entry");
+        let config = &entry.modifier;
+        assert_eq!(config.symbols().count(), 5);
+        for symbol in ['?', '|', 'Œ', '\\', 'ئ'] {
+            let fields = config.for_symbol(symbol);
+            assert_eq!(fields.len(), 1, "{symbol}");
+            assert_eq!(fields[0].0, Path::from_dotted("rel").unwrap(), "{symbol}");
+            assert_eq!(fields[0].1, AttrValue::Str("nofollow".into()), "{symbol}");
+        }
+        // A symbol no entry defines contributes nothing; it is not a diagnostic.
+        assert!(config.for_symbol('~').is_empty());
+    }
+
+    /// A symbol is one character, so a run of two is a typo — and the message
+    /// says which rule it broke.
+    #[test]
+    fn a_multi_char_symbol_is_a_load_error() {
+        let custom =
+            custom_of("[[custom]]\nname = \"Anchor\"\nbracket.modifier.\"??\" = { rel = \"x\" }\n");
+        let error = load("anchor", "anchor", Some(&custom)).unwrap_err();
+        assert!(
+            error.to_string().contains("exactly one character"),
+            "{error}"
+        );
+    }
+
+    /// D-9 rule 5: a modifier run exists in a bracket, so `paren.modifier` is not
+    /// syntax — and it is not reported as a typo either.
+    #[test]
+    fn a_modifier_outside_the_bracket_is_a_load_error() {
+        let custom =
+            custom_of("[[custom]]\nname = \"Anchor\"\nparen.modifier.\"?\" = { rel = \"x\" }\n");
+        let error = load("anchor", "anchor", Some(&custom)).unwrap_err();
+        assert!(error.to_string().contains("bracket-only"), "{error}");
+    }
+
+    /// The entry vocabulary under `bracket` is closed (D-5): the only key is
+    /// `modifier`, and a `field.*` name is not reachable from here.
+    #[test]
+    fn an_unknown_bracket_key_is_a_load_error() {
+        let custom = custom_of("[[custom]]\nname = \"Anchor\"\nbracket.other = \"x\"\n");
+        let error = load("anchor", "anchor", Some(&custom)).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("`bracket.other` is not a modifier config key"),
+            "{error}"
+        );
+    }
+
+    /// A modifier config is a definition on its own (D-8): the entry needs no
+    /// component, and a dotted key and the nested spelling are one path.
+    #[test]
+    fn a_modifier_entry_without_a_component_loads() {
+        let custom = custom_of(
+            r#"
+            [[custom]]
+            type = "Check"
+            bracket.modifier."?" = { rel = "nofollow", "soo.baz" = "wax" }
+            "#,
+        );
+        let loaded = load("anchor", "anchor", Some(&custom)).expect("a modifier-only entry");
+        let entry = &loaded.components.layer("anchor").unwrap().typed()[0];
+        assert!(entry.carries_config());
+        assert!(!entry.is_configured());
+        let fields = entry.modifier.for_symbol('?');
+        let names: Vec<String> = fields.iter().map(|(path, _)| path.dotted()).collect();
+        assert_eq!(names, ["rel", "soo.baz"]);
+    }
+
+    /// D-8/D-4: two configs for one literal would silently drop one, so the load
+    /// fails the same way two components for one literal do.
+    #[test]
+    fn two_modifier_configs_for_one_literal_clash() {
+        let custom = custom_of(
+            r#"
+            [[custom]]
+            type = "Check"
+            bracket.modifier."?" = { rel = "nofollow" }
+
+            [[custom]]
+            type = "Check"
+            bracket.modifier."!" = { rel = "noopener" }
+            "#,
+        );
+        let error = load("anchor", "anchor", Some(&custom)).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("duplicate `type` marker `Check`"),
             "{error}"
         );
     }

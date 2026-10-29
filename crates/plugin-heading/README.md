@@ -187,6 +187,17 @@ parentheses are §7.4's fixed slots and are not renamed. The element reads the
 matched entry leaves them on their default paths — move one and it becomes a field
 of the author's own (D-7).
 
+## Slot modifiers (§5.4, D-9)
+
+The bracket's `|…` run contributes configured fields to the heading's `<hN>`
+(§5.4, [ADR-0017](../../docs/decisions/0017-slot-modifiers.md)). The run is
+**pure configuration**, so it contributes last: a field the decorator or the
+specs items already produced wins with a `Warning`, and `class` accumulates
+(§6.4). A symbol with no `bracket.modifier."<symbol>"` config contributes
+nothing, and a config-only entry (no `name` / `template`) is enough to define one
+(D-8) — the heading keeps its built-in `<hN>` and only gains the fields. Golden
+`43-slot-modifiers` renders such an entry.
+
 ## Behavioral Notes
 
 - This plugin parses heading lines itself — it must run **before** `plugin-markdown`

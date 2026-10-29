@@ -489,3 +489,14 @@ fn golden_41_decorator_claim() {
 fn golden_42_decorator_rejected() {
     assert_fixture("42-decorator-rejected");
 }
+
+/// §16.3 fixture 43: §5.4 / D-9 (S2-6) — the bracket's `|…` run is pure
+/// configuration: a symbol contributes the fields its entry's
+/// `bracket.modifier."…"` table names, two contributions to one path merge into
+/// an array in written order, `class` accumulates, the head wins over a run, an
+/// unconfigured symbol is a no-op, a `true` contribution is a bare flag, and a
+/// config-only entry (D-8) needs no custom component to be read.
+#[test]
+fn golden_43_slot_modifiers() {
+    assert_fixture("43-slot-modifiers");
+}

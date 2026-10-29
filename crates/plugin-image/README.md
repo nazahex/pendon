@@ -199,6 +199,18 @@ answers `None`, §6.1). These keys do not void the slot preset — only a
 `field.<slot>.<kind>` key does (§6.5, D-7). The table is in
 [`docs/spec/SYNTAX.md` §6.1](../../docs/spec/SYNTAX.md).
 
+## Slot modifiers (§5.4, D-9)
+
+The bracket's `|…` run contributes configured fields to the `<img>` (§5.4,
+[ADR-0017](../../docs/decisions/0017-slot-modifiers.md)). The run is **pure
+configuration**, so it contributes last: a field the head or the extras already
+produced wins with a `Warning`, `class` accumulates (§6.4), and a `true`
+contribution is a bare attribute. A prop the `<img>` has no attribute for lands
+under the `data-` prefix like any extras prop (§6.3), so `loading` arrives as
+`data-loading`. A symbol with no `bracket.modifier."<symbol>"` config contributes
+nothing, and a config-only entry (no `name` / `template`) is enough to define one
+(D-8). Golden `43-slot-modifiers` is the end-to-end example.
+
 ## Behavioral Notes
 
 - This plugin processes **raw text events** — it must run before `plugin-markdown`

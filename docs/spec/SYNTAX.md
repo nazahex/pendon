@@ -674,9 +674,12 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
 - There is **no** automatic external-link handling and **no** URL-suffix modifier
   (§14, D-16): `target`, `rel`, `hreflang`, … are ordinary extras keys, and `^`,
   `!`, `$`, `;;`, `--` at the end of a target are ordinary characters of it.
-- The bracket's `|…` run is §5.4's slot modifier run. It is parsed and carried
-  (`SlotPair::modifiers`) but contributes nothing until the modifier config lands
-  (S2-6); Pendon ships no built-in modifier.
+- The bracket's `|…` run is §5.4's slot modifier run: each symbol contributes the
+  fields its `bracket.modifier."<symbol>"` table names, merged in written order
+  ([ADR-0017](../decisions/0017-slot-modifiers.md), D-9). A symbol with no config
+  contributes nothing and is not a diagnostic, and Pendon ships no built-in
+  modifier; the run is pure configuration, so it never overrides an authored
+  field of the head (§6.2). Fixture 43 asserts the whole rule.
 - Image syntax `![alt](src)` is another element's head (§7.1), and reference-style
   links and nested brackets are unsupported.
 
@@ -1252,10 +1255,14 @@ and as a map of layers, so it is never guessed
 [ADR-0018](../decisions/0018-clean-replacement.md)).
 
 An entry is either a **component** (`name` / `template` / `imports`) or
-**fields-only** (`field.*` keys — [ADR-0014](../decisions/0014-field-model.md)),
-or both. A fields-only entry with `type` configures that type only; without
-`type` it is the element-wide default, and a typed entry's `field.*` beats it. An
-entry with neither a component nor a `field.*` key is a load error
+**configuration** — `field.*` keys ([ADR-0014](../decisions/0014-field-model.md))
+and/or `bracket.modifier."<symbol>"` tables (§5.4,
+[ADR-0017](../decisions/0017-slot-modifiers.md)) — or both. A configuration-only
+entry is a definition on its own ([D-8](../workflows/unified-syntax-stage-2/DECISIONS.md)):
+it emits **no template**, so the layer keeps rendering its built-in element while
+still reading that config. A fields-only entry with `type` configures that type
+only; without `type` it is the element-wide default, and a typed entry's config
+beats it. An entry with neither a component nor any configuration is a load error
 ("empty custom entry").
 
 Rules:
