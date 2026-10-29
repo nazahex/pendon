@@ -30,12 +30,20 @@ for interpreting the parsed properties.
 - **IR glue** — `scan_extras_chars` / `emit_attrs` / `warning_event` (`src/emit.rs`):
   the shared **emit** pass that turns a parsed head into event attributes. It is
   not data binding — that is `plugin-bind` (§12.2, ADR-0005).
-- **Decorator binder** — `parse_decorator_line` / `bind_decorators`
-  (`src/decorator.rs`): a standalone `@@`-prefixed extras line binds to the
-  _next_ block node through a caller-supplied `target` callback. The `@@` sigil
-  is mandatory (D-10, ADR-0013): a bare `{…}` line is literal text, and the head
-  reads in one order (`@@type` → slot → `{specs}` → `%%numbering`). See
-  [`docs/decisions/0002-decorator-binder.md`](../../docs/decisions/0002-decorator-binder.md).
+- **Decorator binder** — `parse_decorator_line` / `classify_block` /
+  `bind_decorators` / `decorator_diagnostics` (`src/decorator.rs`): a standalone
+  `@@`-prefixed extras line binds to the _next_ block node, and **which** plugin
+  binds it is the claim table of D-10 rule 2, not the caller's choice:
+  `Receiver::ORDER` is section → table → list → blockquote → paragraph,
+  `classify_block` names a block's receiver from its `NodeKind` alone, and each
+  pass passes a `Claim { receiver, enabled }` — `Claim::only` leaves other
+  owners' blocks untouched, `Claim::sweeping` (the last binder) also drops what
+  no enabled receiver will claim. Every drop is reported through the one
+  `decorator_diagnostics` helper, so the four binders cannot drift. The `@@`
+  sigil is mandatory (D-10, ADR-0013): a bare `{…}` line is literal text, and the
+  head reads in one order (`@@type` → slot → `{specs}` → `%%numbering`). See
+  [`docs/decisions/0002-decorator-binder.md`](../../docs/decisions/0002-decorator-binder.md)
+  and §9.1 for the table.
 - **Typed values** — `AttrValue { Str, Int, Float, Bool, Raw, Object, Array, JsxExpr, Null }` and
   `classify_scalar` (§6.3, ADR-0005). Numbers parse as numbers (a component
   receives `12`, not `"12"`) but render back to their authored literal text so

@@ -22,8 +22,11 @@
 
 use std::collections::HashMap;
 
-use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::{bind_decorators, emit_attrs, issue_event, BoundDecorator};
+use pendon_core::{Event, NodeKind};
+use pendon_extra::{
+    bind_decorators, decorator_diagnostics, emit_attrs, issue_event, BoundDecorator, Claim,
+    Receiver,
+};
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
 
@@ -52,7 +55,8 @@ pub struct BlockquoteOptions {
 pub fn process(events: &[Event], options: &BlockquoteOptions) -> Vec<Event> {
     // §9.1: a decorator line directly above the quote decorates it too.
     let specs = |target: Option<&str>| options.custom.specs_for(target);
-    let bindings = bind_decorators(events, &specs, quote_target);
+    // D-10 rule 2: a blockquote is this pass's one receiver.
+    let bindings = bind_decorators(events, &specs, Claim::only(Receiver::Blockquote));
     let decorators: HashMap<usize, &BoundDecorator> = bindings
         .bound
         .iter()
@@ -61,12 +65,7 @@ pub fn process(events: &[Event], options: &BlockquoteOptions) -> Vec<Event> {
 
     let mut out: Vec<Event> = Vec::with_capacity(bindings.events.len() + 8);
     // §9.1: a decorator that bound to nothing is dropped with a warning.
-    for dropped in &bindings.dropped {
-        out.push(diagnostic(&format!(
-            "a decorator line bound to no block and was dropped ({:?})",
-            dropped.reason
-        )));
-    }
+    out.extend(decorator_diagnostics(&bindings, "blockquote"));
 
     let mut i = 0;
     while i < bindings.events.len() {
@@ -109,9 +108,9 @@ pub fn primary_layer() -> &'static str {
 /// The indentation of the first line of the paragraph at `index` when that
 /// paragraph opens a quote (`>`), `None` otherwise.
 ///
-/// This is the `target` rule [`bind_decorators`] is given: §9.1 binds a
-/// decorator line to the next block node, and for this plugin that block is a
-/// paragraph that opens a quote.
+/// §9.2: this is the construct a blockquote owns — both the quote node this pass
+/// builds and the [`Receiver::Blockquote`](pendon_extra::Receiver) the claim
+/// table classifies it as (D-10 rule 2).
 pub(crate) fn quote_target(events: &[Event], index: usize) -> Option<usize> {
     if !matches!(
         events.get(index),
@@ -164,15 +163,6 @@ fn strip_one_level(line: &str) -> String {
             out
         }
         None => line.to_string(),
-    }
-}
-
-/// A §13 `Warning` carrying the plugin's name.
-fn diagnostic(message: &str) -> Event {
-    Event::Diagnostic {
-        severity: Severity::Warning,
-        message: format!("[blockquote] {message}"),
-        span: None,
     }
 }
 

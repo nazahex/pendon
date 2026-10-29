@@ -42,7 +42,7 @@ The one-key spread `{...{ "specs.tick": "x" }}` is the only spelling (§6.3), so
 fixture cannot freeze invalid output and pass.
 
 ```bash
-cargo test -p pendon --test syntax_spec      # 35 fixtures, none #[ignore]d
+cargo test -p pendon --test syntax_spec      # 36 fixtures, none #[ignore]d
 ```
 
 ## Re-freezing (when output intentionally changes)
@@ -98,6 +98,8 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | 38 | `head-slots-block` | the same claim for the **block** group: a heading (its fourth position is the `#` run, D-11) and a block image, six positions each (§6.5, §7.1, §7.4) |
 | 39 | `decorator-order`  | S2-5.1 — a decorator reads one head order: `@@type` → slot → `{specs}` → `%%numbering`; every part lands on the quote, and the untyped `@@[slot]%%numberA` spelling proves the sigil (not the type) is what decorates (§9.1, D-10) |
 | 40 | `decorator-needs-at` | S2-5.1 — `@@` is mandatory: a bare `{.lead, #nope}` line is literal text and configures nothing, while the same head with the sigil decorates the next quote (§9.1, §14, D-10) |
+| 41 | `decorator-claim`  | S2-5.2 — one decorator, one owner (D-10 rule 2): the claim order section → table → list → blockquote → paragraph decides by **what the block is**, so the heading's decorator lands on the `<section>`, the list's on the `<ul>`, the quote's on the `<blockquote>` and the paragraph's on the `<p>` (§9.1, §9.5) |
+| 42 | `decorator-rejected` | S2-5.2 — every decorator no pass can claim is removed with a `Warning` (D-10 rule 3): `NotAReceiver` (a thematic break), `ReceiverAbsent` (`section`/`list`/`blockquote` not in the chain) and `Overridden` (two lines in a row) leave no trace in the output (§9.1) |
 
 Fixtures 17–20 are covered by unit tests in the renderer/CLI crates rather than as
 golden files.

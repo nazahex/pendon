@@ -1,0 +1,20 @@
+§9.1/D-10 rule 2 (S2-5.2): one decorator, one owner. The claim order is
+section → table → list → blockquote → paragraph, and the owner is decided by
+**what the block is**, never by which plugin happens to read the stream first:
+
+@@{.lead, `slug-section`}
+## A decorated heading
+
+The decorator above the heading decorates the **section**, not the heading
+(§9.5): the heading carries its own extras on the `#` run, so a second head
+above it would be redundant.
+
+@@unorderedA{.card, #list-1}
+- one
+- two
+
+@@aside{.note}
+> a decorated quote
+
+@@{.lead, #p1}
+A decorated paragraph.

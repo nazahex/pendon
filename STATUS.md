@@ -84,7 +84,7 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## In progress
 
-- [ ] **Stage 2 — Phases 0–4 done; Phase 5 in progress (`S2-5.1` done).** Docs live in
+- [ ] **Stage 2 — Phases 0–4 done; Phase 5 in progress (`S2-5.2` done).** Docs live in
       [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md).
       **Phase 0 complete 2026-10-28**: D-1…D-17 signed (D-16 = clean total
       replacement: no compat, no warnings, no migration doc, old configs fail
@@ -345,6 +345,24 @@ exactly one `export const headings` line each (no bytes removed), and
       Fixtures `39-decorator-order` (all four parts land on the quote) and
       `40-decorator-needs-at` (the bare head renders literally, the quote keeps
       nothing). 787 tests, 35 fixtures.
+      **`S2-5.2` done — one decorator, one owner (D-10 rule 2).** The claim table
+      is data in `crates/extra/src/decorator.rs`: `Receiver::ORDER` (section →
+      table → list → blockquote → paragraph), `ReceiverSet` (what the chain has,
+      from `task.plugin`) and `Claim` — `only(receiver)` for a pass that leaves
+      other owners' blocks alone, `sweeping(receiver, enabled)` for the last
+      binder, which also reports what no pass will ever claim. `classify_block`
+      names the block's receiver from its **`NodeKind`** alone (a paragraph's
+      first-line marker picks list / quote / table), so a plugin's position in
+      the chain can no longer change which block a decorator lands on: the four
+      binders (`section`, `list`, `blockquote`, `markdown`) now pass a `Claim`
+      and emit one shared `decorator_diagnostics`, and a dropped line never
+      renders (`NotAReceiver`, `ReceiverAbsent`, `Overridden`,
+      `NoFollowingBlock`). Whitespace-separated text after a head is dropped with
+      a `Warning` while the head still decorates; touching text keeps the line
+      literal. Unit test `each_receiver_claims_its_own_decorator_whatever_the_order`
+      binds one five-decorator document forwards **and** reversed; fixtures
+      `41-decorator-claim` + `42-decorator-rejected`. `plugin-table` claims
+      nothing yet (S2-5.3/S2-5.4). 821 tests, 36 fixtures.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden
@@ -440,8 +458,8 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## Golden & freeze status (see [`docs/spec/golden/README.md`](docs/spec/golden/README.md))
 
-- Golden fixtures `01–12`, `14–16`, `21–28`, `30–40` are frozen and green; none
-  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (35 fixtures) is the gate.
+- Golden fixtures `01–12`, `14–16`, `21–28`, `30–42` are frozen and green; none
+  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (36 fixtures) is the gate.
 - Phase 3 re-froze `06-heading` (it loses the numbers `plugin-heading` used to
   compute and keeps its authored `number:` props) and `28-type-selectors`
   (dropped `auto_number`, no output change).
@@ -475,3 +493,8 @@ exactly one `export const headings` line each (no bytes removed), and
 - `S2-5.1` moved **no** fixture: every golden already spelled its decorators with
   `@@`. `39-decorator-order` and `40-decorator-needs-at` are new and freeze the
   mandatory sigil from both sides.
+- `S2-5.2` moved **no** fixture either (the three binders that already existed
+  agreed with the table for every golden block) and added `41-decorator-claim` /
+  `42-decorator-rejected`: the first proves each receiver takes its own line, the
+  second that a `NotAReceiver` / `ReceiverAbsent` / `Overridden` line leaves no
+  trace.

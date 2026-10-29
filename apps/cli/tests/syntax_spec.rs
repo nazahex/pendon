@@ -470,3 +470,21 @@ fn golden_39_decorator_order() {
 fn golden_40_decorator_needs_at() {
     assert_fixture("40-decorator-needs-at");
 }
+
+/// §16.3 fixture 41: D-10 rule 2 (S2-5.2) — the claim table gives each decorator
+/// exactly one owner, and the owner is the **block**, not the plugin's position
+/// in the chain: the section takes the heading's decorator, the list its own, the
+/// quote its own and the paragraph its own.
+#[test]
+fn golden_41_decorator_claim() {
+    assert_fixture("41-decorator-claim");
+}
+
+/// §16.3 fixture 42: D-10 rule 3 (S2-5.2) — every decorator no pass can claim is
+/// removed with a `Warning`: a thematic break can never receive one, a heading /
+/// list / quote whose plugin is missing from the chain belongs to an absent
+/// receiver, and the earlier line of a run is overridden.
+#[test]
+fn golden_42_decorator_rejected() {
+    assert_fixture("42-decorator-rejected");
+}

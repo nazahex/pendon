@@ -45,8 +45,9 @@ pub use slot::{
 };
 
 pub use decorator::{
-    bind_decorators, parse_decorator_line, Bindings, BoundDecorator, DecoratorDrop, DecoratorLine,
-    DroppedDecorator,
+    bind_decorators, classify_block, decorator_diagnostics, parse_decorator_line, Bindings,
+    BoundDecorator, Claim, DecoratorDrop, DecoratorLine, DroppedDecorator, DroppedText, Receiver,
+    ReceiverSet, Target,
 };
 
 pub use typed::{

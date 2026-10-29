@@ -848,7 +848,9 @@ Rules:
 
 A **decorator line** is a line whose entire content is an extras head **with the
 `@@` sigil** — `@@type{…}` / `@@{…}` / `@@type` — with optional leading
-indentation and no trailing text other than whitespace. The sigil is mandatory
+indentation and nothing after it but whitespace (text separated by whitespace is
+dropped with a warning while the head still decorates, below). The sigil is
+mandatory
 (D-10): it is what makes a standalone head a decorator, because without it a head
 only ever attaches to a construct it touches (§4.1). The head reads in one order —
 `@@type` → slot → `{specs}` → `%%numbering` (§5). A decorator decorates the
@@ -895,13 +897,39 @@ A paragraph line like this stays a link — without `@@` it is not a decorator.
   after the body (`@@{.a}aside`) is not a head at all, so the line is literal.
 
 - A decorator applies to a **paragraph** or a **code fence** (`plugin-markdown`),
-  a **list container** (§9.3) or a **blockquote** (§9.2). A decorator line above
-  a **heading** decorates the **section** (§9.5), and a **table** parses its own
-  heads (§8); neither is a `plugin-markdown` target. Anything else (inline
-  constructs) uses the adjacent form (§4.1).
+  a **list container** (§9.3), a **blockquote** (§9.2), a **table** (§8) or a
+  **section** — the block a decorator line sits above a **heading** decorates is
+  the section, not the heading (§9.5). As a spellable rule the **block** decides
+  its owner (D-10 rule 2), and the owners are ordered most specific first:
+
+  | # | receiver     | the block       | plugin       |
+  | - | ------------ | --------------- | ------------ |
+  | 1 | `Section`    | a heading       | `section`    |
+  | 2 | `Table`      | a `\|…\|` line  | `table`      |
+  | 3 | `List`       | a `-`/`1.` line | `list`       |
+  | 4 | `Blockquote` | a `>` line      | `blockquote` |
+  | 5 | `Paragraph`  | anything else   | `markdown`   |
+
+  The claim is a **classification, not a race**: `pendon_extra::classify_block`
+  names the receiver from the block alone, so the pass that owns it binds the
+  decorator **whichever order the chain runs the plugins in**. A pass that meets
+  a decorator for another receiver leaves it in the stream untouched. Inline
+  constructs never receive one — they use the adjacent form (§4.1) — and
+  `heading`, `marker`, `directive` and frontmatter/data blocks own no receiver at
+  all.
+- A decorator no pass will ever claim is **removed with a `Severity::Warning`**
+  (D-10 rule 3): the block can never receive one (a thematic break, a marker, a
+  directive, frontmatter, a data block, an already-emitted element), or the block
+  belongs to a receiver the chain does not have (a heading without `section`, a
+  table without `table`, …). The last binder is the one that reports it.
 - If no following block exists (end of input, or the next sibling is not a
-  block), the decorator is dropped with a `Severity::Warning`. Every decorator
-  line carries `@@`, so there is no ambiguous spelling that stays in the stream.
+  block), the decorator is dropped the same way. Every decorator line carries
+  `@@`, so there is no ambiguous spelling that stays in the stream.
+- Trailing text is judged by adjacency (§4.1, D-10 rule 3): text that **touches**
+  the head is part of its spelling, so the line is a head-after-body and literal
+  text (`@@{.a}aside`); text that is separated from the head by whitespace is
+  **dropped** with a `Severity::Warning` while the head still decorates the block
+  — the head is never silently re-read around it.
 - Consecutive decorators: only the **last** one applies; earlier ones are
   dropped with a `Severity::Warning` (MAY be an error later).
 - Indentation MUST be `<=` the indentation of the decorated block; a decorator
@@ -998,7 +1026,7 @@ as an attribute.
   indentation; a blank line before the heading is allowed) — decorates the
   **section**, not the heading: the heading already owns its extras on its `#`
   run (§7.4). That decorator is the section's head in every respect but spelling
-  (the §9.1 binder claims it, `S2-5.x` formalises the claim), so its `type`,
+  (the claim table of §9.1 gives a heading to `section`), so its `type`,
   `class` and remaining items attach to the `<section>`.
 
   ```text

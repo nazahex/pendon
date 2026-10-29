@@ -47,8 +47,8 @@ use std::collections::HashMap;
 
 use pendon_core::{ensure_unique, slugify, Event, NodeKind, Severity};
 use pendon_extra::{
-    bind_decorators, issue_event, scan_extras_chars, to_attributes, Attrs, BoundDecorator,
-    ExtrasAttr, Specs, SpecsKey,
+    bind_decorators, decorator_diagnostics, issue_event, scan_extras_chars, to_attributes, Attrs,
+    BoundDecorator, Claim, ExtrasAttr, Receiver, Specs, SpecsKey,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
@@ -119,7 +119,10 @@ enum Marker {
 
 pub fn process(events: &[Event], options: &SectionOptions) -> Vec<Event> {
     let specs = |target: Option<&str>| options.section.specs_for(target);
-    let bindings = bind_decorators(events, &specs, section_target);
+    // D-10 rule 2: a heading is the one receiver this pass owns, so a
+    // decorator above a list, quote, table or plain paragraph is left in the
+    // stream for the plugin that owns it.
+    let bindings = bind_decorators(events, &specs, Claim::only(Receiver::Section));
     let decorators: HashMap<usize, &BoundDecorator> = bindings
         .bound
         .iter()
@@ -128,12 +131,7 @@ pub fn process(events: &[Event], options: &SectionOptions) -> Vec<Event> {
 
     let mut out: Vec<Event> = Vec::with_capacity(bindings.events.len() + 16);
     // §9.1: a decorator that bound to nothing is dropped with a warning.
-    for dropped in &bindings.dropped {
-        out.push(diagnostic(&format!(
-            "a decorator line bound to nothing and was dropped ({:?})",
-            dropped.reason
-        )));
-    }
+    out.extend(decorator_diagnostics(&bindings, "section"));
 
     let events = &bindings.events;
     let mut stack: Vec<Frame> = Vec::new();
@@ -210,22 +208,6 @@ pub fn process(events: &[Event], options: &SectionOptions) -> Vec<Event> {
     }
     close_all(&mut stack, &mut out);
     out
-}
-
-/// §9.5: binds a decorator line to the heading below it. Every other block is
-/// declined so the line stays for `plugin-list` / `plugin-blockquote` /
-/// `plugin-markdown` (§9.1 — a binder must never steal another's decorator).
-fn section_target(events: &[Event], index: usize) -> Option<usize> {
-    match &events[index] {
-        Event::StartNode(NodeKind::Heading) => Some(0),
-        // A decorator line that *touches* its heading shares one paragraph with
-        // it, so the heading is the paragraph's first content.
-        Event::StartNode(NodeKind::Paragraph) => {
-            let end = node_end(events, index, NodeKind::Paragraph);
-            heading_within(events, index, end).map(|_| 0)
-        }
-        _ => None,
-    }
 }
 
 /// The index of a `StartNode(Heading)` that is the first content of the

@@ -1,5 +1,7 @@
 use pendon_core::{Event, NodeKind};
-use pendon_extra::{bind_decorators, BoundDecorator, Specs};
+use pendon_extra::{
+    bind_decorators, decorator_diagnostics, BoundDecorator, Claim, Receiver, ReceiverSet, Specs,
+};
 
 mod context;
 mod end;
@@ -65,15 +67,31 @@ pub fn render_inline(s: &str, opts: MarkdownOptions) -> Vec<Event> {
 }
 
 pub fn process_with_options(events: &[Event], opts: MarkdownOptions) -> Vec<Event> {
+    process_with_receivers(events, opts, ReceiverSet::all())
+}
+
+/// §9.1/D-10 rules 2–3: the Markdown pass, told which receivers the document's
+/// **chain** has.
+///
+/// The Markdown pass claims the catch-all receiver — a paragraph or a code
+/// fence — and, being the last binder to run, also drops the decorators no
+/// plugin in `receivers` will ever claim. Without it every such decorator would
+/// render as a stray `@@…` line (a heading's decorator in a chain without
+/// `plugin-section`, a list's in a chain without `plugin-list`, …). Its blocks
+/// carry no §11 component set, so the §6.1 specs stay the built-in
+/// `slug` / `title`.
+pub fn process_with_receivers(
+    events: &[Event],
+    opts: MarkdownOptions,
+    receivers: ReceiverSet,
+) -> Vec<Event> {
     // §9.1: decorator lines that decorate the blocks this pass owns — paragraphs
-    // and code fences — are bound here. `plugin-list` and `plugin-blockquote`
-    // run first and have already consumed the decorators of the lists and quotes
-    // they own, and a heading's decorator belongs to `plugin-section`, so
-    // `markdown_target` declines those and leaves any still-present one in the
-    // stream for the right binder. Its blocks carry no §11 component set, so the
-    // §6.1 specs stay the built-in `slug` / `title`.
+    // and code fences — are bound here. Every other block belongs to the plugin
+    // whose receiver `classify_block` names, and `bind_decorators` leaves its
+    // decorator in the stream for that pass whatever order the chain runs in.
     let specs = |_: Option<&str>| Specs::default();
-    let bindings = bind_decorators(events, &specs, markdown_target);
+    let claim = Claim::sweeping(Receiver::Paragraph, receivers);
+    let bindings = bind_decorators(events, &specs, claim);
     let decorators: std::collections::HashMap<usize, &BoundDecorator> = bindings
         .bound
         .iter()
@@ -81,16 +99,10 @@ pub fn process_with_options(events: &[Event], opts: MarkdownOptions) -> Vec<Even
         .collect();
 
     let mut ctx = ParseContext::new(bindings.events.len(), opts);
-    // §9.1: a decorator that bound to nothing is dropped with a warning.
-    for dropped in &bindings.dropped {
-        ctx.push_event(&Event::Diagnostic {
-            severity: pendon_core::Severity::Warning,
-            message: format!(
-                "[markdown] a decorator line bound to no block and was dropped ({:?})",
-                dropped.reason
-            ),
-            span: None,
-        });
+    // §9.1: a decorator that bound to nothing — or whose owner is not in the
+    // chain — is dropped with a warning.
+    for diagnostic in decorator_diagnostics(&bindings, "markdown") {
+        ctx.push_event(&diagnostic);
     }
 
     let mut i = 0;
@@ -113,81 +125,6 @@ pub fn process_with_options(events: &[Event], opts: MarkdownOptions) -> Vec<Even
         i += 1;
     }
     ctx.finalize()
-}
-
-/// §9.1: the `target` rule the decorator binder uses for this pass. The blocks a
-/// decorator may decorate here are the ones `plugin-markdown` emits — a
-/// paragraph or a code fence. A heading owns its extras on its own `#` run and a
-/// table parses its own heads, so both are declined; a paragraph that opens a
-/// list item or a blockquote is declined too, because it belongs to
-/// `plugin-list` / `plugin-blockquote`. A binder must never steal another
-/// plugin's decorator (§9.1), so a declined target leaves the line in the stream.
-///
-/// The returned indentation is the block's own, the value §9.1 compares each
-/// decorator's indentation against.
-fn markdown_target(events: &[Event], index: usize) -> Option<usize> {
-    match &events[index] {
-        Event::StartNode(NodeKind::CodeFence) => Some(block_indent(events, index)),
-        Event::StartNode(NodeKind::Paragraph) => {
-            if opens_construct(events, index) {
-                None
-            } else {
-                Some(block_indent(events, index))
-            }
-        }
-        _ => None,
-    }
-}
-
-/// The leading spaces of the first text line of the block node at `index`.
-fn block_indent(events: &[Event], index: usize) -> usize {
-    for event in events.iter().skip(index + 1) {
-        match event {
-            Event::Text(text) => {
-                let trimmed = text.trim_start_matches(' ');
-                return text.len() - trimmed.len();
-            }
-            Event::Attribute { .. } | Event::AttributeFlag { .. } => continue,
-            _ => break,
-        }
-    }
-    0
-}
-
-/// §9.1: whether a `Paragraph` node opens a construct another binder owns — a
-/// list item (`- `, `* `, `+ `, `1. `) or a blockquote (`>`).
-fn opens_construct(events: &[Event], index: usize) -> bool {
-    let Some(line) = first_text(events, index + 1) else {
-        return false;
-    };
-    let trimmed = line.trim_start();
-    trimmed.starts_with('>')
-        || trimmed.starts_with("- ")
-        || trimmed.starts_with("* ")
-        || trimmed.starts_with("+ ")
-        || ordered_marker(trimmed)
-}
-
-/// The first `Text` event at or after `index`, skipping attributes.
-fn first_text<'a>(events: &'a [Event], index: usize) -> Option<&'a str> {
-    for event in events.iter().skip(index) {
-        match event {
-            Event::Text(text) => return Some(text),
-            Event::Attribute { .. } | Event::AttributeFlag { .. } => continue,
-            _ => return None,
-        }
-    }
-    None
-}
-
-/// §9.3: whether `line` opens an ordered list item (`1. ` or `1) `).
-fn ordered_marker(line: &str) -> bool {
-    let digits = line.chars().take_while(|c| c.is_ascii_digit()).count();
-    if digits == 0 {
-        return false;
-    }
-    let rest = &line[digits..];
-    rest.starts_with(". ") || rest.starts_with(") ")
 }
 
 /// §11 rule 3: the placement of a construct node is declared by the emitting

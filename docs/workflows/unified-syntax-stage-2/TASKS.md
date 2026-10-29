@@ -846,12 +846,32 @@ mandatory and first, five receivers work, and both rejection paths warn.
       head). Goldens `39-decorator-order` (valid: every part lands on the quote)
       and `40-decorator-needs-at` (invalid: the bare line renders literally and
       the quote keeps no extras). §3/§5/§9.1/§9.5/§14 updated.
-- [ ] **S2-5.2 — Claim table.** Dep: S2-5.1.
+- [x] **S2-5.2 — Claim table.** Dep: S2-5.1.
       Do: implement D-10's order — `section` → `table` → `list` → `blockquote`
       → `paragraph`; one claim per receiver; unclaimed decorator is removed with
       `Warning`; trailing literal text on a decorator line is dropped with
       `Warning`; `section` claiming before a heading is silent.
       U: claim-order unit test; G: 3 rejection fixtures + section case.
+      **Done 2026-10-29** — `crates/extra/src/decorator.rs` holds the table as
+      data: `Receiver::ORDER` (section → table → list → blockquote → paragraph),
+      `Receiver::plugin()`, `ReceiverSet` (the receivers a chain has, built from
+      `task.plugin`) and `Claim { receiver, enabled }` — `Claim::only` for a pass
+      that leaves other owners' blocks alone, `Claim::sweeping` for the last
+      binder. `classify_block` names the following block's receiver from its
+      **`NodeKind`** (a paragraph's first-line marker decides list / quote /
+      table), so a claim never depends on the chain's order; a pass that meets
+      another enabled receiver's block leaves the line in the stream, and one
+      whose receiver is absent or that can never receive a decorator drops it
+      (`DecoratorDrop::{NotAReceiver, ReceiverAbsent, Overridden,
+      NoFollowingBlock}`) through the one `decorator_diagnostics` helper, so the
+      four binders cannot drift. Whitespace-separated text after a head is
+      dropped with a `Warning` while the head still binds (`Bindings::trailing`);
+      text that touches it keeps the line literal (§4.1). Unit test
+      `each_receiver_claims_its_own_decorator_whatever_the_order` binds the same
+      five-decorator document in claim order **and** reversed; goldens
+      `41-decorator-claim` (all four plugins) and `42-decorator-rejected` (all
+      three rejection reasons) are new. `plugin-table` claims nothing yet — its
+      receiver is wired by S2-5.3/S2-5.4.
 - [ ] **S2-5.3 — New receivers.** Dep: S2-5.2.
       Do: paragraph, codefence, list and table obtain the claimed decorator's
       slots/specs/number as public fields; heading/marker/directive/frontmatter

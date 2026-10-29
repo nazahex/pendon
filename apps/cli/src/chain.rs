@@ -447,7 +447,18 @@ fn run_chain(
                 result
             }
             "markdown" => {
-                let result = pendon_plugin_markdown::process_with_options(&events, config.markdown);
+                // D-10 rules 2–3: the Markdown pass is the chain's last binder,
+                // so it also needs to know which receivers the chain has — a
+                // decorator for a construct whose plugin is missing can never be
+                // claimed and must be dropped instead of rendering as text.
+                let receivers = pendon_extra::ReceiverSet::from_plugins(
+                    config.enabled.iter().map(String::as_str),
+                );
+                let result = pendon_plugin_markdown::process_with_receivers(
+                    &events,
+                    config.markdown,
+                    receivers,
+                );
                 markdown_ran = true;
                 if quiz_pending {
                     quiz_pending = false;

@@ -1,0 +1,12 @@
+[[task]]
+name = "Golden 42"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "markdown"
+format = "solid"
+
+# §9.1/D-10 rule 3: `markdown` is the chain's last binder, so it is the pass that
+# sees a decorator no enabled receiver owns. All three rejection reasons are here
+# — `NotAReceiver` (a thematic break), `ReceiverAbsent` (`section` / `list` /
+# `blockquote` are not in `plugin`) and `Overridden` (two lines in a row) — and
+# every dropped line leaves no trace in the output.

@@ -43,8 +43,11 @@
 
 use std::collections::HashMap;
 
-use pendon_core::{Event, NodeKind, Severity};
-use pendon_extra::{bind_decorators, emit_attrs, issue_event, BoundDecorator};
+use pendon_core::{Event, NodeKind};
+use pendon_extra::{
+    bind_decorators, decorator_diagnostics, emit_attrs, issue_event, BoundDecorator, Claim,
+    Receiver,
+};
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
 
@@ -95,7 +98,8 @@ pub fn process(events: &[Event], options: &ListOptions) -> Vec<Event> {
             .or_else(|| options.list.specs_for_opt(target))
             .unwrap_or_default()
     };
-    let bindings = bind_decorators(events, &specs, list_target);
+    // D-10 rule 2: a list container is this pass's one receiver.
+    let bindings = bind_decorators(events, &specs, Claim::only(Receiver::List));
     let decorators: HashMap<usize, &BoundDecorator> = bindings
         .bound
         .iter()
@@ -104,12 +108,7 @@ pub fn process(events: &[Event], options: &ListOptions) -> Vec<Event> {
 
     let mut out: Vec<Event> = Vec::with_capacity(bindings.events.len() + 8);
     // §9.1: a decorator that bound to nothing is dropped with a warning.
-    for dropped in &bindings.dropped {
-        out.push(diagnostic(&format!(
-            "a decorator line bound to no block and was dropped ({:?})",
-            dropped.reason
-        )));
-    }
+    out.extend(decorator_diagnostics(&bindings, "list"));
 
     let mut i = 0;
     while i < bindings.events.len() {
@@ -181,15 +180,6 @@ pub fn solid_hints(options: &ListOptions) -> Option<SolidRenderHints> {
     Some(hints)
 }
 
-/// The `target` rule of [`bind_decorators`]: a paragraph that opens a list item.
-///
-/// The returned indentation is the block's own, which §9.1 compares a
-/// decorator's indentation against.
-pub(crate) fn list_target(events: &[Event], index: usize) -> Option<usize> {
-    let line = first_line(events, index)?;
-    item_marker(line).map(|(_, indent)| indent)
-}
-
 /// The list container a paragraph opens, if it opens one.
 fn list_kind(events: &[Event], index: usize) -> Option<NodeKind> {
     item_marker(first_line(events, index)?).map(|(kind, _)| kind)
@@ -252,15 +242,6 @@ fn fallback_element(kind: &NodeKind) -> &'static str {
     match kind {
         NodeKind::OrderedList => "ol",
         _ => "ul",
-    }
-}
-
-/// A §13 `Warning` carrying the plugin's name.
-fn diagnostic(message: &str) -> Event {
-    Event::Diagnostic {
-        severity: Severity::Warning,
-        message: format!("[list] {message}"),
-        span: None,
     }
 }
 

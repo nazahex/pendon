@@ -1,0 +1,27 @@
+§9.1/D-10 rule 3 (S2-5.2): a decorator that no pass in the chain will ever claim
+is **removed with a `Warning`**. It never renders as a stray `@@…` line, and it
+never decorates a block it does not own.
+
+The block can never receive a decorator at all (a thematic break):
+
+@@{.nowhere}
+---
+
+The block belongs to a receiver this chain does not have — `plugin` is
+`markdown` only, so `section`, `list` and `blockquote` are absent:
+
+@@{.nope}
+## A heading that gets no decorator
+
+@@{.nope}
+- a list that gets no decorator
+
+@@{.nope}
+> a quote that gets no decorator
+
+Two decorator lines in a row: only the last one applies, so the first is
+overridden and dropped (`Overridden`):
+
+@@first{.a}
+@@second{.b}
+A paragraph that keeps only `second`.
