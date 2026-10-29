@@ -338,9 +338,8 @@ fn run_chain(
                     track_used_spec(&mut state.used_specs, spec.clone());
                 }
                 if markdown_ran {
-                    pendon_plugin_quiz::process(&events)
+                    events
                 } else {
-                    quiz_pending = true;
                     events
                 }
             }
@@ -452,7 +451,7 @@ fn run_chain(
                 markdown_ran = true;
                 if quiz_pending {
                     quiz_pending = false;
-                    pendon_plugin_quiz::process(&result)
+                    events
                 } else {
                     result
                 }
@@ -483,21 +482,14 @@ fn run_chain(
         };
     }
 
-    if quiz_pending {
-        events = pendon_plugin_quiz::process(&events);
-    }
     events
 }
 
 /// The hints of the plugins that produce them once, for the whole document.
 ///
 /// Called after `bind`'s `resolve` (which may render payloads through the chain)
-/// and after the citation export, so a quiz or a `Vicado` that only appears
 /// inside a bound payload still imports what it needs.
 pub fn finish(config: &ChainConfig, state: &mut ChainState) {
-    if state.used_quiz {
-        state.hints.push(pendon_plugin_quiz::solid_hints());
-    }
     if state.anchor_ran {
         if let Some(hints) = pendon_plugin_anchor::solid_hints(&config.anchor) {
             state.hints.push(hints);

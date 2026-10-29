@@ -20,7 +20,6 @@ members = [
   "crates/plugin-marker",
   "crates/plugin-micromatter",
   "crates/plugin-number",
-  "crates/plugin-quiz",
   "crates/plugin-section",
   "crates/plugin-table",
   "crates/plugin-wiki",
