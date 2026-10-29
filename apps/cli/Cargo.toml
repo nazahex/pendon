@@ -12,7 +12,7 @@ pendon-plugin-anchor = { path = "../../crates/plugin-anchor" }
 pendon-plugin-bind = { path = "../../crates/plugin-bind" }
 pendon-plugin-blockquote = { path = "../../crates/plugin-blockquote" }
 pendon-plugin-cite = { path = "../../crates/plugin-cite" }
-pendon-plugin-codeblock-syntect = { path = "../../crates/plugin-codeblock-syntect" }
+pendon-plugin-codeblock = { path = "../../crates/plugin-codeblock" }
 pendon-plugin-custom = { path = "../../crates/plugin-custom" }
 pendon-plugin-dialog = { path = "../../crates/plugin-dialog" }
 pendon-plugin-directive = { path = "../../crates/plugin-directive" }

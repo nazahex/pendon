@@ -141,7 +141,7 @@ pub fn process_stateless_plugin(
             None => events.to_vec(),
         },
         "wiki" => pendon_plugin_wiki::process_with_options(events, wiki_options.clone()),
-        "syntect" => pendon_plugin_codeblock_syntect::process(events),
+        "syntect" => pendon_plugin_codeblock::process(events),
         _ => return None,
     })
 }

@@ -130,7 +130,7 @@ fn collect_classes_via_sample(
 // Attempt to locate the TypeScript .tmLanguage grammar in the repo
 fn find_ts_tmlanguage() -> Option<PathBuf> {
     let rels = [
-        "crates/plugin-codeblock-syntect/src/grammar/typescript.tmLanguage",
+        "crates/plugin-codeblock/src/grammar/typescript.tmLanguage",
         "sandbox/syntect/syntaxes/typescript.tmLanguage",
     ];
     let prefixes = ["./", "../", "../../", "../../../", "../../../../"]; // try up to 4 levels up

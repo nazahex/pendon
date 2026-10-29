@@ -7,7 +7,7 @@ members = [
   "crates/plugin-bind",
   "crates/plugin-blockquote",
   "crates/plugin-cite",
-  "crates/plugin-codeblock-syntect",
+  "crates/plugin-codeblock",
   "crates/plugin-custom",
   "crates/plugin-dialog",
   "crates/plugin-directive",
