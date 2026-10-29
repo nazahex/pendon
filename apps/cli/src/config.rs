@@ -228,32 +228,12 @@ pub struct PluginCustomSection {
     pub enable_unsafe_hooks: Option<bool>,
 }
 
-#[derive(Debug, Deserialize, Default)]
-#[allow(dead_code)]
-pub struct PluginVicadoSolidSection {
-    pub imports: Option<Vec<toml::Value>>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-#[allow(dead_code)]
-pub struct PluginVicadoRendererSection {
-    pub solid: Option<PluginVicadoSolidSection>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-#[allow(dead_code)]
-pub struct PluginVicadoSection {
-    pub renderer: Option<PluginVicadoRendererSection>,
-}
-
 #[derive(Debug, Deserialize)]
 pub struct PendonConfig {
     #[serde(rename = "task")]
     pub tasks: Vec<ConfigTask>,
     #[serde(rename = "plugin-custom")]
     pub plugin_custom: Option<PluginCustomSection>,
-    #[serde(rename = "plugin-vicado")]
-    pub plugin_vicado: Option<PluginVicadoSection>,
 }
 
 #[derive(Debug, Deserialize, Default)]

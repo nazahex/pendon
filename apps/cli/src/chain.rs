@@ -68,8 +68,6 @@ pub struct ChainConfig {
     /// `[[task.<element>.extract]]` — the per-element extraction blocks
     /// (`docs/issues/plugin-extract.md`).
     pub extract: ExtractOptions,
-    /// A `[task.plugin.vicado.renderer.solid]` override (§11), when configured.
-    pub vicado_hints: Option<SolidRenderHints>,
 }
 
 impl ChainConfig {
@@ -125,7 +123,6 @@ impl ChainConfig {
             heading,
             number: NumberOptions::default(),
             extract: ExtractOptions::default(),
-            vicado_hints: None,
         })
     }
 
@@ -208,7 +205,6 @@ pub struct ChainState {
     pub hints: Vec<SolidRenderHints>,
     pub used_specs: Vec<PluginSpec>,
     pub used_quiz: bool,
-    pub used_vicado: bool,
     pub anchor_ran: bool,
     pub cite_ran: bool,
     /// What this document's `[[task.<element>.extract]]` blocks produced: the
@@ -233,7 +229,6 @@ impl ChainState {
             hints: Vec::new(),
             used_specs: Vec::new(),
             used_quiz: false,
-            used_vicado: false,
             anchor_ran: false,
             cite_ran: false,
             extract: ExtractOutput::default(),
@@ -452,10 +447,6 @@ fn run_chain(
                 }
                 result
             }
-            "vicado" => {
-                state.used_vicado = true;
-                pendon_plugin_vicado::process(&events)
-            }
             "markdown" => {
                 let result = pendon_plugin_markdown::process_with_options(&events, config.markdown);
                 markdown_ran = true;
@@ -506,13 +497,6 @@ fn run_chain(
 pub fn finish(config: &ChainConfig, state: &mut ChainState) {
     if state.used_quiz {
         state.hints.push(pendon_plugin_quiz::solid_hints());
-    }
-    if state.used_vicado {
-        let hints = match &config.vicado_hints {
-            Some(override_hints) => override_hints.clone(),
-            None => pendon_plugin_vicado::solid_hints(),
-        };
-        state.hints.push(hints);
     }
     if state.anchor_ran {
         if let Some(hints) = pendon_plugin_anchor::solid_hints(&config.anchor) {

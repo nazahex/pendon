@@ -9,7 +9,7 @@ use walkdir::WalkDir;
 use crate::cache::{hash_content, hash_file, CacheStore};
 use crate::config::{PendonConfig, PostHook};
 use crate::hook::run_post_hooks;
-use crate::plugins::{build_vicado_hints_override, load_custom_registry};
+use crate::plugins::load_custom_registry;
 use crate::process::process_single_file;
 use crate::utils::{captures_to_map, input_pattern_to_regex, substitute_output};
 
@@ -54,7 +54,6 @@ pub fn run_from_config() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let vicado_hints_override = build_vicado_hints_override(cfg.plugin_vicado.as_ref());
 
     // Parse cache flags using pico_args for consistency with the rest of the CLI.
     let mut pargs = Arguments::from_env();
@@ -245,7 +244,6 @@ pub fn run_from_config() -> ExitCode {
                     &out_path,
                     &map,
                     &custom_registry,
-                    vicado_hints_override.as_ref(),
                     task_markdown_opts,
                     task_wiki_opts.clone(),
                     deps,

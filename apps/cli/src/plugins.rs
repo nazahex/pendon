@@ -21,7 +21,7 @@ use std::path::Path;
 use crate::config::{
     AnchorTaskConfig, BindTaskConfig, BlockquoteTaskConfig, CiteTaskConfig, ConfigTask,
     ExtractRule, HeadingTaskConfig, ImageTaskConfig, ListTaskConfig, NumberRule, OneOrMany,
-    PluginCustomSection, PluginVicadoSection, SectionTaskConfig, TableTaskConfig,
+    PluginCustomSection, SectionTaskConfig, TableTaskConfig,
 };
 use crate::utils::{substitute_output, validate_export_identifier};
 use pendon_types::Selector;
@@ -966,27 +966,6 @@ pub(crate) fn parse_import_entries(imports: &[toml::Value]) -> Vec<ImportEntry> 
         }
     }
     parsed_imports
-}
-
-pub fn build_vicado_hints_override(cfg: Option<&PluginVicadoSection>) -> Option<SolidRenderHints> {
-    let imports = cfg
-        .and_then(|c| c.renderer.as_ref())
-        .and_then(|r| r.solid.as_ref())
-        .and_then(|s| s.imports.as_ref())
-        .map(|vals| parse_import_entries(vals))
-        .unwrap_or_default();
-
-    if imports.is_empty() {
-        return None;
-    }
-
-    let mut hints = pendon_plugin_vicado::solid_hints();
-    // A configured `[plugin-vicado.renderer.solid]` block *replaces* the
-    // plugin's default `vicado` import rather than adding to it.
-    for tpl in &mut hints.templates {
-        tpl.imports = imports.clone();
-    }
-    Some(hints)
 }
 
 pub fn merge_solid_hints(

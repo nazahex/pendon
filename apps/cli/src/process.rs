@@ -61,7 +61,6 @@ pub fn process_single_file(
     out_path: &str,
     map: &HashMap<String, String>,
     custom_registry: &HashMap<String, PluginSpec>,
-    vicado_hints_override: Option<&SolidRenderHints>,
     task_markdown_opts: MarkdownOptions,
     task_wiki_opts: WikiOptions,
     mut deps: Vec<String>,
@@ -132,7 +131,6 @@ pub fn process_single_file(
         task_markdown_opts,
         task_wiki_opts.clone(),
     ));
-    config.vicado_hints = vicado_hints_override.cloned();
     config.image = plugin_options!(build_image_options(task.image.as_ref()));
     config.anchor = plugin_options!(build_anchor_options(task.anchor.as_ref()));
     config.marker = plugin_options!(build_marker_options(task.marker.as_ref()));

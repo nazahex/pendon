@@ -23,7 +23,6 @@ members = [
   "crates/plugin-quiz",
   "crates/plugin-section",
   "crates/plugin-table",
-  "crates/plugin-vicado",
   "crates/plugin-wiki",
   "crates/renderer-ast",
   "crates/renderer-events",
