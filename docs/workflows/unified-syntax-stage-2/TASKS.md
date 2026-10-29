@@ -379,7 +379,7 @@ assignable, and the DOM renderers still emit valid `class`/`id`/`style`.
       position. So the default paths have to be produced where the config is
       known (`to_attributes` + `Specs`, parse time); the ten plugins that read
       `class` / `id` / `style` / tick / quote off the head, `plugin-extract`'s
-      field tables (`EXTRAS-INVENTORY.md`) and every golden then move with it.
+      field tables (`FIELDS-INVENTORY.md`) and every golden then move with it.
       **Done 2026-10-28.** `to_attributes(head, specs)` emits `specs.class` /
       `specs.id` / `specs.style` / `specs.tick` / `specs.quote` (through `Specs`,
       so an assignment renames them) and every fixture moved with it. The D-12
@@ -441,7 +441,7 @@ assignable, and the DOM renderers still emit valid `class`/`id`/`style`.
       a rename — `slug`/`title` → `bracket.bare`/`paren.bare` (D-7: an untyped
       group has no preset), `slug`/`title` → `specs.tick`/`specs.quote` (marker
       items), and the decorator's own `class` → `specs.class` in the event stream.
-      Not in this pass: `plugin-extract`'s tables and `EXTRAS-INVENTORY.md` still
+      Not in this pass: `plugin-extract`'s tables and `FIELDS-INVENTORY.md` still
       name the pre-3.2 fields for the raw-decorator elements (blockquote, list,
       marker, directive emit `specs.class` / `bracket.bare` verbatim because
       extract reads the events, not the map) — Phase 4 rewrites those elements and
@@ -918,20 +918,31 @@ mandatory and first, five receivers work, and both rejection paths warn.
 Entry: Phases 1 + 5 done; D-9 settled. Leave when modifiers configure specs
 through config, merge per D-9, and the legacy modifier code is gone.
 
-- [ ] **S2-6.1 — Config for modifiers.** Dep: S2-5.4.
+- [x] **S2-6.1 — Config for modifiers.** Dep: S2-5.4.
       Files: `apps/cli/src/config.rs`, `crates/extra/src/field.rs`.
       Do: parse `<slot>.modifier."<symbol>"` (any UTF-8 symbol, quoted) into a
       contribution map; unknown slot name → error; a symbol with no config is
       ignored (no warning — a modifier without config is legal).
       U: parsing tests incl. `||`, `Œ`, `\`, `ئ`.
-- [ ] **S2-6.2 — Merge and projection.** Dep: S2-6.1.
+      **Done 2026-10-29** — `crates/extra/src/modifier.rs` (`ModifierConfig`,
+      one `char` per symbol, `bracket.modifier."…"` parsed in
+      `apps/cli/src/components.rs`); tests cover `?` `|` `Œ` `\` `ئ`, a
+      multi-character symbol (load error) and `paren.modifier` (not syntax);
+      `field.rs` needed nothing.
+- [x] **S2-6.2 — Merge and projection.** Dep: S2-6.1.
       Do: apply contributions in canonical order (D-9) into the projection;
       same-path merge rules (array/scalar/nested-array/deep-merge); irreconcilable
       → `Severity::Error` + drop that contribution.
       G: the proposal's `rel: ["nofollow","noopener"]` + `soo.baz: ["wax","wax"]`
       example, byte-for-byte.
       Exit: extraction output matches the proposal's JSON exactly.
-- [ ] **S2-6.3 — Delete the legacy modifiers.** Dep: S2-6.2.
+      **Done 2026-10-29** — `merge` / `contributions` in `modifier.rs`; every
+      element merges the run **last** (`append_class` for `class`, a dropped
+      field is a `Warning`, an unusable merge is one `Error` that drops the whole
+      run). `ComponentSet` gained the config-only channel (`ConfigEntry`, D-8) so
+      the run reaches the element without a component. Golden
+      `43-slot-modifiers` freezes the proposal's JSON, byte for byte.
+- [x] **S2-6.3 — Delete the legacy modifiers.** Dep: S2-6.2.
       Do: remove the anchor URL-suffix modifiers (`^`, `~`, `!`, `$`, `;;`, `--`
       after the URL in `@[text](url…MOD)`) and the image marker modifiers
       (`?`, `~`, `w<n>`, `h<n>`); remove the conflicting-`^`/`~` warning and the
@@ -943,11 +954,20 @@ through config, merge per D-9, and the legacy modifier code is gone.
       URL-suffix modifiers and the external-URL defaults and wrote their §14 rows
       — and `S2-4.7` deletes the image marker run, so what is left here is the
       `grep` that proves neither parser survives.
-- [ ] **S2-6.4 — Modifier visibility in extraction.** Dep: S2-6.2 (and S2-8.2).
+      **Done 2026-10-29** — the `grep` is clean: a suffix/marker scan of
+      `plugin-anchor` and `plugin-image` finds only `merge_modifiers`
+      (§5.4) and its tests; §14's rows and goldens `04-anchor` / `03-image` (old
+      symbols literal) already froze it.
+- [x] **S2-6.4 — Modifier visibility in extraction.** Dep: S2-6.2 (and S2-8.2).
       Do: modifier-produced fields are extractable (`preset = "all"`, `include`,
       `only`) and appear in the inventory as _user_ fields, never in the preset.
       U + G: extract fixture with and without a modifier.
       Exit: `preset = "pendon"` excludes them; `preset = "all"` includes them.
+      **Done 2026-10-29** — contributions are ordinary public fields, so
+      `plugin-extract` sees them with no change; `43-slot-modifiers.out/` freezes
+      both sides of the exit criterion (`recommended` leaves `rel` / `soo.baz` /
+      `class` out, the un-preset block keeps them, arrays and dotted paths
+      included).
 
 ## Phase 7 — inventory
 
@@ -955,11 +975,29 @@ Entry: Phase 4–6 done (element fields are final). Leave when
 `FIELDS-INVENTORY.md` is the single list of built-in fields and the presets in
 code match it exactly.
 
-- [ ] **S2-7.1 — Rename the document.** Dep: S2-6.4.
+- [x] **S2-7.1 — Rename the document.** Dep: S2-6.4.
       Do: `git mv docs/spec/EXTRAS-INVENTORY.md docs/spec/FIELDS-INVENTORY.md`;
       retitle; update every inbound link (`AGENTS.md`, `docs/INDEX.md`, plugin
       READMEs, `SYNTAX.md`).
       Exit: `grep -r EXTRAS-INVENTORY` returns nothing.
+      **Done 2026-10-30** — `git mv` (staged as a rename, 97% similar), the title
+      is "Fields inventory — built-in fields per element", and the vocabulary in
+      §0 follows S2-8's `preset` (`recommended` is gone from the header, the
+      `recommended` column name stays until S2-7.2, which owns the table
+      rewrite). Every live link moved: `AGENTS.md` (routing row), `docs/INDEX.md`,
+      `crates/plugin-extract/README.md`, `SYNTAX.md` §21, the workflow `README.md`
+      and `DECISIONS.md` (D-13, D-19), plus the two `TASKS.md` mentions. `git grep`
+      now finds the token only where it is **history**: `docs/archive/**`, ADR-0010
+      / ADR-0011 / ADR-0015, the two proposal `.mdp` files, and this task's own
+      `Do:` / `Exit:` line, which has to quote the old name — those are frozen
+      records of the rename, not links, so they stay. While renaming, the doc's
+      tail turned out to carry **ten orphan rows** an older edit had appended
+      after §12 (§3's blockquote rows and §5's directive rows): the quote's
+      `type` goes back to §3 — the decorator's marker is its only built-in field
+      — and the other nine are deleted, because `id` / `class` / `author` /
+      `isOpen` reach those elements as extras under their own names (§0),
+      `inner_text` is universal, and `plugin-directive` emits no `level` /
+      `summary` any more.
 - [ ] **S2-7.2 — Rewrite the tables.** Dep: S2-7.1.
       Do: per element, list only built-in fields; drop everything that comes from
       extras or from custom assignments (including `type`, except

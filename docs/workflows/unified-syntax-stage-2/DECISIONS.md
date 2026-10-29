@@ -237,7 +237,7 @@ that still writes it is an **error** at load, not a warning and not a mapping.
 
 **Consequence.** `preset = "all"` must include _custom_ slot/extras fields but
 still exclude internals (`reference_id`, `__number`) — the same exclusion list
-`EXTRAS-INVENTORY.md` already encodes as "not extracted".
+`FIELDS-INVENTORY.md` already encodes as "not extracted".
 
 ---
 
@@ -498,8 +498,9 @@ read by every element. Their packages are `pendon-plugin-extract` /
 - If either type only exists to satisfy the `Plugin` trait, it stops being a
   `Plugin`; if it is a chain stage today, it stays one — this task must not
   change pipeline order. Verify in `apps/cli/src/chain.rs` before editing.
-- `docs/spec/EXTRAS-INVENTORY.md` → `FIELDS-INVENTORY.md` lands in the same PR as
-  `extract`, so presets and inventory change together (Phase 7 → 8).
+- The inventory is renamed to `FIELDS-INVENTORY.md` in S2-7.1 (2026-10-30), one
+  phase ahead of `extract` (S2-8.1), so the tables move before the presets read
+  them.
 
 **Rejected.** Renaming the _configuration_ (`[[task.<element>.extraction]]`).
 Churn for users, zero benefit.
@@ -694,7 +695,7 @@ names reads them off the props (`{attrs.ref_id}`), which is what golden
 **Rejected.** Keeping `ref_id` / `loc` for compatibility — D-16 forbids the alias
 and it would leave the export as the only place the old names survive.
 
-**Consequence.** §7.3, §20, `EXTRAS-INVENTORY.md` and the plugin README document
+**Consequence.** §7.3, §20, `FIELDS-INVENTORY.md` and the plugin README document
 the new row shape; goldens `05` / `26` / `33` were re-frozen with it.
 
 ---

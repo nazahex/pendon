@@ -17,8 +17,8 @@ line is done, delete it (the git history is the record) — keep this file short
 ## Current focus
 
 Four proposals, one sequenced plan ([`docs/workflows/`](docs/workflows/), 40 tasks
-in [`TASKS.md`](docs/workflows/TASKS.md)). **Phases 0–4 are landed**; the gates and
-the L37 blocker are what is left.
+in [`TASKS.md`](docs/workflows/TASKS.md)). **Phases 0–6 are landed and Phase 7 is
+open**; the gates and the L37 blocker are what is left.
 
 - **Phase 0/1 — shared types.** `pendon-types` (`Selector`, `TypeSet`, `Rule`,
   `Group`, `winner`, `matching`) answers `type = …` selectors; `D-3a`: the
@@ -84,7 +84,8 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## In progress
 
-- [ ] **Stage 2 — Phases 0–4 done; Phase 5 done (`S2-5.4`).** Docs live in
+- [ ] **Stage 2 — Phases 0–6 done; Phase 7 in progress (`S2-7.1` done).**
+      Docs live in
       [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md).
       **Phase 0 complete 2026-10-28**: D-1…D-17 signed (D-16 = clean total
       replacement: no compat, no warnings, no migration doc, old configs fail
@@ -382,6 +383,34 @@ exactly one `export const headings` line each (no bytes removed), and
       six layers already used), and `41`/`42` gained a table case (claimed when
       `plugin-table` is enabled, `ReceiverAbsent` when it is not). 783 tests, 37
       fixtures.
+      **`S2-6.1`…`S2-6.4` done — the modifier run is configuration (§5.4, D-9).**
+      `crates/extra/src/modifier.rs` (`ModifierConfig`: one UTF-8 `char` per
+      symbol; same-path merge in written order — two scalars become an array, an
+      array beats a scalar, two arrays nest, two objects deep-merge, and an
+      object + scalar pair is one `Error` that drops the whole run), parsed from
+      `[…custom.*.bracket.modifier."<symbol>"]` in `apps/cli/src/components.rs`
+      (unknown slot / multi-char symbol = load error). `ComponentSet` carries
+      **config-only** entries (`ConfigEntry`, D-8) and `field_for` /
+      `modifier_for` are transparent across levels, so `field.*` and the modifier
+      table reach an element that names no component. The four slot elements
+      merge the run **last** (anchor, image, heading, cite), so an authored field
+      of the head always wins and `class` accumulates. Fixture
+      `43-slot-modifiers` freezes the proposal's JSON byte for byte plus the
+      extract pair (modifier fields absent from the preset, present when asked).
+      The legacy URL-suffix and image-marker scanners are gone from both parsers
+      (§14 rows and `03`/`04` already had them as literal text). 813 tests.
+      **`S2-7.1` done — the inventory is `FIELDS-INVENTORY.md`.** Rename + retitle
+      (`preset`, not `recommended`, in §0) + every live link: `AGENTS.md`,
+      `docs/INDEX.md`, `SYNTAX.md` §21, `crates/plugin-extract/README.md`, the
+      workflow `README.md` / `TASKS.md` / `DECISIONS.md`. The old file name now
+      survives only in frozen history (`docs/archive/**`, ADR-0010/0011/0015 and
+      the two proposal `.mdp` files), which record the rename rather than link to
+      it. Ten orphan rows an older edit had appended after §12 are put back: the
+      quote's decorator `type` returns to §3 (its only built-in field) and the
+      other nine go, because `id` / `class` / `author` / `isOpen` reach those
+      elements as extras under their own names, `inner_text` is universal, and
+      `plugin-directive` emits no `level` / `summary` any more. S2-7.2 still owns
+      the table rewrite; `recommended` stays a column name until then.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden
@@ -481,7 +510,7 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## Golden & freeze status (see [`docs/spec/golden/README.md`](docs/spec/golden/README.md))
 
-- Golden fixtures `01–12`, `14–16`, `21–28`, `30–42` are frozen and green; none
+- Golden fixtures `01–12`, `14–16`, `21–28`, `30–43` are frozen and green; none
   `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (37 fixtures) is the gate.
 - Phase 3 re-froze `06-heading` (it loses the numbers `plugin-heading` used to
   compute and keeps its authored `number:` props) and `28-type-selectors`
@@ -528,3 +557,15 @@ exactly one `export const headings` line each (no bytes removed), and
   decl line's prose removed) and `36-table-slots` (the `<table>`'s `specs.*`
   slots are spreads now instead of the decl's hardcoded `id`/`title`).
   `41-decorator-claim` and `42-decorator-rejected` each gained one table case.
+- `S2-6` moved **no** existing fixture: a modifier run contributes nothing until a
+  config defines a symbol, and no earlier fixture defines one. `43-slot-modifiers`
+  is new — array merge in written order (equal values kept), `class`
+  accumulation without a repeated token, head-wins, an unconfigured symbol, a bare
+  flag, `loading` → `data-loading`, and a **config-only** entry per element — and
+  its `.out/` freezes the extract pair (`recommended` leaves the modifier fields
+  out, the un-preset block keeps `rel` / `soo.baz` as an array and a dotted path).
+  The one behavioural addition behind it: `ComponentSet` carries config-only
+  entries (`ConfigEntry`, D-8) and `field_for` / `modifier_for` are transparent
+  across levels, so `field.*` and `bracket.modifier` reach an element that has no
+  custom component (and an entry that configures nothing no longer silences the
+  layer default).

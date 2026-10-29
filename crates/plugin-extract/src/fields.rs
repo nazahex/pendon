@@ -1,7 +1,7 @@
 //! The frozen field vocabulary.
 //!
 //! The single source of truth is
-//! [`docs/spec/EXTRAS-INVENTORY.md`](../../../docs/spec/EXTRAS-INVENTORY.md): a
+//! [`docs/spec/FIELDS-INVENTORY.md`](../../../docs/spec/FIELDS-INVENTORY.md): a
 //! name here that is not a row there (or a `recommended` mark that disagrees with
 //! §12) is a bug, and this module's tests are written against the document.
 

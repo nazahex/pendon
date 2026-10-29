@@ -760,7 +760,7 @@ fn number_block(
     Ok(NumberBlock::new(element, selectors, styles))
 }
 /// Every element a `[[task.<element>.extract]]` section can name
-/// (`docs/spec/EXTRAS-INVENTORY.md`).
+/// (`docs/spec/FIELDS-INVENTORY.md`).
 ///
 /// The five elements §1 lists as in scope but without a layer tag (`wiki`,
 /// `codeblock`, `latex`, `bind`, `frontmatter`) are absent on purpose: naming one
@@ -779,7 +779,7 @@ pub const EXTRACT_ELEMENTS: [&str; 10] = [
     "table",
 ];
 
-/// §1 of `docs/spec/EXTRAS-INVENTORY.md`: in scope, but nothing can be extracted
+/// §1 of `docs/spec/FIELDS-INVENTORY.md`: in scope, but nothing can be extracted
 /// from them yet (no `__layer`, no attributes, or the data already has an
 /// export). A block under one of these names is a config *error*, not a silent
 /// no-op — the section is unknown to the schema, so it has to be caught here
@@ -801,7 +801,7 @@ pub fn build_extract_options(task: &ConfigTask) -> Result<ExtractOptions, String
         };
         if section.contains_key("extract") {
             return Err(format!(
-                "task.{element}.extract: `{element}` cannot be extracted yet (§1 of docs/spec/EXTRAS-INVENTORY.md)"
+                "task.{element}.extract: `{element}` cannot be extracted yet (§1 of docs/spec/FIELDS-INVENTORY.md)"
             ));
         }
     }
@@ -1861,7 +1861,7 @@ export = "not a name"
         assert!(build_extract_options(&task).expect("no section").is_empty());
     }
 
-    /// §1 of `docs/spec/EXTRAS-INVENTORY.md`: an in-scope element with no
+    /// §1 of `docs/spec/FIELDS-INVENTORY.md`: an in-scope element with no
     /// extractable fields fails by name instead of being silently ignored — the
     /// section is unknown to the schema, so it lands in `task.unknown`.
     #[test]

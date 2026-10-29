@@ -47,7 +47,7 @@ docs/
    spec/SYNTAX.md       normative grammar (§1–§15 normative, §16 fixture ref)
    spec/PARSER.md       parser/IR contract
    spec/CLI-REPORT.md   CLI report contract (streams, theme, layout, gating)
-   spec/EXTRAS-INVENTORY.md  extractable extras field per element (Phase 4 gate)
+   spec/FIELDS-INVENTORY.md  extractable fields per element (Phase 4 gate)
    spec/golden/         executable fixtures (ground truth) + README
    decisions/           ADRs (append-only) + index
    guides/              how-tos: cli, plugin-authoring, testing

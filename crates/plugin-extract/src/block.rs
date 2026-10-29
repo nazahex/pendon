@@ -72,7 +72,7 @@ impl ExtractBlock {
             ExtractError::new(
                 key("element".to_string()),
                 format!(
-                    "`{}` has no extractable node (docs/spec/EXTRAS-INVENTORY.md §1)",
+                    "`{}` has no extractable node (docs/spec/FIELDS-INVENTORY.md §1)",
                     spec.element
                 ),
             )
@@ -237,7 +237,7 @@ mod tests {
     }
 
     /// `wiki` is listed by §8.6 but has no layer tag yet: the config is rejected
-    /// rather than silently extracting nothing (EXTRAS-INVENTORY §1).
+    /// rather than silently extracting nothing (FIELDS-INVENTORY §1).
     #[test]
     fn an_element_without_a_layer_is_rejected() {
         let message = error(
@@ -251,7 +251,7 @@ mod tests {
             message.starts_with("task.wiki.extract[0].element: "),
             "{message}"
         );
-        assert!(message.contains("EXTRAS-INVENTORY"), "{message}");
+        assert!(message.contains("FIELDS-INVENTORY"), "{message}");
     }
 
     #[test]

@@ -91,7 +91,7 @@ Left column is proposal language; right column is what an agent actually touches
 | slot contract         | `SlotContract` in `crates/extra/src/slot.rs`, declared per element (S2-1.x)                            |
 | slot modifier         | today: anchor URL suffix + image pre-bracket — **both deleted**                                        |
 | decorator             | `crates/extra/src/decorator.rs` (`bind_decorators`), §9.1                                              |
-| bare / built-in field | `AttrValue` on the node; rows in `docs/spec/EXTRAS-INVENTORY.md`                                       |
+| bare / built-in field | `AttrValue` on the node; rows in `docs/spec/FIELDS-INVENTORY.md`                                       |
 | assign / override     | `field.*` (D-5) + `Specs::resolve`; the four old naming keys are deleted (S2-2.8)                      |
 | preset                | today: `recommended: bool` in `ExtractRule` (`apps/cli/src/config.rs`)                                 |
 | extract               | `crates/plugin-extract` + `[[task.<element>.extract]]` (§21)                                           |

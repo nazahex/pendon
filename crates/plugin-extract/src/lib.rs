@@ -12,7 +12,7 @@
 //! - **It only reads.** The event stream is not rewritten (P.2), so adding an
 //!   extract block never changes a rendered byte.
 //! - **The fields are frozen.** [`fields::ELEMENTS`] and [`fields::recommended`]
-//!   mirror [`docs/spec/EXTRAS-INVENTORY.md`](../../../docs/spec/EXTRAS-INVENTORY.md);
+//!   mirror [`docs/spec/FIELDS-INVENTORY.md`](../../../docs/spec/FIELDS-INVENTORY.md);
 //!   the extractor knows exactly what a node can carry and nothing else.
 //! - **Disjointness is `pendon-types`.** A block's `type` scope is a
 //!   [`pendon_types::Selector`] list resolved per element, so two blocks that name

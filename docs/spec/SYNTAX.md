@@ -1750,7 +1750,7 @@ omit        = [<field>, …]
 2. **`<element>` is one of** `anchor`, `blockquote`, `cite`, `directive`,
    `heading`, `image`, `list`, `marker`, `section`, `table`. Any other name is a
    task error naming it. The extractable **fields** per element are frozen in
-   [`EXTRAS-INVENTORY.md`](EXTRAS-INVENTORY.md).
+   [`FIELDS-INVENTORY.md`](FIELDS-INVENTORY.md).
 3. **`type` is a selector list** (§11, [ADR-0008](../decisions/0008-type-selectors.md)):
    a literal, `?`, `_` or `*`, resolved per element against the types that element
    actually occurs with, so two blocks naming disjoint types cannot both claim a

@@ -1,10 +1,10 @@
-# Extras inventory — extractable fields per element
+# Fields inventory — built-in fields per element
 
 **Status: frozen (T4.1).** This is the contract `plugin-extract` implements: the
-`only` / `omit` / `recommended` vocabulary, one row per field, `recommended`
+`only` / `omit` / `preset` vocabulary, one row per field, `preset`
 decided per element (D-7 of
 [`../workflows/numbering-extract-type-export.md`](../workflows/numbering-extract-type-export.md)).
-Changing a `recommended` mark here changes what `recommended = true` extracts, so
+Changing a `preset` mark here changes what `preset = "pendon"` extracts, so
 it is a behaviour change and needs its own line in `STATUS.md`.
 
 Scope is fixed by §8.6 of the workflow: `anchor`, `blockquote`, `cite`,
@@ -25,7 +25,7 @@ the frozen tables. Out of scope and deliberately absent: `quiz`,
 3. **`source`** — `§N · crate · golden`, in that order: the attribute list in
    [`SYNTAX.md`](../spec/SYNTAX.md), the plugin's `emit` block, then the fixture
    that proves it. A field with no golden does not ship.
-4. **`recommended`** — `yes` = in the preset, `no` = only on request.
+4. **`preset`** — `yes` = in the `pendon` preset, `no` = only on request.
 5. **`notes`** — interactions worth pinning.
 
 Two names exist on **every** extractable element and are not repeated per table:
@@ -47,7 +47,7 @@ Rules that hold for all rows:
   enumerable here.
 - **A missing field is dropped, never emitted empty** — even when `only` names
   it (P.1 of [`../issues/plugin-extract.md`](../issues/plugin-extract.md)).
-- **Selection order** is `recommended` → `only` → `omit`, and `omit` always wins
+- **Selection order** is `preset` → `only` → `omit`, and `omit` always wins
   (P.3). Fields are emitted in **attribute order** (the order the plugin wrote
   them), not in the order of the `only` array.
 
@@ -84,8 +84,13 @@ Source: §7.2 · `crates/plugin-anchor` · golden `04-anchor`.
 
 Source: §9.2 · `crates/plugin-blockquote` · golden `11-blockquote`.
 
-| field | type | recommended | notes |
-| ----- | ---- | ----------- | ----- |
+| field  | type   | recommended | notes                         |
+| ------ | ------ | ----------- | ----------------------------- |
+| `type` | string | yes         | the decorator's marker (§6.2) |
+
+The quote writes nothing else: `id` / `class` / `title` reach it as extras under
+their own names (§0) and `inner_text` is universal, so §12's preset can name them
+without a row here.
 
 ## 4. `cite` — `__layer = "cite"` (renders as the `Cite` component)
 
@@ -204,9 +209,6 @@ and the decorator line above the heading publishes everything else.
 | `inner_text` | text   | no          | the whole section body; prefer the child headings                  |
 | `depth`      | number | yes         | the heading's own depth; a `<--->` child's parent + 1; `0` prehead |
 
-| `level` | string | yes | head `("paren")`; a positional slot, kept verbatim |
-| `summary` | string | yes | backticked extras item (§6.1) |
-
 ## 11. `table` — `__layer = "table"` (+ `thead` / `tbody` / `tfoot` layers)
 
 Source: §8 · `crates/plugin-table` · goldens `08`/`09`.
@@ -243,13 +245,3 @@ extract surface until a table layer owns them.
 
 A field in the preset that an element does not carry in a given instance is
 dropped from that row (§0), so one preset serves a whole document.
-
-| `author` | string | no | quoted extras item (§6.1) |
-| `isOpen` | flag | no | bare extras flag; emitted `true` |
-| `class` | string | no | extras only |
-| `inner_text` | text | yes | the directive body |
-
-| `type` | string | yes | the decorator's marker (§6.2) |
-| `id` | string | yes | `#id` / slug from the decorator |
-| `class` | string | yes | extras only |
-| `inner_text` | text | yes | the quote body, markup flattened |
