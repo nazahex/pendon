@@ -1,0 +1,30 @@
+---
+references:
+  book:
+    id: book
+    title: A Book
+---
+
+§6.5/D-7: a claimed head is read **whole**. The preset names some of its
+positions, and every other content becomes a bare field under its slot-qualified
+name — so a head cannot lose a value for want of a preset row.
+
+The anchor presets `bracket.bare → inner_text`, `paren.bare → href` and
+`paren.quote → title`; its other three positions keep their names:
+
+An @[anchor "anchor quote" `anchor tick`](/u "anchor title" `anchor paren tick`) inline.
+
+The image presets `bracket.bare → alt` and `paren.bare → src`. Its quote is **not**
+the `<img>` title — that is the *extras* `"quote"` (§6.3) — so all four of the
+remaining positions stay fields of their own:
+
+Mid-sentence ![an image "image quote" `image tick`](img.png "image paren quote" `image paren tick`) stays inline.
+
+The citation presets `bracket.bare → reference_id` and `bracket.quote → locator`.
+The built-in `<sup>` has no prop for the other four, so it writes them under the
+`data-` prefix — `bracket.tick` becomes `data-bracket-tick`, the spelling a dotted
+path takes when it cannot be a prop (§6.3, §7.3):
+
+A [^book "p. 12" `cite tick`](paperback "cite paren quote" `cite paren tick`) citation.
+
+None of the above is a diagnostic: an unpreset position is a field, not a mistake.

@@ -1,0 +1,13 @@
+§6.5/D-7: the block-level heads read whole too. A heading presets
+`bracket.bare → slug` and `paren.quote → title`; its depth is the `#` run, not a
+position (D-11), and the four contents left over are fields:
+
+##[heading "heading quote" `heading tick`](hp "heading paren quote" `heading paren tick`) Heading text
+
+A head alone on its line is a **block image** (§7.1): the `<img>` replaces the
+paragraph, and the six positions are the inline form's six:
+
+![block alt "block quote" `block tick`](block.png "block paren quote" `block paren tick`)
+
+The block form drops nothing either — `bracket.bare` and `paren.bare` are the
+preset's two rows, and the other four are the `<img>`'s own fields (§7.1).

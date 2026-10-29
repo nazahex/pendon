@@ -605,6 +605,12 @@ fn emit_citation(parts: CiteParts, ctx: &mut CitationContext, out: &mut Vec<Even
 /// The class and the two prefixes are constants (§7.3): a site that wants its own
 /// spelling writes a `Cite` component, which is why `citation_class`,
 /// `ref_id_prefix` and `citation_id_prefix` are gone (§14).
+///
+/// The markup is fixed, but the *fields* are not: every position the head carried
+/// beyond `reference_id` / `locator` (D-7's `bracket.tick`, `paren.bare`, …) is
+/// written under the `data-` prefix — `bracket.tick` becomes
+/// `data-bracket-tick`, the spelling a dotted path gets when it cannot be a prop
+/// (§6.3). A cite head never loses content for want of a component.
 fn emit_citation_html(
     out: &mut Vec<Event>,
     parts: &CiteParts,
@@ -633,6 +639,23 @@ fn emit_citation_html(
     // Add extra id if present (appended to anchor id)
     if let Some(extra_id) = &extra.id {
         html.push_str(&format!(" data-cite-id=\"{}\"", escape_html(extra_id)));
+    }
+
+    // §7.3/D-7: every other claimed position is an ordinary field, and this
+    // markup has no prop of its own for one — so it writes the field the way the
+    // built-in `<img>` writes a key it has no attribute for (§6.3, §7.1): under
+    // the `data-` prefix. A dotted path is *not* an attribute name in JSX
+    // (§6.3 writes it as a one-key spread, which raw markup cannot do), so
+    // `bracket.tick` is spelled `data-bracket-tick` here. Without this the head's
+    // remaining contents would be dropped, and only the custom-component path
+    // would keep them.
+    for (name, value) in &parts.values {
+        let attribute = format!("data-{}", name.replace('.', "-"));
+        html.push_str(&format!(
+            " {}=\"{}\"",
+            escape_html(&attribute),
+            escape_html(value)
+        ));
     }
 
     // Add data attributes
@@ -1513,6 +1536,34 @@ mod tests {
         );
         // §6.2: `#id` > extras `slug`.
         assert!(html_text(&result).contains("data-cite-id=\"short-slug\""));
+    }
+
+    /// S2-4.12/D-7: the built-in markup is fixed, but the head is not — every
+    /// position beyond `reference_id` / `locator` reaches the markup under its
+    /// own dotted name, so a head never loses content for want of a component.
+    #[test]
+    fn the_builtin_markup_keeps_every_other_position() {
+        let result = process(
+            &events_with_text(r#"[^book "p. 1" `t`](b "q" `u`)"#),
+            &CiteOptions::default(),
+        );
+
+        let html = html_text(&result);
+        for (name, value) in [
+            ("data-bracket-tick", "t"),
+            ("data-paren-bare", "b"),
+            ("data-paren-quote", "q"),
+            ("data-paren-tick", "u"),
+        ] {
+            assert!(
+                html.contains(&format!("{name}=\"{value}\"")),
+                "`{name}` was dropped: {html}"
+            );
+        }
+        // The preset's own positions keep their markup: the reference is the
+        // href, and the locator has no attribute of its own (§7.3).
+        assert!(html.contains("href=\"#citeref-1-book\""), "{html}");
+        assert!(!html.contains("locator="), "{html}");
     }
 
     /// §14/D3: the retired `[.class,#id]{k:v}` block is literal text.

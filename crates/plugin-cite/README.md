@@ -218,11 +218,19 @@ Without a custom node, citations render as standard HTML:
 
 ```html
 <sup class="cite-ref highlight urgent" data-foo="bar" style="--color:red;">
-  <a href="#citeref-1-suryana-2026" id="cite-1">[1]</a>
+  <a href="#citeref-1-suryana-2026" id="cite-1" data-bracket-tick="p. 2">[1]</a>
 </sup>
 ```
 
 Extra classes are appended to the base `cite-ref` class. Data attributes and styles are placed on the `<sup>` wrapper.
+
+The markup is fixed, but the head is not (§7.3, D-7): a position beyond
+`reference_id` / `locator` — `bracket.tick` in the example above — is written on
+the `<a>` as `data-<slot>-<kind>`, because a dotted path is not an attribute name
+in JSX (§6.3) and raw markup cannot spread one. `reference_id` stays the `href`,
+`citation_number` the label, and `locator` the `citations` binding (§20). A head
+therefore never loses a value for want of a component (fixture
+`37-head-slots-inline`).
 
 ## Shared Citation Context
 
