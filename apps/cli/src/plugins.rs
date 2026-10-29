@@ -894,7 +894,7 @@ pub fn build_solid_hints(specs: &[PluginSpec]) -> SolidRenderHints {
                 }
             }
 
-            let parsed_imports = parse_import_entries(&renderer.imports);
+            let parsed_imports = parse_import_entries(&renderer.imports[..]);
 
             if let Some(tpl) = &renderer.component_template {
                 for key in &keys {
