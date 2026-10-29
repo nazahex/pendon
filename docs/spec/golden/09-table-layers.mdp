@@ -1,8 +1,10 @@
 Column extras in the alignment row belong to that column's `<th>` only (§8,
 OPEN-E1), while the alignment and the width cascade into every `<td>` of the
-column. The alignment row's end-of-line extras belong to the `<tbody>`:
+column. The alignment row's end-of-line extras belong to the `<tbody>`. The
+`<table>` extras are the §9.1 decorator line above the table — never a line
+inside it:
 
-|-[layers]@@tableX{.striped}-|
+@@tableX{.striped, #layers}
 ||@@captionAB{.cap} Layer routing||
 | A | B | C |
 | :---@@cellA{.v-top} | :--- | :--- |@@tbodyX{.body}

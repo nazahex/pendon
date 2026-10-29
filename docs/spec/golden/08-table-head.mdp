@@ -1,0 +1,18 @@
+§8: the `<table>` extras are the §9.1 decorator line above the table — the
+layers inside it (caption, column, row, cell, foot) carry their own heads, so no
+line *inside* a table configures the `<table>` itself:
+
+@@tableX{.striped, sortable: true, #sales-2026, "Laporan Penjualan 2026"}
+||@@captionX{.caption-note} Laporan Penjualan 2026||
+| Produk     |      Harga |
+| :--------- | ---------: |
+| Laptop Pro | 15.000.000 |
+
+A marker with no configured entry keeps the layer default; a table with no
+decorator keeps working and its layers fall back to plain elements:
+
+| Kolom A | Kolom B |
+| ------- | ------- |
+| satu    | dua     |
+| ===     |         |
+| total   | dua     |

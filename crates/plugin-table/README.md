@@ -41,7 +41,25 @@ format = "solid"
 
 The plugin replaces rigid Markdown tables with a flexible, attribute-rich structure.
 
-### Caption & Table Attributes
+### Table Head (the decorator line)
+
+The `<table>` layer takes **no** head inside the table. Its head is the §9.1
+decorator line directly above the table, claimed by this pass when `table` is in
+the chain (D-10; claim order section → table → list → blockquote → paragraph).
+The retired `|-[slug](…)extras-|` declaration line is literal text (§14).
+
+```md
+@@tableX{.striped, #sales-2026, sortable: true}
+||Laporan Penjualan 2026||
+| Produk | Stok | Harga |
+```
+
+The decorator is the same §5 head as every other construct, so `[slug]` /
+`("title")` reach the `<table>` exactly as `class` / `id` / props do. A
+decorator this pass does not receive — for instance a table head when `table`
+is not enabled — is removed with a `Warning`; it never renders as a stray line.
+
+### Caption
 
 Place the caption on the line immediately preceding the table header: the caption
 text sits between the `||` markers and an optional extras head touches the
@@ -216,7 +234,7 @@ emitted for components actually used by the document.
 
 | Attribute         | Description                                       |
 | :---------------- | :------------------------------------------------ |
-| `{attrs.id}`      | Custom ID from the caption or row block.          |
+| `{attrs.id}`      | Custom ID from the layer's extras head.           |
 | `{attrs.class}`   | Space-separated merged class list.                |
 | `{attrs.align}`   | Horizontal alignment (`left`, `center`, `right`). |
 | `{attrs.width}`   | Explicit width from the column delimiter.         |

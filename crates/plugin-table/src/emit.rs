@@ -13,13 +13,14 @@
 //! layer with a component is emitted props-shaped (`align="left"`). See
 //! [`Shape`] for why that choice can never be per element.
 
-use crate::attrs::{push_cell_attrs, push_layer_attrs, LayerAttrs, Shape};
+use crate::attrs::{decorator_to_layer, push_cell_attrs, push_layer_attrs, LayerAttrs, Shape};
 use crate::grid::{process_grid, ProcessedRow};
 use crate::parser::TableBlock;
 use crate::{CustomComponent, TableOptions};
 use pendon_core::{
     element_close, element_open, parse, raw_inline, Event, InlinePipeline, NodeKind, Options,
 };
+use pendon_extra::BoundDecorator;
 use pendon_plugin_markdown::process as process_markdown;
 use pendon_renderer_solid::{layer_templates, SolidRenderHints};
 
@@ -147,18 +148,12 @@ pub fn solid_hints(options: &TableOptions) -> Option<SolidRenderHints> {
 }
 
 /// Emits one table block as built-in, `__layer`-tagged elements.
-pub fn emit_table(
-    table_block: &TableBlock,
-    options: &TableOptions,
-    inline_pipeline: &pendon_core::Pipeline,
-    out: &mut Vec<Event>,
-) {
-    emit_table_inner(table_block, options, inline_pipeline, &mut (), out);
-}
-
-/// [`emit_table`] for a pipeline that carries per-document state.
+///
+/// `decorator` is the §9.1 decorator line bound to this table, if any: it is the
+/// whole of the `<table>` layer's extras (§8).
 pub fn emit_table_with_context<C, P>(
     table_block: &TableBlock,
+    decorator: Option<&BoundDecorator>,
     options: &TableOptions,
     inline_pipeline: &P,
     context: &mut C,
@@ -166,11 +161,19 @@ pub fn emit_table_with_context<C, P>(
 ) where
     P: InlinePipeline<C>,
 {
-    emit_table_inner(table_block, options, inline_pipeline, context, out);
+    emit_table_inner(
+        table_block,
+        decorator,
+        options,
+        inline_pipeline,
+        context,
+        out,
+    );
 }
 
 fn emit_table_inner<C, P>(
     table_block: &TableBlock,
+    decorator: Option<&BoundDecorator>,
     options: &TableOptions,
     inline_pipeline: &P,
     context: &mut C,
@@ -187,9 +190,12 @@ fn emit_table_inner<C, P>(
     // A composed table is never pretty-printed: the layout whitespace would
     // end up as text children of somebody's component.
     let composed = shapes.any_composed();
+    // §8: the `<table>` layer's extras are the decorator's head, in the same
+    // mapping every other layer uses.
+    let table_attrs = decorator.map(decorator_to_layer).unwrap_or_default();
 
     open_layer(out, "table", TABLE_LAYER, composed);
-    push_layer_attrs(out, &table_block.attrs, shapes.table);
+    push_layer_attrs(out, &table_attrs, shapes.table);
     gap(out, composed, "\n");
 
     if let Some(caption) = &table_block.caption {

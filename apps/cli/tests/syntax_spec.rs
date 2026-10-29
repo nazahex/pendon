@@ -243,10 +243,11 @@ fn golden_07_wiki() {
     assert_fixture("07-wiki");
 }
 
-/// §16.3 fixture 08: `|-…-|`, `|| caption ||`, decl head `[slug]` (§8).
+/// §16.3 fixture 08: the `<table>` layer's decorator head, plus the caption line
+/// (§8).
 #[test]
-fn golden_08_table_decl() {
-    assert_fixture("08-table-decl");
+fn golden_08_table_head() {
+    assert_fixture("08-table-head");
 }
 
 /// §16.3 fixture 09: column/th/td/tr/tbody/tfoot extras routing (§8).

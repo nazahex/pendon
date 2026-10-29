@@ -2,10 +2,11 @@
 name = "Golden 41"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "section,heading,list,blockquote,markdown"
+plugin = "section,heading,list,blockquote,table,markdown"
 format = "solid"
 
 # §9.1/D-10 rule 2: every receiver has its plugin in the chain, so each decorator
 # is claimed by the pass that owns the block below it — `section` a heading,
+# `table` a table (D-10 rule 2's claim order puts it above `list`),
 # `list` a list container, `blockquote` a quote and `markdown` a paragraph. None
 # of them is dropped and none of them lands on the wrong block.

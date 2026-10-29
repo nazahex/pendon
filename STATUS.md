@@ -84,7 +84,7 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## In progress
 
-- [ ] **Stage 2 — Phases 0–4 done; Phase 5 in progress (`S2-5.2` done).** Docs live in
+- [ ] **Stage 2 — Phases 0–4 done; Phase 5 done (`S2-5.4`).** Docs live in
       [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md).
       **Phase 0 complete 2026-10-28**: D-1…D-17 signed (D-16 = clean total
       replacement: no compat, no warnings, no migration doc, old configs fail
@@ -363,6 +363,25 @@ exactly one `export const headings` line each (no bytes removed), and
       binds one five-decorator document forwards **and** reversed; fixtures
       `41-decorator-claim` + `42-decorator-rejected`. `plugin-table` claims
       nothing yet (S2-5.3/S2-5.4). 821 tests, 36 fixtures.
+      **`S2-5.3` + `S2-5.4` done — the table head is a decorator (§8, D-10).**
+      `plugin-table` is the fifth and last receiver: `process` binds its one
+      claim (`Claim::only(Receiver::Table)`), resolves the head against
+      `table.specs_for_opt(decorator_type)`, prepends the shared
+      `decorator_diagnostics`, and hands the bound decorator to
+      `emit_table_with_context` — the standalone `emit_table` is gone, so the
+      `<table>` layer has exactly one source of extras. `parse_decl_line` and
+      `TableBlock::attrs` are deleted: the retired `|-[slug](…)extras-|` line is
+      literal text (§14), so a table's head is the §9.1 decorator line above it
+      and nothing inside the table configures the `<table>`. `decorator_to_layer`
+      reuses `layer_from_attrs`, so `#id`, `"title"`, typed props, `%%numberType`
+      and the layer's own spec entries land exactly where the decl line used to
+      put them. Fixtures: `08-table-head` (renamed from `table-decl`; the old
+      line now renders literally and the caption actually renders),
+      `09-table-layers` + `36-table-slots` moved to the decorator form (`36`
+      drops the decl's hardcoded `id`/`title` for the `specs.*` spread the other
+      six layers already used), and `41`/`42` gained a table case (claimed when
+      `plugin-table` is enabled, `ReceiverAbsent` when it is not). 783 tests, 37
+      fixtures.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden
@@ -441,7 +460,11 @@ exactly one `export const headings` line each (no bytes removed), and
   `S2-5.1`, a few sandbox **sources** (`sandbox/heading`, the L-section of
   `sandbox/ultimate`) still spell decorators as a bare `{…}` line, which now
   renders literally; they are part of the same maintainer replay, not a
-  regression of this change.
+  regression of this change. Since `S2-5.4` the same is true of every sandbox
+  source that still carries a table declaration line (`sandbox/ultimate`'s
+  tables, `sandbox/unified`'s sales table): `|-…-|` is literal text now, so those
+  tables render untyped until the maintainer replays the sources with a `@@…`
+  decorator. No golden depends on them.
 
 - **§11 threading gaps** (from the positional-keys pass):
   - `plugin-table`: `extras_to_layer(head)` still uses `Specs::default()`;
@@ -459,7 +482,7 @@ exactly one `export const headings` line each (no bytes removed), and
 ## Golden & freeze status (see [`docs/spec/golden/README.md`](docs/spec/golden/README.md))
 
 - Golden fixtures `01–12`, `14–16`, `21–28`, `30–42` are frozen and green; none
-  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (36 fixtures) is the gate.
+  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (37 fixtures) is the gate.
 - Phase 3 re-froze `06-heading` (it loses the numbers `plugin-heading` used to
   compute and keeps its authored `number:` props) and `28-type-selectors`
   (dropped `auto_number`, no output change).
@@ -498,3 +521,10 @@ exactly one `export const headings` line each (no bytes removed), and
   `42-decorator-rejected`: the first proves each receiver takes its own line, the
   second that a `NotAReceiver` / `ReceiverAbsent` / `Overridden` line leaves no
   trace.
+- `S2-5.3`/`S2-5.4` moved the three table fixtures that carried a decl line:
+  `08-table-decl` → **`08-table-head`** (renamed and rewritten — the retired line
+  is literal text, the decorator carries `class`/`id`/`title`/typed props, and
+  the caption line now actually renders), `09-table-layers` (same output, the
+  decl line's prose removed) and `36-table-slots` (the `<table>`'s `specs.*`
+  slots are spreads now instead of the decl's hardcoded `id`/`title`).
+  `41-decorator-claim` and `42-decorator-rejected` each gained one table case.

@@ -77,9 +77,6 @@
           "include": "#blockDirective"
         },
         {
-          "include": "#tableDeclaration"
-        },
-        {
           "include": "#tableCaption"
         },
         {
@@ -1093,33 +1090,6 @@
       "captures": {
         "1": {
           "name": "punctuation.definition.section.close.pendon"
-        }
-      }
-    },
-    "tableDeclaration": {
-      "comment": "§8 — the optional `|-…-|` declaration line. The line is childless: only the groups and the head are coloured, any other text stays literal.",
-      "match": "^[ ]{0,3}(\\|-)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(.*?)((?:-\\|)|\\|)[ \\t]*$",
-      "name": "meta.table.declaration.pendon",
-      "captures": {
-        "1": {
-          "name": "punctuation.definition.table.begin.pendon"
-        },
-        "2": {
-          "patterns": [
-            {
-              "include": "#positionalGroup"
-            }
-          ]
-        },
-        "3": {
-          "patterns": [
-            {
-              "include": "#headExtras"
-            }
-          ]
-        },
-        "4": {
-          "name": "punctuation.definition.table.end.pendon"
         }
       }
     },

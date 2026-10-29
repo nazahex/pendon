@@ -32,7 +32,7 @@ The golden set in [`../spec/golden/`](../spec/golden/) is copied into a temp
 project, rendered with the real CLI, and compared byte-for-byte.
 
 ```bash
-cargo test -p pendon --test syntax_spec          # 35 fixtures
+cargo test -p pendon --test syntax_spec          # 37 fixtures
 cargo test -p pendon --test extras_heads_spec    # extras on every element head
 cargo test -p pendon --test slot_heads_spec      # every slot position on every element
 ```

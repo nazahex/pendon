@@ -1,9 +1,10 @@
 §8: every table layer reads the same head — `@@type[…]("…"){…}%%numberType` —
 so a slot pair, the specs items and a numbering marker reach the `<table>`, the
 `<caption>`, a column's `<th>`, the `<tbody>`, a `<tr>`, a `<td>` and the
-`<tfoot>` alike. Nothing is layer-specific except *where* the head sits:
+`<tfoot>` alike. Nothing is layer-specific except *where* the head sits. The
+`<table>` head is the §9.1 decorator above the table (D-10):
 
-|-[tbl-slug]("Table title")@@tableX{.t}%%%numberA -|
+@@tableX[tbl-slug]("Table title"){.t}%%%numberA
 ||@@captionX[cap-slug]("Cap title"){.c}%%%numberA A caption ||
 | A | B | C |
 | :---@@thX[th-slug]("Th title"){.v}%%%numberA | ---: | --- |@@tbodyX{.tb}

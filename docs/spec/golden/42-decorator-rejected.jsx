@@ -8,7 +8,7 @@ never decorates a block it does not own.
 </p>
 <hr />
 <p>The block belongs to a receiver this chain does not have — <code>plugin</code> is
-<code>markdown</code> only, so <code>section</code>, <code>list</code> and <code>blockquote</code> are absent:
+<code>markdown</code> only, so <code>section</code>, <code>table</code>, <code>list</code> and <code>blockquote</code> are absent:
 </p>
 <h2>A heading that gets no decorator</h2>
 <ul>
@@ -18,6 +18,10 @@ never decorates a block it does not own.
 <p>a quote that gets no decorator
 </p>
 </blockquote>
+<p>| A |
+| --- |
+| 1 |
+</p>
 <p>Two decorator lines in a row: only the last one applies, so the first is
 overridden and dropped (<code>Overridden</code>):
 </p>

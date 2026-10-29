@@ -18,3 +18,11 @@ above it would be redundant.
 
 @@{.lead, #p1}
 A decorated paragraph.
+
+A table is claimed by `table`, not by `markdown` — even though `table` runs first
+and the block below is still a `Paragraph` when it reads the stream:
+
+@@tableA{.grid, #sales}
+| Produk | Harga |
+| ------ | ----: |
+| Laptop | 10000 |

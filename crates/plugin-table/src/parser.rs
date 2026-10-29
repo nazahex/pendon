@@ -6,8 +6,6 @@ use pendon_extra::scan_extras_chars;
 pub struct TableBlock {
     pub start_index: usize,
     pub end_index: usize,
-    /// §8 `decl` layer: the `<table>` attributes.
-    pub attrs: LayerAttrs,
     pub caption: Option<CaptionSpec>,
     pub columns: Vec<ColumnSpec>,
     pub body_rows: Vec<RowSpec>,
@@ -79,13 +77,10 @@ pub fn try_parse_table_block(events: &[Event], start_idx: usize) -> Option<Table
 fn parse_table_from_lines(lines: &[&str]) -> Option<TableBlock> {
     let mut cursor = 0usize;
 
-    // §8: the optional declaration line carries the `<table>` extras.
-    let mut attrs = LayerAttrs::default();
-    if let Some((decl_attrs, consumed)) = parse_decl_line(lines[cursor]) {
-        attrs = decl_attrs;
-        cursor += consumed;
-    }
-
+    // §8: a table is a caption line and/or a header row. The `<table>` element's
+    // own extras come from the §9.1 decorator line above the table, never from a
+    // line inside it — the retired `|-[slug](…)extras-|` declaration is plain
+    // text (§14).
     let mut caption = None;
     if let Some((cap, consumed)) = parse_caption_line(lines.get(cursor)?) {
         caption = Some(cap);
@@ -163,7 +158,6 @@ fn parse_table_from_lines(lines: &[&str]) -> Option<TableBlock> {
     Some(TableBlock {
         start_index: 0,
         end_index: 0,
-        attrs,
         caption,
         columns,
         body_rows,
@@ -239,60 +233,6 @@ fn parse_layer_block(input: &str) -> Option<LayerAttrs> {
         Some((head, next)) if chars[next..].iter().all(|ch| ch.is_whitespace()) => {
             Some(extras_to_layer(&head))
         }
-        _ => None,
-    }
-}
-
-/// Parses the §8 declaration line: `|-` `[slug]` `("title")` `extras?` `-|`.
-///
-/// Returns the `<table>` attributes and how many lines it consumed (0 when the
-/// line is not a declaration). The declaration is childless: text that is not
-/// part of a head or the extras is discarded. The retired `[.class]` bracket is
-/// literal text (§14).
-fn parse_decl_line(line: &str) -> Option<(LayerAttrs, usize)> {
-    let body = line.trim().strip_prefix("|-")?;
-    let mut rest = body;
-
-    let mut layer = LayerAttrs::default();
-
-    // §8: the head uses the standard `[slug]` / `("title")` form, adjacent to
-    // the opening `|-`.
-    if let Some(stripped) = rest.strip_prefix('[') {
-        if let Some(close) = stripped.find(']') {
-            let slug = stripped[..close].trim();
-            if !slug.is_empty() && !slug.starts_with('.') && !slug.starts_with('#') {
-                layer.attrs.id = Some(slug.to_string());
-                rest = &stripped[close + 1..];
-            }
-        }
-    }
-    if let Some(stripped) = rest.strip_prefix('(') {
-        if let Some(close) = stripped.find(')') {
-            let title = stripped[..close]
-                .trim()
-                .trim_matches('"')
-                .trim_matches('\'');
-            if !title.is_empty() {
-                layer
-                    .attrs
-                    .properties
-                    .push(("title".to_string(), title.to_string()));
-            }
-            rest = &stripped[close + 1..];
-        }
-    }
-
-    // §8/D4: the extras head touches the closing `-|`.
-    let chars: Vec<char> = rest.chars().collect();
-    if let Some((head, next)) = scan_extras_chars(&chars, 0) {
-        let bytes: usize = chars[..next].iter().map(|ch| ch.len_utf8()).sum();
-        crate::attrs::merge_layer(&mut layer, &extras_to_layer(&head));
-        rest = &rest[bytes..];
-    }
-
-    // The trailing `-|` closes the declaration (a bare `|` is accepted too).
-    match rest.trim() {
-        "-|" | "|" | "" => Some((layer, 1)),
         _ => None,
     }
 }

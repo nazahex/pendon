@@ -157,14 +157,12 @@ template = "<Cite {...attrs} />"
         ],
     },
     Case {
-        name: "table-decl",
+        name: "table-head",
         plugins: "table,markdown",
-        source: "|-[t](\"T\")@@tableX{HEAD}-|\n| A | B |\n| :--- | :--- |\n| a | c |\n",
+        source: "@@tableX{HEAD}\n| A | B |\n| :--- | :--- |\n| a | c |\n",
         extra: "",
-        // §8: the declaration line is the `<table>` head. The extras quote wins
-        // this `title` today — the decl's own `("T")` should win (§6.2) — because
-        // the layer props are emitted after the head value; the decl line is
-        // Phase 5's (`S2-4.11` + Phase 5), so this row records the current shape.
+        // §8/§9.1: the `<table>` head is the decorator line above the table, so
+        // the quote lands as `title` and every specs position reaches the node.
         expect: &[
             r#"class="cls""#,
             r#"id="elem-x""#,
@@ -175,7 +173,7 @@ template = "<Cite {...attrs} />"
     Case {
         name: "table-cell",
         plugins: "table,markdown",
-        source: "|-[t](`cell-table`)-|\n| A | B |\n| :---@@cellX{HEAD} | :--- |\n| a | c |\n",
+        source: "| A | B |\n| :---@@cellX{HEAD} | :--- |\n| a | c |\n",
         extra: "",
         // §8: a cell head in the alignment row routes the column's `th` and `td`.
         expect: &[

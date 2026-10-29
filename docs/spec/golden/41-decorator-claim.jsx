@@ -18,6 +18,23 @@ above it would be redundant.
 </p>
 </blockquote><p class="lead" id="p1">A decorated paragraph.
 </p>
+<p>A table is claimed by <code>table</code>, not by <code>markdown</code> — even though <code>table</code> runs first
+and the block below is still a <code>Paragraph</code> when it reads the stream:
+</p>
+<table class="grid" id="sales" type="tableA">
+  <thead>
+    <tr>
+      <th>Produk</th>
+      <th style="text-align: right;">Harga</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Laptop</td>
+      <td style="text-align: right;">10000</td>
+    </tr>
+  </tbody>
+</table>
 </section>
 
 </>); }

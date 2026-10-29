@@ -8,7 +8,7 @@ The block can never receive a decorator at all (a thematic break):
 ---
 
 The block belongs to a receiver this chain does not have — `plugin` is
-`markdown` only, so `section`, `list` and `blockquote` are absent:
+`markdown` only, so `section`, `table`, `list` and `blockquote` are absent:
 
 @@{.nope}
 ## A heading that gets no decorator
@@ -18,6 +18,11 @@ The block belongs to a receiver this chain does not have — `plugin` is
 
 @@{.nope}
 > a quote that gets no decorator
+
+@@{.nope}
+| A |
+| --- |
+| 1 |
 
 Two decorator lines in a row: only the last one applies, so the first is
 overridden and dropped (`Overridden`):

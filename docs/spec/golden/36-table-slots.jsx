@@ -2,9 +2,10 @@ export default function PendonView() { return (<>
 <p>§8: every table layer reads the same head — <code>@@type[…](&quot;…&quot;)&#123;…&#125;%%numberType</code> —
 so a slot pair, the specs items and a numbering marker reach the <code>&lt;table&gt;</code>, the
 <code>&lt;caption&gt;</code>, a column&#39;s <code>&lt;th&gt;</code>, the <code>&lt;tbody&gt;</code>, a <code>&lt;tr&gt;</code>, a <code>&lt;td&gt;</code> and the
-<code>&lt;tfoot&gt;</code> alike. Nothing is layer-specific except <em>where</em> the head sits:
+<code>&lt;tfoot&gt;</code> alike. Nothing is layer-specific except <em>where</em> the head sits. The
+<code>&lt;table&gt;</code> head is the §9.1 decorator above the table (D-10):
 </p>
-<table class="t" id="tbl-slug" number={["A", "A"]} title="Table title" type="tableX">
+<table {...{ "bracket.bare": "tbl-slug" }} class="t" number={["A", "A"]} {...{ "paren.bare": "Table title" }} type="tableX">
   <caption {...{ "bracket.bare": "cap-slug" }} class="c" number={["A", "B"]} {...{ "paren.bare": "Cap title" }} type="captionX">A caption</caption>
   <thead>
     <tr>

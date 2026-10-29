@@ -1,7 +1,9 @@
 use pendon_core::InlinePipeline;
 use pendon_core::{Event, Pipeline};
+use pendon_extra::{bind_decorators, decorator_diagnostics, BoundDecorator, Claim, Receiver};
 use pendon_renderer_solid::{ComponentSet, ImportEntry};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 mod attrs;
 mod emit;
@@ -63,21 +65,7 @@ pub struct CustomComponent {
 }
 
 pub fn process(events: &[Event], options: &TableOptions, inline_pipeline: &Pipeline) -> Vec<Event> {
-    let mut out: Vec<Event> = Vec::with_capacity(events.len());
-    let mut i = 0usize;
-
-    while i < events.len() {
-        if let Some(table_block) = parser::try_parse_table_block(events, i) {
-            emit::emit_table(&table_block, options, inline_pipeline, &mut out);
-            i = table_block.end_index + 1;
-            continue;
-        }
-
-        out.push(events[i].clone());
-        i += 1;
-    }
-
-    out
+    process_inner(events, options, inline_pipeline, &mut ())
 }
 
 pub fn process_with_context<C, P>(
@@ -89,13 +77,47 @@ pub fn process_with_context<C, P>(
 where
     P: InlinePipeline<C>,
 {
-    let mut out = Vec::with_capacity(events.len());
-    let mut i = 0usize;
+    process_inner(events, options, inline_pipeline, context)
+}
 
-    while i < events.len() {
-        if let Some(table_block) = parser::try_parse_table_block(events, i) {
+/// Both entry points: bind the decorators this pass owns, then rewrite every
+/// table paragraph into the seven §11 layers.
+fn process_inner<C, P>(
+    events: &[Event],
+    options: &TableOptions,
+    inline_pipeline: &P,
+    context: &mut C,
+) -> Vec<Event>
+where
+    P: InlinePipeline<C>,
+{
+    // §8/§9.1: a decorator line above a table decorates the `<table>` layer, and
+    // its head is resolved against that layer's entry (§6.1).
+    let specs = |target: Option<&str>| {
+        options
+            .custom_node
+            .as_ref()
+            .and_then(|custom| custom.table.specs_for_opt(target))
+            .unwrap_or_default()
+    };
+    // D-10 rule 2: a table is this pass's one receiver.
+    let bindings = bind_decorators(events, &specs, Claim::only(Receiver::Table));
+    let decorators: HashMap<usize, &BoundDecorator> = bindings
+        .bound
+        .iter()
+        .map(|bound| (bound.target_index, bound))
+        .collect();
+
+    let mut out: Vec<Event> = Vec::with_capacity(bindings.events.len() + 8);
+    // §9.1: a decorator that bound to nothing is dropped with a warning.
+    out.extend(decorator_diagnostics(&bindings, "table"));
+
+    let mut i = 0usize;
+    while i < bindings.events.len() {
+        if let Some(table_block) = parser::try_parse_table_block(&bindings.events, i) {
             emit::emit_table_with_context(
                 &table_block,
+                decorators.get(&i).copied(),
                 options,
                 inline_pipeline,
                 context,
@@ -104,7 +126,7 @@ where
             i = table_block.end_index + 1;
             continue;
         }
-        out.push(events[i].clone());
+        out.push(bindings.events[i].clone());
         i += 1;
     }
     out
@@ -120,6 +142,21 @@ mod tests {
             Event::StartNode(NodeKind::Document),
             Event::StartNode(NodeKind::Paragraph),
             Event::Text(text.to_string()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ]
+    }
+
+    /// A §9.1 decorator line above a block. The core parser keeps the two in one
+    /// paragraph, but as separate line events — which is what the binder splits
+    /// before it classifies the block.
+    fn decorated_paragraph_events(decorator: &str, body: &str) -> Vec<Event> {
+        vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text(decorator.to_string()),
+            Event::Text("\n".to_string()),
+            Event::Text(body.to_string()),
             Event::EndNode(NodeKind::Paragraph),
             Event::EndNode(NodeKind::Document),
         ]
@@ -190,14 +227,15 @@ mod tests {
         })
     }
 
-    /// §8: the declaration line, the `|| caption ||` line and the cell/row/section
-    /// extras each land on their own layer; bare `===` is retired.
+    /// §8: the decorator above the table carries the `<table>` extras, the
+    /// `|| caption ||` line and the cell/row/section extras each land on their
+    /// own layer; bare `===` is retired.
     #[test]
     fn section_eight_layers_land_on_their_elements() {
         let pipeline = Pipeline::default();
-        let events = paragraph_events(
-            "|-[sales](\"Laporan\")@@tableX{.striped}-|\n\
-             ||@@captionX{.cap} Caption||\n\
+        let events = decorated_paragraph_events(
+            "@@tableX{.striped, #sales, title: \"Laporan\"}",
+            "||@@captionX{.cap} Caption||\n\
              | A | B |\n\
              | :---@@cellA{.v-top} | :--- |\n\
              |@@cellB{.lead} 1 | 2 |@@rowB{.info}\n\
@@ -206,7 +244,7 @@ mod tests {
         );
         let out = process(&events, &TableOptions::default(), &pipeline);
 
-        // Declaration line → `<table>`; caption line → `<caption>`.
+        // Decorator line → `<table>`; caption line → `<caption>`.
         assert!(has_attribute(&out, "id", "sales"));
         assert!(has_attribute(&out, "title", "Laporan"));
         assert!(has_attribute(&out, "type", "tableX"));
@@ -248,31 +286,31 @@ mod tests {
         assert!(has_attribute(&out, "class", "wide"));
     }
 
-    /// §8: a taxonomy that the lexer turned into a `Link` — the declaration head
-    /// `[slug]("A longer title")` — is rebuilt before the table is parsed.
+    /// §8/§14: the retired `|-[slug](…)@@type{…}-|` declaration line is plain
+    /// text — it decorates nothing, and it is not a decorator line either.
     #[test]
-    fn declaration_head_lexed_as_a_link_still_parses() {
+    fn the_retired_declaration_line_is_literal_text() {
         let pipeline = Pipeline::default();
         let events = vec![
             Event::StartNode(NodeKind::Document),
             Event::StartNode(NodeKind::Paragraph),
-            Event::Text("|-".to_string()),
-            Event::StartNode(NodeKind::Link),
-            Event::Attribute {
-                name: "href".to_string(),
-                value: "\"Laporan Penjualan 2026\"".to_string(),
-            },
-            Event::Text("sales".to_string()),
-            Event::EndNode(NodeKind::Link),
-            Event::Text("@@tableX{.striped}-|\n| A |\n| --- |\n| 1 |\n".to_string()),
+            Event::Text("|-[sales](\"Laporan Penjualan 2026\")@@tableX{.striped}-|".into()),
+            Event::Text("\n".into()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text("| A |\n| --- |\n| 1 |\n".into()),
             Event::EndNode(NodeKind::Paragraph),
             Event::EndNode(NodeKind::Document),
         ];
         let out = process(&events, &TableOptions::default(), &pipeline);
 
-        assert!(has_attribute(&out, "id", "sales"));
-        assert!(has_attribute(&out, "title", "Laporan Penjualan 2026"));
-        assert!(text_of(&out).contains('1'));
+        // The line stays literal text; the table below it is untouched by it.
+        let text = text_of(&out);
+        assert!(text.contains("|-[sales]"), "{text:?}");
+        assert_eq!(all_element_children(&out, "table").len(), 1);
+        assert!(!has_attribute(&out, "type", "tableX"));
+        assert!(!has_attribute(&out, "id", "sales"));
+        assert!(!has_attribute(&out, "class", "striped"));
     }
 
     /// Stand-in for an inline custom plugin (like `cite`): rewrites `{{cite}}`
@@ -469,9 +507,9 @@ mod tests {
     #[test]
     fn type_markers_stay_on_their_layer_nodes() {
         let pipeline = Pipeline::default();
-        let events = paragraph_events(
-            "|-[sales](\"Laporan\")@@tableX{.striped}-|\n\
-             | A |\n\
+        let events = decorated_paragraph_events(
+            "@@tableX{.striped}",
+            "| A |\n\
              | :---@@cellA{.v-top} |\n\
              | 1 |\n",
         );

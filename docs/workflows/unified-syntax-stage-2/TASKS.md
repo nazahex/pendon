@@ -872,18 +872,46 @@ mandatory and first, five receivers work, and both rejection paths warn.
       `41-decorator-claim` (all four plugins) and `42-decorator-rejected` (all
       three rejection reasons) are new. `plugin-table` claims nothing yet — its
       receiver is wired by S2-5.3/S2-5.4.
-- [ ] **S2-5.3 — New receivers.** Dep: S2-5.2.
+- [x] **S2-5.3 — New receivers.** Dep: S2-5.2.
       Do: paragraph, codefence, list and table obtain the claimed decorator's
       slots/specs/number as public fields; heading/marker/directive/frontmatter
       and data blocks reject it (D-10 §3).
       G: one fixture per receiver.
       Exit: each of the five receivers renders decorator-derived fields.
-- [ ] **S2-5.4 — Table head through the decorator.** Dep: S2-5.3 (and S2-4.11).
+      **Done 2026-10-29** — all five receivers are wired and none chooses by
+      chain order: `plugin-section` (`Claim::only(Receiver::Section)`),
+      `plugin-table` (`Claim::only(Receiver::Table)`, below), `plugin-list`
+      (`Receiver::List`), `plugin-blockquote` (`Receiver::Blockquote`) and
+      `plugin-markdown` (`Claim::sweeping(Receiver::Paragraph, receivers)` —
+      the last binder, which is why the CLI hands it
+      `ReceiverSet::from_plugins(&config.enabled)`). A decorator above a code
+      fence is `Receiver::Paragraph` (`classify_block` maps `NodeKind::CodeFence`
+      to it), so a fence is decorated whenever `markdown` is in the chain — the
+      receiver set has no separate `codefence` member. Fixture coverage:
+      `41-decorator-claim` (section / table / list / blockquote / paragraph),
+      `42-decorator-rejected` (the three drop reasons, now including a table
+      whose `plugin-table` is absent).
+- [x] **S2-5.4 — Table head through the decorator.** Dep: S2-5.3 (and S2-4.11).
       Do: delete `|-[slug]("Title")@@type{specs}-|`; the table head is a plain
       `|…|` line and the decorator supplies everything; confirm no table layer
       contracts slot parts; add the §14 entry.
       G: table fixture before/after (old head becomes literal text).
       Exit: table has zero head grammar of its own.
+      **Done 2026-10-29** — `parse_decl_line` and `TableBlock::attrs` are gone;
+      `plugin-table::process` binds the decorator itself
+      (`Claim::only(Receiver::Table)`, specs from
+      `table.specs_for_opt(decorator_type)`), prepends
+      `decorator_diagnostics(&bindings, "table")` and passes the bound decorator
+      into `emit_table_with_context` — the standalone `emit_table` was deleted so
+      there is one entry point. `attrs::decorator_to_layer` maps it with the same
+      `layer_from_attrs` path every in-table head uses, so `#id`, `"title"`,
+      typed props, `%%numberType` and the layer's own spec entries all land on
+      the `<table>` exactly as before (`08-table-head`, re-frozen: the retired
+      line is literal text and its caption now renders). `09-table-layers` and
+      `36-table-slots` moved to the decorator form; `36` loses the decl's
+      hardcoded `id`/`title` mapping in favour of the uniform `specs.*` spread
+      the other six layers already used. §3, §8, §14 and the plugin README
+      updated.
 
 ## Phase 6 — slot modifiers
 

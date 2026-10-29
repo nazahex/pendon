@@ -1,7 +1,7 @@
 // src/attrs.rs
 use crate::parser::Align;
 use pendon_core::Event;
-use pendon_extra::{to_attributes, ExtrasAttr, ExtrasHead, Specs, SpecsKey};
+use pendon_extra::{to_attributes, Attrs, BoundDecorator, ExtrasAttr, ExtrasHead, Specs, SpecsKey};
 
 /// The attributes of one table layer (table/caption/thead/tbody/tfoot/row/cell).
 ///
@@ -34,8 +34,25 @@ pub struct LayerAttrs {
 pub fn extras_to_layer(head: &ExtrasHead) -> LayerAttrs {
     let specs = Specs::default();
     let parsed = to_attributes(head, &specs);
+    layer_from_attrs(&parsed, head.type_marker.as_deref(), &specs)
+}
+
+/// The same mapping for a §9.1 decorator line (§8).
+///
+/// A table's `<table>` layer has no head inside the table: the decorator line
+/// above it is the whole of its extras, exactly as for a list container or a
+/// quote (§9.1). The binder already resolved the head against this layer's specs
+/// (`[task.table.custom.table]`, §6.1), so it carries both the attributes and
+/// the specs they were mapped with.
+pub fn decorator_to_layer(bound: &BoundDecorator) -> LayerAttrs {
+    layer_from_attrs(&bound.attrs, bound.type_marker.as_deref(), &bound.specs)
+}
+
+/// [`extras_to_layer`] for an already-parsed head plus the specs it was parsed
+/// against — the one mapping both the in-table heads and the decorator use.
+fn layer_from_attrs(parsed: &Attrs, type_marker: Option<&str>, specs: &Specs) -> LayerAttrs {
     let mut layer = LayerAttrs {
-        type_marker: head.type_marker.clone(),
+        type_marker: type_marker.map(str::to_string),
         ..LayerAttrs::default()
     };
 

@@ -72,36 +72,36 @@ Implementation units that own this grammar:
 
 ## 3. Sigil inventory
 
-| Token                       | Meaning                                        | Owner               | Status                          |
-| --------------------------- | ---------------------------------------------- | ------------------- | ------------------------------- |
-| `{…}`                       | extras head, **adjacent** to its construct     | `crates/extra`      | **current**                     |
-| `@@type{…}`                 | typed extras head (adjacent or decorator line) | `crates/extra`      | **current**                     |
-| `@@type`                    | type-only head                                 | `crates/extra`      | **current**                     |
-| `@@{…}`                     | untyped head on a **decorator line**           | `crates/extra`      | **current**                     |
-| `{}` / `@@{}`               | empty head                                     | `crates/extra`      | **current**                     |
-| `` `x` `` / `"x"`           | positional slug / title                        | `crates/extra`      | new                             |
-| `.x` `#x` `--x:v` `k:v` `k` | class / id / CSS var / prop / flag             | `crates/extra`      | extended                        |
-| `{{type}}`                  | inline & block marker                          | `plugin-marker`     | new (freed from `cite.section`) |
-| `::type` … `::`             | inline directive, 2–7 colons                   | `plugin-directive`  | new                             |
-| `==type` … `==`             | block directive                                | `plugin-directive`  | new                             |
-| `@[k]("k")`                 | anchor head (tag + slots)                      | `plugin-anchor`     | current (§7.2)                  |
-| `[k]` `("k")`               | construct head (slug / title)                  | per-plugin          | existing                        |
-| `\|-…-\|`                   | table declaration line                         | `plugin-table`      | new                             |
-| `\|\| cap \|\|`             | table caption line                             | `plugin-table`      | new                             |
-| `\|===\|`                   | table foot separator                           | `plugin-table`      | existing (kept)                 |
-| `~?!` / `~?!!`              | image / figure marker                          | `plugin-image`      | existing                        |
-| `[^ref "loc"]`              | citation (tag + slots)                         | `plugin-cite`       | current (§7.3)                  |
-| `[[…]]`                     | wiki link                                      | `plugin-wiki`       | existing                        |
-| `>`                         | blockquote                                     | `plugin-blockquote` | current (decorator only, §9.2)  |
-| `-` `*` `+`                 | unordered list container                       | `plugin-list`       | current (+extras)               |
-| `1.`                        | ordered list container                         | `plugin-list`       | current (+extras)               |
-| `{{{lang[var] … }}}`        | data block                                     | `plugin-bind`       | new (§19)                       |
-| `$var`                      | bound data reference (extras only)             | `plugin-bind`       | new (§19)                       |
-| `$a.b[0]`                   | path into a bound value                        | `plugin-bind`       | new (§19)                       |
-| `...$var`                   | spread/merge inside a `{…}` value              | `plugin-bind`       | new (§19)                       |
-| `{{{lang[var](../src/x)}}}` | external data block                            | `plugin-bind`       | new (§19)                       |
-| `:::name`                   | legacy custom block                            | `plugin-custom`     | superseded by `==type`          |
-| `@@`                        | _no other meaning_                             | —                   | reserved for Pendon             |
+| Token                       | Meaning                                         | Owner               | Status                          |
+| --------------------------- | ----------------------------------------------- | ------------------- | ------------------------------- |
+| `{…}`                       | extras head, **adjacent** to its construct      | `crates/extra`      | **current**                     |
+| `@@type{…}`                 | typed extras head (adjacent or decorator line)  | `crates/extra`      | **current**                     |
+| `@@type`                    | type-only head                                  | `crates/extra`      | **current**                     |
+| `@@{…}`                     | untyped head on a **decorator line**            | `crates/extra`      | **current**                     |
+| `{}` / `@@{}`               | empty head                                      | `crates/extra`      | **current**                     |
+| `` `x` `` / `"x"`           | positional slug / title                         | `crates/extra`      | new                             |
+| `.x` `#x` `--x:v` `k:v` `k` | class / id / CSS var / prop / flag              | `crates/extra`      | extended                        |
+| `{{type}}`                  | inline & block marker                           | `plugin-marker`     | new (freed from `cite.section`) |
+| `::type` … `::`             | inline directive, 2–7 colons                    | `plugin-directive`  | new                             |
+| `==type` … `==`             | block directive                                 | `plugin-directive`  | new                             |
+| `@[k]("k")`                 | anchor head (tag + slots)                       | `plugin-anchor`     | current (§7.2)                  |
+| `[k]` `("k")`               | construct head (slug / title)                   | per-plugin          | existing                        |
+| `\|-…-\|`                   | _retired_ table declaration line (literal text) | —                   | **removed** (D-10)              |
+| `\|\| cap \|\|`             | table caption line                              | `plugin-table`      | new                             |
+| `\|===\|`                   | table foot separator                            | `plugin-table`      | existing (kept)                 |
+| `~?!` / `~?!!`              | image / figure marker                           | `plugin-image`      | existing                        |
+| `[^ref "loc"]`              | citation (tag + slots)                          | `plugin-cite`       | current (§7.3)                  |
+| `[[…]]`                     | wiki link                                       | `plugin-wiki`       | existing                        |
+| `>`                         | blockquote                                      | `plugin-blockquote` | current (decorator only, §9.2)  |
+| `-` `*` `+`                 | unordered list container                        | `plugin-list`       | current (+extras)               |
+| `1.`                        | ordered list container                          | `plugin-list`       | current (+extras)               |
+| `{{{lang[var] … }}}`        | data block                                      | `plugin-bind`       | new (§19)                       |
+| `$var`                      | bound data reference (extras only)              | `plugin-bind`       | new (§19)                       |
+| `$a.b[0]`                   | path into a bound value                         | `plugin-bind`       | new (§19)                       |
+| `...$var`                   | spread/merge inside a `{…}` value               | `plugin-bind`       | new (§19)                       |
+| `{{{lang[var](../src/x)}}}` | external data block                             | `plugin-bind`       | new (§19)                       |
+| `:::name`                   | legacy custom block                             | `plugin-custom`     | superseded by `==type`          |
+| `@@`                        | _no other meaning_                              | —                   | reserved for Pendon             |
 
 `@@` is reserved: no plugin may claim it for another purpose.
 
@@ -778,23 +778,22 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
 ## 8. Table (`plugin-table`)
 
 ```ebnf
-table       = decl? caption? header-row row* [ foot ]
-decl        = "|-" [ "[" slug "]" ] [ "(" title ")" ] extras? ( "-|" | "|" )
+table       = decorator? caption? header-row row* [ foot ]
+decorator   = §9.1 decorator line                   # the <table> head, D-10
 caption     = "||" extras? content "||"
 header-row  = "|" cell ( "|" cell )* "|" extras?     # alignment/width row
-row         = "|" cell ( "|" cell )* "|" extras?      # body row
+row         = "|" cell ( "|" cell )* "|" extras?     # body row
 foot        = "|===|" extras? row*
 cell        = "|" extras? content
 
-extras   = §5 extras-head                       # the shared {…} / @@type{…} head
+extras   = §5 extras-head                           # the shared {…} / @@type{…} head
 ```
 
 Mapping to table layers:
 
 | Source                               | Layer / node                                 |
 | ------------------------------------ | -------------------------------------------- |
-| `decl` line                          | `<table>` (`table`)                          |
-| extras after closing `-\|`           | `<table>`                                    |
+| §9.1 decorator line above the table  | `<table>` (`table`)                          |
 | `\|\| … \|\|` line                   | `<caption>` (`caption`)                      |
 | alignment-row cell extras            | the `<th>` of that column (`thead` / column) |
 | alignment-row **end-of-line** extras | `<tbody>` (`tbody`)                          |
@@ -804,13 +803,19 @@ Mapping to table layers:
 | foot-row cell-front extras           | that `<td>` (`cell`)                         |
 | foot-row end-of-line extras          | that `<tr>` (`row`)                          |
 
-Every one of those is the **same** head (§5) — `@@type?[…]("…"){…}%%numberType`
-so a slot pair, the specs items and a numbering marker reach whichever layer the
-head sits on, and the layer keys above are only _where_ the head is read. What a
-head names is not layer-specific: `@@cellA[slug]("t"){.x}%%%numberA` puts
-`bracket.bare` / `paren.bare` on the cell, `class="x"` with it, and the
-`__number` transport `plugin-number` reads (§10.5). Golden `36-table-slots` is
-the seven-layer proof.
+The `<table>` is the one layer whose head is **outside** the table: the §9.1
+decorator line directly above it, claimed by this pass under D-10 (claim order
+section → table → list → blockquote → paragraph). Nothing written _inside_ a
+table configures the `<table>` itself, and the retired `|-[slug](…)extras-|`
+declaration line is literal text (§14).
+
+The other six layers read the **same** head (§5) —
+`@@type?[…]("…"){…}%%numberType` — so a slot pair, the specs items and a
+numbering marker reach whichever layer the head sits on, and the layer keys above
+are only _where_ the head is read. What a head names is not layer-specific:
+`@@cellA[slug]("t"){.x}%%%numberA` puts `bracket.bare` / `paren.bare` on the
+cell, `class="x"` with it, and the `__number` transport `plugin-number` reads
+(§10.5). Golden `36-table-slots` is the seven-layer proof.
 
 A column's extras stay on its `<th>`: the alignment and the width cascade into
 the column's `<td>`s, the rest does not (OPEN-E1), so an attribute or a number is
@@ -819,7 +824,9 @@ never duplicated on every body cell.
 Rules:
 
 - **Slot placement (§4.1).** A table has **no** adjacency exception: every head
-  touches the `|` (or the `||`) it belongs to.
+  touches the `|` (or the `||`) it belongs to. The one head that is not adjacent
+  is the `<table>`'s own decorator line (§9.1), which belongs to the table by
+  position, not by touching.
   - A cell head sits directly after its opening `|`: `|{.x} text |`,
     `|@@cellB{.lead} text |`; `| {.x} text |` is literal text.
   - A caption head sits directly after `||`: `||{.c} caption ||`.
@@ -831,16 +838,20 @@ Rules:
     | :---(200px)@@cellA{.v-top} | :---:{.c} | ---:(30%) | :---@@cellB{.a, #i, k: "v", n: 2} |@@tbodyX{.tb}
     ```
 
-- The declaration line is **childless**: any non-extras/head text inside it is
-  discarded (a `Severity::Warning` MAY be emitted).
-- The declaration line is optional; when absent the table is untyped.
-- `head` inside `decl` uses the standard `[slug]` / `("title")` form:
-  `|-[slug-foo]@@type{…}-|`.
+- **The `<table>` head is a decorator line** (§9.1, D-10): `@@tableX{…}` on the
+  line above the table, the same head every other construct uses, with slots,
+  specs and numbering. The harness hands the bound decorator to this pass only
+  when the pass declares `Receiver::Table` (D-10 rule 2) — the claim order is
+  section → table → list → blockquote → paragraph, and the owner follows **what
+  the block is** (`|` → table), never which plugin read the stream first.
+- The retired declaration line (`|-[slug](…)extras-|`) is literal text (§14); the
+  table is then untyped and its layers fall back to plain elements.
+- A decorator no pass can claim — including a table head when `plugin-table` is
+  not in the chain — is removed with a `Warning` (D-10 rule 3).
 - Bare `===` as a foot separator is **retired**; only `|===|` remains.
 - Alignment/width tokens (`:---:`, `(200px)`) and the `>` (colspan `+1`) / `^`
   (rowspan `+1`) cell markers are unchanged and come **before** the cell extras.
 - Cell content may be empty; empty cells become `<td></td>`.
-- Text before the closing `-|` is literal text (§14).
 
 ## 9. Decorators, blockquotes and lists
 
@@ -1405,6 +1416,7 @@ Config-load errors MUST abort the build before any file is processed.
 | `[task.cite.section]`                                                   | `plugin-marker` (`{{bibliography}}`)                                                 | **removed**: `CiteOptions.section` and `CitationContext::replace_section_markers` are gone; the section component is now a marker.                                                                                                                                                                                |
 | `{{section}}` in sources                                                | marker block                                                                         | **removed**: the `{{ footnote }}` lines in `sandbox/cite` and `sandbox/img` are gone; `{{…}}` is free for `plugin-marker`.                                                                                                                                                                                        |
 | `:::name` custom blocks                                                 | `==type` block directive                                                             | deprecated alias kept for one release (Warning), then hard-error — §15 OPEN-R1.                                                                                                                                                                                                                                   |
+| table declaration line (`\|-…-\|`)                                      | the §9.1 decorator line above the table (§8)                                         | **not syntax** (D-16, D-10): a table's head is the decorator, so the retired line is literal text and its extras configure nothing; golden `08-table-head` is the proof.                                                                                                                                          |
 | bare `===` table footer                                                 | `\|===\|`                                                                            | **removed**: only `\|===\|` remains.                                                                                                                                                                                                                                                                              |
 | `o.` ordered-list offset                                                | first item's number                                                                  | **removed**: an `ol`'s `start` comes from the first item and is not overridable (§9.4).                                                                                                                                                                                                                           |
 | `plugin-quiz` (`:::quiz`)                                               | —                                                                                    | retired from the pipeline; plugin code stays, deep rework later.                                                                                                                                                                                                                                                  |
