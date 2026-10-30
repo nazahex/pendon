@@ -1795,7 +1795,14 @@ omit = ["instance_id", "extraAttr1"]
         assert_eq!(first.outputs.len(), 2);
         assert_eq!(first.outputs[0].0, "./out/[slug].cite.json");
         assert_eq!(first.outputs[1].1, pendon_extract::Format::Yaml);
-        assert_eq!(first.only, ["citation_number", "instance_id"]);
+        assert_eq!(
+            first
+                .only
+                .iter()
+                .map(pendon_extra::Path::dotted)
+                .collect::<Vec<_>>(),
+            ["citation_number", "instance_id"]
+        );
         assert!(first.export.is_none());
 
         // A block with no `type` covers the whole element and writes no file.
@@ -1846,7 +1853,14 @@ include = "class"
         let options = build_extract_options(&task).expect("valid blocks");
         let block = &options.blocks[0];
         assert_eq!(block.preset, pendon_extract::Preset::Pendon);
-        assert_eq!(block.include, ["class"]);
+        assert_eq!(
+            block
+                .include
+                .iter()
+                .map(pendon_extra::Path::dotted)
+                .collect::<Vec<_>>(),
+            ["class"]
+        );
         assert!(block.only.is_empty());
     }
 

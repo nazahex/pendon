@@ -1758,17 +1758,28 @@ omit        = [<field>, …]                   # always wins
    node, and an omitted `type` is `_` — the remainder no other block named.
 4. **Field selection** starts from a **preset** — `"pendon"` is the element's own
    field list (§12 of [`FIELDS-INVENTORY.md`](FIELDS-INVENTORY.md)), `"all"` is
-   every field the occurrence carries — then `include` adds names to it, `only`
-   keeps nothing but its own names and **`omit` subtracts last, so omit always
-   wins** (P.3, [D-6](../workflows/unified-syntax-stage-2/DECISIONS.md)). A preset
-   name outside those two is a task error listing both; so is `only` together with
-   `include`, which would be one command with two readings. `include` with `omit`
-   is fine (the `omit` names simply never ship), and `include` on `"all"` is
-   redundant but valid. A field the element does not carry is dropped, never
-   emitted empty, even when `only` names it. Internal `__`-keys never ship; an
-   author's extras key passes through under its own name. `recommended = <bool>`
-   is **gone** (D-16): it was `preset = "pendon"` and is now a load error naming
-   the replacement.
+   every field the occurrence carries — then `include` adds to it, `only` keeps
+   nothing but its own entries and **`omit` subtracts last, so omit always
+   wins** (P.3, [D-6](../workflows/unified-syntax-stage-2/DECISIONS.md)). A
+   preset name outside those two is a task error listing both; so is `only`
+   together with `include`, which would be one command with two readings.
+   `include` with `omit` is fine (the `omit` names simply never ship), and
+   `include` on `"all"` is redundant but valid. `recommended = <bool>` is **gone**
+   (D-16): it was `preset = "pendon"` and is now a load error naming the
+   replacement.
+   Every entry of the three lists is a **dotted field path**, validated at load
+   under §7's name rules (`price..amount` is an error naming the entry, D-16), and
+   a path whose **prefix** matches selects the whole **subtree**. So
+   `include = ["price.details"]` ships `price.details` and everything below it but
+   no sibling of `amount`, while `omit = ["price.details.tax"]` cuts one leaf out
+   of an otherwise included subtree. Paths are segment-wise — `price` never
+   matches `priced` — and an array is a leaf: paths address fields, never indices.
+   `only` is a **filter, not an addition**: it can only keep what the preset or
+   `include` already reached, so `only` naming a path the preset does not carry
+   extracts nothing at all (PE.4). A path the element does not carry is dropped,
+   never emitted empty, and a path that lost every child takes its container with
+   it (no `{}` husk). Internal `__`-keys never ship; an author's extras key passes
+   through under its own path.
 5. **Two names exist on every element:** `inner_text` (the node's text,
    descendants concatenated, trimmed) and `depth` (the heading's own, a section's
    open-section count, `1` elsewhere).
@@ -1789,10 +1800,14 @@ omit        = [<field>, …]                   # always wins
 7. **`export` is §20's channel**: a `solid` task emits `export const <name>`, a
    non-solid task drops the binding and keeps the files. Two blocks exporting one
    name leave the later value only (D-6).
-8. **Rows are flat and one per occurrence, in document order.** Nothing is nested:
-   a heading row carries `depth` and the fields of its head; a consumer builds the
-   tree. (The
-   _nested_ `headings` outline of §20 is separate and automatic.)
+8. **One row per occurrence, in document order.** A row's fields are **nested by
+   path**: a dotted attribute name (`soo.baz`) and a structured value that is an
+   object (`price` → `details` → `amount`) become objects, an array stays whole,
+   and the leaves a selection did not narrow keep the shape the field map gave
+   them. Nothing else is nested: a heading row carries `depth` and the fields of
+   its head; a consumer builds the tree. A selection that keeps nothing is still
+   a **row** — `{}` (PE.4) — because the occurrence carries fields and the filter
+   matched none; only an occurrence with no field at all emits no row (OBJ-7).
 9. **Written after the page renders, atomically.** A failed render leaves no side
    file behind; a block that matched nothing writes no file and registers no
    binding. Side files are **outputs**: the cache records them, so deleting one

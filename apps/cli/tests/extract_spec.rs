@@ -670,3 +670,134 @@ only = ["reference_id"]
         "the cache must rebuild the side file, not skip the page"
     );
 }
+
+/// §21 rule 4: a dotted name is a **path**, not a flat key. The modifier run
+/// writes `soo.baz`, so `only = ["soo"]` takes the whole subtree, `omit` takes
+/// it away again, and (with no selection at all) the row nests the field the way
+/// the config spells it.
+#[test]
+fn a_dotted_field_is_a_selectable_path() {
+    let dir = project(
+        "dotted-path",
+        r#"[[task]]
+name = "Extract"
+input = "./src/doc.mdp"
+output = "./out/doc.jsx"
+plugin = "frontmatter,anchor,extract,markdown"
+format = "solid"
+
+[[task.anchor.custom]]
+bracket.modifier."?" = { "soo.baz" = "wax", rel = "nofollow" }
+
+[[task.anchor.extract]]
+output = "./out/all.json"
+format = "json"
+preset = "all"
+
+[[task.anchor.extract]]
+output = "./out/subtree.json"
+format = "json"
+preset = "all"
+only = ["soo"]
+
+[[task.anchor.extract]]
+output = "./out/without.json"
+format = "json"
+preset = "all"
+omit = ["soo"]
+"#,
+    );
+    fs::write(
+        dir.join("src/doc.mdp"),
+        "@[one |?](https://example.com/one)\n",
+    )
+    .expect("source");
+    run_in(&dir);
+
+    let all: Value = serde_json::from_str(&read(&dir, "out/all.json")).expect("json");
+    assert_eq!(
+        all,
+        serde_json::json!([{
+            "depth": 1,
+            "href": "https://example.com/one",
+            "inner_text": "one",
+            "rel": "nofollow",
+            "soo": { "baz": "wax" },
+        }]),
+        "a dotted attribute name is a path, so the row nests"
+    );
+
+    let subtree: Value = serde_json::from_str(&read(&dir, "out/subtree.json")).expect("json");
+    assert_eq!(subtree, serde_json::json!([{ "soo": { "baz": "wax" } }]));
+
+    let without: Value = serde_json::from_str(&read(&dir, "out/without.json")).expect("json");
+    assert_eq!(
+        without,
+        serde_json::json!([{
+            "depth": 1,
+            "href": "https://example.com/one",
+            "inner_text": "one",
+            "rel": "nofollow",
+        }]),
+        "`omit = [\"soo\"]` takes the whole subtree, leaving no `soo: {{}}` husk"
+    );
+}
+
+/// PE.4 / §21 rule 4: `only` filters what the preset already reached, so naming
+/// a path outside it writes **one empty row** — `[{}]`, not an error and not a
+/// quiet fall back to the preset.
+#[test]
+fn an_only_outside_the_preset_writes_an_empty_row() {
+    let dir = project(
+        "empty-row",
+        r#"[[task]]
+name = "Extract"
+input = "./src/doc.mdp"
+output = "./out/doc.jsx"
+plugin = "frontmatter,cite,extract,markdown"
+format = "solid"
+
+[[task.cite.extract]]
+output = "./out/empty.json"
+format = "json"
+preset = "pendon"
+only = ["name", "depth"]
+"#,
+    );
+    fs::write(dir.join("src/doc.mdp"), "A [^alpha].\n").expect("source");
+    with_cite(&dir);
+    run_in(&dir);
+
+    let rows: Value = serde_json::from_str(&read(&dir, "out/empty.json")).expect("json");
+    assert_eq!(rows, serde_json::json!([{}]));
+}
+
+/// D-16: a selection entry that is not a field path is a **load error** naming
+/// the entry — never a filter that silently matches nothing.
+#[test]
+fn a_malformed_field_path_is_a_load_error() {
+    let dir = project(
+        "bad-path",
+        r#"[[task]]
+name = "Extract"
+input = "./src/doc.mdp"
+output = "./out/doc.jsx"
+plugin = "frontmatter,cite,extract,markdown"
+format = "solid"
+
+[[task.cite.extract]]
+output = "./out/cite.json"
+format = "json"
+only = ["price", "price..amount"]
+"#,
+    );
+    fs::write(dir.join("src/doc.mdp"), "A [^alpha].\n").expect("source");
+    with_cite(&dir);
+
+    let stderr = run_expecting_failure(&dir);
+    assert!(stderr.contains("task.cite.extract[0].only[1]"), "{stderr}");
+    assert!(
+        stderr.contains("`price..amount` is not a field path"),
+        "{stderr}"
+    );
+}

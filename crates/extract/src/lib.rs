@@ -24,17 +24,19 @@ mod block;
 mod fields;
 mod format;
 mod scan;
+mod select;
 
 pub use block::{BlockSpec, ExtractBlock, ExtractError, Preset};
-pub use fields::{pendon_preset, select_fields, ELEMENTS};
+pub use fields::{pendon_preset, ELEMENTS};
 pub use format::Format;
 pub use scan::{ElementNode, DEPTH, INNER_TEXT};
+pub use select::Selection;
 
 use std::collections::BTreeMap;
 
 use pendon_core::Event;
 use pendon_types::{Group, Rule, Selector, TypeId, TypeSet};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 /// The validated blocks of one task, grouped the way the config wrote them.
 #[derive(Clone, Debug, Default)]
@@ -131,6 +133,9 @@ pub fn run(events: &[Event], options: &ExtractOptions) -> ExtractOutput {
     if options.is_empty() {
         return output;
     }
+    // One field algebra per block: the four keys are parsed once, then applied to
+    // every occurrence of that block's element (§21 rule 4).
+    let selections: Vec<Selection> = options.blocks.iter().map(Selection::new).collect();
     for element in ELEMENTS {
         let occurrences: Vec<&ElementNode> = nodes
             .iter()
@@ -199,7 +204,7 @@ pub fn run(events: &[Event], options: &ExtractOptions) -> ExtractOutput {
                 }
             }
             for index in claimed {
-                if let Some(row) = row_of(&options.blocks[index], node) {
+                if let Some(row) = row_of(&selections[index], node) {
                     rows.entry(index).or_default().push(row);
                 }
             }
@@ -227,22 +232,21 @@ pub fn run(events: &[Event], options: &ExtractOptions) -> ExtractOutput {
     output
 }
 /// One occurrence as a JSON object of the selected fields, or `None` when the
-/// selection leaves nothing to write.
-fn row_of(block: &ExtractBlock, node: &ElementNode) -> Option<Value> {
-    let fields = fields::select_fields(block, &node.available());
-    let mut row = Map::new();
-    for name in fields {
-        if let Some(value) = node.value(&name) {
-            row.insert(name, value);
-        }
-    }
-    (!row.is_empty()).then_some(Value::Object(row))
+/// occurrence carries no field at all and therefore has no row (OBJ-7).
+///
+/// A selection that keeps nothing is still a row — `{}`, never an error and
+/// never a fall back to the whole preset (PE.4).
+fn row_of(selection: &Selection, node: &ElementNode) -> Option<Value> {
+    let fields = node.fields();
+    let empty = fields.as_object().is_none_or(|object| object.is_empty());
+    (!empty).then(|| selection.apply(&fields))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use pendon_core::NodeKind;
+    use pendon_extra::Path;
 
     fn attribute(name: &str, value: &str) -> Event {
         Event::Attribute {
@@ -308,7 +312,36 @@ mod tests {
         assert_eq!(node.get("id"), Some("intro"));
         assert_eq!(node.get("__layer"), None);
         assert_eq!(node.get("__number"), None);
-        assert!(!node.available().iter().any(|name| name.starts_with("__")));
+        let fields = node.fields();
+        assert_eq!(fields["id"], "intro");
+        assert_eq!(fields["depth"], 2);
+        assert_eq!(fields["inner_text"], "Intro");
+        assert!(
+            fields
+                .as_object()
+                .expect("an object")
+                .keys()
+                .all(|name| !name.starts_with("__")),
+            "internal keys never reach the field tree: {fields}"
+        );
+    }
+
+    /// A dotted attribute name is a **path**: it nests, so `include` / `only` /
+    /// `omit` can address it (`soo.baz`) and the row is structured like the
+    /// config wrote it.
+    #[test]
+    fn scan_nests_a_dotted_attribute_name() {
+        let events = vec![
+            Event::StartNode(NodeKind::Link),
+            attribute("__layer", "anchor"),
+            attribute("href", "/x"),
+            attribute("soo.baz", "wax"),
+        ];
+        let nodes = scan::scan(&events);
+        assert_eq!(
+            nodes[0].fields(),
+            serde_json::json!({ "depth": 1, "href": "/x", "soo": { "baz": "wax" } })
+        );
     }
 
     #[test]
@@ -460,9 +493,9 @@ mod tests {
     fn one_path_is_one_destination_so_the_later_block_wins() {
         let events = heading("2", "intro", None);
         let mut first = block("heading", &[], &["out/x.json"], &["json"], None);
-        first.only = vec!["id".to_string()];
+        first.only = vec![Path::from_dotted("id").expect("a path")];
         let mut second = block("heading", &[], &["out/x.json"], &["json"], None);
-        second.only = vec!["depth".to_string()];
+        second.only = vec![Path::from_dotted("depth").expect("a path")];
         let output = run(&events, &options(vec![first, second]));
         assert_eq!(output.files.len(), 1);
         assert_eq!(output.files[0].rows[0], serde_json::json!({"depth": 2}));
@@ -520,9 +553,9 @@ mod tests {
     fn a_repeated_export_name_keeps_the_later_value() {
         let events = heading("2", "intro", None);
         let mut first = block("heading", &[], &[], &[], Some("headings"));
-        first.only = vec!["id".to_string()];
+        first.only = vec![Path::from_dotted("id").expect("a path")];
         let mut second = block("heading", &[], &[], &[], Some("headings"));
-        second.only = vec!["depth".to_string()];
+        second.only = vec![Path::from_dotted("depth").expect("a path")];
         let output = run(&events, &options(vec![first, second]));
         assert_eq!(output.exports.len(), 1);
         assert_eq!(

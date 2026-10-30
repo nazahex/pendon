@@ -6,9 +6,11 @@
 //! ones appended to that file, D-20) while two blocks writing different paths
 //! both run.
 
+use pendon_extra::Path;
 use pendon_types::Selector;
 
 use crate::format::Format;
+use crate::select::Selection;
 
 /// A config error: the key that is wrong and what is wrong with it.
 ///
@@ -112,9 +114,11 @@ pub struct ExtractBlock {
     pub selectors: Vec<Selector>,
     pub outputs: Vec<(String, Format)>,
     pub preset: Preset,
-    pub include: Vec<String>,
-    pub only: Vec<String>,
-    pub omit: Vec<String>,
+    /// `include`, `only` and `omit` as **paths**: `price.details.amount` is
+    /// three segments, and a prefix selects the whole subtree (§21 rule 4).
+    pub include: Vec<Path>,
+    pub only: Vec<Path>,
+    pub omit: Vec<Path>,
     pub export: Option<String>,
 }
 
@@ -162,6 +166,10 @@ impl ExtractBlock {
                 "`only` cannot be combined with `include`: `include` adds fields to the preset, `only` keeps nothing else (use `include` with `omit`, or `only` alone)",
             ));
         }
+
+        let include = paths(&spec.include, &key("include".to_string()))?;
+        let only = paths(&spec.only, &key("only".to_string()))?;
+        let omit = paths(&spec.omit, &key("omit".to_string()))?;
 
         if spec.output.is_empty() && spec.export.is_none() {
             return Err(ExtractError::new(
@@ -212,9 +220,9 @@ impl ExtractBlock {
             selectors,
             outputs,
             preset,
-            include: spec.include,
-            only: spec.only,
-            omit: spec.omit,
+            include,
+            only,
+            omit,
             export: spec.export,
         })
     }
@@ -223,6 +231,31 @@ impl ExtractBlock {
     pub fn destination_count(&self) -> usize {
         self.outputs.len() + usize::from(self.export.is_some())
     }
+
+    /// The field algebra this block's four keys describe (§21 rule 4).
+    pub fn selection(&self) -> Selection {
+        Selection::new(self)
+    }
+}
+
+/// Parses the `include` / `only` / `omit` entries into field paths.
+///
+/// §21 rule 4: each entry is a dotted public field path, so a typo such as
+/// `price..amount` or `1x` is a load error naming the entry — never a filter
+/// that silently matches nothing (D-16).
+fn paths(names: &[String], key: &str) -> Result<Vec<Path>, ExtractError> {
+    names
+        .iter()
+        .enumerate()
+        .map(|(slot, name)| {
+            Path::from_dotted(name).map_err(|error| {
+                ExtractError::new(
+                    format!("{key}[{slot}]"),
+                    format!("`{name}` is not a field path: {error}"),
+                )
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -462,6 +495,11 @@ mod tests {
         );
     }
 
+    /// The dotted spelling of a path list, for assertions.
+    fn dotted(paths: &[Path]) -> Vec<String> {
+        paths.iter().map(Path::dotted).collect()
+    }
+
     /// D-6: the allowed pairs. `omit` may follow either narrow key, and a preset
     /// may be narrowed by `only` alone (that is PE.4's `[{}]` case).
     #[test]
@@ -473,8 +511,8 @@ mod tests {
             ..written("cite")
         });
         assert_eq!(included.preset, Preset::Pendon);
-        assert_eq!(included.include, ["class"]);
-        assert_eq!(included.omit, ["title"]);
+        assert_eq!(dotted(&included.include), ["class"]);
+        assert_eq!(dotted(&included.omit), ["title"]);
         assert!(included.only.is_empty());
 
         let exclusive = block(BlockSpec {
@@ -483,8 +521,53 @@ mod tests {
             omit: vec!["href".to_string()],
             ..written("cite")
         });
-        assert_eq!(exclusive.only, ["href"]);
-        assert_eq!(exclusive.omit, ["href"]);
+        assert_eq!(dotted(&exclusive.only), ["href"]);
+        assert_eq!(dotted(&exclusive.omit), ["href"]);
         assert!(exclusive.include.is_empty());
+    }
+
+    /// §21 rule 4: every selection entry is a field path, and a malformed one is
+    /// a load error naming the entry — not a filter that silently matches
+    /// nothing (D-16). The dotted names a `field.*` key allows are the rule.
+    #[test]
+    fn a_selection_entry_must_be_a_field_path() {
+        let message = error(
+            BlockSpec {
+                only: vec!["price".to_string(), "price..amount".to_string()],
+                ..written("anchor")
+            },
+            2,
+        );
+        assert!(
+            message.starts_with("task.anchor.extract[2].only[1]: "),
+            "{message}"
+        );
+        assert!(message.contains("`price..amount`"), "{message}");
+        assert!(message.contains("segment 2 is empty"), "{message}");
+
+        let message = error(
+            BlockSpec {
+                omit: vec!["1x".to_string()],
+                ..written("anchor")
+            },
+            0,
+        );
+        assert!(
+            message.starts_with("task.anchor.extract[0].omit[0]: "),
+            "{message}"
+        );
+        assert!(message.contains("starts with `1`"), "{message}");
+    }
+
+    /// A dotted entry keeps its segments, so the selection can reach a subtree.
+    #[test]
+    fn a_dotted_selection_entry_keeps_its_segments() {
+        let block = block(BlockSpec {
+            include: vec!["price.details.amount".to_string()],
+            ..written("anchor")
+        });
+        assert_eq!(dotted(&block.include), ["price.details.amount"]);
+        assert_eq!(block.include[0].segments().len(), 3);
+        assert_eq!(block.include[0].segments()[2], "amount");
     }
 }

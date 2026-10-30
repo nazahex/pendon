@@ -54,6 +54,14 @@ output = "./out/[category]-cite-preset.json"
 format = "json"
 preset = "pendon"
 include = ["class"]
+
+# S2-8.3 — paths, not names: `include` a subtree, then cut one leaf out of it
+[[task.anchor.extract]]
+output = "./out/[slug].anchor.json"
+format = "json"
+preset = "pendon"
+include = ["price.details"]
+omit = ["price.details.tax"]
 ```
 
 - `output` is a path (or a list) **relative to the project root**, with the same
@@ -80,23 +88,32 @@ include = ["class"]
 
 ## Field selection
 
-Every emitted object is one occurrence of the element: its attributes in
-emission order, plus `inner_text` and `depth`. Selection is one **preset** plus
-three modifiers, applied in this order: **`preset` (the starting set) →
-`include` (adds names) → `only` (keeps nothing else) → `omit` (always wins)**.
+Every emitted object is one occurrence of the element: its fields, plus
+`inner_text` and `depth`. Selection is one **preset** plus three modifiers,
+applied in this order: **`preset` (the starting set) → `include` (adds paths) →
+`only` (keeps nothing else) → `omit` (always wins)**.
 
+- Every entry is a **dotted field path** (`price.details.amount`, `soo.baz`),
+  validated at load like a `field.*` name: `price..amount` or `1x` is a config
+  error naming the entry. A path whose **prefix** names it selects the whole
+  subtree, so `only = ["soo"]` keeps `soo.baz` and `omit = ["soo"]` takes it
+  away. `soo.baz` is one path of two segments whether the name came dotted from
+  an attribute or nested from a structured value; the row nests it either way
+  (§21.4).
 - `preset = "pendon"` is the element's own field list — §12 of
   [`FIELDS-INVENTORY.md`](../../docs/spec/FIELDS-INVENTORY.md), the same table as
   [`pendon_preset`]. `preset = "all"` is every field the occurrence carries, and
   it is what an **absent** `preset` means today (S2-8.6 flips the default to
   `"pendon"`). Any other name is a config error listing both values.
-- `include` adds names to the preset instead of replacing it; on `"all"` it is
-  redundant but valid. `only` keeps nothing but its own names, so `only` **and**
-  `include` in one block is a config error — it would be one command with two
-  readings. `include` with `omit` is fine: the omitted names simply never ship.
-- A field the occurrence does not carry is dropped, never emitted empty, even when
-  `only` names it, and an unmatched `only` yields an empty row rather than a fall
-  back to the preset. `__`-prefixed internal keys are never extractable.
+- `include` adds paths to the preset instead of replacing it; on `"all"` it is
+  redundant but valid. `only` keeps nothing but its own paths — it is a filter,
+  not an addition — so `only` **and** `include` in one block is a config error:
+  it would be one command with two readings. `include` with `omit` is fine: the
+  omitted paths simply never ship.
+- A path the occurrence does not carry is dropped, never emitted empty, even when
+  `only` names it, and an unmatched `only` yields an **empty row** (`[{}]`, PE.4)
+  rather than a fall back to the preset. A path that lost every child leaves no
+  `{}` husk behind. `__`-prefixed internal keys are never extractable.
 
 `recommended = <bool>` was the pre-D-6 spelling of this (`true` = `"pendon"`,
 `false` = `"all"`). It is **gone**; a config that still has it fails to load with
@@ -120,6 +137,17 @@ A `cite` block sees citations only when the task configures the citation layer
 node with attributes. Without it the citations render as inline `<sup>` markup
 and carry nothing to read — their data is `plugin-cite`'s own
 `citations`/`references` export.
+
+## Layout
+
+| file        | owns                                                                   |
+| ----------- | ---------------------------------------------------------------------- |
+| `lib.rs`    | the pass: one row per occurrence, one rule per destination (D-2, D-20) |
+| `scan.rs`   | reading occurrences out of the event stream, and their field tree      |
+| `block.rs`  | one `[[task.<element>.extract]]`: selectors, destinations, `Path`s     |
+| `select.rs` | the field algebra — `preset` / `include` / `only` / `omit` over paths  |
+| `fields.rs` | the frozen vocabulary: `ELEMENTS` and the §12 `PRESETS` table          |
+| `format.rs` | JSON / YAML / TOML rendering, detection and appending (§21.6)          |
 
 ## License
 

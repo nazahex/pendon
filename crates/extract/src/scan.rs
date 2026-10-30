@@ -9,7 +9,7 @@
 use pendon_core::{
     is_json_attr, is_jsx_attr, json_attr_payload, jsx_attr_payload, Event, NodeKind,
 };
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use crate::fields::element_of_layer;
 
@@ -41,32 +41,55 @@ impl ElementNode {
             .map(|(_, value)| value.as_str())
     }
 
-    /// The fields this occurrence *carries*, in emission order — the base that
-    /// `only` / `omit` / `preset` narrow.
-    pub fn available(&self) -> Vec<String> {
-        let mut names: Vec<String> = self.attrs.iter().map(|(key, _)| key.clone()).collect();
-        names.push(INNER_TEXT.to_string());
-        // A heading carries `depth` as its own attribute (§7.4), so it is already
-        // listed in emission order; only the derived case appends it.
-        if !names.iter().any(|name| name == DEPTH) {
-            names.push(DEPTH.to_string());
-        }
-        names
-    }
-
-    /// The JSON value of a field, or `None` when the occurrence does not carry it.
+    /// The occurrence's fields as one nested object — the tree `include` /
+    /// `only` / `omit` walk (§21 rule 4).
     ///
-    /// A structured attribute (`JSON_ATTR_PREFIX` + JSON, e.g. `number` once
-    /// `plugin-number` ran) is emitted structured; every other attribute stays the
-    /// string it is in the stream.
-    pub fn value(&self, name: &str) -> Option<Value> {
-        match name {
-            INNER_TEXT => {
-                (!self.inner_text.is_empty()).then(|| Value::String(self.inner_text.clone()))
+    /// Two things become structure: a dotted attribute name (`soo.baz` nests as
+    /// `soo` → `baz`, exactly the path a config has to write) and a structured
+    /// value that is an object (`price` → `details` → `amount`). An array is a
+    /// leaf: paths address fields, never indices. `inner_text` and `depth` are
+    /// fields like any other, so a selection names them next to an attribute.
+    pub fn fields(&self) -> Value {
+        let mut root = Map::new();
+        for (name, raw) in &self.attrs {
+            // `depth` is the *derived* outline depth (clamped for a heading, the
+            // open-section count for a section), so the attribute it was read
+            // from never reaches the row as a bare string.
+            if name == DEPTH {
+                continue;
             }
-            DEPTH => Some(Value::from(self.depth)),
-            _ => self.get(name).map(attribute_value),
+            insert_path(&mut root, name, attribute_value(raw));
         }
+        if !self.inner_text.is_empty() {
+            root.insert(
+                INNER_TEXT.to_string(),
+                Value::String(self.inner_text.clone()),
+            );
+        }
+        root.insert(DEPTH.to_string(), Value::from(self.depth));
+        Value::Object(root)
+    }
+}
+
+/// Stores `value` at the dotted path `name`, creating intermediate objects.
+///
+/// A name that is a plain field lands at the root. When a path collides with a
+/// scalar the nested name wins (a dotted name is an explicit path), and a
+/// repeated exact name keeps the later attribute — both are impossible for the
+/// names the pipeline produces today, so the rule only has to be predictable.
+fn insert_path(object: &mut Map<String, Value>, name: &str, value: Value) {
+    let Some((head, rest)) = name.split_once('.') else {
+        object.insert(name.to_string(), value);
+        return;
+    };
+    let entry = object
+        .entry(head.to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    if !entry.is_object() {
+        *entry = Value::Object(Map::new());
+    }
+    if let Value::Object(child) = entry {
+        insert_path(child, rest, value);
     }
 }
 

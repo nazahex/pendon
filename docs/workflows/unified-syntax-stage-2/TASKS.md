@@ -1141,13 +1141,54 @@ frontmatter fixtures are frozen.
       load errors). Fixture 33 gained a `preset` + `include` block
       (`33-extract-scopes.included.json`); §21.4 and the crate README carry the
       rule.
-- [ ] **S2-8.3 — Nested path selection.** Dep: S2-8.2.
+- [x] **S2-8.3 — Nested path selection.** Dep: S2-8.2.
       Do: `include`/`only`/`omit` operate on dotted paths against the projected
       `FieldMap`; a prefix selects the whole subtree; `omit` wins over
       `include`/`only`; an unmatched path is silently empty (PE.4 ⇒ `[{}]`, not
       an error).
       U: path algebra table; G: PE.1, PE.3, PE.4.
       Exit: PE.4 produces exactly `[{}]`.
+      **Done 2026-10-30.** Selection is now `crates/extract/src/select.rs`:
+      `Selection { preset, include, only, omit }` holds
+      [`pendon_extra::Path`]s and answers `keeps(path)` / `apply(fields)`, with
+      the algebra written down as a table in the module docs. Built once per
+      block in `run` (not per row), and applied to the **field tree**
+      `scan::ElementNode::fields()` builds: a dotted attribute name nests
+      (`soo.baz` → `soo: { baz }`) exactly like a structured value that is an
+      object, an array stays a leaf, and `depth` is the derived outline depth
+      rather than the string the attribute carried. A path covers itself and
+      everything below it, so a prefix is a subtree; matching is segment-wise
+      (`price` never matches `priced`).
+      Three details the algebra settles:
+      (1) `omit` is tested first and wins over every other key, deep inside an
+      included subtree;
+      (2) `only` is a **filter, not an addition** — it can only keep what the
+      preset or `include` reached — so PE.4's `only = ["number.raw",
+      "price.details.amount"]` under `preset = "pendon"` yields `{}`;
+      (3) a container survives only when a child survived, so omitting a subtree
+      leaves no `{}` husk, while a _row_ with nothing selected is still a row:
+      `row_of` returns `Some({})` when the occurrence carries fields and `None`
+      only when it carries none (OBJ-7 as read against PE.4).
+      `block::build` parses the three lists into `Vec<Path>`, so `price..amount`
+      or `1x` is a load error naming `task.<el>.extract[i].<key>[j]` (D-16);
+      `fields::select_fields` (string equality) is gone.
+      Tests: nine in `select.rs` (the PE.1 shape end to end, `only` on both
+      presets, `omit` over `include`, the empty row, the dropped container, the
+      segment rule, `keeps` on a single path, absent preset), two in `block.rs`
+      (the path rules, a dotted entry's segments), one in `lib.rs`/`scan.rs` (a
+      dotted attribute name nests), and three CLI cases
+      (`a_dotted_field_is_a_selectable_path`,
+      `an_only_outside_the_preset_writes_an_empty_row`,
+      `a_malformed_field_path_is_a_load_error`).
+      Golden 43 re-frozen: its `preset = "all"` side file now nests `soo.baz` as
+      `soo: { baz }` — the one intentional byte change, and the only fixture with
+      a dotted field. §21.4/§21.8, the crate README (plus a `src/` layout table)
+      and `golden/README.md` carry the rules. The literal PE.1–PE.4 fixtures land
+      with S2-8.4: today an extras **object** value (`price: { details: … }`)
+      travels as one JSON _string_ (only a modifier contribution is
+      `JSON_ATTR_PREFIX`-encoded), so `price.details.amount` is not yet a path.
+      `cargo test --workspace` green (85 + 17 + … targets), `cargo fmt --all
+      --check` clean.
 - [ ] **S2-8.4 — Extract final public fields.** Dep: S2-8.3 (needs D-3's
       projection). Do: read the projection only — `specs.*`, `number.*`,
       slot-derived, override-renamed, modifier-derived; never internals
