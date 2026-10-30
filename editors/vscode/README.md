@@ -21,6 +21,7 @@ layer only draws on top of that.
 | `tools/grammars.mjs`                        | harness: loads the declared grammars + the bundled VS Code ones                          |
 | `tools/check-scopes.mjs`                    | prints the scope stack of every token in a file                                          |
 | `tools/self-test.mjs`                       | checks rule references, scope names and that every fixture tokenizes                     |
+| `tools/scope-cases.mjs`                     | one case per §5.2–§5.4 / §6.1 construct: the scopes a line must (not) produce            |
 | `tools/directive-scan-test.mjs`             | drives `src/scan.js` against goldens 15/16 with plain `node` (no VS Code)                |
 | `tools/heading-scan-test.mjs`               | drives `src/headings.js` against goldens 06/21/22 with plain `node` (no VS Code)         |
 
@@ -43,8 +44,34 @@ without touching any other file.
 The `.mdp` grammar keeps the built-in Markdown block/inline dispatch and puts
 the Pendon rules in front of it, so anything Pendon does not override (§4.3)
 keeps its Markdown highlighting. All Pendon scopes are suffixed `.pendon` under
-a `meta.<construct>.pendon` root scope (e.g. `meta.figure.pendon`,
+a `meta.<construct>.pendon` root scope (e.g. `meta.anchor.pendon`,
 `meta.citation.pendon`), so a theme can target them without touching Markdown.
+
+## Scopes
+
+The grammar tags text and nothing else; **what** each construct means is defined
+once, in [`docs/spec/SYNTAX.md`](../../docs/spec/SYNTAX.md). This table is the
+mapping from construct to scope — the grammar's `comment` on each rule names the
+same `§`, and `tools/scope-cases.mjs` asserts one case per row.
+
+| Construct                                  | Scope                                                                                                      | §          |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------- | ---------- |
+| slot tag `@` `^` `!` `#`                   | `keyword.other.slot.tag.{anchor,cite,image,heading}.pendon`                                                | §5.3, D-11 |
+| slot bracket / paren delimiters            | `punctuation.definition.slot.{bracket,paren}.{begin,end}.pendon`                                           | §5.2       |
+| bare / quote / tick content                | `string.unquoted.slot.bare.pendon`, `string.quoted.{double,single}.slot…`, `string.other.slot.tick.pendon` | §5.2       |
+| modifier run \|?~uv$%                      | `punctuation.definition.slot.modifier.begin.pendon` + `keyword.other.slot.modifier.pendon`                 | §5.4       |
+| `[x]` / `("x")` groups on a claimed head   | `meta.slot.bracket.pendon` / `meta.slot.paren.pendon` (no tag)                                             | §5.2, §6.1 |
+| `specs.class` / `specs.id` / `specs.style` | `meta.specs.{class,id,style}.pendon`                                                                       | §6.1       |
+| numbering marker `%%type`                  | `meta.number-mark.pendon` (`punctuation.definition.number.pendon`, `entity.name.type.number.pendon`)       | §5, §10.5  |
+| `@@` head / decorator line                 | `meta.head.pendon` inside `meta.decorator.pendon`                                                          | §9.1, D-10 |
+| anchor / image / citation head             | `meta.anchor.pendon` / `meta.image.pendon` / `meta.citation.pendon`                                        | §7.1–§7.3  |
+
+`specs.tick` and `specs.quote` keep the text scopes they share with a head's
+values (`entity.name.slug.pendon`, `string.quoted.double.pendon`), because the
+same rule reads both an item and a `k: v` value; a value never claims a
+`meta.specs.*` scope. Config keys (`field.specs.tick`, `bracket.modifier."?"`, …)
+live in `pendon.toml`, which is TOML's business — the grammar colours the markup
+those keys name, not the config file.
 
 The §5/§10.5 numbering marker gets one rule of its own (`#numberMark`,
 `meta.number-mark.pendon`): the `%` run is `punctuation.definition.number.pendon`
@@ -61,10 +88,12 @@ install them beside this `package.json`, or point `NODE_PATH` at a copy:
 
 ```sh
 NODE_PATH=/path/to/node_modules node tools/self-test.mjs
+NODE_PATH=/path/to/node_modules node tools/scope-cases.mjs
 NODE_PATH=/path/to/node_modules node tools/check-scopes.mjs sandbox/demo/src/demo.md
 NODE_PATH=/path/to/node_modules node tools/check-scopes.mjs --md --mapped some.md
 ```
 
+`npm run check` runs the first two (the structural one and the construct one).
 `--md` tokenizes as plain Markdown (how the injection is checked) and `--mapped`
 keeps only the Pendon/Markdown scopes. Compare against the fixture's `.jsx`
 (`docs/spec/golden/`) to see what the engine really renders.
@@ -175,7 +204,7 @@ and duplicate the symbols.
   "closing run at least as long" rule, so an unterminated opener never opens
   (§4.3); a closer longer than seven colons is not modelled.
 - **Inline directive head groups (`::note[slug]("level") …`)**. Inside `.md` the
-  bracket/paren groups wear the inline link scopes instead of the `#positionalGroup`
+  bracket/paren groups wear the inline link scopes instead of the `#slotGroup`
   ones; the `.mdp` grammar scopes them correctly.
 - **Heading heads are scoped leniently.** `#headingN` scopes any run of
   `[x]` / `(x)` groups touching the `#` run, and the breadcrumb depth is the `#`
@@ -185,15 +214,15 @@ and duplicate the symbols.
   Colouring never depends on the depth, so this is cosmetic — the scanner reports
   what the `#` run says.
 - **URLs** nest parentheses two levels deep; deeper nesting is not matched.
-- **Image rules still describe the retired marker run.** `#figure` and
-  `#advancedImage` colour a `!!` / `?~w300` run and the caption after it, but
-  §7.1 deleted all of that (D-16): the head is `![alt](src)` + extras and the
-  text after it is paragraph content. Colouring is therefore wider than the
-  syntax — a `~?!!` line still lights up as a figure even though the plugin now
-  renders it literally. The rewrite waits for the grammar pass that follows the
-  Stage-2 head work, like the heading leniency above.
-- **Image container prefixes.** `p!…` / `d!…` only ever tag the marker from its
-  `!`, so the prefix letter stays plain.
+- **A delimiter only closes at a boundary** (§5.2). `"x"` closes a quote content
+  only when a space, `]` or `)` follows, exactly like the parser — so
+  `[bare"quote"]` is _one_ bare content to the engine but colours as bare text
+  plus an unstyled `"`, because a slot's kind is decided by its first character
+  and TextMate cannot see that the delimiter never closed.
+- **A `|` inside a table cell still splits the cell.** The table rules cut a row
+  at every `|` before the inline rules run, so a modifier run (`|?x`) written in
+  a cell loses its cell; a slot inside a cell without a run is unaffected. Fixing
+  it means teaching `#table` the slot grammar, which waits for the table rework.
 - **Display math is line-bounded.** `plugin-latex` renders `$$…$$` across lines
   (its `toggle_display_math_on_line`), but the grammar's `mathDisplay` rule
   (`meta.math.display.pendon`) matches a `$$…$$` pair on one line only; a

@@ -36,7 +36,7 @@
     "onLanguage:pendon"
   ],
   "scripts": {
-    "check": "node tools/self-test.mjs",
+    "check": "node tools/self-test.mjs && node tools/scope-cases.mjs",
     "scopes": "node tools/check-scopes.mjs",
     "test": "node tools/directive-scan-test.mjs && node tools/heading-scan-test.mjs",
     "package": "vsce package --no-dependencies"

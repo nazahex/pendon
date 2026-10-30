@@ -94,7 +94,7 @@
       ]
     },
     "inlinePendon": {
-      "comment": "Inline Pendon constructs, most specific sigil first: citation, wiki, figure/image, marker, directive, anchor, then the extras heads.",
+      "comment": "Inline Pendon constructs, most specific sigil first: the `@@` heads, the numbering marker, then the tagged slot heads (cite, wiki, anchor, image), the marker, the directive and finally the Markdown link.",
       "patterns": [
         {
           "include": "#mathDisplay"
@@ -103,13 +103,28 @@
           "include": "#mathInline"
         },
         {
+          "include": "#headGroups"
+        },
+        {
+          "include": "#headTypedBody"
+        },
+        {
+          "include": "#headTypeOnly"
+        },
+        {
+          "include": "#headBare"
+        },
+        {
+          "include": "#numberMark"
+        },
+        {
           "include": "#citation"
         },
         {
           "include": "#wiki"
         },
         {
-          "include": "#figure"
+          "include": "#anchor"
         },
         {
           "include": "#image"
@@ -125,21 +140,6 @@
         },
         {
           "include": "#link"
-        },
-        {
-          "include": "#headGroups"
-        },
-        {
-          "include": "#headTypedBody"
-        },
-        {
-          "include": "#headTypeOnly"
-        },
-        {
-          "include": "#numberMark"
-        },
-        {
-          "include": "#headBare"
         }
       ]
     },
@@ -177,9 +177,181 @@
         }
       ]
     },
+    "bracketContents": {
+      "comment": "§5.2 — the three contents of a bracket, plus the modifier run (§5.4) that can end it.",
+      "patterns": [
+        {
+          "include": "#slotModifier"
+        },
+        {
+          "include": "#slotTick"
+        },
+        {
+          "include": "#slotQuoteDouble"
+        },
+        {
+          "include": "#slotQuoteSingle"
+        },
+        {
+          "include": "#slotBare"
+        }
+      ]
+    },
+    "parenContents": {
+      "comment": "§5.2 — the three contents of a paren. A paren carries no modifier run, so `|` is ordinary content here.",
+      "patterns": [
+        {
+          "include": "#slotTick"
+        },
+        {
+          "include": "#slotQuoteDouble"
+        },
+        {
+          "include": "#slotQuoteSingle"
+        },
+        {
+          "include": "#slotBare"
+        }
+      ]
+    },
+    "citeContents": {
+      "comment": "§5.2/§7.3 — a citation's bracket: the same three contents, with the bare one read as the reference.",
+      "patterns": [
+        {
+          "include": "#slotModifier"
+        },
+        {
+          "include": "#citeReference"
+        },
+        {
+          "include": "#slotTick"
+        },
+        {
+          "include": "#slotQuoteDouble"
+        },
+        {
+          "include": "#slotQuoteSingle"
+        },
+        {
+          "include": "#slotBare"
+        }
+      ]
+    },
+    "slotModifier": {
+      "comment": "§5.4 — the modifier run. `|` opens it only at the start of a word (the head or a space) and everything after it up to the `]` is a symbol — `\\` included, which is not an escape there.",
+      "match": "(?<=[\\[\\s])(\\|)([^\\]\\n]*)",
+      "name": "meta.slot.modifier.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.slot.modifier.begin.pendon"
+        },
+        "2": {
+          "name": "keyword.other.slot.modifier.pendon"
+        }
+      }
+    },
+    "slotTick": {
+      "comment": "§5.2 — the tick content, `` `x` ``. Like the parser, a delimiter closes only at a boundary, so `\"q\"`t`` is one quote content and not a quote plus a tick.",
+      "match": "(`)((?:[^`\\\\\\n]|\\\\.)*)(`)(?=[\\s\\])]|$)",
+      "name": "string.other.slot.tick.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.slot.tick.begin.pendon"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#itemEscape"
+            }
+          ]
+        },
+        "3": {
+          "name": "punctuation.definition.slot.tick.end.pendon"
+        }
+      }
+    },
+    "slotQuoteDouble": {
+      "comment": "§5.2 — the quote content, `\"x\"`; §6.1 decides what the position means.",
+      "match": "(\\\")((?:[^\\\"\\\\\\n]|\\\\.)*)(\\\")(?=[\\s\\])]|$)",
+      "name": "string.quoted.double.slot.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.slot.quote.begin.pendon"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#itemEscape"
+            }
+          ]
+        },
+        "3": {
+          "name": "punctuation.definition.slot.quote.end.pendon"
+        }
+      }
+    },
+    "slotQuoteSingle": {
+      "comment": "§5.2 — the single-quoted spelling of the quote content, `'x'`.",
+      "match": "(')((?:[^'\\\\\\n]|\\\\.)*)(')(?=[\\s\\])]|$)",
+      "name": "string.quoted.single.slot.pendon",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.slot.quote.begin.pendon"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#itemEscape"
+            }
+          ]
+        },
+        "3": {
+          "name": "punctuation.definition.slot.quote.end.pendon"
+        }
+      }
+    },
+    "slotBare": {
+      "comment": "§5.2 — the bare content: whatever a delimiter did not claim. It may contain spaces, so this is the last rule of a slot.",
+      "match": "[^\\s\\\"'`]+",
+      "name": "string.unquoted.slot.bare.pendon"
+    },
+    "slotGroup": {
+      "comment": "§5.2 — a slot pair: the bracket and the paren attached to it (§4.1). Untagged, so only a head something else already claimed (`{{type}}`, `@@type`, a directive) may carry one (§5.3).",
+      "match": "(\\[)([^\\]\\n]*)(\\])(?:(\\()([^)\\n]*)(\\)))?",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.slot.bracket.begin.pendon"
+        },
+        "2": {
+          "name": "meta.slot.bracket.pendon",
+          "patterns": [
+            {
+              "include": "#bracketContents"
+            }
+          ]
+        },
+        "3": {
+          "name": "punctuation.definition.slot.bracket.end.pendon"
+        },
+        "4": {
+          "name": "punctuation.definition.slot.paren.begin.pendon"
+        },
+        "5": {
+          "name": "meta.slot.paren.pendon",
+          "patterns": [
+            {
+              "include": "#parenContents"
+            }
+          ]
+        },
+        "6": {
+          "name": "punctuation.definition.slot.paren.end.pendon"
+        }
+      }
+    },
     "headGroups": {
-      "comment": "§4.4/§6.1 — head groups `[slug]` / `(\"title\")` on a head with no `{…}` body.",
-      "match": "(@@)([A-Za-z][A-Za-z0-9]*)?((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))+)(?!\\{)",
+      "comment": "§5.2/§5.3 — the slot pair of a head with no `{…}` body. It is untagged because the `@@` sigil already claimed it.",
+      "match": "(@@)([A-Za-z][A-Za-z0-9]*)?((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))+)(?![\\{(])",
       "name": "meta.head.pendon",
       "captures": {
         "1": {
@@ -191,7 +363,7 @@
         "3": {
           "patterns": [
             {
-              "include": "#positionalGroup"
+              "include": "#slotGroup"
             }
           ]
         }
@@ -212,32 +384,11 @@
         "3": {
           "patterns": [
             {
-              "include": "#positionalGroup"
+              "include": "#slotGroup"
             }
           ]
         },
         "4": {
-          "name": "punctuation.definition.head.begin.pendon"
-        }
-      },
-      "endCaptures": {
-        "1": {
-          "name": "punctuation.definition.head.end.pendon"
-        }
-      },
-      "patterns": [
-        {
-          "include": "#headItems"
-        }
-      ]
-    },
-    "headBodyOnly": {
-      "comment": "§4.1 — the body of an untyped head; only reachable where adjacency is known (a decorator line), so no look-behind is needed.",
-      "begin": "(\\{)",
-      "end": "(\\})|(^)",
-      "name": "meta.head.pendon",
-      "beginCaptures": {
-        "1": {
           "name": "punctuation.definition.head.begin.pendon"
         }
       },
@@ -299,46 +450,6 @@
         }
       }
     },
-    "positionalGroup": {
-      "comment": "§6.1 — the positional groups of a head: `[slug]` and `(\"title\")`, in either order.",
-      "patterns": [
-        {
-          "match": "(\\[)([^\\]\\n]*)(\\])",
-          "captures": {
-            "1": {
-              "name": "punctuation.definition.group.begin.pendon"
-            },
-            "2": {
-              "name": "entity.name.slug.pendon"
-            },
-            "3": {
-              "name": "punctuation.definition.group.end.pendon"
-            }
-          }
-        },
-        {
-          "match": "(\\(\\s*)([^)\\n]*?)(\\s*\\))",
-          "captures": {
-            "1": {
-              "name": "punctuation.definition.group.begin.pendon"
-            },
-            "2": {
-              "patterns": [
-                {
-                  "include": "#itemString"
-                },
-                {
-                  "include": "#itemBare"
-                }
-              ]
-            },
-            "3": {
-              "name": "punctuation.definition.group.end.pendon"
-            }
-          }
-        }
-      ]
-    },
     "marker": {
       "comment": "§6.1 — a `{{type}}` marker; its groups (and any head) must follow the closing braces immediately.",
       "match": "(\\{\\{)([A-Za-z][A-Za-z0-9_-]*)(\\}\\})",
@@ -356,59 +467,178 @@
       }
     },
     "markerGroups": {
-      "comment": "§6.1 — the positional groups of a marker; they must touch the `}}`.",
+      "comment": "§6.1 — the slot pair of a marker; it must touch the `}}`.",
       "match": "(?<=\\}\\})((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))+)",
       "name": "meta.marker.pendon",
       "captures": {
         "1": {
           "patterns": [
             {
-              "include": "#positionalGroup"
+              "include": "#slotGroup"
             }
           ]
         }
       }
     },
+    "citeReference": {
+      "comment": "§7.3 — the citation's bare content is its reference, not a generic position, so it keeps the reference scope.",
+      "match": "(?<=\\^)[^\\\"'`]*[^\\\"'`\\s]",
+      "name": "variable.other.reference.cite.pendon"
+    },
     "citation": {
-      "comment": "§7.3 — `[^^](ref \"loc\")`: an unquoted reference and an optional quoted location. A quoted reference, a comma or an empty argument is not a citation and stays literal text (the retired spellings).",
-      "match": "(\\[\\^\\^\\])(\\()([ \\t]*)([^ \\t)\",]+)(?:[ \\t]+(\"[^\"\\n]*\"))?[ \\t]*(\\))",
+      "comment": "§7.3 — `[^reference_id \"locator\"](…)`: `^` sits inside the bracket and is the tag. The bare content is the reference, the quoted one the locator; the paren and the tick are preset-less positions, so they stay fields (D-7).",
+      "match": "(\\[)(\\^)([^\\]\\n]*)(\\])(?:(\\()([^)\\n]*)(\\)))?",
       "name": "meta.citation.pendon",
       "captures": {
         "1": {
-          "patterns": [
-            {
-              "match": "(\\[)(\\^\\^)(\\])",
-              "captures": {
-                "1": {
-                  "name": "punctuation.definition.citation.begin.pendon"
-                },
-                "2": {
-                  "name": "keyword.other.citation.marker.pendon"
-                },
-                "3": {
-                  "name": "punctuation.definition.citation.end.pendon"
-                }
-              }
-            }
-          ]
+          "name": "punctuation.definition.slot.bracket.begin.pendon"
         },
         "2": {
-          "name": "punctuation.definition.metadata.begin.pendon"
+          "name": "keyword.other.slot.tag.cite.pendon"
         },
-        "4": {
-          "name": "variable.other.reference.cite.pendon"
-        },
-        "5": {
+        "3": {
+          "name": "meta.slot.bracket.pendon",
           "patterns": [
             {
-              "include": "#itemString"
+              "include": "#citeContents"
             }
           ]
         },
+        "4": {
+          "name": "punctuation.definition.slot.bracket.end.pendon"
+        },
+        "5": {
+          "name": "punctuation.definition.slot.paren.begin.pendon"
+        },
         "6": {
-          "name": "punctuation.definition.metadata.end.pendon"
+          "name": "meta.slot.paren.pendon",
+          "patterns": [
+            {
+              "include": "#parenContents"
+            }
+          ]
+        },
+        "7": {
+          "name": "punctuation.definition.slot.paren.end.pendon"
         }
       }
+    },
+    "anchor": {
+      "comment": "§7.2 — `@[inner text](href \"title\")`: the `@` tag claims the bracket and the paren attached to it. Without the tag the text is a Markdown link and an adjacent head stays literal (§14).",
+      "match": "(?<!@)(@)(\\[)([^\\]\\n]*)(\\])(?:(\\()([^)\\n]*)(\\)))?",
+      "name": "meta.anchor.pendon",
+      "captures": {
+        "1": {
+          "name": "keyword.other.slot.tag.anchor.pendon"
+        },
+        "2": {
+          "name": "punctuation.definition.slot.bracket.begin.pendon"
+        },
+        "3": {
+          "name": "meta.slot.bracket.pendon",
+          "patterns": [
+            {
+              "include": "#bracketContents"
+            }
+          ]
+        },
+        "4": {
+          "name": "punctuation.definition.slot.bracket.end.pendon"
+        },
+        "5": {
+          "name": "punctuation.definition.slot.paren.begin.pendon"
+        },
+        "6": {
+          "name": "meta.slot.paren.pendon",
+          "patterns": [
+            {
+              "include": "#parenContents"
+            }
+          ]
+        },
+        "7": {
+          "name": "punctuation.definition.slot.paren.end.pendon"
+        }
+      }
+    },
+    "image": {
+      "comment": "§7.1 — `![alt](src)`: `!` is the tag, so the bracket and the paren are the whole head and the alt may be empty. The retired `!!` / `?~w300` marker run is ordinary text now (§14).",
+      "match": "(!)(\\[)([^\\]\\n]*)(\\])(?:(\\()([^)\\n]*)(\\)))?",
+      "name": "meta.image.pendon",
+      "captures": {
+        "1": {
+          "name": "keyword.other.slot.tag.image.pendon"
+        },
+        "2": {
+          "name": "punctuation.definition.slot.bracket.begin.pendon"
+        },
+        "3": {
+          "name": "meta.slot.bracket.pendon",
+          "patterns": [
+            {
+              "include": "#bracketContents"
+            }
+          ]
+        },
+        "4": {
+          "name": "punctuation.definition.slot.bracket.end.pendon"
+        },
+        "5": {
+          "name": "punctuation.definition.slot.paren.begin.pendon"
+        },
+        "6": {
+          "name": "meta.slot.paren.pendon",
+          "patterns": [
+            {
+              "include": "#parenContents"
+            }
+          ]
+        },
+        "7": {
+          "name": "punctuation.definition.slot.paren.end.pendon"
+        }
+      }
+    },
+    "valueItems": {
+      "comment": "§5 — the items of a nested `{…}` object or `[…]` array. `specs.*`, `.class`, `#id` and the tick do not exist inside a value, so the specs rules are not offered here.",
+      "patterns": [
+        {
+          "include": "#itemEscape"
+        },
+        {
+          "include": "#itemComma"
+        },
+        {
+          "include": "#itemNestedObject"
+        },
+        {
+          "include": "#itemNestedArray"
+        },
+        {
+          "include": "#itemSpread"
+        },
+        {
+          "include": "#itemSlug"
+        },
+        {
+          "include": "#itemString"
+        },
+        {
+          "include": "#itemStringSingle"
+        },
+        {
+          "include": "#itemKey"
+        },
+        {
+          "include": "#itemBool"
+        },
+        {
+          "include": "#itemNumber"
+        },
+        {
+          "include": "#itemBare"
+        }
+      ]
     },
     "wiki": {
       "comment": "§7.5 — `[[Target | Label]]`: the label is split off the first `|` (both sides are trimmed) and an empty target stays literal text. A wikilink's content is never re-interpreted, so the target and the label are single scopes.",
@@ -432,71 +662,6 @@
         }
       }
     },
-    "figure": {
-      "comment": "§7.1 — a figure: a line-start marker carrying `!!`, its extras attach to the figure and the rest of the line is the caption (inline content).",
-      "begin": "^[ ]{0,3}((?:[!?~]|[wh][0-9]+)*!{2,}(?:[!?~]|[wh][0-9]+)*)(\\[)([^\\]\\n]*)(\\])(\\()([^)\\n]*)(\\))",
-      "end": "[ \\t]*$",
-      "name": "meta.figure.pendon",
-      "beginCaptures": {
-        "1": {
-          "name": "keyword.other.image.marker.pendon"
-        },
-        "2": {
-          "name": "punctuation.definition.link.description.begin.pendon"
-        },
-        "3": {
-          "name": "string.other.link.description.pendon"
-        },
-        "4": {
-          "name": "punctuation.definition.link.description.end.pendon"
-        },
-        "5": {
-          "name": "punctuation.definition.metadata.begin.pendon"
-        },
-        "6": {
-          "name": "markup.underline.link.image.pendon"
-        },
-        "7": {
-          "name": "punctuation.definition.metadata.end.pendon"
-        }
-      },
-      "patterns": [
-        {
-          "include": "#headExtras"
-        },
-        {
-          "include": "#inlineContent"
-        }
-      ]
-    },
-    "image": {
-      "comment": "§7.1 — an advanced image: the marker carries `!` but not `!!` (that is a figure) and either carries modifiers or has an adjacent head; a bare `!` before a Markdown image only counts when a head touches the `)`. The `p`/`d` container prefix only matters on a line of its own, where the marker is coloured from its `!`.",
-      "match": "(?![!?~wh0-9]*!!)((?:[!?~]|[wh][0-9]+){2,}|!(?=\\[[^\\]\\n]*\\]\\([^)\\n]*\\)(?:\\{|@@(?:[A-Za-z]|\\[|\\())))(\\[)([^\\]\\n]*)(\\])(\\()([^)\\n]*)(\\))",
-      "name": "meta.image.advanced.pendon",
-      "captures": {
-        "1": {
-          "name": "keyword.other.image.marker.pendon"
-        },
-        "2": {
-          "name": "punctuation.definition.link.description.begin.pendon"
-        },
-        "3": {
-          "name": "string.other.link.description.pendon"
-        },
-        "4": {
-          "name": "punctuation.definition.link.description.end.pendon"
-        },
-        "5": {
-          "name": "punctuation.definition.metadata.begin.pendon"
-        },
-        "6": {
-          "name": "markup.underline.link.image.pendon"
-        },
-        "7": {
-          "name": "punctuation.definition.metadata.end.pendon"
-        }
-      }
-    },
     "inlineDirective": {
       "comment": "§10.2 — `::type[…](\"…\") content ::`: the content is inline content and the closing run must be at least as long as the opening one. `\\1` is the opening run, so a longer close is accepted, a run followed by a letter opens a nested directive instead of closing this one, and a run that no closer ever follows (an unterminated opener, §4.3) never opens at all; `(^)` is the safety net for a region whose closer the scan missed.",
       "begin": "(:{2,7})([A-Za-z][A-Za-z0-9]*)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[^\\n]*(?:\\1:{0,5})(?![A-Za-z:]))",
@@ -512,7 +677,7 @@
         "3": {
           "patterns": [
             {
-              "include": "#positionalGroup"
+              "include": "#slotGroup"
             }
           ]
         }
@@ -532,8 +697,8 @@
       ]
     },
     "link": {
-      "comment": "§7.2 — a Markdown inline link; the anchor layer owns `href`/`target`/`rel`, the URL modifiers (`^`, `!`, `$`, `;;`, `--`) are coloured apart from the URL and an adjacent head attaches to the anchor. URLs may nest parentheses, two levels deep. `![…](…)` stays a Markdown image.",
-      "match": "(?<!!)(\\[)((?<square>[^\\[\\]\\\\]|\\\\.|\\[\\g<square>*+\\])*+)(\\])(\\()([ \\t]*)((?:[^()\"\\n]|\\((?:[^()\"\\n]|\\([^()\"\\n]*\\))*\\))*?)((?:;;|--|[!^~$])*)([ \\t]*)(?:(\")([^\"\\n]*)(\"*)([ \\t]*))?(\\))",
+      "comment": "§7.2 — a Markdown inline link. Pendon does not claim it: without the `@` tag there is no anchor and the URL modifiers are gone (§14), so `^`, `!`, `$`, `;;` and `--` are ordinary URL characters. URLs may nest parentheses two levels deep.",
+      "match": "(?<!!)(\\[)((?<square>[^\\[\\]\\\\]|\\\\.|\\[\\g<square>*+\\])*+)(\\])(\\()([ \\t]*)((?:[^()\\\"\\n]|\\((?:[^()\\\"\\n]|\\([^()\\\"\\n]*\\))*\\))*?)([ \\t]*)(?:(\\\")([^\\\"\\n]*)(\\\")([ \\t]*))?(\\))",
       "name": "meta.link.pendon",
       "captures": {
         "1": {
@@ -556,19 +721,16 @@
         "7": {
           "name": "markup.underline.link.pendon"
         },
-        "8": {
-          "name": "keyword.operator.url-modifier.pendon"
-        },
-        "10": {
+        "9": {
           "name": "punctuation.definition.string.begin.pendon"
         },
-        "11": {
+        "10": {
           "name": "string.other.link.description.title.pendon"
         },
-        "12": {
+        "11": {
           "name": "punctuation.definition.string.end.pendon"
         },
-        "14": {
+        "13": {
           "name": "punctuation.definition.metadata.end.pendon"
         }
       }
@@ -597,8 +759,8 @@
       ]
     },
     "heading1": {
-      "comment": "§7.4 — `#` heading. Capture 2 are the head groups, 4 the title (with its Pendon extras), 5 a closing run of `#`.",
-      "match": "^(#)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
+      "comment": "§7.4 — `#` heading. A claimed head spends one `#` on the tag (D-11), so capture 2 is the slot pair of a depth-(run − 1) heading and capture 3 the title with its Pendon heads.",
+      "match": "^(#)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{|%)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
       "name": "markup.heading.1.pendon",
       "captures": {
         "1": {
@@ -607,7 +769,7 @@
         "2": {
           "patterns": [
             {
-              "include": "#positionalGroup"
+              "include": "#slotGroup"
             }
           ]
         },
@@ -624,7 +786,7 @@
       }
     },
     "heading2": {
-      "match": "^(##)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
+      "match": "^(##)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{|%)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
       "name": "markup.heading.2.pendon",
       "captures": {
         "1": {
@@ -633,7 +795,7 @@
         "2": {
           "patterns": [
             {
-              "include": "#positionalGroup"
+              "include": "#slotGroup"
             }
           ]
         },
@@ -650,7 +812,7 @@
       }
     },
     "heading3": {
-      "match": "^(###)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
+      "match": "^(###)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{|%)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
       "name": "markup.heading.3.pendon",
       "captures": {
         "1": {
@@ -659,7 +821,7 @@
         "2": {
           "patterns": [
             {
-              "include": "#positionalGroup"
+              "include": "#slotGroup"
             }
           ]
         },
@@ -676,7 +838,7 @@
       }
     },
     "heading4": {
-      "match": "^(####)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
+      "match": "^(####)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{|%)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
       "name": "markup.heading.4.pendon",
       "captures": {
         "1": {
@@ -685,7 +847,7 @@
         "2": {
           "patterns": [
             {
-              "include": "#positionalGroup"
+              "include": "#slotGroup"
             }
           ]
         },
@@ -702,7 +864,7 @@
       }
     },
     "heading5": {
-      "match": "^(#####)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
+      "match": "^(#####)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{|%)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
       "name": "markup.heading.5.pendon",
       "captures": {
         "1": {
@@ -711,7 +873,7 @@
         "2": {
           "patterns": [
             {
-              "include": "#positionalGroup"
+              "include": "#slotGroup"
             }
           ]
         },
@@ -728,7 +890,7 @@
       }
     },
     "heading6": {
-      "match": "^(######)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
+      "match": "^(######)(?!#)((?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*)(?=[ \\t]|$|@@|\\{|%)([^\\n]*?)(?:[ \\t]+(#+))?[ \\t]*$",
       "name": "markup.heading.6.pendon",
       "captures": {
         "1": {
@@ -737,7 +899,7 @@
         "2": {
           "patterns": [
             {
-              "include": "#positionalGroup"
+              "include": "#slotGroup"
             }
           ]
         },
@@ -754,8 +916,8 @@
       }
     },
     "decorator": {
-      "comment": "§9.1 — a line whose entire content is a head. Bodies are matched up to two levels of nesting; a deeper one is left as literal text.",
-      "match": "^[ \\t]{0,3}((?:@@)(?:[A-Za-z][A-Za-z0-9]*)?(?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*(?:\\{(?:[^{}\\n]|\\{(?:[^{}\\n]|\\{[^{}\\n]*\\})*\\})*\\})?|(?:\\{(?:[^{}\\n]|\\{(?:[^{}\\n]|\\{[^{}\\n]*\\})*\\})*\\}))[ \\t]*$",
+      "comment": "§9.1/D-10 — a decorator line: `@@`, then type → slot pair → `{specs}` → `%%numbering`, in that order. `@@` is mandatory (a bare `{…}` line is literal text, §14) and a body nests two levels deep.",
+      "match": "^[ \\t]{0,3}(@@(?=[\\[({A-Za-z%])[A-Za-z]*(?:\\[[^\\]\\n]*\\]|\\([^)\\n]*\\))*(?:\\{(?:[^{}\\n]|\\{(?:[^{}\\n]|\\{[^{}\\n]*\\})*\\})*\\})?(?:(?<!%)%{2,7}(?!%)[A-Za-z][A-Za-z0-9]*)?)[ \\t]*$",
       "name": "meta.decorator.pendon",
       "captures": {
         "1": {
@@ -770,7 +932,7 @@
               "include": "#headTypeOnly"
             },
             {
-              "include": "#headBodyOnly"
+              "include": "#numberMark"
             }
           ]
         }
@@ -796,9 +958,6 @@
         },
         {
           "include": "#itemSpread"
-        },
-        {
-          "include": "#itemRef"
         },
         {
           "include": "#itemSlug"
@@ -861,7 +1020,7 @@
       },
       "patterns": [
         {
-          "include": "#headItems"
+          "include": "#valueItems"
         }
       ]
     },
@@ -881,7 +1040,7 @@
       },
       "patterns": [
         {
-          "include": "#headItems"
+          "include": "#valueItems"
         }
       ]
     },
@@ -1012,9 +1171,9 @@
       }
     },
     "itemCustomProperty": {
-      "comment": "§5 — the `--name` form; the `::` form cannot be used inside a head body because `::` opens an inline directive.",
+      "comment": "§6.1 — `--name: value` fills `specs.style`; the `::` form cannot be used inside a head body because `::` opens an inline directive.",
       "match": "(--)([A-Za-z_][A-Za-z0-9_-]*)(?=[ \\t]*:(?!:))",
-      "name": "meta.custom-property.pendon",
+      "name": "meta.specs.style.pendon",
       "captures": {
         "1": {
           "name": "punctuation.definition.custom-property.pendon"
@@ -1026,7 +1185,7 @@
     },
     "itemClass": {
       "match": "(\\.)([A-Za-z0-9_:-]+)",
-      "name": "meta.class.pendon",
+      "name": "meta.specs.class.pendon",
       "captures": {
         "1": {
           "name": "punctuation.definition.class.pendon"
@@ -1034,11 +1193,12 @@
         "2": {
           "name": "entity.other.attribute-name.class.pendon"
         }
-      }
+      },
+      "comment": "§6.1 — `.x` fills `specs.class` (a `class:` prop joins it exactly like a `.x` item)."
     },
     "itemId": {
       "match": "(#)([A-Za-z0-9_:-]+)",
-      "name": "meta.id.pendon",
+      "name": "meta.specs.id.pendon",
       "captures": {
         "1": {
           "name": "punctuation.definition.id.pendon"
@@ -1046,7 +1206,8 @@
         "2": {
           "name": "entity.other.attribute-name.id.pendon"
         }
-      }
+      },
+      "comment": "§6.1 — `#x` fills `specs.id`."
     },
     "itemKey": {
       "comment": "§5 — `key: value`; `::` is an inline directive, never a key/value separator.",
@@ -1275,7 +1436,7 @@
         "3": {
           "patterns": [
             {
-              "include": "#positionalGroup"
+              "include": "#slotGroup"
             }
           ]
         }
