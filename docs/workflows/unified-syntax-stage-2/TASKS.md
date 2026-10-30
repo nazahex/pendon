@@ -998,11 +998,44 @@ code match it exactly.
       `isOpen` reach those elements as extras under their own names (§0),
       `inner_text` is universal, and `plugin-directive` emits no `level` /
       `summary` any more.
-- [ ] **S2-7.2 — Rewrite the tables.** Dep: S2-7.1.
+- [x] **S2-7.2 — Rewrite the tables.** Dep: S2-7.1.
       Do: per element, list only built-in fields; drop everything that comes from
       extras or from custom assignments (including `type`, except
       directive/marker); mark preset membership per field.
       Exit: an element with no built-in fields shows an explicit "none".
+      **Done 2026-10-30.** §0 now _defines_ the row: a built-in field is a name
+      the element produces — owned (`href`, `src`, `alt`, `citation_number`), a
+      preset assignment (`title`, `slug`, `locator`, `reference_id`) or a derived
+      value (`id`'s chain, `cite-id`, `number`) — and four kinds of name are
+      explicitly not rows: **bare fields**, **`type`** (except `directive` /
+      `marker`, whose syntax spells it), **`name`** (the fallback tag a layer node
+      carries for the renderer, D-3a) and the universal **`inner_text` / `depth`**.
+      The tables came out at anchor 3, cite 4, directive 1, heading 5, image 3,
+      list 1, marker 1, section 2 — and `blockquote` / `table` **none**, which is
+      the exit criterion. The column is `preset`, and §12 was re-derived from the
+      code rather than transposed: a script compared it with
+      `fields::recommended()` name-for-name (it caught `section`'s dropped
+      `depth`), so S2-7.4 only has to turn that script into a test.
+      Every claim was checked against the real CLI on a throwaway `/tmp` project
+      that extracts all ten elements at once, which corrected five things the old
+      tables asserted: `citation_number` and `start` are **strings** in the
+      stream (not `number`); `list` has exactly one layer field, `start`, written
+      by **`plugin-markdown`** on the merged container (so the "`list` (item)"
+      layer and `plugin-list`'s ownership of it were both wrong); a
+      decorator-bound element keeps extras under the qualified path
+      (`specs.class`, `specs.id`), not `class`, while a head-bound one projects
+      them (`class`, `id`) — the old "extras pass through under their own name"
+      rule was only half true; a `cite` is a layer node **only** when a `Cite`
+      component is configured (the built-in `<sup>` fallback is raw HTML); and
+      `table` carries no built-in field at all (`caption` is an extras key — the
+      `<caption>` element is its own layer, §11).
+      §12 keeps every non-built-in preset name, marked `*`, and says which are
+      inert today (decorator-bound `id` / `class`, `image`'s `width` / `height`,
+      `directive`'s `level` / `summary`, `table`'s `caption`): a preset recommends
+      names, it does not promise an occurrence carries them. Two dead links in
+      the header (`../workflows/numbering-extract-type-export.md`,
+      `../issues/plugin-extract.md`) now point into `docs/archive/`; `AGENTS.md`'s
+      P.1 link had the same stale path and was fixed with it. `dprint fmt` clean.
 - [ ] **S2-7.3 — Add the contracts.** Dep: S2-7.2.
       Do: per element, a slot-contract table (which `slot.kind` is contracted to
       which field), the slot-qualified bare fallbacks, and the `specs.*` /

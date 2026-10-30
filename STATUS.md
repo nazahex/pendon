@@ -409,8 +409,19 @@ exactly one `export const headings` line each (no bytes removed), and
       quote's decorator `type` returns to §3 (its only built-in field) and the
       other nine go, because `id` / `class` / `author` / `isOpen` reach those
       elements as extras under their own names, `inner_text` is universal, and
-      `plugin-directive` emits no `level` / `summary` any more. S2-7.2 still owns
-      the table rewrite; `recommended` stays a column name until then.
+      `plugin-directive` emits no `level` / `summary` any more.
+      **`S2-7.2` done — every table lists built-in fields only.** A row is what
+      the element produces (owned, preset-assigned, derived); dropped are the
+      routing key `type` (except `directive` / `marker`, whose syntax spells it),
+      every extras key, the renderer's `name`, and the universal `inner_text` /
+      `depth` — `depth` keeps a row on `heading` / `section`, which publish it.
+      The column is `preset`, `blockquote` and `table` read **none**, and §12 is
+      name-for-name equal to `fields::recommended` (checked by script). Three
+      facts the old tables had wrong and the probe fixed: `citation_number` and
+      `start` are **strings** in the stream, `list`'s only layer field is `start`
+      (written by `plugin-markdown`, not `plugin-list`), and a decorator-bound
+      element keeps its extras under `specs.<key>` (`specs.class`), not `class`.
+      Two links that pointed at pre-archive paths now resolve.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden

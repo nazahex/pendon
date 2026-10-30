@@ -1,34 +1,69 @@
 # Fields inventory — built-in fields per element
 
-**Status: frozen (T4.1).** This is the contract `plugin-extract` implements: the
-`only` / `omit` / `preset` vocabulary, one row per field, `preset`
-decided per element (D-7 of
-[`../workflows/numbering-extract-type-export.md`](../workflows/numbering-extract-type-export.md)).
-Changing a `preset` mark here changes what `preset = "pendon"` extracts, so
-it is a behaviour change and needs its own line in `STATUS.md`.
+**Status: the contract `plugin-extract` implements.** One row per **built-in**
+field — a field an element produces itself (§0). The vocabulary is the archived
+proposal's: `preset` is decided per element (D-7 in §4 of
+[`../archive/workflows/numbering-and-extract/numbering-extract-type-export.md`](../archive/workflows/numbering-and-extract/numbering-extract-type-export.md))
+and the selection order is P.1–P.3 of
+[`../archive/fulfilled/plugin-extract.md`](../archive/fulfilled/plugin-extract.md).
+Changing a `preset` mark here changes what the preset extracts, so it is a
+behaviour change and needs its own line in `STATUS.md`.
 
 Scope is fixed by §8.6 of the workflow: `anchor`, `blockquote`, `cite`,
 `directive`, `heading`, `image`, `marker`, `list`, `section`, `table`, `wiki`
 (wikilink only), `codeblock` (vanilla), `latex`, `bind`, `micromatter`. §1 lists
 the five in-scope elements that are **not** extractable yet and why; §2–§11 are
-the frozen tables. Out of scope and deliberately absent: `quiz`,
-`codeblock-syntect`, `vicado`, `dialog`, and `plugin-custom`'s `toml:` specs.
+the tables. Out of scope and deliberately absent: `quiz`, `codeblock-syntect`,
+`vicado`, `dialog`, and `plugin-custom`'s `toml:` specs.
 
 ## 0. How to read a row
 
 1. **`field`** — the name a config block uses (`only` / `omit`), which is also the
-   key in the emitted object. Everything the element plugin writes as an
-   `Event::Attribute` is addressable by its attribute name.
+   key in the emitted object.
 2. **`type`** — `string`, `number`, `string[]`, `text` (`inner_text`), or `flag`.
-   A value carried as `JSON_ATTR_PREFIX` + JSON (`number`, a bound `data`) is
-   emitted **structured**, not as a string.
+   An attribute carried as `JSON_ATTR_PREFIX` + JSON (`number` once
+   `plugin-number` ran) is emitted **structured**; every other attribute keeps the
+   string it is in the stream, so a numeric-looking `start` or `citation_number`
+   is a `string` here.
 3. **`source`** — `§N · crate · golden`, in that order: the attribute list in
-   [`SYNTAX.md`](../spec/SYNTAX.md), the plugin's `emit` block, then the fixture
-   that proves it. A field with no golden does not ship.
-4. **`preset`** — `yes` = in the `pendon` preset, `no` = only on request.
+   [`SYNTAX.md`](SYNTAX.md), the plugin's `emit` block, then the fixture that
+   proves it. A field with no golden does not ship.
+4. **`preset`** — `yes` = a `preset = "pendon"` extract includes it (§12),
+   `no` = only on request.
 5. **`notes`** — interactions worth pinning.
 
-Two names exist on **every** extractable element and are not repeated per table:
+### A row is a built-in field
+
+A **built-in field** is one the element itself produces: an **owned** name it
+writes (`href`, `src`, `alt`, `citation_number`), a **preset assignment** it
+decides (`title`, `slug`, `locator`, `reference_id`), or a value it **derives**
+(`id`'s chain, `cite-id`, `number`). Four kinds of name are therefore not rows,
+even though `plugin-extract` emits them:
+
+- **Bare fields.** An extras item or a slot position the element does not assign.
+  It keeps the path the stream carries: the qualified one (`specs.class`,
+  `specs.tick`, `bracket.bare`, `paren.bare`) for an element that only binds a
+  block's decorator (`blockquote`, `list`, `marker`, `directive`), the plain one
+  (`class`, `id`, `rel`, `note`) for an element whose head projects extras onto
+  the DOM (`anchor`, `image`, `heading`, `table`, `section`, `cite`) — or, where
+  the built-in element has no prop for the key, the `data-`-prefixed spelling
+  (`data-width`, §6.3). The set is open — any author key is addressable (§6.1).
+- **`type`** — the author's routing key (§11), not a name an element defines. The
+  two exceptions are the constructs that spell it in their own syntax:
+  `directive` (`::name`, `==name`) and `marker` (`{{name}}`), which keep a row.
+- **`name`** — the built-in tag a layer node falls back to (`div`, `span`, `img`,
+  `table`, `blockquote`, `ol`, `ul`): the renderer's transport for `NodeKind`
+  (D-3a), like `__layer`. Addressable, in no preset, never a row.
+- **`inner_text` / `depth`** — universal (below) and computed for every
+  occurrence. `inner_text` is never a row; `depth` is a row only on the two
+  elements that publish it themselves (`heading`, `section`, §6/§10).
+
+Every built-in field the tables list is in its element's preset today, so every
+row reads `preset = yes`; a `no` stays legal (a built-in field the preset leaves
+out) and no element needs one.
+
+Two names exist on **every** extractable element. Neither is repeated per table,
+except `depth` on the two elements that emit it:
 
 | field        | type   | meaning                                                              |
 | ------------ | ------ | -------------------------------------------------------------------- |
@@ -40,13 +75,9 @@ Rules that hold for all rows:
 - **Internal keys never ship.** `__layer`, `__plugin_kind`, `__number` and every
   other `__`-prefixed attribute are the event stream's own bookkeeping (D-9);
   `only = ["__layer"]` selects nothing rather than leaking it.
-- **Extras pass through under their own name.** An element plugin emits the
-  author's extras verbatim (`for (name, value) in attrs.values`), so
-  `only = ["extraAttr1"]` works for any author-defined key. The tables list the
-  fields the _plugin_ writes; a custom key is not less real, it is just not
-  enumerable here.
 - **A missing field is dropped, never emitted empty** — even when `only` names
-  it (P.1 of [`../issues/plugin-extract.md`](../issues/plugin-extract.md)).
+  it (P.1 of
+  [`../archive/fulfilled/plugin-extract.md`](../archive/fulfilled/plugin-extract.md)).
 - **Selection order** is `preset` → `only` → `omit`, and `omit` always wins
   (P.3). Fields are emitted in **attribute order** (the order the plugin wrote
   them), not in the order of the `only` array.
@@ -70,73 +101,77 @@ naming the element.
 
 Source: §7.2 · `crates/plugin-anchor` · golden `04-anchor`.
 
-| field        | type   | recommended | notes                                                     |
-| ------------ | ------ | ----------- | --------------------------------------------------------- |
-| `href`       | string | yes         | the construct owns it; an extras `href` is ignored (§7.2) |
-| `id`         | string | yes         | `#id` > `[slug]` head > extras `slug` (§6.2)              |
-| `title`      | string | yes         | from the head's `("title")`, never part of the label      |
-| `type`       | string | yes         | the `@@type` marker                                       |
-| `rel`        | string | no          | merged, not replaced, by the `rel:` modifier              |
-| `target`     | string | no          | `_blank` from a `!` / `?` modifier, or extras             |
-| `inner_text` | text   | yes         | the link label                                            |
+| field   | type   | preset | notes                                                                                             |
+| ------- | ------ | ------ | ------------------------------------------------------------------------------------------------- |
+| `href`  | string | yes    | `paren.bare`; the construct owns it, so an extras `href:` is an `Error` (D-12 rule 5)             |
+| `title` | string | yes    | `paren.quote`; the head wins over an extras `"…"` (§6.2)                                          |
+| `id`    | string | yes    | `#id` > extras `` `slug` `` — the tick position, read while it keeps its default path (§6.2/§6.3) |
+
+The other three positions of the head (`bracket.quote`, `bracket.tick`,
+`paren.tick`) stay bare under their slot-qualified names (D-7), and `class` /
+`style` / `rel` / `target` / `hreflang` are ordinary extras (§6.3): no row (§0).
 
 ## 3. `blockquote` — `__layer = "blockquote"`
 
 Source: §9.2 · `crates/plugin-blockquote` · golden `11-blockquote`.
 
-| field  | type   | recommended | notes                         |
-| ------ | ------ | ----------- | ----------------------------- |
-| `type` | string | yes         | the decorator's marker (§6.2) |
-
-The quote writes nothing else: `id` / `class` / `title` reach it as extras under
-their own names (§0) and `inner_text` is universal, so §12's preset can name them
-without a row here.
+**None.** A quote has no head: no slot contract, no preset, no owned field
+(§9.2). The plugin writes the `__`-prefixed bookkeeping, its `name` (§0) and the
+decorator line's `type` plus extras — all bare (§0), which is why a
+decorator-bound quote keeps an extras class as `specs.class`, not `class`. §12's
+preset for the element is a list of names a quote may carry, never fields it
+defines, and `inner_text` is universal.
 
 ## 4. `cite` — `__layer = "cite"` (renders as the `Cite` component)
 
 Source: §7.3 · `crates/plugin-cite` · golden `05-cite`.
 
 `reference_id` and `locator` are the §7.3 preset (S2-4.4); `citation_number` is
-assigned by the processor and is the one field the element **owns** (D-12 rule 5).
+assigned by the processor, the one field the element **owns** (D-12 rule 5).
 `instance_index` is gone (§14) — a per-occurrence ordinal is `plugin-number`'s.
 
-| field             | type   | recommended | notes                                                            |
-| ----------------- | ------ | ----------- | ---------------------------------------------------------------- |
-| `reference_id`    | string | yes         | the reference the head names; mandatory (§7.3)                   |
-| `locator`         | string | yes         | the quoted locator; part of the citation's identity              |
-| `citation_number` | number | yes         | assigned by `plugin-cite`; stable for a repeated `(id, locator)` |
-| `cite-id`         | string | yes         | the node's `id` slot (`#id` / slug) — the backlink anchor        |
-| `type`            | string | yes         | the `@@type` marker                                              |
-| `note`            | string | no          | extras only                                                      |
-| `class`           | string | no          | extras only                                                      |
-| `inner_text`      | text   | no          | the citation's display text (the `[n]` marker)                   |
+| field             | type   | preset | notes                                                                                                                                      |
+| ----------------- | ------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `reference_id`    | string | yes    | the reference the head names; mandatory (§7.3)                                                                                             |
+| `locator`         | string | yes    | the quoted locator; part of the citation's identity                                                                                        |
+| `citation_number` | string | yes    | assigned by `plugin-cite`, stable for a repeated `(reference_id, locator)`; a display ordinal, so a `string` — only `number` is structured |
+| `cite-id`         | string | yes    | the node's id slot: `#id` > extras `` `slug` ``, the backlink anchor                                                                       |
 
 `reference` is **not** a field: the renderer resolves it from `reference_id`
 against `export const references`. Extract `cite-id` and join on the `references`
 export — which is what golden `05`'s `citations` array does.
 
+A citation is a layer node only when a `Cite` component is configured: the
+built-in `<sup class="cite-ref">` fallback is raw HTML, so a document that keeps
+it has no `cite` node to extract.
+
 ## 5. `directive` — `__layer = "directive"`
 
-Source: §10.2/§10.4 · `crates/plugin-directive` · goldens `15`/`16`.
+Source: §10.2/§10.3 · `crates/plugin-directive` · goldens `15`/`16`.
 
-| field  | type   | recommended | notes                                                 |
-| ------ | ------ | ----------- | ----------------------------------------------------- |
-| `type` | string | yes         | `::name` — the routing key and the marker's only name |
+| field  | type   | preset | notes                                                                   |
+| ------ | ------ | ------ | ----------------------------------------------------------------------- |
+| `type` | string | yes    | `::name` / `==name` — the head's own name, and the only field it writes |
+
+One of §0's two exceptions: the construct spells `type` in its syntax, so it is
+a field here (§10.4) and never extras-derived. A directive contracts no slot:
+its `[bracket]` / `("paren")` groups stay bare (`bracket.bare`, `paren.bare`) and
+so do its extras (`specs.tick`, `specs.quote`, `specs.class`), which is why §12's
+`id` / `level` / `summary` are author names rather than rows.
 
 ## 6. `heading` — `__layer = "heading"` (`NodeKind::Heading`)
 
 Source: §7.4/§11 · `crates/plugin-heading` · golden `06-heading`.
 
-| field        | type     | recommended | notes                                                     |
-| ------------ | -------- | ----------- | --------------------------------------------------------- |
-| `depth`      | number   | yes         | `1..6`: the `#` run, minus the `#` the head's tag spends  |
-| `id`         | string   | yes         | section id > `#id` > `[slug]` > extras slug (§6.2)        |
-| `slug`       | string   | yes         | the heading's own slug (`[slug]` head, extras tick, auto) |
-| `title`      | string   | yes         | the head's `("title")` (or the extras `"…"` fallback)     |
-| `number`     | string[] | yes         | written by `plugin-number` (ADR-0010); structured array   |
-| `type`       | string   | yes         | the `@@type` marker                                       |
-| `class`      | string   | no          | extras only                                               |
-| `inner_text` | text     | yes         | the visible heading text, never an attribute              |
+| field    | type     | preset | notes                                                                                                                                                 |
+| -------- | -------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `depth`  | number   | yes    | `1..6`: the `#` run minus the `#` the head's tag spends (§7.4)                                                                                        |
+| `id`     | string   | yes    | the section's when `plugin-section` runs — the heading then emits neither `id` nor `slug` (§9.5); else `#id` > `[slug]` > extras tick > the auto slug |
+| `slug`   | string   | yes    | `bracket.bare`, else a slug of `inner_text` (§7.4)                                                                                                    |
+| `title`  | string   | yes    | `paren.quote`; the extras `"…"` is the fallback (§6.2)                                                                                                |
+| `number` | string[] | yes    | written by `plugin-number` (ADR-0010) as a structured array; reserved once it runs (D-10)                                                             |
+
+`class` is an extra and `type` the routing key (§0); `inner_text` is universal.
 
 `number` is **reserved** once `plugin-number` runs (D-10): an extras
 `number: "auto"` is a diagnostic there, and the only `number` an extract sees is
@@ -150,76 +185,70 @@ An image is **one node**: `![alt](src)` is the whole head, the extras decorate t
 same `<img>`, and every position the head carries beyond the preset stays a bare
 slot field. There is no `figure` layer and no caption any more (§14).
 
-| field           | type   | recommended | notes                                              |
-| --------------- | ------ | ----------- | -------------------------------------------------- |
-| `src`           | string | yes         | `paren.bare`; owned by the construct (D-12 rule 5) |
-| `alt`           | string | yes         | `bracket.bare`; owned by the construct (D-12)      |
-| `width`         | number | yes         | an extras `width:` (the `w` modifier is gone)      |
-| `height`        | number | yes         | an extras `height:` (the `h` modifier is gone)     |
-| `type`          | string | yes         | the `@@type` marker                                |
-| `id`            | string | yes         | `#id` / extras `` `slug` `` (§6.2)                 |
-| `class`         | string | no          | extras only, accumulates (§6.4)                    |
-| `style`         | string | no          | extras only; `--x:` folds in (§6.3)                |
-| `loading`       | string | no          | an extras `loading:` (the `?` modifier is gone)    |
-| `decoding`      | string | no          | an extras `decoding:` (the `~` modifier is gone)   |
-| `bracket.quote` | text   | no          | a claimed position the preset does not name (D-7)  |
-| `inner_text`    | —      | no          | **none**: the head owns no children (§14)          |
+| field | type   | preset | notes                                                         |
+| ----- | ------ | ------ | ------------------------------------------------------------- |
+| `src` | string | yes    | `paren.bare`; owned by the construct (D-12 rule 5)            |
+| `alt` | string | yes    | `bracket.bare`; owned too, and emitted even when empty (§6.3) |
+| `id`  | string | yes    | `#id` > extras `` `slug` `` (§6.2)                            |
 
-## 8. `list` — `__layer = "list"` (item), `"unordered"` / `"ordered"` (container)
+The unclaimed positions (`bracket.quote`, `bracket.tick`, `paren.quote`,
+`paren.tick`) keep their slot-qualified names (D-7), and the retired modifier run
+is gone (§14): `width`, `height`, `loading`, `decoding` are ordinary extras. The
+built-in `<img>` has no prop for an unknown key, so such an extra reaches the
+element `data-`-prefixed (`data-width`, §6.3) — a bare name, not a field of the
+node.
 
-Source: §9.3/§9.4 · `crates/plugin-list` · golden `12-list-container`.
+## 8. `list` — `__layer = "unordered"` / `"ordered"` (the container)
 
-| field        | type   | recommended | layer     | notes                                       |
-| ------------ | ------ | ----------- | --------- | ------------------------------------------- |
-| `type`       | string | yes         | container | the marker; the layer decides, not the type |
-| `id`         | string | yes         | container | `#id` / slug of the decorator               |
-| `start`      | number | yes         | `ordered` | the `<ol start>`; absent on `<ul>`          |
-| `class`      | string | no          | both      | extras only                                 |
-| `inner_text` | text   | yes         | item      | the item's text                             |
+Source: §9.3/§9.4 · `crates/plugin-list` + `crates/plugin-markdown` · golden `12-list-container`.
+
+| field   | type   | preset | layer     | notes                                                                                                                                    |
+| ------- | ------ | ------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `start` | string | yes    | `ordered` | the first item's number, written on the container node by `plugin-markdown`; absent on `unordered`, and extras cannot override it (§9.3) |
+
+The items are markdown's `<li>` nodes: no layer, no field. The container contracts
+nothing either — no head, no preset (§9.3) — so the decorator's `type`, `#id` and
+extras are the author's (§0) and reach the node under their qualified paths
+(`specs.id`, `specs.class`). `type` gets no row: it is the routing key, even when
+the decorator is what writes it (§0).
 
 ## 9. `marker` — `__layer = "marker"`
 
 Source: §10.1 · `crates/plugin-marker` · golden `14-marker`.
 
-| field        | type   | recommended | notes                                              |
-| ------------ | ------ | ----------- | -------------------------------------------------- |
-| `type`       | string | yes         | **mandatory** (§10.1) and the §11 routing key      |
-| `slug`       | string | yes         | `{{type}}` groups between `}}` and the extras head |
-| `id`         | string | yes         | `#id` / extras `id`                                |
-| `title`      | string | yes         | extras `title:`                                    |
-| `isOpen`     | flag   | no          | bare extras flag                                   |
-| `class`      | string | no          | extras only                                        |
-| `inner_text` | text   | yes         | the block form's trailing text (the caption)       |
+| field  | type   | preset | notes                                         |
+| ------ | ------ | ------ | --------------------------------------------- |
+| `type` | string | yes    | **mandatory** (§10.1) and the §11 routing key |
+
+The second of §0's exceptions: `{{name}}` spells the field, and it silently wins
+over an extras `@@type` (§10.1). A marker contracts nothing — no slot, no preset
+— so its groups (`bracket.bare`, `paren.bare`) and extras (`specs.tick`,
+`specs.quote`, `specs.class`) are bare, and its text is its children, which the
+plugin never writes as an `inner_text` attribute.
 
 ## 10. `section` — `__layer = "section"` (`NodeKind::Section`)
 
 Source: §9.5 · `crates/plugin-section` · golden `22-section`.
 
-A section has **no head**: it declares no `ElementHead` and contracts no slot.
-Its own two fields are the ones it derives — `id` from the chain and `depth` from
-the heading it wraps (or its parent `<--->` section + 1, `0` for the preface) —
-and the decorator line above the heading publishes everything else.
+A section has **no head**: it declares no `ElementHead` and contracts no slot, so
+the two fields it derives are its whole preset assignment (§9.5, §6.5). The
+decorator line above the heading publishes everything else (`type`, `#id`,
+extras — the author's, §0).
 
-| field        | type   | recommended | notes                                                              |
-| ------------ | ------ | ----------- | ------------------------------------------------------------------ |
-| `id`         | string | yes         | `#sectionID` > `[slug]` > extras slug > title slug                 |
-| `type`       | string | yes         | the decorator's marker (§6.2)                                      |
-| `class`      | string | yes         | extras only                                                        |
-| `title`      | string | no          | extras `title:`                                                    |
-| `inner_text` | text   | no          | the whole section body; prefer the child headings                  |
-| `depth`      | number | yes         | the heading's own depth; a `<--->` child's parent + 1; `0` prehead |
+| field   | type   | preset | notes                                                                                                                                                                                      |
+| ------- | ------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`    | string | yes    | the decorator's `#id` > its slug > the heading's `[slug]` > the heading's extras slug > the title's slug, then de-duplicated (`-2`, `-3`, …); absent on the preface and on a `<--->` child |
+| `depth` | number | yes    | the outline level it stands for: the wrapped heading's own, a `<--->` child's parent + 1, `0` for the preface (§9.5)                                                                       |
 
-## 11. `table` — `__layer = "table"` (+ `thead` / `tbody` / `tfoot` layers)
+## 11. `table` — `__layer = "table"`
 
 Source: §8 · `crates/plugin-table` · goldens `08`/`09`.
 
-| field        | type   | recommended | layer   | notes                                          |
-| ------------ | ------ | ----------- | ------- | ---------------------------------------------- |
-| `type`       | string | yes         | `table` | the `@@type` marker                            |
-| `id`         | string | yes         | `table` | `#id` / slug (§6.2)                            |
-| `class`      | string | no          | `table` | extras only                                    |
-| `caption`    | string | yes         | `table` | the construct's caption slot                   |
-| `inner_text` | text   | no          | `table` | flattened cell text — prefer the per-cell rows |
+**None.** The `<table>` is the one layer whose head is **outside** the table (§8):
+the decorator line above it writes `type`, `#id` and the extras, so everything the
+node carries is the author's (§0), and `name` is its fallback tag (§0). The
+column / row / foot layers (`thead`, `tbody`, `tfoot`) and the `<caption>`
+element are layers no config name maps to.
 
 Per-cell fields (`colspan`, `rowspan`, `align`, `id`, `class`) live on `td`/`th`
 nodes, which are **markdown's** nodes, not a Pendon layer: they are out of the
@@ -227,21 +256,31 @@ extract surface until a table layer owns them.
 
 ## 12. Preset table (the code's source of truth)
 
-`recommended = true` extracts exactly these names, in this order, intersect
-`only`, minus `omit`:
+The `pendon` preset — `recommended = true` today, `preset = "pendon"` from S2-8.2
+— extracts exactly these names, in this order, intersect `only`, minus `omit`:
 
-| element      | preset                                                          |
-| ------------ | --------------------------------------------------------------- |
-| `anchor`     | `href`, `id`, `title`, `type`, `inner_text`                     |
-| `blockquote` | `type`, `id`, `class`, `inner_text`                             |
-| `cite`       | `reference_id`, `locator`, `citation_number`, `cite-id`, `type` |
-| `directive`  | `type`, `id`, `level`, `summary`, `inner_text`                  |
-| `heading`    | `depth`, `id`, `slug`, `title`, `number`, `type`, `inner_text`  |
-| `image`      | `src`, `alt`, `width`, `height`, `type`, `id`                   |
-| `list`       | `type`, `id`, `start`, `inner_text`                             |
-| `marker`     | `type`, `slug`, `id`, `title`, `inner_text`                     |
-| `section`    | `id`, `type`, `class`, `depth`                                  |
-| `table`      | `type`, `id`, `caption`                                         |
+| element      | preset                                                            |
+| ------------ | ----------------------------------------------------------------- |
+| `anchor`     | `href`, `id`, `title`, `type`\*, `inner_text`                     |
+| `blockquote` | `type`\*, `id`\*, `class`\*, `inner_text`                         |
+| `cite`       | `reference_id`, `locator`, `citation_number`, `cite-id`, `type`\* |
+| `directive`  | `type`, `id`\*, `level`\*, `summary`\*, `inner_text`              |
+| `heading`    | `depth`, `id`, `slug`, `title`, `number`, `type`\*, `inner_text`  |
+| `image`      | `src`, `alt`, `width`\*, `height`\*, `type`\*, `id`               |
+| `list`       | `type`\*, `id`\*, `start`, `inner_text`                           |
+| `marker`     | `type`, `slug`\*, `id`\*, `title`\*, `inner_text`                 |
+| `section`    | `id`, `type`\*, `class`\*, `depth`                                |
+| `table`      | `type`\*, `id`\*, `caption`\*                                     |
 
-A field in the preset that an element does not carry in a given instance is
-dropped from that row (§0), so one preset serves a whole document.
+A `*` marks a name that is not a built-in field of that element (§2–§11): it is a
+bare field, the routing key, or a universal name (§0) — `inner_text` / `depth` are
+universal and never starred — so the preset recommends it without any element
+producing it. Some of them cannot match a name the stream carries at all today
+and stay as inert recommendations: a decorator-bound element writes `specs.id` /
+`specs.class`, not `id` / `class` (§3/§8/§9); the built-in `<img>` spells
+`data-width` / `data-height` (§7); `table`'s `caption` is an extras key, because
+the `<caption>` element is a layer of its own (§11); and `directive`'s `level` /
+`summary` are extras keys its head never assigns.
+
+A field in the preset that an instance does not carry is dropped from that row
+(§0), so one preset serves a whole document.

@@ -1,7 +1,7 @@
 # pendon-plugin-extract
 
 One extraction pass for **every** extractable element (P.1 of
-[`docs/issues/plugin-extract.md`](../../docs/issues/plugin-extract.md)). The
+[`docs/archive/fulfilled/plugin-extract.md`](../../docs/archive/fulfilled/plugin-extract.md)). The
 fields an element can carry are frozen in
 [`docs/spec/FIELDS-INVENTORY.md`](../../docs/spec/FIELDS-INVENTORY.md); the
 `type = …` selector vocabulary is §11 of
