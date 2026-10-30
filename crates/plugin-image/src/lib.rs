@@ -957,7 +957,7 @@ mod tests {
 
     /// ADR-0010 `D-9`: `__number` is internal transport, not an extra prop, so the
     /// HTML fallback passes it verbatim instead of `data-`-prefixing it (the
-    /// renderers strip it; `plugin-number` reads it).
+    /// renderers strip it; `number` reads it).
     #[test]
     fn internal_number_attribute_is_not_prefixed() {
         let out = process(

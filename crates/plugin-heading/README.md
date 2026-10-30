@@ -5,7 +5,7 @@ Heading parsing and custom-component plugin for Pendon.
 `pendon-plugin-heading` turns a heading line into a structured `Heading` node with
 its depth, slug, title and extras attributes, and routes it to a §11 component. It
 runs **before** `markdown` (§7.4 of [`SYNTAX.md`](../../docs/spec/SYNTAX.md));
-numbering is not part of it any more — [`plugin-number`](../plugin-number/README.md)
+numbering is not part of it any more — [`number`](../number/README.md)
 owns `attrs.number` (ADR-0010).
 
 ## What This Plugin Does
@@ -17,7 +17,7 @@ owns `attrs.number` (ADR-0010).
   of `inner_text`), `title` (the head's `("title")`) and `id` (§6.2's chain
   `#id` > `[slug]` > extras tick > auto slug)
 - Emits the §11 layer tag `__layer = "heading"` in both modes, so
-  `plugin-number` and `plugin-extract` can tell the element kind from the stream
+  `number` and `plugin-extract` can tell the element kind from the stream
 - Strips the head from the visible text in both standard and custom modes; the
   visible text is the node's **content** (`inner_text`), never an attribute
 - Routes the node to a §11 component through `@@type{…}`
@@ -54,7 +54,7 @@ type = ["HeadingA"]
 style = ["decimal", "decimal", "lower-alpha"]
 ```
 
-`[[task.heading.number]]` belongs to `plugin-number`, not to this crate; see its
+`[[task.heading.number]]` belongs to `number`, not to this crate; see its
 README for styles, depth and the `%%numberType` marker.
 
 ## The Heading Head
@@ -116,7 +116,7 @@ literal text (§14).
 ## Numbering
 
 This plugin does **not** number headings. `[[task.heading.number]]` and the
-`%%numberType` marker are `plugin-number`'s (`crates/plugin-number/README.md`,
+`%%numberType` marker are `number`'s (`crates/number/README.md`,
 ADR-0010): it writes `attrs.number` as an array of strings per depth, and a
 component decides how to display it. An authored `number:` prop still passes
 through as an ordinary extras prop when no `number` block selects the element
@@ -133,7 +133,7 @@ Replace the default `<hN>` output with a custom Solid component:
 [task.heading.custom.heading]
 name = "DocHeading"
 # `{...attrs}` spreads every attribute, so the component receives `number` as a
-# real array when `plugin-number` wrote one (golden `30-number-heading`).
+# real array when `number` wrote one (golden `30-number-heading`).
 template = "<DocHeading {...attrs}>{children}</DocHeading>"
 
 [[task.heading.custom.heading.imports]]
@@ -147,18 +147,18 @@ coming from the same module are merged into a single `import` statement.
 
 ### Available Template Attributes
 
-| Attribute        | Description                                                                  |
-| :--------------- | :--------------------------------------------------------------------------- |
-| `{attrs.depth}`  | The depth as a string (`"1"`…`"6"`, §7.4)                                    |
-| `{attrs.id}`     | extras `#id` > `[slug]` > extras tick > auto slug (§6.2)                     |
-| `{attrs.slug}`   | The same fallback chain, always slug-shaped                                  |
-| `{attrs.title}`  | The head's `("title")`                                                       |
-| `{attrs.number}` | Written by `plugin-number` when a `number` block selects the heading (array) |
-| `{attrs.class}`  | Space-separated class list from the extras head                              |
-| `{attrs.type}`   | The `@@type` marker (§11 rule 3)                                             |
-| `{attrs.*}`      | Any other extras pair, under its own name                                    |
-| `{attrs.style}`  | Inline style string from `{--var: val}`                                      |
-| `{children}`     | The visible heading text (the head stripped, nothing prepended)              |
+| Attribute        | Description                                                           |
+| :--------------- | :-------------------------------------------------------------------- |
+| `{attrs.depth}`  | The depth as a string (`"1"`…`"6"`, §7.4)                             |
+| `{attrs.id}`     | extras `#id` > `[slug]` > extras tick > auto slug (§6.2)              |
+| `{attrs.slug}`   | The same fallback chain, always slug-shaped                           |
+| `{attrs.title}`  | The head's `("title")`                                                |
+| `{attrs.number}` | Written by `number` when a `number` block selects the heading (array) |
+| `{attrs.class}`  | Space-separated class list from the extras head                       |
+| `{attrs.type}`   | The `@@type` marker (§11 rule 3)                                      |
+| `{attrs.*}`      | Any other extras pair, under its own name                             |
+| `{attrs.style}`  | Inline style string from `{--var: val}`                               |
+| `{children}`     | The visible heading text (the head stripped, nothing prepended)       |
 
 ### Standard Mode Behavior
 

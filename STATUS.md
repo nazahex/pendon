@@ -29,7 +29,7 @@ default); Phase 9 (`number`) is next. The L37 blocker is what is left.
   `renderer-solid` alone; `frontmatter`/`headings` are automatic, `plugin-cite`
   pushes `references` then `citations`, `[[task.bind.inject]]` publishes a file
   (SYNTAX §20, ADR-0009).
-- **Phase 3 — numbering.** `plugin-number` owns all numbering (ADR-0010):
+- **Phase 3 — numbering.** `number` owns all numbering (ADR-0010):
   `[[task.<element>.number]]` + `[[task.number.custom]]`, the `%%numberType`
   marker parsed in `crates/extra` (§5, §10.5) and carried as `__number`,
   `attrs.number` written as an array. `plugin-heading` numbers nothing (its
@@ -288,7 +288,7 @@ exactly one `export const headings` line each (no bytes removed), and
       `Specs::dom_fields`' element table), and a plain heading now carries an
       anchor `id`. Cascade: the core/`plugin-markdown` emit `depth` and every
       `level` reader moved — `renderer-solid`'s `<h*>` (which skips `depth` and
-      `slug`), `renderer-html`'s two writers, `plugin-number`'s natural depth,
+      `slug`), `renderer-html`'s two writers, `number`'s natural depth,
       `plugin-section`'s level test, `plugin-extract`'s heading preset
       (`depth`/`title`; `depth` is no longer appended twice) and
       `renderer-solid`'s outline. Fixtures: `06`/`22`/`27`/`28`/`30` re-frozen

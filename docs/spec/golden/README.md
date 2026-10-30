@@ -68,7 +68,7 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | 03 | `image`            | `!` tag + preset `alt`/`src`, bare slot fields, retired marker run |
 | 04 | `anchor`           | `@` tag vs untagged, six positions → preset, removed modifiers/external defaults |
 | 05 | `cite`             | `[^reference "locator"]` + extras, retired forms stay literal  |
-| 06 | `heading`          | `[slug]` + `("title")` + extras, an authored `number:` passes through (numbering is `plugin-number`) |
+| 06 | `heading`          | `[slug]` + `("title")` + extras, an authored `number:` passes through (numbering is `number`) |
 | 07 | `wiki`             | `[[…]]` + extras, `href` not overridable                      |
 | 08 | `table-head`       | `@@tableX{…}` decorator → `<table>`, `\|\| caption \|\|`     |
 | 09 | `table-layers`     | column/th/td/tr/tbody/tfoot extras routing                    |

@@ -1,9 +1,9 @@
 [package]
-name = "pendon-plugin-number"
+name = "pendon-number"
 version = "0.0.1"
 edition = "2021"
 license = "MIT"
-description = "Document-wide numbering plugin for Pendon documents"
+description = "Document-wide numbering for Pendon documents"
 
 [dependencies]
 pendon-core = { path = "../core" }

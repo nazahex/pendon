@@ -59,7 +59,7 @@ docs/
 memory-bank/            Cline per-session working memory (not project truth)
 crates/*/README.md      per-crate public reference (link to spec, don't restate it)
                        crates/types = pendon-types (shared type resolution, ADR-0008)
-                       crates/plugin-number = every `attrs.number` producer (ADR-0010)
+                       crates/number = every `attrs.number` producer (ADR-0010)
                        crates/extract = every `[[task.<element>.extract]]` reader
                        (files + `export const`; never rewrites the stream)
 editors/vscode/         TextMate grammars for .mdp / .md + the scope harness

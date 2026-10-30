@@ -53,7 +53,7 @@ then runs each element over a head with six distinct values and fails if one val
 to check them against the code — §12 against `PRESETS` in
 `crates/extract/src/fields.rs`, every `preset` mark in both directions, the
 four slot-contract tables against each plugin's `HEAD`, and the shared `specs.*` /
-`number` / fallback tables against `crates/extra` and `plugin-number`. Editing a
+`number` / fallback tables against `crates/extra` and `crates/number`. Editing a
 table without editing the code (or the reverse) fails it, so §12 and the element
 tables are a two-file change by construction.
 

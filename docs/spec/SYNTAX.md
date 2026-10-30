@@ -277,7 +277,7 @@ ws          = 1*( " " | "\t" )
   normalized once, here (`%%` → 1 … `%%%%%%%` → 6), and the item reaches the
   plugin as the internal attribute `__number` with
   `{"depth":1,"type":"numberB"}`; the type keeps the authored spelling, because
-  resolving it is `plugin-number`'s job (§10.5). `%` alone, `%%` with no name and
+  resolving it is `number`'s job (§10.5). `%` alone, `%%` with no name and
   a run of 8+ `%` are literal text with no diagnostic (`D-9`).
 
 ### 5.1 Worked example
@@ -446,7 +446,7 @@ Mapping to the event IR (`Event::Attribute { name, value: String }`):
   deep), which is the reason the value is structured and not text.
   An **internal** `__`-key is the one exception (`AttrValue::transport_for`): it
   keeps the plain literal its consumer parses — `__number`'s
-  `{"depth":…,"type":…}` marker is read by `plugin-number` before any renderer
+  `{"depth":…,"type":…}` marker is read by `number` before any renderer
   runs (ADR-0010) and never reaches an AST, a renderer or a projection.
 - **JSX expression token.** A `{ … }` group whose body is a single identifier or
   dot-separated path — e.g. `{valueA}` or `{frontmatter.fm1}` — is a JSX
@@ -732,7 +732,7 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
 - The citation's fields are `reference_id`, `locator` and `citation_number` (the
   display ordinal, assigned by the processor; a repeated
   `(reference_id, locator)` keeps its number). There is no `instance_index`
-  (§14) — a per-occurrence ordinal is `plugin-number`'s job (§10.5).
+  (§14) — a per-occurrence ordinal is `number`'s job (§10.5).
 - Without a `cite` component the built-in markup is
   `<sup class="cite-ref"><a href="#citeref-1-book" id="cite-1">[1]</a></sup>`:
   the class and the two prefixes are fixed, because a site that wants its own
@@ -777,7 +777,7 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
 - With `plugin-section` owning the outline the heading emits **neither** `id` nor
   `slug`; the id transfers to the section (§9.5).
 - The heading does **not** number itself: `[[task.heading.number]]` and
-  `%%numberType` are `plugin-number`'s (§10.5), which reads `depth` as the
+  `%%numberType` are `number`'s (§10.5), which reads `depth` as the
   natural depth and writes `attrs.number`. An authored `number:` prop passes
   through untouched when no block selects the heading.
 
@@ -830,7 +830,7 @@ The other six layers read the **same** head (§5) —
 numbering marker reach whichever layer the head sits on, and the layer keys above
 are only _where_ the head is read. What a head names is not layer-specific:
 `@@cellA[slug]("t"){.x}%%%numberA` puts `bracket.bare` / `paren.bare` on the
-cell, `class="x"` with it, and the `__number` transport `plugin-number` reads
+cell, `class="x"` with it, and the `__number` transport `number` reads
 (§10.5). Golden `36-table-slots` is the seven-layer proof.
 
 A column's extras stay on its `<th>`: the alignment and the width cascade into
@@ -1161,7 +1161,7 @@ another type cannot replace it.
 | `number`                 | `%%numberType` marker > `[[task.<element>.number]]` (§10.5) |
 | any other key            | head prop > extras prop                                     |
 
-### 10.5 Numbering (`plugin-number`)
+### 10.5 Numbering (`number`)
 
 `%%numberType` and `attrs.number` are one plugin's job
 ([ADR-0010](../decisions/0010-plugin-number.md)); no element plugin numbers
@@ -1443,7 +1443,7 @@ Config-load errors MUST abort the build before any file is processed.
 | legacy `[.c,#id]{k:v}`                                                  | `{…}` / `@@type{…}`                                                                  | **removed** (D3): plain literal text, no warning, no deprecation path. Gone from the code (`parse_attrs`, `ExtraAttrs`, `legacy_extras_warning`), docs, sandboxes and READMEs.                                                                                                                                    |
 | `import = "…"` (string)                                                 | `imports = ["…"]`                                                                    | **removed**: the singular form is accepted with a Warning (§15 OPEN-C2), then hard-errors.                                                                                                                                                                                                                        |
 | `[task.<plugin>.custom_node]`                                           | `[task.<plugin>.custom.<layer>]`                                                     | **removed**: `custom.<layer>` is read for `anchor`, `image` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`); every sandbox/fixture config is migrated. The stale key fails the build with a migration message. Unwired layers (`task.image.custom.img`) are config errors. |
-| `[task.heading]` `auto_number` / `number_style`                         | `[[task.heading.number]]`                                                            | **removed** (ADR-0010): both keys are read only to raise the §14 migration error. Numbering is `plugin-number` (§10.5), which writes `attrs.number` as an array and never prefixes the text.                                                                                                                      |
+| `[task.heading]` `auto_number` / `number_style`                         | `[[task.heading.number]]`                                                            | **removed** (ADR-0010): both keys are read only to raise the §14 migration error. Numbering is `number` (§10.5), which writes `attrs.number` as an array and never prefixes the text.                                                                                                                             |
 | anchor URL-suffix modifiers (`^`, `~`, `!`, `$`, `;;`, `--`)            | —                                                                                    | **not syntax** (D-16, §7.2): deleted, not replaced. A modifier-shaped tail is now part of the URL, and the `target` / `rel` tokens they produced are ordinary extras keys; the `^`/`~` conflict warning went with them. Slot modifiers are §5.4's, and Pendon ships none.                                         |
 | image marker run (`?`, `~`, `w<n>`, `h<n>`)                             | extras keys `loading:` / `decoding:` / `width:` / `height:`                          | **removed** (D-16, §7.1): `~?!![](src)` is the text `~?!` followed by an empty-alt image. A flag was never a field name, so the marker is not another spelling of one.                                                                                                                                            |
 | image `!!` figure, trailing caption, `<figure>` / `<figcaption>`        | the text after the head / a `[task.image.custom.img]` component                      | **removed** (D-16, §7.1): the head is one `<img>` node, so a caption is ordinary paragraph content and a wrapper is the component's own markup. `[task.image.custom.figure]` no longer loads (§13).                                                                                                               |
@@ -1455,7 +1455,7 @@ Config-load errors MUST abort the build before any file is processed.
 | `backtick_key` / `quote_key` / `bracket_key` / `parentheses_key`        | `field.specs.tick` / `field.specs.quote` / `field.bracket.bare` / `field.paren.bare` | **removed** (D-16): the four naming keys are gone from the loader, so a config that still uses them **fails to load** with an unknown-key error (§13) — no alias, no deprecation. Naming is `field.*` only (§6.1); an entry that configures none keeps the seven default paths (`specs.tick` … `paren.bare`).     |
 | `[^^](ref "loc")` cite head                                             | `[^ref "loc"]`                                                                       | **not syntax** (D-16, §7.3): the caret is the slot tag and sits inside the bracket, so the old form's second caret becomes the reference. A `cite` head without `reference_id` is an `Error`, not a citation.                                                                                                     |
 | `[task.cite]` `citation_class` / `ref_id_prefix` / `citation_id_prefix` | a `Cite` component                                                                   | **removed** (D-16, §7.3): the built-in `<sup>` markup's class and prefixes are constants; a site that wants its own spelling configures the component. The three keys are unknown now, so a config that still sets them **fails to load** (§13).                                                                  |
-| `citation_number`'s sibling `instance_index`                            | `plugin-number` (§10.5)                                                              | **removed** (D-16, §7.3): the per-occurrence ordinal is no longer a field of the citation. The citations export carries `reference_id` / `locator` / `citation_number` only; the built-in markup still needs a unique backlink anchor and derives one internally.                                                 |
+| `citation_number`'s sibling `instance_index`                            | `number` (§10.5)                                                                     | **removed** (D-16, §7.3): the per-occurrence ordinal is no longer a field of the citation. The citations export carries `reference_id` / `locator` / `citation_number` only; the built-in markup still needs a unique backlink anchor and derives one internally.                                                 |
 
 ## 15. Open decisions
 

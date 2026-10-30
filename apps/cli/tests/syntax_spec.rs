@@ -369,7 +369,7 @@ fn golden_26_cite_scope() {
     assert_fixture("26-cite-scope");
 }
 
-/// §16.3 fixture 30: `plugin-number` numbers headings from
+/// §16.3 fixture 30: `number` numbers headings from
 /// `[[task.heading.number]]` (ADR-0010, `D-1`/`D-5`). One counter answers the
 /// `HeadingA`+`HeadingB` selector, `style[n]` formats depth n, a depth without a
 /// style falls back to decimal, and a type no block selects stays bare. The

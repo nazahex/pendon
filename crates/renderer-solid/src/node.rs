@@ -68,7 +68,7 @@ pub fn render_node(v: &Value, out: &mut String, ctx: &Ctx) {
                 // `slug` is a template-only read (§11 rule 3): the built-in `<h*>`
                 // fallback keeps the authored extras, including the `type` marker,
                 // but not it. `number` is **not** one of them any more:
-                // `plugin-number` writes it for every element (ADR-0010), so the
+                // `number` writes it for every element (ADR-0010), so the
                 // fallback prints it like any other attribute (`number={["1","a"]}`).
                 render_attrs(v, out, &["depth", "slug"], ctx);
                 out.push('>');

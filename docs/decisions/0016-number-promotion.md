@@ -3,7 +3,7 @@
 - Status: **Accepted** — D-13 (number half) settled by the owner 2026-10-28, plus
   `OBJ-6`/`OBJ-8` (`number.depth`); promotion is `S2-9.3`, the public projection
   `S2-9.1`/`S2-9.2`
-- Depends on: [`0010`](0010-plugin-number.md) (`plugin-number` owns numbering),
+- Depends on: [`0010`](0010-plugin-number.md) (`number` owns numbering),
   [`0014`](0014-field-model.md) (the public field map)
 - Spec: [`SYNTAX.md`](../spec/SYNTAX.md) §10 (numbering), §10.5 (`number.*`
   public fields)
@@ -16,7 +16,7 @@
 ## Context
 
 Numbering is read by every element — headings nest, tables and figures carry the
-current counters — yet it ships as `pendon-plugin-number` and is imported directly
+current counters — yet it ships as `pendon-number` and is imported directly
 by the CLI. Its values reach the rest of the system as internal attributes
 (`__number`), which today is also what nesting reads. Extraction needs them as
 _public_ fields, and the two must not become the same thing: nesting must keep
@@ -24,7 +24,7 @@ reading the internal value even when the public name is renamed.
 
 ## Decision
 
-1. **Pure mechanical promotion**: `crates/plugin-number` → `crates/number`,
+1. **Pure mechanical promotion**: `crates/number` → `crates/number`,
    package `pendon-number`, in a task that changes no behaviour. The config
    surface stays `[[task.<element>.number]]`; plugin tokens are untouched.
 2. **The public fields are `number.*`** (`number.raw`, `number.depth`, …),
@@ -42,7 +42,7 @@ reading the internal value even when the public name is renamed.
 
 ## Rejected
 
-- **Keeping the crate named `plugin-number`.** It is not a plugin in any
+- **Keeping the crate named `number`.** It is not a plugin in any
   observable sense, and the name is what makes agents look for a `Plugin` impl
   that should not exist.
 - **Emitting `number.depth` by re-counting nesting in the projection.** Two

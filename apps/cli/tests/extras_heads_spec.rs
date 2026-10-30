@@ -226,7 +226,7 @@ template = "<Cite {...attrs} />"
         plugins: "anchor,number,markdown",
         // `%%` → depth 1 (ADR-0010), so one counter segment.
         source: "@[N](/n)@@numberedA{`slug-y`, %%numberA}\n",
-        // §10.5: the marker reaches `plugin-number`, which writes `number`.
+        // §10.5: the marker reaches `number`, which writes `number`.
         extra: r#"
 [[task.number.custom]]
 type = ["numberA"]

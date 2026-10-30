@@ -9,6 +9,7 @@ description = "Pendon CLI"
 pendon-core = { path = "../../crates/core" }
 pendon-extra = { path = "../../crates/extra" }
 pendon-extract = { path = "../../crates/extract" }
+pendon-number = { path = "../../crates/number" }
 pendon-plugin-anchor = { path = "../../crates/plugin-anchor" }
 pendon-plugin-bind = { path = "../../crates/plugin-bind" }
 pendon-plugin-blockquote = { path = "../../crates/plugin-blockquote" }
@@ -24,7 +25,6 @@ pendon-plugin-latex = { path = "../../crates/plugin-latex" }
 pendon-plugin-list = { path = "../../crates/plugin-list" }
 pendon-plugin-markdown = { path = "../../crates/plugin-markdown" }
 pendon-plugin-marker = { path = "../../crates/plugin-marker" }
-pendon-plugin-number = { path = "../../crates/plugin-number" }
 pendon-plugin-section = { path = "../../crates/plugin-section" }
 pendon-plugin-table = { path = "../../crates/plugin-table" }
 pendon-plugin-wiki = { path = "../../crates/plugin-wiki" }

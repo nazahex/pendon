@@ -219,7 +219,7 @@ nothing, and a config-only entry (no `name` / `template`) is enough to define on
 - A head written inside a **code span** (`a` ![a](b) `b`) stays text: the span is
   consumed verbatim, so documentation about the syntax does not become images
 - `%%numberType` attaches to the image like to every other element: it becomes the
-  `__number` transport `plugin-number` reads (§10.5)
+  `__number` transport `number` reads (§10.5)
 - A malformed slot (`![a "b](/x)`) is an `Error` and stays literal text (§4.3)
 - An unterminated extras head after a complete one stays literal text (§4.3)
 

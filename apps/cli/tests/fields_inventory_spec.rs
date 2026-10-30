@@ -498,7 +498,7 @@ fn the_number_table_is_the_numbering_plugins_attribute() {
     let rows: Vec<String> = table.rows.iter().map(|row| plain(&row[0])).collect();
     assert_eq!(
         rows,
-        vec![pendon_plugin_number::NUMBER_ATTR.to_string()],
-        "the namespace has one row today, and it is the attribute `plugin-number` writes"
+        vec![pendon_number::NUMBER_ATTR.to_string()],
+        "the namespace has one row today, and it is the attribute `number` writes"
     );
 }

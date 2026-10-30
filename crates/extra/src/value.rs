@@ -92,7 +92,7 @@ impl AttrValue {
     /// [`transport`](Self::transport) for a **named** attribute.
     ///
     /// An internal `__`-key keeps the plain literal its consumer parses —
-    /// `__number`'s `{"depth":…,"type":…}` marker is read by `plugin-number`
+    /// `__number`'s `{"depth":…,"type":…}` marker is read by `number`
     /// before any renderer runs (ADR-0010) and never reaches an AST, a renderer
     /// or a projection, so prefixing it would only break the reader.
     pub fn transport_for(&self, key: &str) -> String {

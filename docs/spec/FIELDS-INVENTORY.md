@@ -28,7 +28,7 @@ the tables. Out of scope and deliberately absent: `quiz`, `codeblock-syntect`,
    key in the emitted object.
 2. **`type`** — `string`, `number`, `string[]`, `text` (`inner_text`), or `flag`.
    An attribute carried as `JSON_ATTR_PREFIX` + JSON (`number` once
-   `plugin-number` ran) is emitted **structured**; every other attribute keeps the
+   `number` ran) is emitted **structured**; every other attribute keeps the
    string it is in the stream, so a numeric-looking `start` or `citation_number`
    is a `string` here.
 3. **`source`** — `§N · crate · golden`, in that order: the attribute list in
@@ -125,7 +125,7 @@ there is no half-preset mode.
 
 ### The `number` namespace
 
-`plugin-number` is the only writer of numbering attributes (ADR-0010), so one row
+`number` is the only writer of numbering attributes (ADR-0010), so one row
 covers every numbered element. A `number` its own plugin wrote (`{number: "auto"}`)
 is replaced by the pass, and once the pass ran the name is reserved (D-10):
 
@@ -218,7 +218,7 @@ Source: §7.3 · `crates/plugin-cite` · golden `05-cite`.
 
 `reference_id` and `locator` are the §7.3 preset (S2-4.4); `citation_number` is
 assigned by the processor, the one field the element **owns** (D-12 rule 5).
-`instance_index` is gone (§14) — a per-occurrence ordinal is `plugin-number`'s.
+`instance_index` is gone (§14) — a per-occurrence ordinal is `number`'s.
 
 | field             | type   | preset | notes                                                                                                                                      |
 | ----------------- | ------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -275,7 +275,7 @@ Source: §7.4/§11 · `crates/plugin-heading` · golden `06-heading`.
 | `id`     | string   | yes    | the section's when `plugin-section` runs — the heading then emits neither `id` nor `slug` (§9.5); else `#id` > `[slug]` > extras tick > the auto slug |
 | `slug`   | string   | yes    | `bracket.bare`, else a slug of `inner_text` (§7.4)                                                                                                    |
 | `title`  | string   | yes    | `paren.quote`; the extras `"…"` is the fallback (§6.2)                                                                                                |
-| `number` | string[] | yes    | written by `plugin-number` (ADR-0010) as a structured array; reserved once it runs (D-10)                                                             |
+| `number` | string[] | yes    | written by `number` (ADR-0010) as a structured array; reserved once it runs (D-10)                                                                    |
 
 `class` is an extra and `type` the routing key (§0); `inner_text` is universal.
 
@@ -295,7 +295,7 @@ the `#` run and the Markdown body write them (§7.4) — so the preset assigns o
 the two above. The extras side feeds `slug` (`specs.tick`) and `title`
 (`specs.quote`), each as the fallback of its head position (§0).
 
-`number` is **reserved** once `plugin-number` runs (D-10): an extras
+`number` is **reserved** once `number` runs (D-10): an extras
 `number: "auto"` is a diagnostic there, and the only `number` an extract sees is
 the array.
 

@@ -16,6 +16,7 @@ use std::collections::{HashMap, HashSet};
 
 use pendon_core::{ContextPipeline, Event, NodeKind};
 use pendon_extract::{ExtractOptions, ExtractOutput};
+use pendon_number::NumberOptions;
 use pendon_plugin_anchor::AnchorOptions;
 use pendon_plugin_bind::{Fragment, MdpMode};
 use pendon_plugin_blockquote::BlockquoteOptions;
@@ -27,7 +28,6 @@ use pendon_plugin_latex::LatexOptions;
 use pendon_plugin_list::ListOptions;
 use pendon_plugin_markdown::MarkdownOptions;
 use pendon_plugin_marker::MarkerOptions;
-use pendon_plugin_number::NumberOptions;
 use pendon_plugin_section::SectionOptions;
 use pendon_plugin_table::TableOptions;
 use pendon_plugin_wiki::WikiOptions;
@@ -375,7 +375,7 @@ fn run_chain(
                 // its attributes and before `markdown` re-lexes the rest. The
                 // position is validated up front (`validate_number_order`), so a
                 // misordered chain is a config error, not a silent difference.
-                pendon_plugin_number::process(&events, &config.number)
+                pendon_number::process(&events, &config.number)
             }
             "extract" => {
                 // P.2 of `docs/archive/fulfilled/plugin-extract.md`: extraction only *reads*

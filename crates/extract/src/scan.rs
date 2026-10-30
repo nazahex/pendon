@@ -2,7 +2,7 @@
 //!
 //! Extraction is a *reader*: it never rewrites the stream (P.2), so the document
 //! keeps rendering exactly as it would without the plugin. A node belongs to an
-//! element when its `__layer` attribute says so (the same contract `plugin-number`
+//! element when its `__layer` attribute says so (the same contract `number`
 //! and the §11 component sets use) — the events are the one place that knows every
 //! extras field, including the ones no renderer ever sees.
 

@@ -1,5 +1,6 @@
 use pendon_core::{ContextPipeline, Event};
 use pendon_extract::{BlockSpec, ExtractBlock, ExtractOptions, FieldConfigs};
+use pendon_number::{NumberBlock, NumberOptions, NumberStyles};
 use pendon_plugin_anchor::{AnchorCustomNode, AnchorOptions};
 use pendon_plugin_blockquote::{BlockquoteCustomNode, BlockquoteOptions};
 use pendon_plugin_cite::{CitationContext, CiteCustomNode, CiteOptions, ReferencesScope};
@@ -9,7 +10,6 @@ use pendon_plugin_heading::{HeadingCustomNode, HeadingOptions};
 use pendon_plugin_image::{ImageCustomNode, ImageOptions};
 use pendon_plugin_list::{ListCustomNode, ListOptions};
 use pendon_plugin_marker::{MarkerCustomNode, MarkerOptions};
-use pendon_plugin_number::{NumberBlock, NumberOptions, NumberStyles};
 use pendon_plugin_section::{SectionCustomNode, SectionOptions};
 use pendon_renderer_solid::{
     ComponentSet, ComponentTemplate, ConfigEntry, DataExport, ImportEntry, SolidRenderHints,
@@ -531,7 +531,7 @@ pub fn build_heading_options(config: Option<&HeadingTaskConfig>) -> Result<Headi
     if config.auto_number.is_some() || config.number_style.is_some() {
         return Err(concat!(
             "task.heading.auto_number / number_style were removed; ",
-            "use [[task.heading.number]] with plugin-number (ADR-0010, §14)"
+            "use [[task.heading.number]] with number (ADR-0010, §14)"
         )
         .to_string());
     }

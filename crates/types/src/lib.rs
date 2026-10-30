@@ -6,7 +6,7 @@
 //! | Consumer         | Asks                                                    |
 //! | ---------------- | ------------------------------------------------------- |
 //! | `renderer-solid` | which component renders an element                       |
-//! | `plugin-number`  | which numbering block an element belongs to              |
+//! | `number`  | which numbering block an element belongs to              |
 //! | `plugin-extract` | which extraction block(s) an element belongs to          |
 //!
 //! A config `type = …` entry is a [`Selector`] list. Resolution is scoped to a

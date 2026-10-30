@@ -1,4 +1,4 @@
-# pendon-plugin-number
+# pendon-number
 
 One numbering pass for **every** element (ADR-0010). The grammar of a marker
 lives in `crates/extra` (§5 + §10.5 of [`SYNTAX.md`](../../docs/spec/SYNTAX.md));

@@ -13,7 +13,7 @@
 /// The ten layer-tagged elements `plugin-extract` understands, in the order the
 /// inventory documents them (§2-§11).
 ///
-/// It is the same set `plugin-number` numbers: an element is extractable exactly
+/// It is the same set `number` numbers: an element is extractable exactly
 /// when its plugin tags the node with `__layer`. The five other in-scope elements
 /// of §8.6 are explained in §1 of the inventory.
 pub const ELEMENTS: [&str; 10] = [

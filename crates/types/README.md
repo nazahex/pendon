@@ -15,7 +15,7 @@ and they must never disagree:
 | Consumer         | Question                                          |
 | ---------------- | ------------------------------------------------- |
 | `renderer-solid` | which component renders this element              |
-| `plugin-number`  | which numbering block this element belongs to     |
+| `number`         | which numbering block this element belongs to     |
 | `plugin-extract` | which extraction block(s) this element belongs to |
 
 `pendon-types` depends on nothing but `std` (plus `serde` derives, because

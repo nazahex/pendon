@@ -1,7 +1,7 @@
-//! `plugin-number` — one numbering pass for every element (ADR-0010).
+//! `number`: one numbering pass for every element (ADR-0010).
 //!
 //! Numbering used to be a per-plugin feature: `plugin-heading` counted headings
-//! with its own counter and style table. This plugin owns **all** numbering:
+//! with its own counter and style table. This crate owns **all** numbering:
 //!
 //! * `[[task.<element>.number]]` blocks select elements of one element plugin
 //!   with ADR-0008's `type` selectors and give them a counter and a style;
@@ -525,7 +525,7 @@ pub fn process(events: &[Event], options: &NumberOptions) -> Vec<Event> {
                     vec![Event::Diagnostic {
                         severity: Severity::Warning,
                         message: format!(
-                            "[number] `{NUMBER_ATTR}` is reserved by plugin-number; the \
+                            "[number] `{NUMBER_ATTR}` is reserved by number; the \
                              authored value was replaced"
                         ),
                         span: None,

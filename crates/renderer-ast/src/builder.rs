@@ -181,7 +181,7 @@ impl AstBuilder {
     }
 
     fn handle_attribute(&mut self, name: &str, value: &str) {
-        // `__number` is `plugin-number`'s transport (ADR-0010, D-9): it is read
+        // `__number` is `number`'s transport (ADR-0010, D-9): it is read
         // and replaced by the numbering pass before any renderer runs, so the
         // internal marker never becomes part of the AST/JSON output.
         if name == "__number" {

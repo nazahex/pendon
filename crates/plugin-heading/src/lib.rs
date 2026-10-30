@@ -490,11 +490,11 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
 
             // 5. Emit StartNode, the §11 layer tag, the §13 diagnostics and the
             // fields. There is one emission path: what a Solid template reads is
-            // what the AST/JSON renderers carry. Numbering is `plugin-number`'s
+            // what the AST/JSON renderers carry. Numbering is `number`'s
             // job (ADR-0010); this plugin no longer counts anything.
             out.push(Event::StartNode(NodeKind::Heading));
             // §11 rule 3 / D-3a: every node names the layer that owns it, in both
-            // modes, so whole-document consumers (`plugin-number`,
+            // modes, so whole-document consumers (`number`,
             // `plugin-extract`) can tell the element kind from the event stream.
             out.push(Event::Attribute {
                 name: "__layer".to_string(),
@@ -904,7 +904,7 @@ mod tests {
             .any(|e| matches!(e, Event::Text(text) if text == "Body")));
     }
 
-    /// ADR-0010: numbering belongs to `plugin-number`. No heading code path may
+    /// ADR-0010: numbering belongs to `number`. No heading code path may
     /// emit a `number` attribute or inject a number into the heading text any
     /// more (the legacy `auto_number` / `number_style` behaviour is gone).
     #[test]

@@ -26,7 +26,7 @@ That has three consequences the proposals asked to remove:
 2. **The rule is duplicated ten times.** anchor, blockquote, cite, directive,
    heading, image, list, marker, section and table each re-implement "exact
    match, else default, else built-in".
-3. **Two more consumers want the same algorithm.** `plugin-number` (Phase 3)
+3. **Two more consumers want the same algorithm.** `number` (Phase 3)
    and `plugin-extract` (Phase 4) scope their blocks by the same selectors, so
    three copies would eventually disagree.
 
@@ -90,7 +90,7 @@ That has three consequences the proposals asked to remove:
 - The renderer now needs the document's occurring types: `render_solid_with_hints`
   walks the AST once, collects `type` attributes, and threads a `TypeSet`
   through node rendering and import gating.
-- `plugin-number` and `plugin-extract` reuse the crate instead of re-deriving
+- `number` and `plugin-extract` reuse the crate instead of re-deriving
   "which types does this rule own" (`matching`).
 - **Landed without moving a byte of output.** The ten cutovers were verified by
   re-freezing their goldens (`03`, `06`, `08`, `09`, `27`): the table's

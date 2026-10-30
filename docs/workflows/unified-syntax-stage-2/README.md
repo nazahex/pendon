@@ -85,7 +85,7 @@ Left column is proposal language; right column is what an agent actually touches
 | element, head         | plugin + its head parser (`crates/plugin-*/src/lib.rs`, `read_head` in `crates/extra`)                 |
 | extras                | `@@type` + `{ … }` + `%%numbering`, parsed by `crates/extra/src/lib.rs` + `typed.rs`                   |
 | specs                 | §5 "extras head grammar" / §6 "extras → attribute mapping"; `to_attributes`                            |
-| numbering             | §10.5 `%%numberType` → `__number` → `crates/plugin-number`                                             |
+| numbering             | §10.5 `%%numberType` → `__number` → `crates/number`                                                    |
 | slot                  | brackets/parentheses parsed ad hoc by `plugin-anchor`, `plugin-cite`, `plugin-image`, `plugin-heading` |
 | slot tag              | today: the whole head (`@[`, `[^^]`, `![`, `#[`)                                                       |
 | slot contract         | `SlotContract` in `crates/extra/src/slot.rs`, declared per element (S2-1.x)                            |
@@ -95,7 +95,7 @@ Left column is proposal language; right column is what an agent actually touches
 | assign / override     | `field.*` (D-5) + `Specs::resolve`; the four old naming keys are deleted (S2-2.8)                      |
 | preset                | today: `recommended: bool` in `ExtractRule` (`apps/cli/src/config.rs`)                                 |
 | extract               | `crates/plugin-extract` + `[[task.<element>.extract]]` (§21)                                           |
-| number                | `crates/plugin-number` + `[[task.<element>.number]]` (ADR-0010)                                        |
+| number                | `crates/number` + `[[task.<element>.number]]` (ADR-0010)                                               |
 
 ## 4. Phase ladder
 

@@ -526,7 +526,7 @@ fn emit_citation(parts: CiteParts, ctx: &mut CitationContext, out: &mut Vec<Even
     };
 
     // `instance_count`: absolute per physical occurrence; it never deduplicates.
-    // It is **not** a field (§7.3 — `plugin-number` replaces it): the built-in
+    // It is **not** a field (§7.3 — `number` replaces it): the built-in
     // markup uses it for its own backlink anchor, nothing else.
     ctx.instance_counter += 1;
     let instance = ctx.instance_counter;

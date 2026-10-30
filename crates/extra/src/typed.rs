@@ -66,7 +66,7 @@ pub enum ExtrasItem {
 /// `depth` is **already normalized** — the `%` run length − 1, so `%%` is depth
 /// 1 and `%%%%%%%` is depth 6. Normalization happens here, once, because two
 /// parsers of `%` would be the layering violation `CONTRIBUTORS.md` forbids;
-/// `plugin-number` only reads the depth back out of `__number`.
+/// `number` only reads the depth back out of `__number`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NumberMark {
     /// Normalized depth, 1…=6 (the `%` count minus one).
