@@ -844,6 +844,7 @@ proposal, the answer wins and `SYNTAX.md` records the corrected rule.
 | D-17     | settled | 2026-10-28                                                                  |
 | D-18     | settled | 2026-10-28 — one-key spread on both paths; nested props rejected            |
 | D-19     | settled | 2026-10-28 — the citations export uses the node's field names               |
+| D-20     | settled | 2026-10-30 — one destination path accumulates (S2-8.7)                      |
 
 **Phase 0 exit met 2026-10-28.** Every decision above is `settled` and every
 objective below is answered. Baseline before Phase 1: `cargo test --workspace`

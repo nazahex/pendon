@@ -101,20 +101,21 @@ Left column is proposal language; right column is what an agent actually touches
 
 Each phase is independently shippable and leaves `cargo test --workspace` green.
 Phases are ordered by _what the next phase reads_, not by proposal order.
+**Phases 0–8 are landed** (8 landed 2026-10-30, `S2-8.1`–`S2-8.7`).
 
-| phase | outcome                                                           | gate (true before leaving the phase)                      |
-| ----- | ----------------------------------------------------------------- | --------------------------------------------------------- |
-| 0     | decisions signed off, ADRs staged, spec map fixed                 | `DECISIONS.md` has no `TBD`; ADR 0012+ exist              |
-| 1     | slot grammar exists in `crates/extra` (parsed, not wired)         | unit tests green; no golden byte moves                    |
-| 2     | field model: names, assignment, override, validation, mapping     | unit tests green; no golden byte moves                    |
-| 3     | specs fields renamed (`specs.class` …) and assignable             | re-frozen goldens reviewed; renderer mapping tested       |
-| 4     | elements reworked one at a time (anchor, cite, heading, image, …) | per-element fixture re-frozen + README + §7.x updated     |
-| 5     | decorator unified (`@@` first, five receivers, warnings)          | decorator fixtures green; table decorator works           |
-| 6     | slot modifiers (config, merge rule, extraction visibility)        | modifier fixture + collision errors                       |
-| 7     | `FIELDS-INVENTORY.md` frozen (presets per element)                | tables reviewed; extract presets match the tables         |
-| 8     | `extract` crate: `preset`/`include`, nested paths, frontmatter    | PE.1–PE.4 + frontmatter fixtures; PE.4 yields `[{}]`      |
-| 9     | `number` crate + `number.*` fields, overridable                   | number fixtures re-frozen; extract sees `number.raw`      |
-| 10    | VSCode grammar, docs sweep, full gates                            | clippy/fmt/test green, sandboxes re-rendered, `STATUS.md` |
+| phase | outcome                                                           | gate (true before leaving the phase)                         |
+| ----- | ----------------------------------------------------------------- | ------------------------------------------------------------ |
+| 0     | decisions signed off, ADRs staged, spec map fixed                 | `DECISIONS.md` has no `TBD`; ADR 0012+ exist                 |
+| 1     | slot grammar exists in `crates/extra` (parsed, not wired)         | unit tests green; no golden byte moves                       |
+| 2     | field model: names, assignment, override, validation, mapping     | unit tests green; no golden byte moves                       |
+| 3     | specs fields renamed (`specs.class` …) and assignable             | re-frozen goldens reviewed; renderer mapping tested          |
+| 4     | elements reworked one at a time (anchor, cite, heading, image, …) | per-element fixture re-frozen + README + §7.x updated        |
+| 5     | decorator unified (`@@` first, five receivers, warnings)          | decorator fixtures green; table decorator works              |
+| 6     | slot modifiers (config, merge rule, extraction visibility)        | modifier fixture + collision errors                          |
+| 7     | `FIELDS-INVENTORY.md` frozen (presets per element)                | tables reviewed; extract presets match the tables            |
+| 8 ✅  | `extract` crate: `preset`/`include`, nested paths, frontmatter    | PE.1–PE.4 (golden 44) + frontmatter (45); PE.4 yields `[{}]` |
+| 9     | `number` crate + `number.*` fields, overridable                   | number fixtures re-frozen; extract sees `number.raw`         |
+| 10    | VSCode grammar, docs sweep, full gates                            | clippy/fmt/test green, sandboxes re-rendered, `STATUS.md`    |
 
 Dependency sketch (`a → b` means _b needs a_):
 
