@@ -122,8 +122,8 @@ component decides how to display it. An authored `number:` prop still passes
 through as an ordinary extras prop when no `number` block selects the element
 (golden `06-heading`).
 
-The retired `[task.heading]` keys `auto_number` and `number_style` fail the build
-with a §14 migration message pointing at `[[task.heading.number]]`.
+The retired `[task.heading]` keys `auto_number` and `number_style` fail the build,
+and the error names `[[task.heading.number]]` (§13, §14).
 
 ## Custom Solid Component
 

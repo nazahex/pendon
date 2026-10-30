@@ -241,12 +241,13 @@ pub fn reject_unwired_layers(
     Ok(())
 }
 
-/// Result of loading one plugin's component config: the sets plus non-fatal
-/// deprecation notices (§11 rule 4).
+/// Result of loading one plugin's component config: the sets each layer got.
+///
+/// There is no warnings list: a config key this version does not know is a load
+/// error, never a notice (D-16, ADR-0018).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct LoadedComponents {
     pub components: PluginComponents,
-    pub warnings: Vec<String>,
 }
 
 /// Keys that mark a table as a component entry rather than a map of layers.
@@ -257,9 +258,7 @@ pub struct LoadedComponents {
 ///
 /// Every other key is a load error (D-16): an entry is a closed vocabulary, so a
 /// typo — or a removed key (§14) — can never be silently ignored.
-const ENTRY_KEYS: [&str; 7] = [
-    "type", "name", "imports", "import", "template", "field", "bracket",
-];
+const ENTRY_KEYS: [&str; 6] = ["type", "name", "imports", "template", "field", "bracket"];
 
 /// Loads the `custom` key of one task-level plugin.
 ///
@@ -280,12 +279,12 @@ pub fn load(
 
     match custom {
         toml::Value::Array(_) => {
-            let set = parse_set(plugin, primary_layer, custom, &mut out.warnings)?;
+            let set = parse_set(plugin, primary_layer, custom)?;
             merge_set(&mut out.components, set)?;
         }
         toml::Value::Table(table) if is_layer_map(table) => {
             for (layer, value) in table {
-                let set = parse_set(plugin, layer, value, &mut out.warnings)?;
+                let set = parse_set(plugin, layer, value)?;
                 merge_set(&mut out.components, set)?;
             }
         }
@@ -329,12 +328,7 @@ fn merge_set(components: &mut PluginComponents, set: ComponentSet) -> Result<(),
     Ok(())
 }
 
-fn parse_set(
-    plugin: &str,
-    layer: &str,
-    value: &toml::Value,
-    warnings: &mut Vec<String>,
-) -> Result<ComponentSet, ConfigError> {
+fn parse_set(plugin: &str, layer: &str, value: &toml::Value) -> Result<ComponentSet, ConfigError> {
     let mut set = ComponentSet::new(layer);
     let label = format!("task.{plugin}.custom.{layer}");
 
@@ -344,13 +338,13 @@ fn parse_set(
                 let table = item.as_table().ok_or_else(|| {
                     ConfigError(format!("{label}: entry #{} must be a table", index + 1))
                 })?;
-                let entry = parse_entry(&format!("{label}[{}]", index + 1), table, warnings)?;
+                let entry = parse_entry(&format!("{label}[{}]", index + 1), table)?;
                 check_duplicate_type(&set, &entry, &label)?;
                 set.insert(entry)?;
             }
         }
         toml::Value::Table(table) => {
-            let entry = parse_entry(&label, table, warnings)?;
+            let entry = parse_entry(&label, table)?;
             set.insert(entry)?;
         }
         other => {
@@ -391,17 +385,20 @@ fn check_duplicate_type(
     Ok(())
 }
 
-fn parse_entry(
-    label: &str,
-    table: &toml::Table,
-    warnings: &mut Vec<String>,
-) -> Result<ComponentEntry, ConfigError> {
+fn parse_entry(label: &str, table: &toml::Table) -> Result<ComponentEntry, ConfigError> {
     // D-16: the entry vocabulary is closed. A key this version does not know is a
     // load error, not a warning — a typo or a removed key (§14) must never be
     // dropped silently and leave the output looking configured.
     for key in table.keys() {
         if ENTRY_KEYS.contains(&key.as_str()) {
             continue;
+        }
+        // D-16: a removed key is an error that names its replacement, never an
+        // alias (ADR-0018).
+        if key == "import" {
+            return Err(ConfigError(format!(
+                "{label}: `import` was removed; use `imports = [\"…\"]` (§11 rule 4, §14)"
+            )));
         }
         // §5.4 / D-9 rule 5: a modifier run exists in a bracket only, so a
         // `paren.modifier` table is not syntax (and not a typo either).
@@ -445,15 +442,10 @@ fn parse_entry(
         validate_template(label, template)?;
     }
 
-    // §11 rule 4: `imports` is canonical, the singular `import` is deprecated.
-    let mut imports = Vec::new();
-    if let Some(value) = table.get("import") {
-        warnings.push(format!("{label}: `import` is deprecated, use `imports`"));
-        imports = parse_imports(label, value)?;
-    }
-    if let Some(value) = table.get("imports") {
-        imports = parse_imports(label, value)?;
-    }
+    let imports = match table.get("imports") {
+        Some(value) => parse_imports(label, value)?,
+        None => Vec::new(),
+    };
 
     let field = match table.get("field") {
         Some(value) => parse_field_config(label, value)?,
@@ -1010,7 +1002,6 @@ mod tests {
             "#,
         );
         let loaded = load("table", "table", Some(&custom)).unwrap();
-        assert!(loaded.warnings.is_empty());
 
         let thead = loaded.components.layer("thead").unwrap();
         assert_eq!(thead.typed().len(), 1);
@@ -1089,18 +1080,31 @@ mod tests {
     }
 
     #[test]
-    fn unbalanced_template_and_deprecated_import_are_reported() {
+    fn unbalanced_template_and_removed_import_are_rejected() {
         let custom =
             custom_of(r#"custom = [{ name = "X", template = "<X {...attrs}>{children}<span>" }]"#);
         let error = load("anchor", "anchor", Some(&custom)).unwrap_err();
         assert!(error.to_string().contains("unclosed"), "{error}");
 
-        // `type` accepts a single string, and `import` only warns.
+        // D-16: the singular `import` is a load error that names `imports`.
         let single = custom_of(
             r#"custom = [{ type = "anchorA", name = "A", import = "import A from 'x'", template = "<A {...attrs}>{children}</A>" }]"#,
         );
-        let loaded = load("anchor", "anchor", Some(&single)).unwrap();
-        assert_eq!(loaded.warnings.len(), 1);
+        let error = load("anchor", "anchor", Some(&single)).unwrap_err();
+        assert!(
+            error.to_string().contains("`import` was removed"),
+            "{error}"
+        );
+
+        // `type` still accepts a single string, and a single import entry is one.
+        let loaded = load(
+            "anchor",
+            "anchor",
+            Some(&custom_of(
+                r#"custom = [{ type = "anchorA", imports = ["import A from 'x'"], template = "<A {...attrs}>{children}</A>" }]"#,
+            )),
+        )
+        .unwrap();
         let set = loaded.components.layer("anchor").expect("anchor layer");
         let entry = &set.typed()[0];
         assert_eq!(entry.literal_types().collect::<Vec<_>>(), vec!["anchorA"]);

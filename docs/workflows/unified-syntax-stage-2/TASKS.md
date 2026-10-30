@@ -1437,7 +1437,7 @@ re-rendered, the editor grammar matches, and `STATUS.md` is quiet again.
       §14's rows and the load-error paths (`components.rs`, `config.rs`,
       `plugins.rs`, the extract tests and the extract README's own error note).
       `cargo test --workspace` still 78 targets green.
-- [ ] **S2-10.3 — Clean-break audit (D-16).** Dep: S2-10.2.
+- [x] **S2-10.3 — Clean-break audit (D-16).** Dep: S2-10.2.
       Do: prove there is no compatibility surface left — `grep -rn "serde(alias)"
       crates apps`, `grep -rn "#\[deprecated\]"`, `grep -rn "TODO: remove"`,
       `grep -rni "backward compat\|deprecat\|migration" docs/ crates/ apps/`;
@@ -1445,6 +1445,26 @@ re-rendered, the editor grammar matches, and `STATUS.md` is quiet again.
       Confirm `MIGRATION.md` is gone and no doc links to it.
       Exit: the greps are clean; a deliberately old config file fails to load with
       one `Severity::Error` in a test.
+      **Done 2026-10-31.** Four surfaces were still alive and are gone: the
+      `LoadedComponents.warnings` plumbing (config keys this version does not know
+      are `Error`s, not warnings), the singular `import` alias in `ENTRY_KEYS`
+      (`imports` only; a stale key names it), `plugin-cite::process()` — the
+      free-function shim over `CitationContext` and the last reader of frontmatter
+      `references` (§2.4 made the map a caller argument) — and `plugin-cite`'s
+      unused frontmatter helpers. Reworded the claims that still implied a compat
+      window (`core/pipeline.rs`'s "migration path", `plugin-custom`'s
+      "backward compatibility" capture fallback → the three names its README
+      documents, the heading and directive READMEs, §15 OPEN-R1 / OPEN-C2 →
+      resolved-dropped, §21 rule 4, and the "migration message" wording in
+      `plugins.rs` / `config.rs` doc comments). `crates/plugin-cite/README.md` now
+      documents `CitationContext` as the only entry point. New
+      `apps/cli/tests/clean_break_spec.rs`: seven retired keys (`import`,
+      `custom_node`, `backtick_key`, `auto_number`, `number_style`, `recommended`,
+      a `figure` layer) each stop the build with exit 2, **one** `Error:` line
+      naming the replacement, and no `out/` file. The `serde(alias)` /
+      `#[deprecated]` / `TODO: remove` / `MIGRATION.md` / `backward compat` greps
+      now hit only ADR-0018's own prohibition and that test's header;
+      `cargo test --workspace` is 79 targets green.
 - [ ] **S2-10.4 — Full gate + sandboxes.** Dep: S2-10.3.
       Do: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets`,
       `cargo test --workspace`; re-render every `sandbox/*`, review the diff;

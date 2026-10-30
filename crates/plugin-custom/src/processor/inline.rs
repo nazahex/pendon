@@ -145,8 +145,8 @@ fn process_line<C, P>(
             let (parsed_attrs, diags) = attrs::collect_attrs(spec, Some(&caps));
             out.extend(diags);
 
-            // Extract inner content. Convention: use capture group named "body" or "content".
-            // Fallback to "reason" for backward compatibility with existing configs.
+            // Extract inner content. The spec's capture group may be named `body`,
+            // `content` or `reason` — the three names its README documents.
             let inner_text = caps
                 .name("body")
                 .or_else(|| caps.name("content"))

@@ -88,7 +88,8 @@ Wired into the CLI plugin list: `directive` builds its `DirectiveOptions` from
 - The plugin runs **before** `plugin-markdown` (§12.1). The block pass runs first
   so a block body is collected whole; the inline pass then walks the result, so
   `::…::` inside a block body is bound too.
-- `:::name` is a deprecated alias kept for one release (Warning) — §15 OPEN-R1.
+- `:::name` is not a directive: the markers are the 2–7 colon run (§10.2) and
+  `==` (§10.3), so a `:::` line is literal text (§14).
 
 ## License
 

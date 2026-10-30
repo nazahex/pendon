@@ -204,8 +204,7 @@ fn cite_default_template(references_export: &str) -> String {
 /// §11 primary layer of `plugin-marker`: the node `{{type}}` renders.
 const MARKER_LAYER: &str = "marker";
 
-/// Loads `task.<plugin>.custom` (§11) once per task, printing the loader's
-/// non-fatal deprecation warnings (§11 rule 4, §13).
+/// Loads `task.<plugin>.custom` (§11) once per task.
 fn load_custom(
     plugin: &str,
     primary_layer: &str,
@@ -216,15 +215,12 @@ fn load_custom(
     };
     let loaded = crate::components::load(plugin, primary_layer, Some(custom))
         .map_err(|error| error.to_string())?;
-    for warning in &loaded.warnings {
-        eprintln!("Warning: {}", warning);
-    }
     Ok(Some(loaded))
 }
 
-/// §14: `[task.<plugin>.custom_node]` was replaced by the §11 `custom.<layer>`
-/// form. The removed key is still parsed so a stale config fails with a
-/// migration message instead of silently losing the custom component.
+/// §14: `[task.<plugin>.custom_node]` is not a key any more. It is still read
+/// so a stale config fails, naming the §11 `custom.<layer>` form it must use,
+/// instead of silently losing the custom component.
 fn check_custom_node_removed(plugin: &str, legacy: bool) -> Result<(), String> {
     if legacy {
         return Err(format!(
@@ -1481,7 +1477,7 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
     }
 
     /// Unknown layers are typos and the removed `custom_node` key is a
-    /// migration; both are reported (§11 rule 1, §14).
+    /// removal; both are reported (§11 rule 1, §14).
     #[test]
     fn unknown_layers_and_removed_custom_node_are_rejected() {
         let cfg: AnchorTaskConfig =
@@ -1498,7 +1494,7 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
     }
 
     /// Every plugin that used to read `[task.<plugin>.custom_node]` fails the
-    /// build with a migration message instead of ignoring the table (§14).
+    /// build with an error naming the layer form instead of ignoring the table (§14).
     #[test]
     fn every_plugin_rejects_the_removed_custom_node_key() {
         let table: TableTaskConfig =

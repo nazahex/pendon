@@ -1510,8 +1510,8 @@ Rules:
    > keep the older node identity instead. `quiz`, `vicado` and the wiki
    > infobox are scheduled for deletion, so they are deliberately **not**
    > migrated to `__layer` / `layer_templates` — ignore them when changing §11.
-4. `imports` is canonical. The legacy singular `import` is accepted with a
-   deprecation `Severity::Warning` (see §14 OPEN-C2).
+4. `imports` is the only spelling. A singular `import` is a load error that
+   names it (§13, §14).
 5. Positional naming (per component, all layers): `field.specs.tick`,
    `field.specs.quote` (§6.1) — plus `field.specs.class` / `.id` / `.style` for
    the universal DOM positions. Directive heads additionally use
@@ -1672,10 +1672,6 @@ objects**; the spec text above already assumes the recommendation.
 - **OPEN-T1 (tenant of `plugin-blockquote`/`plugin-list`).** Both plugins are
   **new crates** (they now exist); the existing markdown-plugin behaviour stays
   as fallback when they are not enabled. **Recommendation: new crates.**
-- **OPEN-R1 (`:::` compatibility).** Keep parsing `:::name` blocks as a
-  deprecated alias of `==name` for one release (Warning), then hard-error.
-  **Recommendation: alias with Warning** — `sandbox/universal`,
-  `sandbox/custom` and `apps/cli/tests/fixtures` still use `:::`.
 
 ### Resolved decisions
 
@@ -1715,8 +1711,14 @@ Rationale lives in [`decisions/`](../decisions/).
   (single table or array of tables); single-layer plugins use the primary layer
   shorthand (`[task.anchor.custom]`, `[[task.anchor.custom]]`). Implemented by
   the loader in `apps/cli/src/components.rs`.
-- **OPEN-C2 (`import` alias) — resolved (warn).** The loader accepts the
-  singular `import` and emits a Warning, then hard-errors one release later.
+- **OPEN-C2 (`import` alias) — resolved (dropped).** `imports` is the only
+  spelling: the loader rejects a singular `import` with an error naming it
+  (§13, §14). D-16 leaves no room for an alias, however short its life.
+- **OPEN-R1 (`::: compatibility`) — resolved (dropped).** There is no `:::name`
+  alias: Pendon's markers are the colon run (§10.2) and `==` (§10.3), so a
+  `:::`-delimited block is ordinary text (§14). A runtime `plugin-custom` spec
+  may still declare `:::` as one of its own literals — that is configuration,
+  not grammar.
 - **OPEN-C3 (layer routing) — resolved (`D-3a`).** A plugin no longer selects a
   layer component per instance: it emits its built-in node, keeps the `type`
   marker and tags the node with the §11 layer that owns it (`__layer`), and
@@ -1762,7 +1764,7 @@ docs/spec/golden/NN-name.out/         side files the render writes, a mirror of 
 > Live status (which fixtures are green) is tracked in [`STATUS.md`](../../STATUS.md),
 > not here — this section stays normative.
 
-## 17. Migration phases (historical)
+## 17. Build phases (historical)
 
 The migration ran in phases (0: shared scanner; 1: construct plugins; 2: table
 rewrite; 3: blockquote/list/marker/directive + binder; 4: list-item layer). The

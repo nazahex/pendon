@@ -9,7 +9,7 @@ pub struct Pipeline {
 
 /// A pipeline whose document state is borrowed explicitly for every step.
 ///
-/// This is the migration path for stateful plugins. It avoids shared mutable
+/// This is the re-registration path for stateful plugins. It avoids shared mutable
 /// state hidden inside processors while preserving the existing `Pipeline`
 /// API for plugins that do not need a document context.
 pub struct ContextPipeline<C> {

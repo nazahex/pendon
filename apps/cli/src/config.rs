@@ -164,7 +164,7 @@ pub struct ImageTaskConfig {
     /// §11 layer component sets: `[task.img.custom.figure]`.
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.img.custom_node]`, §14). The table is still
-    /// parsed so a stale config fails with a migration message instead of
+    /// parsed so a stale config fails with an error naming the new key instead of
     /// silently dropping the custom component.
     pub custom_node: Option<toml::Value>,
     /// `[[task.image.extract]]` — data extraction blocks (plugin-extract).
@@ -175,7 +175,7 @@ pub struct ImageTaskConfig {
 #[derive(Debug, Deserialize, Default)]
 pub struct HeadingTaskConfig {
     /// Removed in favour of `[[task.heading.number]]` (ADR-0010, §14). Parsed as
-    /// an opaque value so a stale config fails with a migration message instead
+    /// an opaque value so a stale config fails with an error naming the new key instead
     /// of silently rendering an unnumbered document.
     pub auto_number: Option<toml::Value>,
     /// Removed with `auto_number` (§14).

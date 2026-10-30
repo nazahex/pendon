@@ -369,8 +369,7 @@ impl CitationContext {
     }
 }
 
-// --- Legacy API (backward compatible) ---
-
+/// Reads a `[task.cite] references` file (§7.3).
 pub fn load_references(path: &Path) -> Result<Value, String> {
     let text = fs::read_to_string(path).map_err(|e| {
         format!(
@@ -387,37 +386,6 @@ pub fn load_references(path: &Path) -> Result<Value, String> {
         )
     })?;
     yaml_to_json(&yaml)
-}
-
-/// Legacy entry point. For new code, prefer CitationContext::new() + process_events().
-pub fn process(events: &[Event], options: &CiteOptions) -> Vec<Event> {
-    let frontmatter = extract_frontmatter(events);
-    let front_references = frontmatter
-        .as_ref()
-        .and_then(|data| data.get("references"))
-        .cloned()
-        .unwrap_or_else(|| Value::Object(Map::new()));
-    let references = merge_references(&front_references, options.external_references.as_ref());
-
-    let mut ctx = CitationContext::new(references, options.clone());
-    let processed = ctx.process_events(events);
-
-    let diagnostics = ctx.drain_diagnostics();
-    let mut out = processed;
-    if !diagnostics.is_empty() {
-        let insert_at = out
-            .iter()
-            .position(|event| matches!(event, Event::StartNode(NodeKind::Document)))
-            .map(|idx| idx + 1)
-            .unwrap_or(0);
-        for (offset, diagnostic) in diagnostics.into_iter().enumerate() {
-            out.insert(insert_at + offset, diagnostic);
-        }
-    }
-
-    // `cites`/`references` no longer ride in frontmatter (§2.4); they are
-    // exported as dedicated JS bindings by the solid renderer.
-    out
 }
 
 /// Builds the Solid render hints for a document that ran the `cite` layer.
@@ -1018,40 +986,6 @@ fn merge_modifiers(extra: &mut CiteExtraAttrs, pair: &SlotPair, config: Option<&
     }
 }
 
-// --- Frontmatter Helpers ---
-
-fn extract_frontmatter(events: &[Event]) -> Option<Value> {
-    let mut inside = false;
-    for event in events {
-        match event {
-            Event::StartNode(NodeKind::Frontmatter) => inside = true,
-            Event::EndNode(NodeKind::Frontmatter) => inside = false,
-            Event::Attribute { name, value } if inside && name == "data" => {
-                if let Ok(data) = serde_json::from_str(value) {
-                    return Some(data);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
-fn merge_references(front: &Value, external: Option<&Value>) -> Value {
-    let mut merged = Map::new();
-    if let Some(map) = external.and_then(Value::as_object) {
-        for (key, value) in map {
-            merged.insert(key.clone(), value.clone());
-        }
-    }
-    if let Some(map) = front.as_object() {
-        for (key, value) in map {
-            merged.insert(key.clone(), value.clone());
-        }
-    }
-    Value::Object(merged)
-}
-
 fn reference_exists(references: &Value, id: &str) -> bool {
     references
         .as_object()
@@ -1563,6 +1497,34 @@ mod tests {
             Event::EndNode(NodeKind::Paragraph),
             Event::EndNode(NodeKind::Document),
         ]
+    }
+
+    /// The catalog every fixture names: the `book` entry its frontmatter shows.
+    fn fixture_references() -> Value {
+        serde_json::json!({"book": {"title": "Book"}})
+    }
+
+    /// Runs the public path ([`CitationContext`]) over a fixture and returns the
+    /// document the chain would report.
+    ///
+    /// §2.4 made the reference map the caller's argument — `references` no longer
+    /// ride in frontmatter — so the helper supplies [`fixture_references`] and
+    /// splices the drained diagnostics after the document start, which is where
+    /// `apps/cli` reports them.
+    fn process(events: &[Event], options: &CiteOptions) -> Vec<Event> {
+        let mut ctx = CitationContext::new(fixture_references(), options.clone());
+        let mut out = ctx.process_events(events);
+        let diagnostics = ctx.drain_diagnostics();
+        if let Some(insert_at) = out
+            .iter()
+            .position(|event| matches!(event, Event::StartNode(NodeKind::Document)))
+            .map(|idx| idx + 1)
+        {
+            for (offset, diagnostic) in diagnostics.into_iter().enumerate() {
+                out.insert(insert_at + offset, diagnostic);
+            }
+        }
+        out
     }
 
     #[test]

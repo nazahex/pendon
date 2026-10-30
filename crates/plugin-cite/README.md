@@ -234,26 +234,32 @@ therefore never loses a value for want of a component (fixture
 
 ## Shared Citation Context
 
-This plugin uses a `CitationContext` that persists across the entire document processing lifecycle. This means:
+This plugin uses a `CitationContext` that persists across the entire document
+processing lifecycle. This means:
 
-- Citations inside image captions (`plugin-image`) share the same numbering as citations in regular paragraphs
-- Identity deduplication works globally — the same citation in a caption and a paragraph gets the same `citation_number`
-- The context is built once per file after `micromatter` extracts frontmatter references
+- Citations inside image captions (`plugin-image`) share the same numbering as
+  citations in regular paragraphs
+- Identity deduplication works globally — the same citation in a caption and a
+  paragraph gets the same `citation_number`
+- The context is built once per file, from the reference map the caller passes
+  (§2.4: references come from `[task.cite] references`, never from frontmatter)
 
-For plugin authors integrating with `pendon-plugin-cite`, use the `CitationContext` API instead of the legacy `process()` function:
+`CitationContext` is the plugin's only entry point — there is no free-function
+shim (`process()` was removed with the frontmatter carrier, D-16):
 
 ```rust
-let ctx = CitationContext::new(references, options);
+let mut ctx = CitationContext::new(references, options);
 
 // Process main document
-events = ctx.process_events(&events);
+let events = ctx.process_events(&events);
 
 // Process sub-pipeline (e.g., caption) — numbering continues where the main doc left off
-caption_events = ctx.process_events(&caption_events);
+let caption_events = ctx.process_events(&caption_events);
 
 // Finalize
 let citations = ctx.get_citations();
 let refs = ctx.get_exported_references(); // honours `references_scope` (§2.6)
+let diagnostics = ctx.drain_diagnostics();
 ```
 
 ## Data Exports
