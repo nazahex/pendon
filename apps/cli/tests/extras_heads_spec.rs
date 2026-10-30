@@ -6,7 +6,7 @@
 //! `@@type{…}` inside the `>` is content and stays literal (§9.2, `S2-4.3`).
 //!
 //! One document per row, one project, one render: the table below is the audit,
-//! and each row asserts what its element's own projection (§6.3, §7.x) makes of
+//! and each row asserts what its element's own projection (§6.5, §7.x) makes of
 //! the shared head. The head text is identical everywhere —
 //! `` {`slug-x`, "Title X", .cls, #elem-x, style: "--w: 1px", %%%numberA} `` —
 //! so a row that loses `class` / the id / the style / the quote is a head the

@@ -459,10 +459,10 @@ assignable, and the DOM renderers still emit valid `class`/`id`/`style`.
       `specs.quote`, …) so a reader can tell a default from an assignment.
       **Done 2026-10-28.** §6.1 is the seven-row table (`content` / `config key` /
       `default path` / `meaning`), and the old `default` column is gone because it
-      was wrong: `slug` / `title` are the **element preset** (§6.5, D-7 — an
+      was wrong: `slug` / `title` are the **element preset** (§6.6, D-7 — an
       assignment), not the path, so the default column now names the path
       (`specs.tick` … `bracket.bare`) and points at `SpecsKey::default_path`.
-      The §6.5 that five crates already cited did not exist and is now written;
+      The §6.6 that five crates already cited did not exist and is now written;
       §5.1's worked example lists public fields instead of attributes, §6.4 names
       positions and paths and states the projection's sort (the "restate me"
       reminder is gone), and §14's removed-keys row no longer promises `slug` /
@@ -550,7 +550,7 @@ README. If an element has nothing to delete, say so in the commit message.
       "an untouched head owns nothing") and
       `title_is_not_overridable_by_extras` (`plugin-wiki`, the `Error` the
       `[&str]` list never proved); `href_stays_construct_owned` still passes.
-      Docs: §6.5 states the owned list, D-12's note records the wiring, and the
+      Docs: §6.6 states the owned list, D-12's note records the wiring, and the
       `crates/extra` README now describes the triple. Gate green: 753 tests.
 - [x] **S2-4.2 — Anchor.** Dep: S2-4.1. `§7.2`
       Do: `@` tag claims `[]`/`()`; contract `bracket.bare→inner_text`,
@@ -820,7 +820,7 @@ README. If an element has nothing to delete, say so in the commit message.
       fixed: the **built-in citation markup** published only `reference_id` /
       `locator` and discarded `parts.values`, so `bracket.tick`, `paren.bare`,
       `paren.quote` and `paren.tick` vanished — raw markup cannot spread a dotted
-      key, so it now writes them as `data-<slot>-<kind>` (§6.5, §7.3).
+      key, so it now writes them as `data-<slot>-<kind>` (§6.6, §7.3).
 
 ## Phase 5 — decorator unification
 
@@ -1392,19 +1392,51 @@ every element, exposes `number.*`, and is extractable.
 Entry: Phases 0–9 done. Leave when the workspace is green, the sandboxes are
 re-rendered, the editor grammar matches, and `STATUS.md` is quiet again.
 
-- [ ] **S2-10.1 — VSCode grammar.** Dep: S2-9.4.
+- [x] **S2-10.1 — VSCode grammar.** Dep: S2-9.4.
       Files: `editors/vscode/**`.
       Do: highlight `@@` (first), slot tags `@ ^ ! #`, the three slot content
       kinds, the modifier run, `specs.*` fields and `field.*` config keys; update
       the scope harness; link `SYNTAX.md` §5.2–§5.4 (never restate the grammar).
       Exit: harness green + one grammar case per construct.
-- [ ] **S2-10.2 — Docs sweep.** Dep: S2-10.1.
+      **Done 2026-10-30.** The slot layer replaced `#positionalGroup`: one
+      `#slotGroup` (bracket + attached paren) and one tagged head per element
+      (`#anchor`, `#image`, `#citation`), with `#slotTick` / `#slotQuoteDouble` /
+      `#slotQuoteSingle` / `#slotBare` as the three contents and `#slotModifier`
+      for the `|…` run. `#decorator` now reads `@@` → type → slots → `{specs}` →
+      `%%numbering` in one order (it used to stop at the body, so a trailing
+      `%%%numberA` hid the whole line), `#headings` allows a numbering marker in
+      the same position, and retired colouring is deleted rather than kept: the
+      `!!`/`?~w300` figure run, the `[^^]` citation, the anchor URL modifiers and
+      the `@@`-less decorator line. Head items wear the specs field they fill
+      (`meta.specs.class|id|style`); a nested value can no longer claim one, and
+      `$ref` steps stay inside a spread. `field.*` keys are config, so the
+      grammar colours the markup they name (§6.1's positions) and the README says
+      so. New `tools/scope-cases.mjs`: 13 cases, one per construct, wired into
+      `npm run check`; `self-test.mjs` still green.
+- [x] **S2-10.2 — Docs sweep.** Dep: S2-10.1.
       Do: `SYNTAX.md` §2 terminology, §5.2–§5.4, §6.1/§6.5/§6.6, §7.x/§8/§9.x,
       §10.5, §13, §14, §21 (D-15); every touched crate README links its §; no
       grammar restated outside the spec. §14 rows record removal only — apply
       OBJ-11 to the pre-existing rows if it is answered "prune".
       Exit: `grep` for old terms (`canonical extras`, `positional names`,
       `recommended`, `backtick_key`) returns only §14's normative lines.
+      **Done 2026-10-30.** §5.2–§5.4 and §6.6 were referenced from code, ADRs and
+      tests but had **never been written**; they exist now (slots, tags,
+      modifiers, preset assignment/voiding), §5 is retitled "Heads: extras and
+      slots", §6.1 is "Slot contracts and the field map", and D-15's map is
+      complete: the naming half of §6.3 moved to a real **§6.5 "The public field
+      projection"** (ADR-0012/0014 already pointed there), so the 46 references
+      that meant "the preset" now say §6.6 and the two that meant the projection
+      were already right. §2 gained element / slot content / contract / specs /
+      modifier / public field / preset and lost the retired `~?!` examples. §3's
+      inventory lists the slots, tags, modifier run and `%%`, and drops the
+      retired `[k] ("k")` and `~?!` rows. §13 gained the four Stage-2 diagnostics;
+      §14 was pruned to OBJ-11's removal-only shape (two columns, no "replaced
+      by", no migration prose) and gained the `recommended` row; §21 rule 4
+      points at it. Greps: the only `backtick_key` / `recommended` hits left are
+      §14's rows and the load-error paths (`components.rs`, `config.rs`,
+      `plugins.rs`, the extract tests and the extract README's own error note).
+      `cargo test --workspace` still 78 targets green.
 - [ ] **S2-10.3 — Clean-break audit (D-16).** Dep: S2-10.2.
       Do: prove there is no compatibility surface left — `grep -rn "serde(alias)"
       crates apps`, `grep -rn "#\[deprecated\]"`, `grep -rn "TODO: remove"`,

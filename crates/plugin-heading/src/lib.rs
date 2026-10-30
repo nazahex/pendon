@@ -41,7 +41,7 @@ const PRESET: &[Preset] = &[
 const ELEMENT_READS: &[(SpecsKey, &str)] = &[(SpecsKey::Tick, "slug"), (SpecsKey::Quote, "title")];
 
 /// The tag that claims heading's head (D-11), the positions it claims, and their
-/// fallback-to-preset assignment (§6.1, §6.5, D-7).
+/// fallback-to-preset assignment (§6.1, §6.6, D-7).
 pub const HEAD: ElementHead = ElementHead::new(
     SlotContract {
         accepted: SLOTS,
@@ -78,7 +78,7 @@ pub struct HeadingCustomNode {
 /// `@@type{…}` extras attached to them (§7.4).
 #[derive(Debug, Default)]
 struct HeadingHead {
-    /// `bracket.bare` — or wherever the preset's row moved (§6.1, §6.5). The
+    /// `bracket.bare` — or wherever the preset's row moved (§6.1, §6.6). The
     /// heading's public id field; it falls back to a slug of `inner_text`.
     slug: Option<String>,
     /// `paren.quote`: the heading's `title` attribute.
@@ -146,7 +146,7 @@ fn read_head(rest: &str, options: &HeadingOptions) -> Read {
         return Read::Literal;
     }
 
-    // §6.5 / D-7: the preset is voided by the **matched** entry, never by
+    // §6.6 / D-7: the preset is voided by the **matched** entry, never by
     // another entry's `field.*`. No extras head means no `type` marker, which is
     // exactly the entry the renderer will pick (the layer default).
     let marker = extras.as_ref().and_then(|head| head.type_marker.as_deref());
@@ -158,7 +158,7 @@ fn read_head(rest: &str, options: &HeadingOptions) -> Read {
     };
     let mut head_keys: Vec<String> = Vec::new();
     if let Some(pair) = &pair {
-        // §6.5: `bracket.bare → slug`, `paren.quote → title`; every other
+        // §6.6: `bracket.bare → slug`, `paren.quote → title`; every other
         // position is a bare field (D-7).
         let fields = HEAD.assign(pair, matched).unwrap_or_else(|error| {
             // The entry's assignments contradict each other (one path is a

@@ -85,7 +85,7 @@ between the head and the text belongs to the head (it is not part of the text).
 ```
 
 `slug="intro"`-style fields come from the preset: `bracket.bare` → `slug`,
-`paren.quote` → `title` (§6.5). The extras tick loses to the head's `[slug]` and
+`paren.quote` → `title` (§6.6). The extras tick loses to the head's `[slug]` and
 is reported (§6.2). With no `[slug]`, an extras tick at its default path
 `specs.tick` **is** the fallback slug — §6.2's chain is `#id` > `[slug]` > extras
 tick > a slug of the text:

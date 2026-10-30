@@ -356,7 +356,7 @@ fn render_attrs(v: &Value, out: &mut String, skipped: &[&str], ctx: &Ctx) {
     // The fields come from the projection, not from the node's own `attrs` map
     // (ADR-0014 rule 2): internals (`__`-prefixed, §11 rule 3) are gone, `specs.*`
     // is in, and `project` has already renamed the universal positions to
-    // `class`/`id`/`style` (§6.3). Phase 4 adds each element's preset assignment
+    // `class`/`id`/`style` (§6.5). Phase 4 adds each element's preset assignment
     // on top of the same map.
     for (name, value) in pendon_extra::project(v, None).attrs() {
         // `name` is the AST node name, not an attribute — the template path

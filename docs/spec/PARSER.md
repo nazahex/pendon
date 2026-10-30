@@ -42,7 +42,7 @@ plus `HtmlBlock` / `HtmlInline`. The `__plugin_kind` attribute on a `Custom` /
 Extras map to `AttrValue { Str, Int, Float, Bool, Raw, Object, Array }`
 (`crates/extra`; objects/arrays are the nested `{…}`/`[…]` values of §5), then to
 `Event::Attribute { name, value: String }`; bare flags emit `Event::AttributeFlag`.
-See `SYNTAX.md` §6.3 for the full mapping and per-renderer behaviour.
+See `SYNTAX.md` §6.3 for the values and §6.5 for how a renderer names them.
 
 ## Not in this contract
 

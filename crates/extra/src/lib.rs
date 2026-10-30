@@ -17,7 +17,7 @@
 //! * [`validate_field_name`] / [`Path`] / [`FieldMap`] / [`project`] — the public
 //!   field vocabulary the projection emits and the map it fills (ADR-0014,
 //!   proposal §7), plus [`FieldName`] / [`Preset`] / [`ElementHead`], the
-//!   built-in slot→field assignment each element declares as data (§6.5, D-7).
+//!   built-in slot→field assignment each element declares as data (§6.6, D-7).
 //! * [`modifier_contributions`] / [`ModifierConfig`] — the §5.4 slot modifier
 //!   run: what each symbol is configured to contribute and D-9's merge
 //!   (ADR-0017). Pendon ships no modifier of its own.

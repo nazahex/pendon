@@ -351,7 +351,7 @@ impl Specs {
 /// [`Specs::dom_fields`]. This is the default-path-only spelling the projection
 /// ([`crate::field::project`]) can apply without a `FieldConfig`. A path
 /// `field.specs.*` assigned is **not** universal: `foo.class` stays `foo.class`
-/// (§6.3 rule 2, [`Specs::element_path`]).
+/// (§6.5 rule 2, [`Specs::element_path`]).
 pub fn universal_field(key: &str) -> Option<&'static str> {
     let key = key.strip_prefix(SPECS_NAMESPACE)?.strip_prefix('.')?;
     match key {

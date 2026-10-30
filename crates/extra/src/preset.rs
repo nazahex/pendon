@@ -1,5 +1,5 @@
 //! Preset assignment: where each slot position of a built-in element lands
-//! (`docs/spec/SYNTAX.md` §6.1/§6.5, proposal §7, D-7).
+//! (`docs/spec/SYNTAX.md` §6.1/§6.6, proposal §7, D-7).
 //!
 //! Every element that contracts a slot head has three pieces of static data:
 //!

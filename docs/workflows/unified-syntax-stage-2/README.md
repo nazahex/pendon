@@ -158,16 +158,16 @@ cargo run --bin pendon -- run -F # in the fixture copy; re-freeze only what move
 
 ## 7. Doc-update matrix
 
-| you changed                     | update                                                               |
-| ------------------------------- | -------------------------------------------------------------------- |
-| slot grammar / tags / modifiers | `spec/SYNTAX.md` §5.2–§5.4 (new), ADR-0012                           |
-| a slot contract                 | `spec/SYNTAX.md` §6.1 (rewritten) + that element's §7.x/§8/§9.x      |
-| fields (assign/override/preset) | `spec/SYNTAX.md` §6.5 (new), `spec/FIELDS-INVENTORY.md`, ADR-0014    |
-| decorator rule                  | `spec/SYNTAX.md` §9.1 + ADR-0013                                     |
-| an element's behaviour          | `crates/plugin-*/README.md` (link the §N) + a golden                 |
-| `extract` / `number` promotion  | `crates/extract/README.md`, `crates/number/README.md`, ADR-0015/0016 |
-| removed syntax or config key    | `spec/SYNTAX.md` §14 (removal only), the §13 error row, `STATUS.md`  |
-| editor scopes                   | `editors/vscode/README.md` (never restate the grammar)               |
+| you changed                     | update                                                                 |
+| ------------------------------- | ---------------------------------------------------------------------- |
+| slot grammar / tags / modifiers | `spec/SYNTAX.md` §5.2–§5.4 (new), ADR-0012                             |
+| a slot contract                 | `spec/SYNTAX.md` §6.1 (rewritten) + that element's §7.x/§8/§9.x        |
+| fields (assign/override/preset) | `spec/SYNTAX.md` §6.5–§6.6 (new), `spec/FIELDS-INVENTORY.md`, ADR-0014 |
+| decorator rule                  | `spec/SYNTAX.md` §9.1 + ADR-0013                                       |
+| an element's behaviour          | `crates/plugin-*/README.md` (link the §N) + a golden                   |
+| `extract` / `number` promotion  | `crates/extract/README.md`, `crates/number/README.md`, ADR-0015/0016   |
+| removed syntax or config key    | `spec/SYNTAX.md` §14 (removal only), the §13 error row, `STATUS.md`    |
+| editor scopes                   | `editors/vscode/README.md` (never restate the grammar)                 |
 
 ## 8. Risks
 

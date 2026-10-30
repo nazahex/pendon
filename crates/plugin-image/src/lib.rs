@@ -54,7 +54,7 @@ const PRESET: &[Preset] = &[
 const OWNED: &[FieldName] = &[FieldName::new("alt"), FieldName::new("src")];
 
 /// The tag that claims image's head (D-11), the positions it claims, and where
-/// each lands when the user configures nothing (§6.1, §6.5, D-7).
+/// each lands when the user configures nothing (§6.1, §6.6, D-7).
 pub const HEAD: ElementHead = ElementHead::new(
     SlotContract {
         accepted: SLOTS,
@@ -292,7 +292,7 @@ impl ImageParts {
 }
 
 /// Turns the two slots and the extras head into the fields the `<img>` exposes
-/// (§6.5 preset, §6.2 priority, §6.3 projection).
+/// (§6.6 preset, §6.2 priority, §6.5 projection).
 ///
 /// `field` is the **matched** entry's `field.*` (D-7): when it configures one,
 /// every preset row is void for this element and each position keeps its
@@ -306,7 +306,7 @@ fn build_parts(
 ) -> ImageParts {
     let mut parts = ImageParts::default();
 
-    // §6.5 / D-7: the preset is voided by the **matched** entry, never by another
+    // §6.6 / D-7: the preset is voided by the **matched** entry, never by another
     // entry's `field.*`. No extras head means no `type` marker, which is exactly
     // the entry the renderer picks (the layer default) — so a layer default's
     // `field.*` voids the preset for every untagged image on the page.

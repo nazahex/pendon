@@ -44,7 +44,7 @@ and the rest link to it. If you are an AI agent, also read [`AGENTS.md`](../AGEN
 
 docs/
    INDEX.md             this map
-   spec/SYNTAX.md       normative grammar (§1–§15 normative, §16 fixture ref)
+   spec/SYNTAX.md       normative grammar (§1–§15 + §19–§21 normative, §16 fixture ref)
    spec/PARSER.md       parser/IR contract
    spec/CLI-REPORT.md   CLI report contract (streams, theme, layout, gating)
    spec/FIELDS-INVENTORY.md  extractable fields per element (Phase 4 gate)

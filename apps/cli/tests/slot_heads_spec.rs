@@ -6,7 +6,7 @@
 //! a head an element claims is not a shape it picks the parts it likes out of —
 //! every content the head carries lands in a field, either the element's preset
 //! name or its slot-qualified bare name (`bracket.tick`, `paren.quote`, …,
-//! D-7, §6.5). An element that contracted only the positions it had a name for
+//! D-7, §6.6). An element that contracted only the positions it had a name for
 //! would drop the rest, which is what the two tests here make impossible:
 //!
 //! * [`every_slot_head_claims_every_position`] audits the **contracts** — the
@@ -47,7 +47,7 @@ fn slot_heads() -> [(&'static str, ElementHead); 4] {
     ]
 }
 
-/// D-7/§6.5: a claimed head is read whole, so no element may narrow its contract
+/// D-7/§6.6: a claimed head is read whole, so no element may narrow its contract
 /// to the positions its preset happens to name. If one ever did, the rest of the
 /// head would be no field at all — the "uncontracted content" this stage exists
 /// to rule out.

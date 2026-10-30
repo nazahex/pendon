@@ -86,9 +86,9 @@ contents of an extras head (§6.1), spelled the same way for every element. A
 | --------- | ------------- | --------- | -------------------------------------------------------------------------------------------------------------------- |
 | `` `x` `` | `specs.tick`  | —         | `slug` on `heading`; the `id` fallback on `anchor`, `image`, `table` and `section`; the `cite-id` fallback on `cite` |
 | `"x"`     | `specs.quote` | —         | `title` on `anchor`, `cite`, `heading`, `image` and `table`                                                          |
-| `.class`  | `specs.class` | `class`   | — (universal, §6.3)                                                                                                  |
+| `.class`  | `specs.class` | `class`   | — (universal, §6.5)                                                                                                  |
 | `#id`     | `specs.id`    | `id`      | `cite-id` on `cite`; the id chain on `section`                                                                       |
-| `style:`  | `specs.style` | `style`   | — (universal, §6.3)                                                                                                  |
+| `style:`  | `specs.style` | `style`   | — (universal, §6.5)                                                                                                  |
 
 Only the **default path** carries meaning: once `field.specs.<k>` moves a
 position, the content is the author's field under the assigned name and no
@@ -387,7 +387,7 @@ plugin never writes as an `inner_text` attribute.
 Source: §9.5 · `crates/plugin-section` · golden `22-section`.
 
 A section has **no head**: it declares no `ElementHead` and contracts no slot, so
-the two fields it derives are its whole preset assignment (§9.5, §6.5). The
+the two fields it derives are its whole preset assignment (§9.5, §6.6). The
 decorator line above the heading publishes everything else (`type`, `#id`,
 extras — the author's, §0).
 

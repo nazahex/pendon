@@ -209,7 +209,7 @@ change is mostly `#[serde(rename)]` + validation (Phase 2).
 > items no longer default to `slug` / `title` but to their own paths
 > (`specs.tick` / `specs.quote`, and `specs.class` / `specs.id` / `specs.style`
 > for the remaining three positions). The old names are the **element preset**
-> (`ElementHead`, `docs/spec/SYNTAX.md` §6.5) — an assignment, not a path — so a
+> (`ElementHead`, `docs/spec/SYNTAX.md` §6.6) — an assignment, not a path — so a
 > construct that configures nothing reads the default path and publishes it under
 > its own DOM field.
 

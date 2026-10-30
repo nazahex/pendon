@@ -20,7 +20,7 @@ use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRen
 const TAG: char = '@';
 
 /// The one preset name the link does not write as an attribute: `bracket.bare`
-/// is the text the `<a>` wraps (§6.5).
+/// is the text the `<a>` wraps (§6.6).
 const INNER_TEXT: &str = "inner_text";
 
 /// Every position anchor claims.
@@ -54,7 +54,7 @@ const PRESET: &[Preset] = &[
 const OWNED: &[FieldName] = &[FieldName::new("href")];
 
 /// The tag that claims anchor's head (D-11), the positions it claims, and where
-/// each lands when the user configures nothing (§6.1, §6.5, D-7).
+/// each lands when the user configures nothing (§6.1, §6.6, D-7).
 pub const HEAD: ElementHead = ElementHead::new(
     SlotContract {
         accepted: SLOTS,
@@ -217,7 +217,7 @@ fn read_head(rest: &str, options: &AnchorOptions) -> Read {
     };
 
     let specs = |target: Option<&str>| options.custom.specs_for(target);
-    // §6.5 / D-7: the preset is voided by the **matched** entry, never by another
+    // §6.6 / D-7: the preset is voided by the **matched** entry, never by another
     // entry's `field.*`.
     let marker = extras.as_ref().and_then(|head| head.type_marker.as_deref());
     let matched = extras
@@ -252,7 +252,7 @@ struct AnchorParts {
 }
 
 /// Turns the two slots and the extras head into the fields the `<a>` exposes
-/// (§6.5 preset, §6.2 priority, §6.3 projection).
+/// (§6.6 preset, §6.2 priority, §6.5 projection).
 ///
 /// `field` is the **matched** entry's `field.*` (D-7): when it configures one,
 /// every preset row is void for this element and each position keeps its
@@ -268,7 +268,7 @@ fn build_attributes(
     let mut parts = AnchorParts::default();
     let mut issues = Vec::new();
 
-    // §6.5: `bracket.bare → inner_text`, `paren.bare → href`,
+    // §6.6: `bracket.bare → inner_text`, `paren.bare → href`,
     // `paren.quote → title`; every other position is a bare field (D-7).
     let fields = HEAD.assign(pair, field).unwrap_or_else(|error| {
         // The entry's assignments contradict each other (one path is a prefix of
@@ -1001,7 +1001,7 @@ mod tests {
         assert_eq!(value(&emitted, "bar.id"), Some("main"));
         assert_eq!(value(&emitted, "foo.style"), Some("color: red"));
         // Nothing was captured by the element: no DOM rename, no id fallback, and
-        // no second copy under a default name (§6.2, §6.3 rule 2).
+        // no second copy under a default name (§6.2, §6.5 rule 2).
         for key in ["class", "id", "style", "specs.tick", "specs.quote"] {
             assert!(value(&emitted, key).is_none(), "{key}: {:?}", emitted.attrs);
         }
@@ -1045,7 +1045,7 @@ mod tests {
         );
     }
 
-    /// §6.5: the preset assignment is `inner_text` / `href` / `title`, and every
+    /// §6.6: the preset assignment is `inner_text` / `href` / `title`, and every
     /// other position of the same head is a bare field under its slot-qualified
     /// name — nothing is dropped (D-7).
     #[test]

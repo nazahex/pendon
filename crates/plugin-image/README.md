@@ -17,7 +17,7 @@ README is the plugin's reference, never a second copy of the grammar.
 - Reads both slots with the shared slot grammar (§5.2), so `bracket.quote`,
   `bracket.tick`, `paren.quote` and `paren.tick` are kept as bare fields instead
   of dropped
-- Applies the element preset `bracket.bare → alt`, `paren.bare → src` (§6.5)
+- Applies the element preset `bracket.bare → alt`, `paren.bare → src` (§6.6)
 - Attaches an adjacent `{…}` / `@@type{…}` extras head to the `<img>` (§6.3)
 - Reports a head item that names `alt` or `src` as an `Error` naming
   `field.override.alt` / `field.override.src` (D-12 rule 5)
@@ -88,7 +88,7 @@ format = "solid"
 Ad ex tempor ![Alt text](https://example.com/image.webp) consectetur.
 ```
 
-## The slot head (§7.1, §6.5)
+## The slot head (§7.1, §6.6)
 
 The tag is part of the syntax: only the `!` that touches `[` claims the head, so
 `!![](src)` is one literal `!` and an image. Both slots are read by the shared
@@ -102,7 +102,7 @@ grammar (§5.2), and the preset assigns two of the six positions:
 The other four are published as attributes under their slot-qualified names, so a
 content is never dropped (D-7); a `field.<slot>.<kind>` key in the entry moves a
 position to a field of the author's own and voids the two preset rows for that
-entry (§6.1, §6.5).
+entry (§6.1, §6.6).
 
 `alt` and `src` are **owned**: `<img>` writes them itself, so an extras item that
 spells one is an `Error` rather than a silent override (D-12 rule 5).
@@ -196,7 +196,7 @@ An entry renames the §6.1 positional slots through its `field.*` keys —
 assignment **moves** the position: the assigned path is the author's own public
 field, which this element neither reads nor renames (`Specs::element_path`
 answers `None`, §6.1). These keys do not void the slot preset — only a
-`field.<slot>.<kind>` key does (§6.5, D-7). The table is in
+`field.<slot>.<kind>` key does (§6.6, D-7). The table is in
 [`docs/spec/SYNTAX.md` §6.1](../../docs/spec/SYNTAX.md).
 
 ## Slot modifiers (§5.4, D-9)

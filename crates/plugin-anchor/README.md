@@ -17,7 +17,7 @@ README is the plugin's reference, never a second copy of the grammar.
 - Reads both slots with the shared slot grammar (§5.2), so `bracket.quote`,
   `bracket.tick` and `paren.tick` are kept as bare fields instead of dropped
 - Applies the element preset `bracket.bare → inner_text`, `paren.bare → href`,
-  `paren.quote → title` (§6.5)
+  `paren.quote → title` (§6.6)
 - Attaches an adjacent `{…}` / `@@type{…}` extras head to the `<a>` (§6.3)
 - Reports a head item that names `href` as an `Error` naming
   `field.override.href` (D-12 rule 5)
@@ -85,7 +85,7 @@ format = "solid"
 @[Partner site](https://partner.com/path "Partner Page")@@anchorA{data-campaign: "q4-launch", target: "_blank", rel: "noopener"}
 ```
 
-## The slot head (§7.2, §6.5)
+## The slot head (§7.2, §6.6)
 
 The tag is part of the syntax, not decoration: without `@` the bracket and paren
 belong to nobody (they are universal, §5.2), so `[text](url)` stays plain text
@@ -103,7 +103,7 @@ the six positions:
 The other three (`bracket.quote`, `bracket.tick`, `paren.tick`) are published as
 attributes under their slot-qualified names, so a content is never dropped
 (D-7); a `field.<slot>.<kind>` key in the entry moves a position to a field of
-the author's own and voids the three preset rows for that entry (§6.1, §6.5).
+the author's own and voids the three preset rows for that entry (§6.1, §6.6).
 
 The bracket's `|…` run is the §5.4 slot-modifier run: every symbol contributes
 the fields its `bracket.modifier."<symbol>"` table names, in written order
@@ -194,7 +194,7 @@ An entry renames the §6.1 positional items through its `field.*` keys —
 assignment **moves** the item: the assigned path is the author's own public
 field, which this element neither reads nor renames (`Specs::element_path`
 answers `None`, §6.1). These keys do not void the slot preset — only a
-`field.<slot>.<kind>` key does (§6.5, D-7). The table is in
+`field.<slot>.<kind>` key does (§6.6, D-7). The table is in
 [`docs/spec/SYNTAX.md` §6.1](../../docs/spec/SYNTAX.md).
 
 ## Behavioral Notes

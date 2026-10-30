@@ -138,9 +138,9 @@ exactly one `export const headings` line each (no bytes removed), and
       `render_attrs_except` + `Link`), `AttrValue` gained `Null` and a total
       `from_json` so a bound value survives the round trip, and the JSON/AST
       renderers needed no call site (their `attrs` _is_ the projection). Zero
-      golden bytes moved — that is the proof. `S2-2.8` done: the four naming
-      keys are gone (a leftover `backtick_key`/`quote_key`/`bracket_key`/
-      `parentheses_key` is a load error, one test each) and their job is now
+      golden bytes moved — that is the proof. `S2-2.8` done: the four pre-D-5
+      naming keys are gone (any leftover is a load error, one test each) and
+      their job is now
       `field.*` — `Specs::resolve` reads `field.bracket.bare` /
       `field.paren.bare` / `field.specs.tick` / `field.specs.quote` off the
       matched entry (which now carries its `FieldConfig` instead of a bespoke
@@ -149,8 +149,8 @@ exactly one `export const headings` line each (no bytes removed), and
       `custom` entry key and an unknown `[[task]]` key are both load errors
       (§13 = Error), and an unknown entry key test pins the closed vocabulary.
       **Phase 2 complete.**
-      `S2-3.1` done: "canonical extras" is now **specs** in code —
-      `PositionalNames` → `Specs`, `NamesResolver` → `SpecsResolver`,
+      `S2-3.1` done: the specs vocabulary is the code's own —
+      `Specs`, `SpecsResolver`,
       `ComponentSet::names_for(_opt)` → `specs_for(_opt)`, and every `keys`
       binding that held one is a `specs` binding. Renames only: workspace green,
       zero output moved. The four `default`/`meaning` rows §6.1 carries now also
@@ -405,7 +405,7 @@ exactly one `export const headings` line each (no bytes removed), and
       The legacy URL-suffix and image-marker scanners are gone from both parsers
       (§14 rows and `03`/`04` already had them as literal text). 813 tests.
       **`S2-7.1` done — the inventory is `FIELDS-INVENTORY.md`.** Rename + retitle
-      (`preset`, not `recommended`, in §0) + every live link: `AGENTS.md`,
+      (`preset` in §0, D-6's vocabulary) + every live link: `AGENTS.md`,
       `docs/INDEX.md`, `SYNTAX.md` §21, `crates/plugin-extract/README.md`, the
       workflow `README.md` / `TASKS.md` / `DECISIONS.md`. The old file name now
       survives only in frozen history (`docs/archive/**`, ADR-0010/0011/0015 and
@@ -421,7 +421,7 @@ exactly one `export const headings` line each (no bytes removed), and
       every extras key, the renderer's `name`, and the universal `inner_text` /
       `depth` — `depth` keeps a row on `heading` / `section`, which publish it.
       The column is `preset`, `blockquote` and `table` read **none**, and §12 is
-      name-for-name equal to `fields::recommended` (checked by script). Three
+      name-for-name equal to the frozen `pendon` preset (checked by script). Three
       facts the old tables had wrong and the probe fixed: `citation_number` and
       `start` are **strings** in the stream, `list`'s only layer field is `start`
       (written by `plugin-markdown`, not `plugin-list`), and a decorator-bound
@@ -435,7 +435,7 @@ exactly one `export const headings` line each (no bytes removed), and
       once and only the assignments repeat. `blockquote` / `table` stay
       **none**.
       **`S2-7.4` done — the inventory is machine-checked.** `fields.rs` keeps the
-      preset in one `pub const PRESETS` (`recommended()` is a lookup) and
+      preset in one `pub const PRESETS` (`pendon_preset()` is a lookup) and
       `apps/cli/tests/fields_inventory_spec.rs` parses `FIELDS-INVENTORY.md`
       itself (`include_str!`) to assert §12 against that table (order included),
       every `preset` mark in both directions, that every preset name is a row or

@@ -43,7 +43,7 @@ element head and decorator, all carrying the same head, so a construct that stop
 reading a specs position — or falls back to literal text — fails there instead of
 in a golden nobody re-read.
 
-`slot_heads_spec` is the same audit one layer down (§5.2, §6.5, D-7): it walks
+`slot_heads_spec` is the same audit one layer down (§5.2, §6.6, D-7): it walks
 `Slot::ALL × SlotKind::ALL` against the four slot-contracting elements' contracts,
 then runs each element over a head with six distinct values and fails if one value
 — or one `Diagnostic` — is missing.

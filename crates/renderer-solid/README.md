@@ -41,7 +41,7 @@ let jsx = render_solid_with_hints(&events, hints);
   `render_attrs` emits the node's **projection** — `pendon_extra::project(node,
   None).attrs()`, ADR-0014 rule 2 — rather than the raw `attrs` map. The map is
   the public vocabulary: `__`-prefixed internals are gone, `specs.*` is in it, and
-  the universal positions are already renamed to `class`/`id`/`style` (§6.3).
+  the universal positions are already renamed to `class`/`id`/`style` (§6.5).
   Phase 4 fills in each element's preset assignment. Per-element reads
   (`depth` on a heading, `header` on a cell, the skip lists) still name their own
   field — Phase 4 moves them as the element's preset lands — while `name` is
@@ -87,7 +87,7 @@ so a payload's `~?!!…` figure still contributes its `Figure` import.
 
 The fields come from the projection, so a name is a **path**, not automatically a
 JSX attribute name. `specs.class`/`specs.id`/`specs.style` are already renamed to
-`class`/`id`/`style` by `pendon_extra::project` (§6.3), and a dotted path
+`class`/`id`/`style` by `pendon_extra::project` (§6.5), and a dotted path
 (`specs.tick`, `bracket.bare`, an assigned `heading.anchor`) is emitted as a
 one-key spread — `<p {...{ "specs.tick": "x" }}>` — because `a.b=` would parse as a
 member expression. The path survives verbatim into the DOM, matching what

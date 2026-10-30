@@ -186,7 +186,7 @@ fn generate_spread_attrs(
             continue;
         }
 
-        // §6.3: a public field is a **path** (`specs.tick`, `bracket.bare`), and
+        // §6.5: a public field is a **path** (`specs.tick`, `bracket.bare`), and
         // JSX reads `a.b=` as a member expression rather than an attribute name,
         // so a dotted field reaches a component exactly as it reaches a built-in
         // element — as the one-key spread that keeps the path as the computed key

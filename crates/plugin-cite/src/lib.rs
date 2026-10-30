@@ -59,7 +59,7 @@ const PRESET: &[Preset] = &[
 const OWNED: &[FieldName] = &[FieldName::new("citation_number")];
 
 /// The tag that claims cite's head (D-11), the positions it claims, and their
-/// fallback-to-preset assignment (§6.1, §6.5, D-7).
+/// fallback-to-preset assignment (§6.1, §6.6, D-7).
 pub const HEAD: ElementHead = ElementHead::new(
     SlotContract {
         accepted: SLOTS,
@@ -792,7 +792,7 @@ fn read_head(rest: &str, ctx: &CitationContext) -> Read {
     };
 
     let options = ctx.options();
-    // §6.5 / D-7: the preset is voided by the **matched** entry, never by another
+    // §6.6 / D-7: the preset is voided by the **matched** entry, never by another
     // entry's `field.*`. No extras head means no `type` marker, which is exactly
     // the entry the renderer will pick (the layer default), so its `field.*`
     // applies too — otherwise a default `Cite` component could never assign or
@@ -801,7 +801,7 @@ fn read_head(rest: &str, ctx: &CitationContext) -> Read {
     let matched = options.custom.field_for(marker);
 
     let mut parts = CiteParts::default();
-    // §6.5: `bracket.bare → reference_id`, `bracket.quote → locator`; every
+    // §6.6: `bracket.bare → reference_id`, `bracket.quote → locator`; every
     // other position is a bare field (D-7).
     let mut issues = Vec::new();
     let fields = HEAD.assign(&pair, matched).unwrap_or_else(|error| {
