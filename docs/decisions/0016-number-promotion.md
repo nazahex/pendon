@@ -56,7 +56,7 @@ reading the internal value even when the public name is renamed.
 states the field list and the "copy, don't recount" rule. `field.override` on a
 `number.*` path affects extraction and render only — never numbering.
 
-## Implementation note (S2-9.1/S2-9.2, 2026-10-30)
+## Implementation note (S2-9.1/S2-9.2/S2-9.3, 2026-10-30)
 
 The promotion is `crates/plugin-number` → `crates/number`, package
 `pendon-number`, with no behaviour change (S2-9.1).
@@ -71,3 +71,11 @@ an element's own `[[task.<element>.custom]]` entry renames a `number.*` field at
 the projection boundary (D-4, unchanged); an override declared in a `number`
 block is applied by the pass itself (S2-9.3), because no `custom` entry answers a
 `%%` marker's `[[task.number.custom]]` counter.
+
+That is `NumberBlock::overrides`: a `<canonical field> → <configured name>` table
+the pass reads through `public_name` on the write, so every layer a counter
+numbers gets the renamed field without naming it. Consistent with rule 4, the
+pass never reads a published name back — the counters, the `id`s and the heading
+outline are byte-identical with and without an override (goldens `46`, `47`), and
+a block is free to rename onto a name another counter is still publishing
+(`number.*` and `counter` on the same page).

@@ -81,6 +81,11 @@ pub struct NumberRule {
     pub types: Option<OneOrMany>,
     /// `style = "lower-alpha"` (every depth) or an array (one per depth).
     pub style: Option<OneOrMany>,
+    /// `field.override.number.raw = "counter"` — the rename table of **this**
+    /// counter (S2-9.3, ADR-0016). Only `field.override.number.{type,raw,depth}`
+    /// is legal here, and the pass applies it when it publishes the values, so
+    /// no element's `custom` entry has to know which counter numbered it.
+    pub field: Option<toml::Value>,
 }
 
 /// A config value that accepts one string or a list of strings.

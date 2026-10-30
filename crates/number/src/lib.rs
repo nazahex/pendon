@@ -127,6 +127,16 @@ pub struct NumberBlock {
     pub selectors: Vec<Selector>,
     /// The style of each depth (§7.2).
     pub styles: NumberStyles,
+    /// `field.override.number.*` — the **public names this counter publishes**
+    /// (S2-9.3, ADR-0016 rule 2).
+    ///
+    /// Keyed by the canonical field (§0 of `FIELDS-INVENTORY.md`) and valued by
+    /// the configured name, both dotted. The pass applies the rename as it
+    /// writes, which is why the override only has to be declared once, on the
+    /// counter, instead of in every element's `custom` entry that a `%%` marker
+    /// group happens to number. Nothing here is read back: numbering keeps using
+    /// the values it computed, so a rename can never move a number (D-4).
+    pub overrides: BTreeMap<String, String>,
 }
 
 impl NumberBlock {
@@ -136,7 +146,17 @@ impl NumberBlock {
             element: element.map(str::to_string),
             selectors,
             styles,
+            overrides: BTreeMap::new(),
         }
+    }
+
+    /// The public name this block publishes `source` under — its own name when
+    /// the block renames nothing.
+    pub fn public_name<'a>(&'a self, source: &'a str) -> &'a str {
+        self.overrides
+            .get(source)
+            .map(String::as_str)
+            .unwrap_or(source)
     }
 }
 
@@ -547,20 +567,44 @@ pub fn process(events: &[Event], options: &NumberOptions) -> Vec<Event> {
             .map(|(index, value)| format_number(style_at(styles, index as u8 + 1), *value))
             .collect();
         let json = serde_json::to_string(&parts).unwrap_or_else(|_| "[]".to_string());
+        let block = &options.blocks[member.block];
         let mut published = vec![
             // ADR-0016 rule 2: the array, structured (ADR-0005 transport).
-            public_attr(NUMBER_RAW_ATTR, format!("{JSON_ATTR_PREFIX}{json}")),
+            public_attr(
+                block.public_name(NUMBER_RAW_ATTR),
+                format!("{JSON_ATTR_PREFIX}{json}"),
+            ),
             // A JSON **scalar**, so `number.depth` is a number in the AST, in a
             // component's props and in an extracted row — not the string every
             // ordinary attribute is (`FIELDS-INVENTORY.md` §0).
             public_attr(
-                NUMBER_DEPTH_ATTR,
+                block.public_name(NUMBER_DEPTH_ATTR),
                 format!("{JSON_ATTR_PREFIX}{}", member.depth),
             ),
         ];
         if let Some(number_type) = &member.number_type {
-            published.push(public_attr(NUMBER_TYPE_ATTR, number_type.clone()));
+            published.push(public_attr(
+                block.public_name(NUMBER_TYPE_ATTR),
+                number_type.clone(),
+            ));
         }
+        // Two fields publishing under one name would make the map's answer
+        // depend on attribute order; the loader rejects such a table
+        // (`field.override` cannot land on a name the same block publishes).
+        debug_assert!(
+            {
+                let mut names: Vec<&str> = published
+                    .iter()
+                    .filter_map(|event| match event {
+                        Event::Attribute { name, .. } => Some(name.as_str()),
+                        _ => None,
+                    })
+                    .collect();
+                names.sort_unstable();
+                names.windows(2).all(|pair| pair[0] != pair[1])
+            },
+            "a numbering block renames two of its fields onto one name: {published:?}"
+        );
         assigned.push((member.insert_at, published));
     }
 
@@ -684,15 +728,14 @@ mod tests {
 
     /// Every `number.raw` attribute, in document order, as its list of entries.
     fn numbers(events: &[Event]) -> Vec<Vec<String>> {
-        events
-            .iter()
-            .filter_map(|event| match event {
-                Event::Attribute { name, value } if name == NUMBER_RAW_ATTR => {
-                    let json = pendon_core::json_attr_payload(value).expect("a JSON attribute");
-                    Some(serde_json::from_str(json).expect("an array of strings"))
-                }
-                _ => None,
-            })
+        arrays(events, NUMBER_RAW_ATTR)
+    }
+
+    /// Every entry list published under `name`, in document order.
+    fn arrays(events: &[Event], name: &str) -> Vec<Vec<String>> {
+        published(events, name)
+            .into_iter()
+            .map(|value| serde_json::from_str(&value).expect("an array of strings"))
             .collect()
     }
 
@@ -786,6 +829,69 @@ mod tests {
         let out = process(&events, &options);
         assert_eq!(numbers(&out), vec![vec!["1"], vec!["1", "1"]]);
         assert_eq!(published(&out, NUMBER_DEPTH_ATTR), vec!["3", "4"]);
+    }
+
+    /// S2-9.3: a block renames the fields **it** publishes, and the numbers
+    /// themselves do not move — the pass never reads a published name back
+    /// (D-4), so `field.override.number.*` cannot reorder a document.
+    #[test]
+    fn a_block_renames_its_own_fields_without_moving_a_number() {
+        let plain = document(vec![
+            heading(1, Some("HeadingA"), None, "I"),
+            heading(2, Some("HeadingA"), None, "I.a"),
+            heading(1, Some("HeadingA"), None, "II"),
+            anchor(Some((2, "numberB")), "1.1"),
+        ]);
+        let options = |overrides: &[(&str, &str)]| NumberOptions {
+            blocks: vec![
+                NumberBlock {
+                    overrides: overrides
+                        .iter()
+                        .map(|(source, target)| (source.to_string(), target.to_string()))
+                        .collect(),
+                    ..NumberBlock::new(
+                        Some("heading"),
+                        selectors(&["HeadingA"]),
+                        styles(&["upper-roman", "lower-alpha"]),
+                    )
+                },
+                NumberBlock::new(None, selectors(&["numberB"]), one("decimal")),
+            ],
+        };
+
+        let renamed = process(
+            &plain,
+            &options(&[
+                (NUMBER_RAW_ATTR, "counter"),
+                (NUMBER_DEPTH_ATTR, "level"),
+                (NUMBER_TYPE_ATTR, "counter_type"),
+            ]),
+        );
+        // The rename applies to the heading block only: the marker's block keeps
+        // the canonical names, so one document can publish both spellings.
+        assert_eq!(
+            arrays(&renamed, "counter"),
+            vec![
+                vec!["I".to_string()],
+                vec!["I".to_string(), "a".to_string()],
+                vec!["II".to_string()],
+            ]
+        );
+        assert_eq!(published(&renamed, "level"), vec!["1", "2", "1"]);
+        assert_eq!(
+            published(&renamed, "counter_type"),
+            vec!["HeadingA", "HeadingA", "HeadingA"]
+        );
+        assert_eq!(arrays(&renamed, NUMBER_RAW_ATTR), vec![vec!["1", "1"]]);
+        assert_eq!(published(&renamed, NUMBER_TYPE_ATTR), vec!["numberB"]);
+
+        // The counter itself never moves: the unrenamed run publishes the same
+        // three arrays under the canonical names, and `public_name` only renames
+        // the write (D-4).
+        let mut canonical = arrays(&process(&plain, &options(&[])), NUMBER_RAW_ATTR);
+        let marker = canonical.pop().expect("the marker's array");
+        assert_eq!(arrays(&renamed, "counter"), canonical);
+        assert_eq!(arrays(&renamed, NUMBER_RAW_ATTR), vec![marker]);
     }
 
     /// T3.3: every tier-1 system at the documented sample values, and the

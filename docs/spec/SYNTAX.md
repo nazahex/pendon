@@ -1188,11 +1188,24 @@ number-system = "decimal" | "lower-roman"  | "upper-roman"
   type = [ … ]                  # §11 selectors: `*` / literal / `_` / `?`; omit = `*`
   style = "…"                   # one system = every depth
   style = [ "…", "…" ]          # entry n−1 = the n-th visible depth, `decimal` beyond
+  field.override.number.raw = "counter"   # optional: rename what this block publishes
 
   [[task.number.custom]]        # the task-level group a `%%numberType` names
   type = [ "NumberA" ]
   style = "upper-alpha"
+  field.override.number.type = "number_kind"
   ```
+
+  A **numbering block** takes `field.override.number.{type,raw,depth}` and
+  nothing else (S2-9.3): the counter is declared once for the whole task, so it
+  — not each numbered element's `custom` entry — is where a rename belongs. Any
+  other `field.*` key, a source outside that namespace, a rename onto a name the
+  same block still publishes, or two renames onto one name is a **load error**.
+  The rename names the write and never feeds back into the pass, so the numbers,
+  the `id`s and the heading outline are unchanged (golden `47-number-overrides`);
+  a block that renames nothing keeps publishing `number.*`, so both spellings can
+  appear on one page. For the extraction side see §0 of
+  [`FIELDS-INVENTORY.md`](FIELDS-INVENTORY.md).
 
 - **Depth.** An element without a natural depth is depth 1 (a heading uses its
   own `depth`, §7.4). The two kinds of block differ here:

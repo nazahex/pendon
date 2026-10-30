@@ -148,6 +148,13 @@ decoration, so `preset = "pendon"` extracts a document without it and
 reaches it. A prefix names the whole subtree, so `omit = ["number"]` cuts all
 three at once.
 
+The three names are **defaults, not fixtures**: a numbering block may rename what
+it publishes with `field.override.number.{type,raw,depth} = "<name>"` (S2-9.3,
+§10.5 of [`SYNTAX.md`](SYNTAX.md)). The rename happens in the pass, so an
+extracted row carries the configured name; the table's `type` column describes the
+**value** and stays accurate under any name (`number.depth` is a `number` wherever
+a block renames it to).
+
 ### Rules that hold for all rows
 
 - **Internal keys never ship.** `__layer`, `__plugin_kind`, `__number` and every

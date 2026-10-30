@@ -1,0 +1,18 @@
+`field.override.number.*` on a **numbering block** renames the fields that block
+publishes (ADR-0016 rule 2, S2-9.3). It has to live there — not in the
+element's `custom` entry — because a `%%` group is declared once for a whole
+task: the counter is the only place that knows every element it will number.
+
+#@@HeadingA One
+
+##@@HeadingA One.one
+
+###@@HeadingA One.one.one
+
+#@@HeadingB Two
+
+#@@HeadingA Three
+
+@[First](/first)%%numberC is numbered by a marker group.
+
+@[Second](/second)%%%%numberC is numbered three levels deep.

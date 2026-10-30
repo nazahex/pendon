@@ -759,7 +759,12 @@ fn number_block(
         },
         None => NumberStyles::default(),
     };
-    Ok(NumberBlock::new(element, selectors, styles))
+    let mut block = NumberBlock::new(element, selectors, styles);
+    if let Some(field) = &rule.field {
+        block.overrides =
+            crate::components::number_field_overrides(key, field).map_err(|error| error.0)?;
+    }
+    Ok(block)
 }
 /// Every element a `[[task.<element>.extract]]` section can name
 /// (`docs/spec/FIELDS-INVENTORY.md`).
@@ -1519,6 +1524,62 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
         let err = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
             .expect_err("removed key");
         assert!(err.contains("task.cite.custom_node was removed"), "{err}");
+    }
+
+    /// S2-9.3: a numbering block's `field.override.number.*` reaches the pass as
+    /// the block's rename table, and a wrong key fails the build while naming the
+    /// config key that carries it (`task.heading.number[0]`).
+    #[test]
+    fn number_blocks_carry_their_renames_into_the_pass() {
+        let task: ConfigTask = toml::from_str(
+            r#"
+            input = "./src/a.mdp"
+            output = "./out/a.jsx"
+            format = "solid"
+
+            [[heading.number]]
+            type = ["HeadingA"]
+            style = "upper-roman"
+            field.override.number.raw = "counter"
+
+            [[number.custom]]
+            type = ["numberB"]
+            field.override.number.depth = "level"
+            "#,
+        )
+        .expect("valid task config");
+
+        let options = build_number_options(&task).expect("two numbering blocks");
+        assert_eq!(options.blocks.len(), 2);
+        assert_eq!(
+            options.blocks[0]
+                .overrides
+                .get("number.raw")
+                .map(String::as_str),
+            Some("counter")
+        );
+        assert_eq!(
+            options.blocks[1]
+                .overrides
+                .get("number.depth")
+                .map(String::as_str),
+            Some("level")
+        );
+
+        let bad: ConfigTask = toml::from_str(
+            r#"
+            input = "./src/a.mdp"
+            output = "./out/a.jsx"
+            format = "solid"
+
+            [[heading.number]]
+            field.override.number.width = "wide"
+            "#,
+        )
+        .expect("valid task config");
+        let err = build_number_options(&bad).expect_err("not a numbering field");
+        assert!(err.contains("task.heading.number[0]"), "{err}");
+        assert!(err.contains("is not a numbering field"), "{err}");
     }
 
     /// ADR-0010/§14: `plugin-heading` no longer numbers anything, so a stale

@@ -66,6 +66,15 @@ style = "upper-alpha"
   not reach is `decimal`.
 - Two blocks that match the same element are decided by selector specificity,
   then config order — the same rule as `[[task.<layer>.custom]]`.
+- `field.override.number.{raw,depth,type} = "<name>"` renames the fields **this
+  block** publishes (S2-9.3, ADR-0016 rule 2). Put it on the counter, not on the
+  numbered element's `custom` entry: a `%%` group is declared once for the whole
+  task and numbers elements of any layer, so repeating the rename per element (or
+  per layer) would be the only alternative. `NumberBlock::overrides` is that
+  table and `public_name` its only reader; nothing feeds back into the counters,
+  so a rename never moves a number (D-4). A rename onto a name the same block
+  still publishes, or two renames onto one name, is a load error (the pass
+  `debug_assert`s it too).
 
 Tier-1 systems (D-8): `decimal`, `lower-roman`, `upper-roman`, `lower-alpha`,
 `upper-alpha`, `lower-latin`, `upper-latin`, `lower-greek`. Anything else (or a

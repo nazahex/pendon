@@ -531,3 +531,14 @@ fn golden_45_frontmatter_extract() {
 fn golden_46_number_fields() {
     assert_fixture("46-number-fields");
 }
+
+/// §16.3 fixture 47: `field.override.number.*` on a **numbering block**
+/// (S2-9.3, ADR-0016 rule 2). The counter the marker group names is declared
+/// once for the whole task, so the block — not each element's `custom` entry —
+/// is where the rename belongs. A second heading counter renames nothing, so
+/// one page carries both spellings, and the heading outline does not move: a
+/// rename only names the write.
+#[test]
+fn golden_47_number_overrides() {
+    assert_fixture("47-number-overrides");
+}

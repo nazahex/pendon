@@ -27,6 +27,8 @@ use std::fmt;
 use pendon_renderer_solid::ImportEntry;
 use pendon_types::Selector;
 
+use pendon_number::{NUMBER_DEPTH_ATTR, NUMBER_RAW_ATTR, NUMBER_TYPE_ATTR};
+
 use pendon_extra::{AttrValue, ModifierConfig, Path, Slot, SlotKind, SPECS_KEYS};
 
 use crate::plugins::parse_import_entries;
@@ -561,7 +563,106 @@ fn parse_field_config(label: &str, value: &toml::Value) -> Result<FieldConfig, C
     Ok(config)
 }
 
-/// Parses an entry's `bracket.modifier."<symbol>"` tables (§5.4, D-9).
+/// Parses one numbering block's `field.*` keys — **renames only** (S2-9.3).
+///
+/// A `[[task.<element>.number]]` block and a `[[task.number.custom]]` block own a
+/// counter, and a counter is the one thing that knows which elements it numbers:
+/// a `%%` group is declared once for the whole task, so making every numbered
+/// element's `custom` entry rename `number.raw` would mean writing the same
+/// table on every element the group might reach. So the block declares the
+/// public names instead, and the pass applies them as it writes (ADR-0016
+/// rule 2).
+///
+/// Only `field.override.<number.type|raw|depth>` is legal — a numbering block
+/// publishes those three fields and nothing else, so a `field.specs`, a
+/// `field.bracket` or a path outside the namespace has no meaning here and is a
+/// load error rather than an ignored key (D-16). Two renames onto one name, and
+/// a rename onto a name the same block still publishes, are errors too: both
+/// would leave the document depending on attribute order.
+pub(crate) fn number_field_overrides(
+    label: &str,
+    value: &toml::Value,
+) -> Result<BTreeMap<String, String>, ConfigError> {
+    let table = value.as_table().ok_or_else(|| {
+        ConfigError(format!(
+            "{label}: `field` must be a table of dotted keys, found {}",
+            value.type_str()
+        ))
+    })?;
+
+    let mut overrides: BTreeMap<String, String> = BTreeMap::new();
+    for (key, value) in table {
+        if key != "override" {
+            return Err(ConfigError(format!(
+                "{label}: `field.{key}` is not a numbering field config key; a numbering \
+                 block publishes three fields, so it takes only {}",
+                number_override_keys()
+            )));
+        }
+        if value.as_table().is_none() {
+            return Err(ConfigError(format!(
+                "{label}: `field.override` must be a table of dotted paths, found {}",
+                value.type_str()
+            )));
+        }
+        let mut leaves = Vec::new();
+        flatten_override_paths(Vec::new(), value, &mut leaves);
+        for (segments, target) in leaves {
+            let names: Vec<&str> = segments.iter().map(String::as_str).collect();
+            let source = Path::from_segments(&names).map_err(|error| {
+                ConfigError(format!(
+                    "{label}: field.override.{}: {error}",
+                    segments.join(".")
+                ))
+            })?;
+            let source = source.to_string();
+            if !NUMBER_FIELDS.contains(&source.as_str()) {
+                return Err(ConfigError(format!(
+                    "{label}: field.override.{source} is not a numbering field; {}",
+                    number_override_keys()
+                )));
+            }
+            let target = field_name(label, &format!("field.override.{source}"), target)?
+                .ok_or_else(|| {
+                    ConfigError(format!(
+                        "{label}: field.override.{source} needs a name; `\"\"` only unassigns a \
+                         slot or specs position"
+                    ))
+                })?;
+            let target = target.to_string();
+            if NUMBER_FIELDS.contains(&target.as_str()) {
+                return Err(ConfigError(format!(
+                    "{label}: field.override.{source} = \"{target}\" renames onto a field this \
+                     block publishes; pick a name outside {}",
+                    NUMBER_FIELDS.join(" / ")
+                )));
+            }
+            if let Some(other) = overrides
+                .iter()
+                .find(|(other, existing)| existing.as_str() == target && other.as_str() != source)
+                .map(|(other, _)| other.clone())
+            {
+                return Err(ConfigError(format!(
+                    "{label}: field.override.{other} and field.override.{source} both write \
+                     `{target}`; a rename target is unique"
+                )));
+            }
+            overrides.insert(source, target);
+        }
+    }
+    Ok(overrides)
+}
+
+/// The three fields a numbering block publishes (§0 of `FIELDS-INVENTORY.md`).
+const NUMBER_FIELDS: [&str; 3] = [NUMBER_TYPE_ATTR, NUMBER_RAW_ATTR, NUMBER_DEPTH_ATTR];
+
+/// The one legal key path of a numbering block, spelled out for errors.
+fn number_override_keys() -> String {
+    format!(
+        "`field.override.{NUMBER_TYPE_ATTR}`, `field.override.{NUMBER_RAW_ATTR}` or \
+         `field.override.{NUMBER_DEPTH_ATTR}`"
+    )
+}
 ///
 /// A symbol is **exactly one character**, quoted because a symbol is
 /// punctuation: `"?"`, `"~"`, `"|"`, `"Œ"`, `"\\"`, `"ئ"` are all valid and all
@@ -1354,6 +1455,76 @@ template = "<H>{{children}}</H>"
             let message = error.to_string();
             assert!(message.contains(expected), "{source}: {message}");
             assert!(message.contains("anchor"), "{source}: {message}");
+        }
+    }
+
+    /// S2-9.3: a `number` block may rename the three fields it publishes and
+    /// nothing else — each malformed shape is a load error naming the key, not an
+    /// ignored table (D-16).
+    #[test]
+    fn numbering_blocks_take_only_renames_of_their_three_fields() {
+        let field = |source: &str| -> toml::Value {
+            let value: toml::Value = toml::from_str(source).expect("valid TOML");
+            value.get("field").expect("a `field` key").clone()
+        };
+        let label = "task.heading.number[0]";
+
+        let overrides = number_field_overrides(
+            label,
+            &field(
+                r#"
+                [field.override]
+                "number.raw" = "counter"
+                number.depth = "level"
+                number.type = "counter_type"
+                "#,
+            ),
+        )
+        .expect("three renames, quoted and nested spellings alike");
+        assert_eq!(
+            overrides.get("number.raw").map(String::as_str),
+            Some("counter")
+        );
+        assert_eq!(
+            overrides.get("number.depth").map(String::as_str),
+            Some("level")
+        );
+        assert_eq!(
+            overrides.get("number.type").map(String::as_str),
+            Some("counter_type")
+        );
+
+        let cases = [
+            (
+                "[field]\nspecs.tick = \"x\"\n",
+                "is not a numbering field config key",
+            ),
+            (
+                "[field.override]\nnumber.bogus = \"x\"\n",
+                "is not a numbering field",
+            ),
+            (
+                "[field.override]\nnumber.raw = \"number.depth\"\n",
+                "renames onto a field this block publishes",
+            ),
+            (
+                "[field.override]\nnumber.raw = \"x\"\nnumber.depth = \"x\"\n",
+                "a rename target is unique",
+            ),
+            ("[field.override]\nnumber.raw = \"\"\n", "needs a name"),
+            ("field = 3\n", "`field` must be a table"),
+            (
+                "[field]\noverride = 3\n",
+                "`field.override` must be a table",
+            ),
+        ];
+        for (source, expected) in cases {
+            let error = number_field_overrides(label, &field(source))
+                .err()
+                .unwrap_or_else(|| panic!("{source} should not load"));
+            let message = error.to_string();
+            assert!(message.contains(expected), "{source}: {message}");
+            assert!(message.contains(label), "{source}: {message}");
         }
     }
 

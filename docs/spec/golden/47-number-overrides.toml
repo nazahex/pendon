@@ -1,0 +1,41 @@
+[[task]]
+name = "Golden 47"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,heading,anchor,number,markdown"
+format = "solid"
+
+# `{...attrs}` prints whatever names the counters published, so the three
+# counters' spellings are all visible in one page.
+[[task.heading.custom]]
+name = "Heading"
+imports = "import { Heading } from '@comp/Heading'"
+template = "<Heading {...attrs}>{children}</Heading>"
+
+# S2-9.3: this counter renames all three fields it publishes. The values are
+# unchanged — `counter` is still the array, `level` the depth the counter used
+# and `counter_type` the type that selected it — and so is the numbering: an
+# override names the write, it never feeds back into the pass (D-4).
+[[task.heading.number]]
+type = ["HeadingA"]
+style = ["upper-roman", "lower-alpha", "decimal"]
+field.override.number.raw = "counter"
+field.override.number.depth = "level"
+field.override.number.type = "counter_type"
+
+# A second heading counter renames nothing, so this page carries both the
+# canonical and the renamed spelling — a rename belongs to one counter, not to
+# the document.
+[[task.heading.number]]
+type = ["HeadingB"]
+style = "decimal"
+
+# The same keys on a `[[task.number.custom]]` group: one table renames the
+# fields of every element the group numbers, including anchors this task has no
+# `number` block for (the marker picks the counter, §5).
+[[task.number.custom]]
+type = ["numberC"]
+style = "decimal"
+field.override.number.raw = "num"
+field.override.number.depth = "num_depth"
+field.override.number.type = "num_type"
