@@ -20,7 +20,8 @@
 //!   the landing field from `ElementHead::preset_for` (else the slot-qualified
 //!   fallback, §0);
 //! * §0's `specs.*` table — `SPECS_KEYS` and `universal_field`;
-//! * §0's `number` table — the numbering plugin's attribute name.
+//! * §0's `number` table — the three public `number.*` fields the numbering pass
+//!   publishes.
 //!
 //! A rename is therefore a two-file change or a failing test, which is the point
 //! (D-16: the document is not a second source of truth, it is the same one in
@@ -488,9 +489,10 @@ fn the_specs_table_is_the_code_vocabulary() {
     assert_eq!(keys, expected, "§0 lists exactly the five positions");
 }
 
-/// §0's `number` table is the one attribute the numbering pass writes (ADR-0010).
+/// §0's `number` table is the three public fields the numbering pass publishes
+/// (ADR-0016, S2-9.2) — one computation, so the table and the crate cannot drift.
 #[test]
-fn the_number_table_is_the_numbering_plugins_attribute() {
+fn the_number_table_is_the_numbering_passes_public_fields() {
     let table = tables(DOC)
         .into_iter()
         .find(|table| table.header == ["name", "type", "meaning"])
@@ -498,7 +500,11 @@ fn the_number_table_is_the_numbering_plugins_attribute() {
     let rows: Vec<String> = table.rows.iter().map(|row| plain(&row[0])).collect();
     assert_eq!(
         rows,
-        vec![pendon_number::NUMBER_ATTR.to_string()],
-        "the namespace has one row today, and it is the attribute `number` writes"
+        vec![
+            pendon_number::NUMBER_TYPE_ATTR.to_string(),
+            pendon_number::NUMBER_RAW_ATTR.to_string(),
+            pendon_number::NUMBER_DEPTH_ATTR.to_string(),
+        ],
+        "the namespace is `number.type` / `number.raw` / `number.depth`, in that order"
     );
 }

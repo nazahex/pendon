@@ -18,10 +18,10 @@ fence is not:
 </p>
 </section>
 <section depth="1" id="lorem-isum">
-<DocHeading depth={1} number={["1"]} >Lorem Isum</DocHeading><section depth="3" id="foo-bar">
-<DocHeading depth={2} number={["1", "1"]} title="Foo Bar" >Foo Bar</DocHeading></section>
+<DocHeading depth={1} {...{ "number.depth": 1 }} {...{ "number.raw": ["1"] }} >Lorem Isum</DocHeading><section depth="3" id="foo-bar">
+<DocHeading depth={2} {...{ "number.depth": 2 }} {...{ "number.raw": ["1", "1"] }} title="Foo Bar" >Foo Bar</DocHeading></section>
 <section depth="2" id="bar-foo">
-<DocHeading depth={2} number={["1", "2"]} >Bar Foo</DocHeading><p>&lt;!--
+<DocHeading depth={2} {...{ "number.depth": 2 }} {...{ "number.raw": ["1", "2"] }} >Bar Foo</DocHeading><p>&lt;!--
 </p>
 <h1>Markdown Comment</h1>
 <p>--&gt;
@@ -29,7 +29,7 @@ fence is not:
 </section>
 </section>
 <section depth="1" id="hiz">
-<DocHeading depth={1} number={["2"]} >Hiz</DocHeading><p>&#123;&#123;&#123;toml[dataY]
+<DocHeading depth={1} {...{ "number.depth": 1 }} {...{ "number.raw": ["2"] }} >Hiz</DocHeading><p>&#123;&#123;&#123;toml[dataY]
 </p>
 <h1>Bind Comment</h1>
 <p>&#125;&#125;&#125;

@@ -1,9 +1,10 @@
 # pendon-number
 
-One numbering pass for **every** element (ADR-0010). The grammar of a marker
-lives in `crates/extra` (§5 + §10.5 of [`SYNTAX.md`](../../docs/spec/SYNTAX.md));
-this crate only maps a marker or an element to a counter and a style, and writes
-the result as the `number` **attribute**.
+One numbering pass for **every** element (ADR-0010, crate promoted by ADR-0016).
+The grammar of a marker lives in `crates/extra` (§5 + §10.5 of
+[`SYNTAX.md`](../../docs/spec/SYNTAX.md)); this crate only maps a marker or an
+element to a counter and a style, and publishes the result as the `number.*`
+**fields**.
 
 ```text
 plugin = "micromatter,heading,anchor,image,number,markdown"
@@ -15,17 +16,30 @@ config error naming both plugins.
 
 ## What it writes
 
-`attrs.number` is an array of exactly `depth` formatted strings — never text, and
-never a display format:
+Every numbered element gets three **public** fields (§0 of
+[`FIELDS-INVENTORY.md`](../../docs/spec/FIELDS-INVENTORY.md), ADR-0016):
+
+| field          | value                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `number.raw`   | the formatted counters, exactly `depth` of them — `["1","2","a"]`                                                   |
+| `number.depth` | the depth the counter used: `%`-count − 1 for a marker, else the element's own (a heading's `depth`, `1` otherwise) |
+| `number.type`  | the type the counter was selected by — a marker's `numberType`, else the element's `type`; dropped when it has none |
+
+`number.raw` is carried through ADR-0005's structured transport, so a component
+receives a **real array**; `number.depth` is a JSON scalar, so it receives a
+number. A client decides how to show `1.2.a.` — nothing is written to the inner
+text, and an element whose number is only used for an `id`/`class` never has to
+display it:
 
 ```jsx
-<Heading level={2} number={["1", "2", "a"]}>…</Heading>
+<Heading {...{ "number.depth": 2 }} {...{ "number.raw": ["1", "2", "a"] }} {...{ "number.type": "HeadingA" }}>…</Heading>
 ```
 
-A client decides how to show `1.2.a`. The value travels as ADR-0005's structured
-transport (`U+E001` + compact JSON), so Solid hands the component a real array.
-Nothing is written to the inner text, and an element whose number is only used
-for an `id`/`class` never has to display it.
+The two are linked by construction: `number.depth` is the value the counter
+**incremented**, copied out, never re-counted from `number.raw` (whose length is
+the depth minus the group's minimum, so a group starting at `###` publishes
+`depth 3` with a two-entry array). `__number` stays internal (§11 rule 3): it is
+the marker's transport, read here and nowhere else.
 
 ## Configuration
 
@@ -75,16 +89,16 @@ A **marker** group instead counts from `1` always (see below).
 
 ## Interaction with authored `number:` (D-10)
 
-While this plugin runs, an authored `number:` extras item is **reserved**: it is
-replaced with a diagnostic instead of competing with the computed attribute. To
-give an element a fixed number, turn the plugin off for that element (drop its
+While this pass runs, an authored `number:` extras item is **reserved**: the
+attribute becomes a diagnostic instead of competing with the computed fields. To
+give an element a fixed number, turn numbering off for that element (drop its
 `number` block) — the authored value then passes through like any other prop
 (golden `06-heading`).
 
 ## Layering
 
 - The `%%numberType` grammar (marker shape, `depth` normalization, literal-text
-  cases) is `crates/extra`'s (§5, D-9); this plugin reads `__number` and never
+  cases) is `crates/extra`'s (§5, D-9); this crate reads `__number` and never
   re-parses text.
 - `__number` itself never reaches output: every renderer strips `__`-prefixed
   keys, and `plugin-image`'s HTML fallback passes it through unprefixed instead
@@ -95,7 +109,7 @@ give an element a fixed number, turn the plugin off for that element (drop its
 
 ## Scope
 
-Numbering of **citations** stays in `plugin-cite` (ADR-0010 rule 7); this plugin
+Numbering of **citations** stays in `plugin-cite` (ADR-0010 rule 7); this crate
 never touches them. Ordering, `start` and list markers (§9.4) are unrelated.
 
 ## License

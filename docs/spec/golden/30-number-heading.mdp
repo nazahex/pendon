@@ -1,6 +1,7 @@
 `[[task.heading.number]]` scopes one counter with `type` selectors (ADR-0010).
-The plugin writes `attrs.number` — an array of one string per depth — and never
-renders it; here the component's `{...attrs}` spread prints the array.
+The pass publishes three public fields (ADR-0016): `number.raw` — the array of
+counters, one string per depth — `number.depth` and `number.type`. It never
+renders them; the component's `{...attrs}` spread prints all three.
 
 #@@HeadingA Will Be Numbered 1
 

@@ -373,7 +373,8 @@ fn golden_26_cite_scope() {
 /// `[[task.heading.number]]` (ADR-0010, `D-1`/`D-5`). One counter answers the
 /// `HeadingA`+`HeadingB` selector, `style[n]` formats depth n, a depth without a
 /// style falls back to decimal, and a type no block selects stays bare. The
-/// number is an **attribute** (`number={["1","2","a"]}`), never text.
+/// numbers are the public **fields** `number.raw` / `number.depth` /
+/// `number.type` (S2-9.2), never text.
 #[test]
 fn golden_30_number_heading() {
     assert_fixture("30-number-heading");
@@ -518,4 +519,15 @@ fn golden_44_extract_paths() {
 #[test]
 fn golden_45_frontmatter_extract() {
     assert_fixture("45-frontmatter-extract");
+}
+
+/// §16.3 fixture 46: the numbering pass publishes **three** public fields
+/// (S2-9.2, ADR-0016) instead of one `number` attribute. `number.raw` is the
+/// counter array, `number.depth` the depth the counter used and `number.type` the
+/// type that selected it — the element's own for `[[task.heading.number]]`, the
+/// marker's for a `%%numberType`, and nothing at all for an untyped element.
+/// `__number` stays internal and never reaches the page.
+#[test]
+fn golden_46_number_fields() {
+    assert_fixture("46-number-fields");
 }

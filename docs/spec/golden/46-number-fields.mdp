@@ -1,0 +1,24 @@
+The numbering pass publishes **three public fields** (ADR-0016), never one
+`number` attribute: `number.raw` is the array of formatted counters,
+`number.depth` is the depth the counter used and `number.type` is the type that
+selected the counter. `__number` — the marker's internal transport — is read by
+the pass and never reaches this page.
+
+The first counter is scoped to `HeadingA`/`HeadingB`, so `number.type` is the
+element's own type across three levels:
+
+#@@HeadingA Chapter
+
+##@@HeadingB Section
+
+###@@HeadingB Subsection
+
+A heading no `type` selects is numbered by the second block, and it publishes no
+`number.type` at all — a missing field is dropped, never emitted empty:
+
+## A Plain Section
+
+A marker carries its own type, so `number.type` here is the marker's `numberB`
+and not the anchor's `AnchorA`; `number.depth` is the marker's depth (`%%` = 1):
+
+@[Link](/a)@@AnchorA%%numberB is numbered by the marker.

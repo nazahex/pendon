@@ -226,13 +226,19 @@ template = "<Cite {...attrs} />"
         plugins: "anchor,number,markdown",
         // `%%` → depth 1 (ADR-0010), so one counter segment.
         source: "@[N](/n)@@numberedA{`slug-y`, %%numberA}\n",
-        // §10.5: the marker reaches `number`, which writes `number`.
+        // §10.5: the marker reaches `number`, which publishes the `number.*`
+        // fields (§0 of `FIELDS-INVENTORY.md`, S2-9.2).
         extra: r#"
 [[task.number.custom]]
 type = ["numberA"]
 style = "decimal"
 "#,
-        expect: &[r#"number={["1"]}"#, r#"type="numberedA""#],
+        expect: &[
+            r#"{...{ "number.depth": 1 }}"#,
+            r#"{...{ "number.raw": ["1"] }}"#,
+            r#"{...{ "number.type": "numberA" }}"#,
+            r#"type="numberedA""#,
+        ],
     },
 ];
 

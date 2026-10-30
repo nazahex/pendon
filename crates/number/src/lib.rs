@@ -26,8 +26,40 @@ use pendon_types::{Group, Rule, Selector, TypeId, TypeSet};
 /// The internal attribute `crates/extra` re-emits for `%%numberType` (§5, D-9).
 pub const NUMBER_MARK_ATTR: &str = "__number";
 
-/// The attribute this plugin writes (`["1","2","a"]`, ADR-0010 rule 5).
+/// The authored extras key the pass reserves (D-10) and the **namespace** every
+/// public field below lives in.
+///
+/// Nothing is written under this bare name any more (S2-9.2): an authored
+/// `number:` is replaced by a warning and the namespace is split into
+/// [`NUMBER_RAW_ATTR`], [`NUMBER_DEPTH_ATTR`] and [`NUMBER_TYPE_ATTR`].
 pub const NUMBER_ATTR: &str = "number";
+
+/// `number.raw` — the formatted counters, one per visible level (`["1","2","a"]`).
+///
+/// The array ADR-0010 rule 5 defines, and the reason nothing is joined here: a
+/// display format (`1.2.a.`) belongs to the component. Carried through ADR-0005's
+/// structured transport, so a renderer hands the component a real array and
+/// `extract` emits a real array (`string[]` in `FIELDS-INVENTORY.md` §0).
+pub const NUMBER_RAW_ATTR: &str = "number.raw";
+
+/// `number.depth` — the depth the counter assigned this element (OBJ-6).
+///
+/// A marker's `%`-count − 1, a heading's own `depth`, `1` for anything else: the
+/// value the pass **incremented**, copied out, never re-counted from
+/// [`NUMBER_RAW_ATTR`] (whose length is the depth minus the group's minimum, so
+/// the two are not the same number in a group that starts at `###`). Transported
+/// as a JSON scalar, so it reaches a component and an extracted row as a `number`
+/// rather than the string the event stream holds.
+pub const NUMBER_DEPTH_ATTR: &str = "number.depth";
+
+/// `number.type` — the type the counter was selected by.
+///
+/// A `%%numberB` marker publishes `numberB` (the authored spelling `__number`
+/// carries, §5); an element numbered by `[[task.<element>.number]]` publishes its
+/// own `type` (the §11 selector that matched it, which may differ from the marker
+/// on the same node); an untyped element publishes nothing, because a missing
+/// field is dropped rather than emitted empty.
+pub const NUMBER_TYPE_ATTR: &str = "number.type";
 
 /// Tier 1 number systems (D-8). Every other CSS `list-style-type` name falls
 /// back to `decimal`, as does a value a system cannot represent.
@@ -339,11 +371,13 @@ fn node_kind(events: &[Event], index: usize) -> Option<NodeKind> {
 
 /// One element that receives a number.
 struct Member {
-    start: usize,
     insert_at: usize,
     /// Which counter numbers it: the index of the winning block.
     block: usize,
     depth: u8,
+    /// The type the counter was selected by (marker type or the element's own
+    /// `type`), published as [`NUMBER_TYPE_ATTR`]; `None` publishes nothing.
+    number_type: Option<String>,
     authored_number: Option<usize>,
 }
 
@@ -373,7 +407,13 @@ impl Counter {
         &self.levels
     }
 }
-/// Assigns `attrs.number` to every numbered element of `events`.
+/// Publishes `number.raw`, `number.depth` and `number.type` on every numbered
+/// element of `events` (ADR-0016; `FIELDS-INVENTORY.md` §0).
+///
+/// The values are the ones the pass already computed — one counter, so a plugin
+/// can never observe two different depths for one element (OBJ-6). `__number`
+/// stays internal: nesting and matching keep reading it, and no renderer or
+/// projection ever sees it (§11 rule 3).
 ///
 /// The pass runs after the element plugins that emit attributes and before
 /// `markdown` re-lexes the remaining text; a misordered chain is a CLI
@@ -441,14 +481,16 @@ pub fn process(events: &[Event], options: &NumberOptions) -> Vec<Event> {
             continue;
         };
         if let Some((depth, number_type)) = number_mark_attr(&block.attrs) {
-            let number_type = number_type.to_lowercase();
-            let local = TypeSet::from_types([number_type.as_str()]);
-            if let Some(rule) = custom.winner(&local, TypeId::Literal(&number_type)) {
+            let local_type = number_type.to_lowercase();
+            let local = TypeSet::from_types([local_type.as_str()]);
+            if let Some(rule) = custom.winner(&local, TypeId::Literal(&local_type)) {
                 members.push(Member {
-                    start: block.start,
                     insert_at: block.insert_at,
                     block: rule.payload,
                     depth,
+                    // §5: the marker keeps the authored spelling (`%%numberB`
+                    // publishes `numberB`), which is also what `__number` carries.
+                    number_type: Some(number_type),
                     authored_number: block.authored_number,
                 });
             }
@@ -470,10 +512,11 @@ pub fn process(events: &[Event], options: &NumberOptions) -> Vec<Event> {
             continue;
         };
         members.push(Member {
-            start: block.start,
             insert_at: block.insert_at,
             block: rule.payload,
             depth: natural_depth(&kind, &block.attrs),
+            // §11: the type that selected this counter is the element's own.
+            number_type: block.attrs.get("type").cloned(),
             authored_number: block.authored_number,
         });
     }
@@ -493,7 +536,7 @@ pub fn process(events: &[Event], options: &NumberOptions) -> Vec<Event> {
     let mut counters: Vec<Counter> = (0..options.blocks.len())
         .map(|_| Counter::default())
         .collect();
-    let mut assigned: Vec<(usize, usize, Option<usize>, String)> = Vec::new();
+    let mut assigned: Vec<(usize, Vec<Event>)> = Vec::new();
     for member in &members {
         let base = minima[member.block].unwrap_or(1);
         let styles = &options.blocks[member.block].styles;
@@ -504,41 +547,39 @@ pub fn process(events: &[Event], options: &NumberOptions) -> Vec<Event> {
             .map(|(index, value)| format_number(style_at(styles, index as u8 + 1), *value))
             .collect();
         let json = serde_json::to_string(&parts).unwrap_or_else(|_| "[]".to_string());
-        assigned.push((member.insert_at, member.start, member.authored_number, json));
+        let mut published = vec![
+            // ADR-0016 rule 2: the array, structured (ADR-0005 transport).
+            public_attr(NUMBER_RAW_ATTR, format!("{JSON_ATTR_PREFIX}{json}")),
+            // A JSON **scalar**, so `number.depth` is a number in the AST, in a
+            // component's props and in an extracted row — not the string every
+            // ordinary attribute is (`FIELDS-INVENTORY.md` §0).
+            public_attr(
+                NUMBER_DEPTH_ATTR,
+                format!("{JSON_ATTR_PREFIX}{}", member.depth),
+            ),
+        ];
+        if let Some(number_type) = &member.number_type {
+            published.push(public_attr(NUMBER_TYPE_ATTR, number_type.clone()));
+        }
+        assigned.push((member.insert_at, published));
     }
 
-    // Write the attribute into each node's attribute block, last.
+    // Write the attributes into each node's attribute block, last.
     let mut out = events.to_vec();
-    let mut inserts: Vec<(usize, Vec<Event>)> = Vec::new();
-    for (insert_at, start, authored_number, json) in assigned {
-        let value = format!("{JSON_ATTR_PREFIX}{json}");
-        match authored_number {
-            Some(index) => {
-                // D-10: `number` is reserved while this plugin runs; the
-                // authored value is replaced and reported.
-                out[index] = Event::Attribute {
-                    name: NUMBER_ATTR.to_string(),
-                    value,
-                };
-                inserts.push((
-                    start + 1,
-                    vec![Event::Diagnostic {
-                        severity: Severity::Warning,
-                        message: format!(
-                            "[number] `{NUMBER_ATTR}` is reserved by number; the \
-                             authored value was replaced"
-                        ),
-                        span: None,
-                    }],
-                ));
-            }
-            None => inserts.push((
-                insert_at,
-                vec![Event::Attribute {
-                    name: NUMBER_ATTR.to_string(),
-                    value,
-                }],
-            )),
+    let mut inserts = assigned;
+    // D-10: `number` is reserved while the pass runs. The authored attribute
+    // becomes a **diagnostic** instead of competing with the computed values —
+    // the same event at the same index, so no reader's position shifts.
+    for member in &members {
+        if let Some(index) = member.authored_number {
+            out[index] = Event::Diagnostic {
+                severity: Severity::Warning,
+                message: format!(
+                    "[number] `{NUMBER_ATTR}` is reserved by the numbering pass; the \
+                     authored value was replaced by `{NUMBER_RAW_ATTR}`"
+                ),
+                span: None,
+            };
         }
     }
     // Apply from the back so an earlier insertion never shifts a later index.
@@ -549,6 +590,14 @@ pub fn process(events: &[Event], options: &NumberOptions) -> Vec<Event> {
         }
     }
     out
+}
+
+/// One public numbering field as an `Event::Attribute`.
+fn public_attr(name: &str, value: String) -> Event {
+    Event::Attribute {
+        name: name.to_string(),
+        value,
+    }
 }
 
 #[cfg(test)]
@@ -633,12 +682,12 @@ mod tests {
         events
     }
 
-    /// Every `number` attribute, in document order, as its list of entries.
+    /// Every `number.raw` attribute, in document order, as its list of entries.
     fn numbers(events: &[Event]) -> Vec<Vec<String>> {
         events
             .iter()
             .filter_map(|event| match event {
-                Event::Attribute { name, value } if name == NUMBER_ATTR => {
+                Event::Attribute { name, value } if name == NUMBER_RAW_ATTR => {
                     let json = pendon_core::json_attr_payload(value).expect("a JSON attribute");
                     Some(serde_json::from_str(json).expect("an array of strings"))
                 }
@@ -653,6 +702,90 @@ mod tests {
             .into_iter()
             .map(|parts| parts.join("."))
             .collect()
+    }
+
+    /// Every value of one public numbering field, in document order, as its
+    /// literal text (`number.depth` is a JSON scalar, so it decodes to `"1"`).
+    fn published(events: &[Event], name: &str) -> Vec<String> {
+        events
+            .iter()
+            .filter_map(|event| match event {
+                Event::Attribute { name: key, value } if key == name => Some(
+                    pendon_core::json_attr_payload(value)
+                        .map(str::to_string)
+                        .unwrap_or_else(|| value.clone()),
+                ),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// S2-9.2: every numbered element publishes `number.raw`, `number.depth` and
+    /// — when it has a type — `number.type`; the internal `__number` never
+    /// appears, and the bare `number` name is never written.
+    #[test]
+    fn every_numbered_element_publishes_the_public_fields() {
+        let options = NumberOptions {
+            blocks: vec![
+                NumberBlock::new(
+                    Some("heading"),
+                    selectors(&["HeadingA"]),
+                    styles(&["upper-roman", "lower-alpha"]),
+                ),
+                NumberBlock::new(None, selectors(&["numberB"]), one("decimal")),
+            ],
+        };
+        let events = document(vec![
+            heading(1, Some("HeadingA"), None, "I"),
+            heading(2, Some("HeadingA"), None, "I.a"),
+            // A marker on a *typed* element: `number.type` is the marker's, not
+            // the element's (§5), and the depth is the marker's own.
+            anchor(Some((2, "numberB")), "1.1"),
+        ]);
+        let out = process(&events, &options);
+        assert_eq!(
+            joined(&out),
+            vec!["I", "I.a", "1.1"],
+            "the numbers themselves are unchanged"
+        );
+        assert_eq!(published(&out, NUMBER_DEPTH_ATTR), vec!["1", "2", "2"]);
+        assert_eq!(
+            published(&out, NUMBER_TYPE_ATTR),
+            vec!["HeadingA", "HeadingA", "numberB"]
+        );
+        // The namespace's bare name is gone: nothing is written as `number`.
+        assert!(published(&out, NUMBER_ATTR).is_empty());
+        // `__number` is still the marker's transport — read, never published.
+        assert_eq!(
+            out.iter()
+                .filter(|event| matches!(
+                    event,
+                    Event::Attribute { name, .. } if name == NUMBER_MARK_ATTR
+                ))
+                .count(),
+            1
+        );
+    }
+
+    /// `number.depth` is the depth the counter used, not the length of
+    /// `number.raw`: a group whose smallest depth is `3` numbers its first
+    /// member at depth 3 while the array holds one entry (§10.5, OBJ-6).
+    #[test]
+    fn number_depth_is_the_absolute_depth_not_the_array_length() {
+        let options = NumberOptions {
+            blocks: vec![NumberBlock::new(
+                Some("heading"),
+                selectors(&["HeadingA"]),
+                one("decimal"),
+            )],
+        };
+        let events = document(vec![
+            heading(3, Some("HeadingA"), None, "1"),
+            heading(4, Some("HeadingA"), None, "1.1"),
+        ]);
+        let out = process(&events, &options);
+        assert_eq!(numbers(&out), vec![vec!["1"], vec!["1", "1"]]);
+        assert_eq!(published(&out, NUMBER_DEPTH_ATTR), vec!["3", "4"]);
     }
 
     /// T3.3: every tier-1 system at the documented sample values, and the

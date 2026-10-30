@@ -16,15 +16,15 @@
 ## Context
 
 Numbering is read by every element — headings nest, tables and figures carry the
-current counters — yet it ships as `pendon-number` and is imported directly
-by the CLI. Its values reach the rest of the system as internal attributes
+current counters — yet it shipped as `pendon-plugin-number` and is imported
+directly by the CLI. Its values reach the rest of the system as internal attributes
 (`__number`), which today is also what nesting reads. Extraction needs them as
 _public_ fields, and the two must not become the same thing: nesting must keep
 reading the internal value even when the public name is renamed.
 
 ## Decision
 
-1. **Pure mechanical promotion**: `crates/number` → `crates/number`,
+1. **Pure mechanical promotion**: `crates/plugin-number` → `crates/number`,
    package `pendon-number`, in a task that changes no behaviour. The config
    surface stays `[[task.<element>.number]]`; plugin tokens are untouched.
 2. **The public fields are `number.*`** (`number.raw`, `number.depth`, …),
@@ -42,7 +42,7 @@ reading the internal value even when the public name is renamed.
 
 ## Rejected
 
-- **Keeping the crate named `number`.** It is not a plugin in any
+- **Keeping the crate named `plugin-number`.** It is not a plugin in any
   observable sense, and the name is what makes agents look for a `Plugin` impl
   that should not exist.
 - **Emitting `number.depth` by re-counting nesting in the projection.** Two
@@ -55,3 +55,19 @@ reading the internal value even when the public name is renamed.
 `PE.1` is re-frozen with `number.raw` when the projection lands, and `§10.5`
 states the field list and the "copy, don't recount" rule. `field.override` on a
 `number.*` path affects extraction and render only — never numbering.
+
+## Implementation note (S2-9.1/S2-9.2, 2026-10-30)
+
+The promotion is `crates/plugin-number` → `crates/number`, package
+`pendon-number`, with no behaviour change (S2-9.1).
+
+Rule 2's _producer_ is the numbering pass, not `project`: `process` owns the
+counter, so it writes `number.raw`, `number.depth` and `number.type` into the
+node's attribute block and the projection copies them like any other attribute.
+That is the only shape that works for **element** numbering, which has no
+`__number` at all — and it keeps the two counters from existing, because the
+published depth is the value `Counter::increment` was given. `field.override` in
+an element's own `[[task.<element>.custom]]` entry renames a `number.*` field at
+the projection boundary (D-4, unchanged); an override declared in a `number`
+block is applied by the pass itself (S2-9.3), because no `custom` entry answers a
+`%%` marker's `[[task.number.custom]]` counter.

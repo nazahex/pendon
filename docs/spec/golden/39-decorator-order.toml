@@ -6,7 +6,8 @@ plugin = "blockquote,number,markdown"
 format = "solid"
 
 # §9.2/§11: the blockquote primary layer, so the decorator's `type` and every
-# extra reach the component. `{...attrs}` is how a client reads `attrs.number`.
+# extra reach the component. `{...attrs}` is how a client reads `number.raw`,
+# `number.depth` and `number.type`.
 [[task.blockquote.custom]]
 type = ["quoteA"]
 name = "QuoteA"

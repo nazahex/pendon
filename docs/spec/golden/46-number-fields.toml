@@ -1,0 +1,30 @@
+[[task]]
+name = "Golden 46"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,heading,anchor,number,markdown"
+format = "solid"
+
+# `{...attrs}` is how a client reads the public numbering fields: three dotted
+# names, each written as the one-key spread a dotted field always uses (§6.3).
+[[task.heading.custom]]
+name = "Heading"
+imports = "import { Heading } from '@comp/Heading'"
+template = "<Heading {...attrs}>{children}</Heading>"
+
+# S2-9.2: one counter for the typed headings, styled per depth …
+[[task.heading.number]]
+type = ["HeadingA", "HeadingB"]
+style = ["upper-roman", "lower-alpha", "decimal"]
+
+# … and a second one for the headings no `type` selects. Two blocks over one
+# element are two counters: selector specificity decides which one owns a
+# heading (ADR-0008), and an untyped heading publishes no `number.type`.
+[[task.heading.number]]
+style = "decimal"
+
+# A `%%numberType` group: the marker names this counter, so `number.type` is
+# `numberB` even though the element's own `type` is `AnchorA` (§5, §10.5).
+[[task.number.custom]]
+type = ["NumberB"]
+style = "decimal"

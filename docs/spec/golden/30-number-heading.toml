@@ -6,8 +6,9 @@ plugin = "micromatter,heading,number,markdown"
 format = "solid"
 
 # §11 component set: one entry with no `type` is the layer default, so every
-# heading renders with it. `{...attrs}` is how a client reads `attrs.number`:
-# a real JS array (`number={["1","2"]}`, ADR-0010 rule 5).
+# heading renders with it. `{...attrs}` is how a client reads the numbering:
+# `number.raw` is a real array (`["1", "2"]`), `number.depth` a real number
+# (ADR-0010 rule 5, ADR-0016).
 [[task.heading.custom]]
 name = "Heading"
 imports = "import { Heading } from '@comp/Heading'"

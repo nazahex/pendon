@@ -105,15 +105,7 @@ pub const PRESETS: [(&str, &[&str]); 10] = [
     ),
     (
         "heading",
-        &[
-            "depth",
-            "id",
-            "slug",
-            "title",
-            "number",
-            "type",
-            "inner_text",
-        ],
+        &["depth", "id", "slug", "title", "type", "inner_text"],
     ),
     ("image", &["src", "alt", "width", "height", "type", "id"]),
     ("list", &["type", "id", "start", "inner_text"]),

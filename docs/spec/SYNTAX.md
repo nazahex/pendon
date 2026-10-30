@@ -778,8 +778,9 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
   `slug`; the id transfers to the section (§9.5).
 - The heading does **not** number itself: `[[task.heading.number]]` and
   `%%numberType` are `number`'s (§10.5), which reads `depth` as the
-  natural depth and writes `attrs.number`. An authored `number:` prop passes
-  through untouched when no block selects the heading.
+  natural depth and writes `number.raw` / `number.depth` / `number.type`. An
+  authored `number:` prop passes through untouched when no block selects the
+  heading.
 
 ### 7.5 Wiki (`plugin-wiki`)
 
@@ -1163,8 +1164,9 @@ another type cannot replace it.
 
 ### 10.5 Numbering (`number`)
 
-`%%numberType` and `attrs.number` are one plugin's job
-([ADR-0010](../decisions/0010-plugin-number.md)); no element plugin numbers
+`%%numberType` and the `number.*` fields are one crate's job
+([ADR-0016](../decisions/0016-number-promotion.md), originally
+[ADR-0010](../decisions/0010-plugin-number.md)); no element plugin numbers
 anything itself.
 
 ```ebnf
@@ -1200,10 +1202,24 @@ number-system = "decimal" | "lower-roman"  | "upper-roman"
   - **Marker blocks** are absolute: a marker's depth is `%`-count − 1 and always
     counts from 1, so `%%%` is depth 2 on any element and a missing parent counts
     as the style's first value (`I`, `A`, `1`).
-- **Output** is `attrs.number`: an array of exactly `depth` strings
-  (`["1","2","a"]`), carried through ADR-0005's structured transport so it is a
-  real array in Solid. The plugin never writes the number into the text — a
-  display format (`1.2.a.`) belongs to the component.
+- **Output** is three public fields (§0 of
+  [`FIELDS-INVENTORY.md`](FIELDS-INVENTORY.md), ADR-0016):
+  - `number.raw` — the counters, an array of exactly `depth` strings
+    (`["1","2","a"]`), carried through ADR-0005's structured transport so it is a
+    real array in Solid;
+  - `number.depth` — the depth the counter used (a marker's `%`-count − 1, a
+    heading's own `depth`, `1` otherwise), transported as a JSON **scalar** so it
+    stays a number;
+  - `number.type` — the type the counter was selected by (a marker's
+    `numberType`, else the element's own `type`), absent when the element has
+    none.
+
+  The pass never writes the number into the text — a display format (`1.2.a.`)
+  belongs to the component — and none of the three is in the `pendon` extract
+  preset (§21.4).
+- **Internals stay internal.** `__number` is the marker's transport (§5) and the
+  one value this pass reads to decide a marker's depth; no renderer, projection
+  or extracted row ever sees it (§11 rule 3).
 - **Matching.** The marker's type is matched against `[[task.number.custom]]`
   selectors **case-insensitively** (the source spelling is CamelCase,
   `%%numberB`). Element types keep §11's case-sensitive literals.
@@ -1219,8 +1235,10 @@ number-system = "decimal" | "lower-roman"  | "upper-roman"
   block), and `![alt](/a.png)%%numberA x` numbers the same image written inline,
   with `x` as ordinary paragraph text (§7.1). Citation numbering stays in
   `plugin-cite`.
-- Frozen by golden `30-number-heading` (element numbering) and
-  `31-number-custom` (`%%` markers across heading/anchor/image).
+- Frozen by golden `30-number-heading` (element numbering), `31-number-custom`
+  (`%%` markers across heading/anchor/image) and `46-number-fields` (the three
+  public fields across three levels, including a marker whose type differs from
+  the element's).
 
 ## 11. Custom component config
 
@@ -1443,7 +1461,7 @@ Config-load errors MUST abort the build before any file is processed.
 | legacy `[.c,#id]{k:v}`                                                  | `{…}` / `@@type{…}`                                                                  | **removed** (D3): plain literal text, no warning, no deprecation path. Gone from the code (`parse_attrs`, `ExtraAttrs`, `legacy_extras_warning`), docs, sandboxes and READMEs.                                                                                                                                    |
 | `import = "…"` (string)                                                 | `imports = ["…"]`                                                                    | **removed**: the singular form is accepted with a Warning (§15 OPEN-C2), then hard-errors.                                                                                                                                                                                                                        |
 | `[task.<plugin>.custom_node]`                                           | `[task.<plugin>.custom.<layer>]`                                                     | **removed**: `custom.<layer>` is read for `anchor`, `image` (`figure`), `heading`, `cite` and all seven `table` layers (`apps/cli/src/plugins.rs`); every sandbox/fixture config is migrated. The stale key fails the build with a migration message. Unwired layers (`task.image.custom.img`) are config errors. |
-| `[task.heading]` `auto_number` / `number_style`                         | `[[task.heading.number]]`                                                            | **removed** (ADR-0010): both keys are read only to raise the §14 migration error. Numbering is `number` (§10.5), which writes `attrs.number` as an array and never prefixes the text.                                                                                                                             |
+| `[task.heading]` `auto_number` / `number_style`                         | `[[task.heading.number]]`                                                            | **removed** (ADR-0010): both keys are read only to raise the §14 migration error. Numbering is `number` (§10.5), which publishes `number.raw` / `number.depth` / `number.type` and never prefixes the text.                                                                                                       |
 | anchor URL-suffix modifiers (`^`, `~`, `!`, `$`, `;;`, `--`)            | —                                                                                    | **not syntax** (D-16, §7.2): deleted, not replaced. A modifier-shaped tail is now part of the URL, and the `target` / `rel` tokens they produced are ordinary extras keys; the `^`/`~` conflict warning went with them. Slot modifiers are §5.4's, and Pendon ships none.                                         |
 | image marker run (`?`, `~`, `w<n>`, `h<n>`)                             | extras keys `loading:` / `decoding:` / `width:` / `height:`                          | **removed** (D-16, §7.1): `~?!![](src)` is the text `~?!` followed by an empty-alt image. A flag was never a field name, so the marker is not another spelling of one.                                                                                                                                            |
 | image `!!` figure, trailing caption, `<figure>` / `<figcaption>`        | the text after the head / a `[task.image.custom.img]` component                      | **removed** (D-16, §7.1): the head is one `<img>` node, so a caption is ordinary paragraph content and a wrapper is the component's own markup. `[task.image.custom.figure]` no longer loads (§13).                                                                                                               |

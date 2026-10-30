@@ -6,7 +6,14 @@
   values), [`0008`](0008-type-selectors.md) (selector-scoped blocks)
 - Spec: [`SYNTAX.md`](../spec/SYNTAX.md) §5 (`%%` item), §10.5 (`%%` markers and
   the `number` config), §15 open decision D-10
-- Evidence: goldens `30-number-heading`, `31-number-custom`
+- Evidence: goldens `30-number-heading`, `31-number-custom`; `crates/number` unit
+  tests
+- **Amended 2026-10-30 — the crate moved and the field split ([0016](0016-number-promotion.md)).**
+  `crates/plugin-number` is now `crates/number` (`pendon-number`), and the single
+  `attrs.number` array is published as the three public fields `number.raw` /
+  `number.depth` / `number.type` (`SYNTAX.md` §10.5, `FIELDS-INVENTORY.md` §0).
+  Nothing else above changed: `__number` is still the marker's internal transport,
+  one pass still numbers every element, and a `number` block is still a counter.
 
 ## Context
 

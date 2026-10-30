@@ -125,18 +125,28 @@ there is no half-preset mode.
 
 ### The `number` namespace
 
-`number` is the only writer of numbering attributes (ADR-0010), so one row
-covers every numbered element. A `number` its own plugin wrote (`{number: "auto"}`)
-is replaced by the pass, and once the pass ran the name is reserved (D-10):
+The `number` crate is the only writer of numbering attributes (ADR-0016), so one
+table covers every numbered element. An authored `number:` (`{number: "auto"}`)
+is replaced by the pass — the attribute becomes a `Warning` and the computed
+values are published under the namespaced names — and the namespace is reserved
+once the pass ran (D-10):
 
-| name     | type     | meaning                                                                                               |
-| -------- | -------- | ----------------------------------------------------------------------------------------------------- |
-| `number` | string[] | the element's formatted counters, one per level — `["1"]`, `["2","a"]`; structured, so not a `string` |
+| name           | type     | meaning                                                                                                                                                                |
+| -------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `number.type`  | string   | the type the counter was selected by: a marker's `numberType` (`%%numberB` → `numberB`), else the element's own `type`; absent when the element has none               |
+| `number.raw`   | string[] | the element's formatted counters, one per visible level — `["1"]`, `["2","a"]`; structured, so not a `string`                                                          |
+| `number.depth` | number   | the depth the counter assigned: a marker's `%`-count − 1, a heading's own `depth`, `1` otherwise (§10.5); counted once by the pass, never re-derived from `number.raw` |
 
 `__number` is internal (D-9): the `{"depth":1,"type":"…"}` mark `crates/extra`
-writes for `%%numberType` (§5) and the numbering pass reads. It never ships, and
-`number` is the whole namespace today — S2-9.2 splits it into `number.type` /
-`number.raw` / `number.depth`, which is when §6's row follows.
+writes for `%%numberType` (§5) and the numbering pass reads. It never ships — a
+`__`-prefixed key is not a public field at all (§11 rule 3), so `only = ["__number"]`
+selects nothing.
+
+**None of the three is in the `pendon` preset** (§12, D-13): a number is
+decoration, so `preset = "pendon"` extracts a document without it and
+`include = ["number.raw"]` — or `only`, or `preset = "all"` — is how a block
+reaches it. A prefix names the whole subtree, so `omit = ["number"]` cuts all
+three at once.
 
 ### Rules that hold for all rows
 
@@ -269,13 +279,12 @@ so do its extras (`specs.tick`, `specs.quote`, `specs.class`), which is why §12
 
 Source: §7.4/§11 · `crates/plugin-heading` · golden `06-heading`.
 
-| field    | type     | preset | notes                                                                                                                                                 |
-| -------- | -------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `depth`  | number   | yes    | `1..6`: the `#` run minus the `#` the head's tag spends (§7.4)                                                                                        |
-| `id`     | string   | yes    | the section's when `plugin-section` runs — the heading then emits neither `id` nor `slug` (§9.5); else `#id` > `[slug]` > extras tick > the auto slug |
-| `slug`   | string   | yes    | `bracket.bare`, else a slug of `inner_text` (§7.4)                                                                                                    |
-| `title`  | string   | yes    | `paren.quote`; the extras `"…"` is the fallback (§6.2)                                                                                                |
-| `number` | string[] | yes    | written by `number` (ADR-0010) as a structured array; reserved once it runs (D-10)                                                                    |
+| field   | type   | preset | notes                                                                                                                                                 |
+| ------- | ------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `depth` | number | yes    | `1..6`: the `#` run minus the `#` the head's tag spends (§7.4)                                                                                        |
+| `id`    | string | yes    | the section's when `plugin-section` runs — the heading then emits neither `id` nor `slug` (§9.5); else `#id` > `[slug]` > extras tick > the auto slug |
+| `slug`  | string | yes    | `bracket.bare`, else a slug of `inner_text` (§7.4)                                                                                                    |
+| `title` | string | yes    | `paren.quote`; the extras `"…"` is the fallback (§6.2)                                                                                                |
 
 `class` is an extra and `type` the routing key (§0); `inner_text` is universal.
 
@@ -295,9 +304,11 @@ the `#` run and the Markdown body write them (§7.4) — so the preset assigns o
 the two above. The extras side feeds `slug` (`specs.tick`) and `title`
 (`specs.quote`), each as the fallback of its head position (§0).
 
-`number` is **reserved** once `number` runs (D-10): an extras
-`number: "auto"` is a diagnostic there, and the only `number` an extract sees is
-the array.
+The `number` namespace is **not** a heading field: `plugin-heading` numbers
+nothing, and the `number.*` fields §0 documents are published by the numbering
+pass on any element it numbers. An authored `number:` is **reserved** once that
+pass runs (D-10): it becomes a diagnostic, and the only numbering an extract sees
+is the `number` subtree.
 
 ## 7. `image` — `__layer = "img"`
 
@@ -406,7 +417,7 @@ last:
 | `blockquote` | `type`\*, `id`\*, `class`\*, `inner_text`                         |
 | `cite`       | `reference_id`, `locator`, `citation_number`, `cite-id`, `type`\* |
 | `directive`  | `type`, `id`\*, `level`\*, `summary`\*, `inner_text`              |
-| `heading`    | `depth`, `id`, `slug`, `title`, `number`, `type`\*, `inner_text`  |
+| `heading`    | `depth`, `id`, `slug`, `title`, `type`\*, `inner_text`            |
 | `image`      | `src`, `alt`, `width`\*, `height`\*, `type`\*, `id`               |
 | `list`       | `type`\*, `id`\*, `start`, `inner_text`                           |
 | `marker`     | `type`, `slug`\*, `id`\*, `title`\*, `inner_text`                 |

@@ -5,23 +5,23 @@ so a slot pair, the specs items and a numbering marker reach the <code>&lt;table
 <code>&lt;tfoot&gt;</code> alike. Nothing is layer-specific except <em>where</em> the head sits. The
 <code>&lt;table&gt;</code> head is the §9.1 decorator above the table (D-10):
 </p>
-<table {...{ "bracket.bare": "tbl-slug" }} class="t" number={["A", "A"]} {...{ "paren.bare": "Table title" }} type="tableX">
-  <caption {...{ "bracket.bare": "cap-slug" }} class="c" number={["A", "B"]} {...{ "paren.bare": "Cap title" }} type="captionX">A caption</caption>
+<table {...{ "bracket.bare": "tbl-slug" }} class="t" {...{ "number.depth": 2 }} {...{ "number.raw": ["A", "A"] }} {...{ "number.type": "numberA" }} {...{ "paren.bare": "Table title" }} type="tableX">
+  <caption {...{ "bracket.bare": "cap-slug" }} class="c" {...{ "number.depth": 2 }} {...{ "number.raw": ["A", "B"] }} {...{ "number.type": "numberA" }} {...{ "paren.bare": "Cap title" }} type="captionX">A caption</caption>
   <thead>
     <tr>
-      <th {...{ "bracket.bare": "th-slug" }} class="v" number={["A", "C"]} {...{ "paren.bare": "Th title" }} style="text-align: left;" type="thX">A</th>
+      <th {...{ "bracket.bare": "th-slug" }} class="v" {...{ "number.depth": 2 }} {...{ "number.raw": ["A", "C"] }} {...{ "number.type": "numberA" }} {...{ "paren.bare": "Th title" }} style="text-align: left;" type="thX">A</th>
       <th style="text-align: right;">B</th>
       <th>C</th>
     </tr>
   </thead>
   <tbody class="tb" type="tbodyX">
     <tr class="rw" type="rowX">
-      <td {...{ "bracket.bare": "cl-slug" }} class="cl" number={["A", "D"]} {...{ "paren.bare": "Cl title" }} style="text-align: left;" type="cellX">1</td>
+      <td {...{ "bracket.bare": "cl-slug" }} class="cl" {...{ "number.depth": 2 }} {...{ "number.raw": ["A", "D"] }} {...{ "number.type": "numberA" }} {...{ "paren.bare": "Cl title" }} style="text-align: left;" type="cellX">1</td>
       <td style="text-align: right;">2</td>
       <td>3</td>
     </tr>
   </tbody>
-  <tfoot {...{ "bracket.bare": "ft-slug" }} class="ft" number={["A", "E"]} {...{ "paren.bare": "Ft title" }} type="tfootX">
+  <tfoot {...{ "bracket.bare": "ft-slug" }} class="ft" {...{ "number.depth": 2 }} {...{ "number.raw": ["A", "E"] }} {...{ "number.type": "numberA" }} {...{ "paren.bare": "Ft title" }} type="tfootX">
     <tr>
       <td colspan="2" style="text-align: left;">Total</td>
       <td>9</td>
