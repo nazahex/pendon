@@ -8,6 +8,7 @@ description = "Pendon CLI"
 [dependencies]
 pendon-core = { path = "../../crates/core" }
 pendon-extra = { path = "../../crates/extra" }
+pendon-extract = { path = "../../crates/extract" }
 pendon-plugin-anchor = { path = "../../crates/plugin-anchor" }
 pendon-plugin-bind = { path = "../../crates/plugin-bind" }
 pendon-plugin-blockquote = { path = "../../crates/plugin-blockquote" }
@@ -16,7 +17,6 @@ pendon-plugin-codeblock = { path = "../../crates/plugin-codeblock" }
 pendon-plugin-custom = { path = "../../crates/plugin-custom" }
 pendon-plugin-dialog = { path = "../../crates/plugin-dialog" }
 pendon-plugin-directive = { path = "../../crates/plugin-directive" }
-pendon-plugin-extract = { path = "../../crates/plugin-extract" }
 pendon-plugin-frontmatter = { path = "../../crates/plugin-frontmatter" }
 pendon-plugin-heading = { path = "../../crates/plugin-heading" }
 pendon-plugin-image = { path = "../../crates/plugin-image" }

@@ -26,12 +26,12 @@ reference_source = "internal"
 bracket.modifier."?" = { class = "cited", compact = true }
 
 # S2-6.4: a modifier's fields are ordinary fields of the occurrence. The preset
-# (`recommended = true`) keeps only the element's own rows, so it leaves them
+# (`preset = "pendon"`) keeps only the element's own rows, so it leaves them
 # out…
 [[task.anchor.extract]]
 output = "./out/[slug].anchor-preset.json"
 format = "json"
-recommended = true
+preset = "pendon"
 
 # …while a block with no preset reaches every field the node carries, the merged
 # `rel` array and the dotted `soo.baz` included.

@@ -352,7 +352,7 @@ fn golden_25_extras_nested() {
 
 /// §16.3 fixture 28: `type` is a **selector** and the renderer resolves the whole
 /// layer once per document (§11, ADR-0008 `D-3a`). Reproduces R.1–R.4 of
-/// `docs/issues/type-upgrade.md`: the literal beats `*`, `_` is the remainder of
+/// `docs/archive/fulfilled/type-upgrade.md`: the literal beats `*`, `_` is the remainder of
 /// the occurring types minus what the layer defines (so `?` removes untyped from
 /// `_` even though it is written later), `?` answers the untyped nodes, and a
 /// `*` entry that loses everywhere contributes no import line.

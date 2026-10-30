@@ -1036,16 +1036,65 @@ code match it exactly.
       the header (`../workflows/numbering-extract-type-export.md`,
       `../issues/plugin-extract.md`) now point into `docs/archive/`; `AGENTS.md`'s
       P.1 link had the same stale path and was fixed with it. `dprint fmt` clean.
-- [ ] **S2-7.3 — Add the contracts.** Dep: S2-7.2.
+- [x] **S2-7.3 — Add the contracts.** Dep: S2-7.2.
       Do: per element, a slot-contract table (which `slot.kind` is contracted to
       which field), the slot-qualified bare fallbacks, and the `specs.*` /
       `number.*` shared tables.
       Exit: every `SlotContract` in code has a matching row; no row without code.
-- [ ] **S2-7.4 — Reconcile with code.** Dep: S2-7.3.
+      **Done 2026-10-30.** §0 grew the three shared vocabularies — "The slot head"
+      (what a contract is, plus the six positions and the fallback each keeps),
+      "The `specs.*` positions" (the five keys with default path, DOM field and
+      which elements read them as a field) and "The `number` namespace" (one row,
+      `number`, with `__number` named as internal and S2-9.2 as the split) — and
+      §2 / §4 / §6 / §7 each print their contract as
+      `**Slot contract** — tag`<sigil>`,`HEAD`in`crates/<plugin>`:` over a
+      `position | lands in` table of all six positions. The division is AGENTS
+      rule 1: the fallbacks are **shared** (one table in §0, since `bracket.quote`
+      means the same thing everywhere) and only the _assignments_ are per element.
+      No row without code: the fallback table is `Slot::ALL × SlotKind::ALL`, and
+      each landing field is `ElementHead::preset_for` or the slot-qualified
+      fallback — which is exactly what `apps/cli/tests/fields_inventory_spec.rs`
+      now asserts, so a narrowed `SlotContract` or a moved preset row fails.
+      §11's "everything the node carries is the author's" gained the one clause it
+      was missing (`specs.quote` → `title`, `specs.class` → `class`: §6.3
+      projection, still the author's keys). §0's self-reference in the
+      `specs.*` paragraph was the only other fix; the four contract tables all
+      agreed with `HEAD` on the first run.
+- [x] **S2-7.4 — Reconcile with code.** Dep: S2-7.3.
       Do: make the extract presets (`preset = "pendon"`) read from one table in
       code that mirrors the doc, so drift is a compile/test failure rather than a
       doc bug. Add the cross-check test.
       Exit: renaming a preset field without touching the doc fails a test.
+      **Done 2026-10-30.** `fields.rs` no longer has a `match` with ten arms: the
+      preset is one `pub const PRESETS: [(&str, &[&str]); 10]` (documented order,
+      with the `*`-style inert names called out) and `recommended()` is a lookup,
+      exported with `ELEMENTS` for the test. The new
+      `apps/cli/tests/fields_inventory_spec.rs` embeds the document
+      (`include_str!`, so editing it rebuilds the test) and parses its tables —
+      no row is copied into Rust:
+      - §12 vs `PRESETS`, element order and field order included;
+      - every `preset` mark of every element table, **both** directions (a `yes`
+      row the code omits fails, a code name marked `no` fails);
+      - every preset name is a `yes` row, a `*` in §12, or one of §0's two
+      universal names — so "S2-7.2 dropped a row" and "the preset still names it"
+      cannot both be true;
+      - the four contract tables: the tag from the sentence above the table, the
+      positions from `SlotContract::accepted` in head order, each landing in
+      `preset_for` or its bare fallback, and no contract in code without a table
+      (or the reverse);
+      - §0's fallback table vs `Slot::ALL × SlotKind::ALL`, its `specs.*` table vs
+      `SPECS_KEYS` + `universal_field`, its `number` row vs
+      `plugin_number::NUMBER_ATTR`;
+      - `blockquote` / `table` are allowed no field table **only** because their
+      prose says `**None.**` — the exit criterion of S2-7.2, now enforced.
+      Mutation-checked before landing: flipping `href` to `preset = no` fails two
+      tests, retagging anchor's contract fails the tag assertion. Seven tests,
+      green; `cargo test --workspace`, `dprint check` and
+      `cargo fmt --all -- --check` clean. Swept with it: the eight remaining
+      `docs/issues/<name>.md` references (six for `plugin-extract`, one for
+      `plugin-number`, one for `type-upgrade`) now point at
+      `docs/archive/fulfilled/` — `docs/issues/` still holds the live proposals,
+      so only the moved files were dead.
 
 ## Phase 8 — `extract`
 
@@ -1053,19 +1102,45 @@ Entry: Phase 7 done; D-6, D-13, D-14 settled. Leave when `preset`/`include`/
 `only`/`omit` work on dotted paths, the default is `pendon`, and PE.1–PE.4 +
 frontmatter fixtures are frozen.
 
-- [ ] **S2-8.1 — Promote the crate.** Dep: S2-7.4.
+- [x] **S2-8.1 — Promote the crate.** Dep: S2-7.4.
       Do: `git mv crates/plugin-extract crates/extract`; package
       `pendon-extract`; update the workspace member list, `apps/cli/Cargo.toml`
       imports (`plugins.rs`, `process.rs`, `config.rs` doc comments) and the crate
       README. The `Plugin` trait import must not change chain order.
       Exit: `cargo test --workspace` green, zero output change.
-- [ ] **S2-8.2 — Preset / include / only / omit.** Dep: S2-8.1.
+      **Done 2026-10-30.** `crates/extract`, package `pendon-extract` (workspace
+      list and `apps/cli/Cargo.toml` re-sorted alphabetically); every
+      `pendon_plugin_extract::` path — `plugins.rs` (2), `process.rs` (1),
+      `chain.rs` (3) and `tests/fields_inventory_spec.rs` — became
+      `pendon_extract::`. Doc paths that would have 404'd were repaired
+      (`docs/INDEX.md`, `docs/guides/testing.md`, `docs/spec/FIELDS-INVENTORY.md`);
+      the archive file `docs/archive/fulfilled/plugin-extract.md` keeps its name.
+      `cargo test --workspace` green (78 suites), no golden byte moved.
+- [x] **S2-8.2 — Preset / include / only / omit.** Dep: S2-8.1.
       Do: `preset = "pendon" | "all"` (default `pendon`), `include: String |
       [String]`, all D-6 validation. Delete the `recommended` field in this task
       (no alias, no mapping): a config that still writes it is a load
       `Severity::Error` (D-16).
       U: config validation table (every D-6 bullet) + the `recommended` load error.
       Exit: every D-6 rule has a test; `recommended` produces `Severity::Error`.
+      **Done 2026-10-30.** `block::Preset { Pendon, All }` (`NAMES`, `parse`,
+      `as_str`, `fields`) plus `BlockSpec`/`ExtractBlock`'s `preset` + `include`;
+      `fields::recommended()` is now `fields::pendon_preset()` and `select_fields`
+      applies preset → `include` → `only` → `omit` (omit first in the code, last
+      in the prose — it always wins). Config-side `recommended` is
+      `Option<toml::Value>`, i.e. a **trap**: any value is a load error naming
+      `preset = "pendon"` (D-16). The default is still `All`, not `Pendon`:
+      flipping it is S2-8.6's whole job (it owns the golden re-freeze), so
+      `Preset::default()` carries the one-line flip with a comment and no output
+      moved here — goldens 33 and 43 re-rendered byte-identical with
+      `preset = "pendon"` where `recommended = true` used to be. Tests: four crate
+      tests for the D-6 bullets (unknown name, `only`+`include`, allowed pairs,
+      absent key), five `fields.rs` selection tests (`include` on both presets,
+      `omit` over `include`, PE.4's `[{}]`, the `all` preset), two `plugins.rs`
+      cases and four CLI cases (`d6_preset_and_include_select_the_rows`, the three
+      load errors). Fixture 33 gained a `preset` + `include` block
+      (`33-extract-scopes.included.json`); §21.4 and the crate README carry the
+      rule.
 - [ ] **S2-8.3 — Nested path selection.** Dep: S2-8.2.
       Do: `include`/`only`/`omit` operate on dotted paths against the projected
       `FieldMap`; a prefix selects the whole subtree; `omit` wins over
@@ -1089,6 +1164,33 @@ frontmatter fixtures are frozen.
       preset; re-freeze the extract goldens; record the intentional shrink in the
       commit message.
       Exit: no un-attributed change in any `.json`/`.yaml`/`.toml` golden.
+- [x] **S2-8.7 — One destination path accumulates.** Dep: S2-8.1.
+      Do: P.1/§21.6 said several blocks or pages on one `output` overwrite it
+      ("later wins"), which silently loses a page's rows. Make the write append
+      instead (D-20): read the target, detect its format from the content
+      (JSON → TOML → YAML), append the rows it does not already hold, and fail the
+      task when the block's `format` disagrees with the file — never convert one
+      format into another.
+      U: `Format::extend` / `SideFile::extend` table (append, idempotent re-run,
+      counted duplicates, TOML per-element tables, cross-format error, shape
+      error, detect-from-content).
+      Exit: a shared path collects every page; a re-run changes no byte; a YAML
+      file under a `format = "json"` block fails with both formats named.
+      **Done 2026-10-30.** `Format::extend` + `Format::detect` +
+      `append_missing` (structural, counted equality so two identical occurrences
+      stay two rows) in `crates/extract/src/format.rs`; `SideFile::extend` is the
+      only door, and `apps/cli/src/process.rs` reads the target (`existing_text`
+      treats a missing file as fresh, any other read error as a task error) before
+      `write_atomically`. `ExtractOutput::push_file` no longer replaces a queued
+      write: within one element the resolver still keeps **one rule per path**
+      (`Group::matching`, so "later block wins" survives there), but two
+      elements — or two pages, or two runs — now accumulate. Eight new unit tests
+      plus five CLI cases (`a_static_side_path_collects_every_page`,
+      `a_rerun_appends_nothing`, `two_elements_share_one_json_array`,
+      `two_elements_share_one_toml_file`,
+      `appending_to_a_file_of_another_format_fails_the_page`); the old
+      `a_static_side_path_is_overwritten_not_merged` froze the loss and is gone.
+      §21.6, the crate README, STATUS and D-20 carry the rule.
 
 ## Phase 9 — `number`
 

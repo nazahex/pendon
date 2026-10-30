@@ -926,7 +926,7 @@ mod tests {
     }
 
     /// §7.4 P.2 verbatim: four blocks (one element block, three `%%` groups) and
-    /// every acceptance value of `docs/issues/plugin-number.md`.
+    /// every acceptance value of `docs/archive/fulfilled/plugin-number.md`.
     #[test]
     fn the_p2_illustration_matches_the_proposal() {
         let options = NumberOptions {

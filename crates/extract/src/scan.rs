@@ -13,7 +13,7 @@ use serde_json::Value;
 
 use crate::fields::element_of_layer;
 
-/// `inner_text` is a field like any other: `only` / `omit` / `recommended` can
+/// `inner_text` is a field like any other: `only` / `omit` / `preset` can
 /// name it next to the node's attributes.
 pub const INNER_TEXT: &str = "inner_text";
 
@@ -42,7 +42,7 @@ impl ElementNode {
     }
 
     /// The fields this occurrence *carries*, in emission order — the base that
-    /// `only` / `omit` / `recommended` narrow.
+    /// `only` / `omit` / `preset` narrow.
     pub fn available(&self) -> Vec<String> {
         let mut names: Vec<String> = self.attrs.iter().map(|(key, _)| key.clone()).collect();
         names.push(INNER_TEXT.to_string());

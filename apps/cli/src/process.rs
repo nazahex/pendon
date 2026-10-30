@@ -1,6 +1,6 @@
 use pendon_core::{Event, Options};
+use pendon_extract::ExtractOutput;
 use pendon_plugin_custom::PluginSpec;
-use pendon_plugin_extract::ExtractOutput;
 use pendon_plugin_markdown::MarkdownOptions;
 use pendon_plugin_wiki::WikiOptions;
 use pendon_renderer_solid::{render_solid_with_hints, DataExport, SolidRenderHints};
@@ -245,7 +245,7 @@ pub fn process_single_file(
             // P.1.b: a block's `export` is the same `export const` mechanism, and
             // it is registered after the bind payloads so a `frontmatter.extract`
             // payload wins over the automatic `frontmatter` export it duplicates.
-            // Every other task format ignores `export` (docs/issues/plugin-extract.md).
+            // Every other task format ignores `export` (docs/archive/fulfilled/plugin-extract.md).
             if !state.extract.exports.is_empty() {
                 state.hints.push(SolidRenderHints {
                     exports: state
@@ -349,12 +349,21 @@ pub fn process_single_file(
 }
 
 /// Writes every side file one document extracted (P.1.a of
-/// `docs/issues/plugin-extract.md`), returning the paths it wrote.
+/// `docs/archive/fulfilled/plugin-extract.md`), returning the paths it wrote.
 ///
 /// A block's `output` is a config path like `output`: relative to the project
-/// root, with the page's dynamic segments substituted per document. Two pages
-/// that resolve to the same file overwrite it — the format is the block's, never
-/// the extension's, so `format = "json"` writes JSON to a `.yaml` path.
+/// root, with the page's dynamic segments substituted per document. The format
+/// is the block's, never the extension's, so `format = "json"` writes JSON to a
+/// `.yaml` path.
+///
+/// A destination **accumulates** (§21.6). Two blocks — or two pages — that
+/// resolve to one file append to it instead of the later one overwriting the
+/// earlier, and a row the file already holds is not written twice, so
+/// re-rendering a page never duplicates its data. The file's own format is
+/// detected from its content: a block whose `format` disagrees with a file that
+/// is already there fails the task instead of mixing two documents in one file.
+/// The cost is that `format` is a promise about the file, not a description of
+/// what gets written into it.
 ///
 /// Writing is atomic ([`cache::write_atomically`]): a reader never sees half a
 /// JSON document, and a failed write is a task error instead of a truncated file.
@@ -366,12 +375,28 @@ fn write_extract_files(
     for file in &output.files {
         let path = substitute_output(&file.path, vars)
             .map_err(|cause| format!("task extract output '{}': {cause}", file.path))?;
+        let existed = existing_text(&path)?;
         let rendered = file
-            .render()
+            .extend(existed.as_deref())
             .map_err(|cause| format!("task extract output '{path}': {cause}"))?;
         write_atomically(Path::new(&path), &rendered)
             .map_err(|e| format!("task extract output: {e}"))?;
         written.push(path);
     }
     Ok(written)
+}
+
+/// What `path` already holds, or `None` when there is no such file.
+///
+/// A missing file is the common case and means "write it fresh". Any other read
+/// error — a directory in the way, a permission — must not be mistaken for an
+/// empty file, because appending to it would then silently write nothing.
+fn existing_text(path: &str) -> Result<Option<String>, String> {
+    match fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!(
+            "task extract output '{path}': cannot read it: {error}"
+        )),
+    }
 }

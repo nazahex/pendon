@@ -9,6 +9,12 @@ and the selection order is P.1–P.3 of
 Changing a `preset` mark here changes what the preset extracts, so it is a
 behaviour change and needs its own line in `STATUS.md`.
 
+The tables are **machine-checked**: §12 is `PRESETS` in
+`crates/extract/src/fields.rs`, the four slot contracts are each plugin's
+`HEAD`, and `apps/cli/tests/fields_inventory_spec.rs` parses this file and fails
+when a row and the code disagree — a rename, an added row, a dropped one, or a
+changed order. Editing a table is therefore a two-file change, not a doc fix.
+
 Scope is fixed by §8.6 of the workflow: `anchor`, `blockquote`, `cite`,
 `directive`, `heading`, `image`, `marker`, `list`, `section`, `table`, `wiki`
 (wikilink only), `codeblock` (vanilla), `latex`, `bind`, `micromatter`. §1 lists
@@ -62,7 +68,9 @@ Every built-in field the tables list is in its element's preset today, so every
 row reads `preset = yes`; a `no` stays legal (a built-in field the preset leaves
 out) and no element needs one.
 
-Two names exist on **every** extractable element. Neither is repeated per table,
+### Shared names — `inner_text`, `depth`, `specs.*`
+
+Two fields exist on **every** extractable element. Neither is repeated per table,
 except `depth` on the two elements that emit it:
 
 | field        | type   | meaning                                                              |
@@ -70,7 +78,67 @@ except `depth` on the two elements that emit it:
 | `inner_text` | text   | the node's text content, descendants concatenated, trimmed           |
 | `depth`      | number | outline nesting: the heading's own, a section's open count, else `1` |
 
-Rules that hold for all rows:
+The `specs.*` namespace is the other shared vocabulary: the five positional
+contents of an extras head (§6.1), spelled the same way for every element. A
+`field.specs.<k>` key moves a position, and `<k>` is the same five names:
+
+| item      | default path  | DOM field | read as a field by                                                                                                   |
+| --------- | ------------- | --------- | -------------------------------------------------------------------------------------------------------------------- |
+| `` `x` `` | `specs.tick`  | —         | `slug` on `heading`; the `id` fallback on `anchor`, `image`, `table` and `section`; the `cite-id` fallback on `cite` |
+| `"x"`     | `specs.quote` | —         | `title` on `anchor`, `cite`, `heading`, `image` and `table`                                                          |
+| `.class`  | `specs.class` | `class`   | — (universal, §6.3)                                                                                                  |
+| `#id`     | `specs.id`    | `id`      | `cite-id` on `cite`; the id chain on `section`                                                                       |
+| `style:`  | `specs.style` | `style`   | — (universal, §6.3)                                                                                                  |
+
+Only the **default path** carries meaning: once `field.specs.<k>` moves a
+position, the content is the author's field under the assigned name and no
+element reads it (§6.2). `class` / `id` / `style` are projected onto the DOM field
+of the same name; an element that only binds a block's decorator keeps the
+qualified path (`specs.class`) instead (§0).
+
+### The slot head
+
+A **slot head** is the `[bracket]` / `(paren)` pair that opens a line (§5.2).
+Four elements claim one — `anchor`, `cite`, `heading`, `image` — and each declares
+its claim as a `SlotContract` ([`crates/extra/src/slot.rs`](../../crates/extra/src/slot.rs)):
+the positions it **accepts**, in head order, and the tag that claims an untagged
+head. §2, §4, §6 and §7 print that contract; no other element has one, so the six
+positions below are unreachable for the other six.
+
+A claimed head is read **whole**: a content the preset does not assign is not
+dropped, it keeps its slot-qualified name (D-7) — and that name _is_ the position:
+
+| position        | content   | fallback name   |
+| --------------- | --------- | --------------- |
+| `bracket.bare`  | `[x]`     | `bracket.bare`  |
+| `bracket.quote` | `["x"]`   | `bracket.quote` |
+| `bracket.tick`  | ``[`x`]`` | `bracket.tick`  |
+| `paren.bare`    | `(x)`     | `paren.bare`    |
+| `paren.quote`   | `("x")`   | `paren.quote`   |
+| `paren.tick`    | ``(`x`)`` | `paren.tick`    |
+
+The fallback is the position's own spelling because a single segment cannot
+contain a `.`: an unassigned content can never collide with a preset name (`href`,
+`title`, `inner_text`). One `field.<slot>.<kind>` key replaces a fallback (D-5)
+and, at the same time, voids the whole preset for that `custom` entry (D-7) —
+there is no half-preset mode.
+
+### The `number` namespace
+
+`plugin-number` is the only writer of numbering attributes (ADR-0010), so one row
+covers every numbered element. A `number` its own plugin wrote (`{number: "auto"}`)
+is replaced by the pass, and once the pass ran the name is reserved (D-10):
+
+| name     | type     | meaning                                                                                               |
+| -------- | -------- | ----------------------------------------------------------------------------------------------------- |
+| `number` | string[] | the element's formatted counters, one per level — `["1"]`, `["2","a"]`; structured, so not a `string` |
+
+`__number` is internal (D-9): the `{"depth":1,"type":"…"}` mark `crates/extra`
+writes for `%%numberType` (§5) and the numbering pass reads. It never ships, and
+`number` is the whole namespace today — S2-9.2 splits it into `number.type` /
+`number.raw` / `number.depth`, which is when §6's row follows.
+
+### Rules that hold for all rows
 
 - **Internal keys never ship.** `__layer`, `__plugin_kind`, `__number` and every
   other `__`-prefixed attribute are the event stream's own bookkeeping (D-9);
@@ -111,6 +179,22 @@ The other three positions of the head (`bracket.quote`, `bracket.tick`,
 `paren.tick`) stay bare under their slot-qualified names (D-7), and `class` /
 `style` / `rel` / `target` / `hreflang` are ordinary extras (§6.3): no row (§0).
 
+**Slot contract** — tag `@`, `HEAD` in `crates/plugin-anchor`:
+
+| position        | lands in        |
+| --------------- | --------------- |
+| `bracket.bare`  | `inner_text`    |
+| `bracket.quote` | `bracket.quote` |
+| `bracket.tick`  | `bracket.tick`  |
+| `paren.bare`    | `href`          |
+| `paren.quote`   | `title`         |
+| `paren.tick`    | `paren.tick`    |
+
+`inner_text` is the one assignment to a shared name (§0) — which is why the link
+text is not a row of its own — and the three bare positions are the fallbacks of
+§0. The extras side feeds `id` (`specs.tick`, as a slug) and `title`
+(`specs.quote`) while those positions keep their default paths (§0).
+
 ## 3. `blockquote` — `__layer = "blockquote"`
 
 Source: §9.2 · `crates/plugin-blockquote` · golden `11-blockquote`.
@@ -140,6 +224,22 @@ assigned by the processor, the one field the element **owns** (D-12 rule 5).
 `reference` is **not** a field: the renderer resolves it from `reference_id`
 against `export const references`. Extract `cite-id` and join on the `references`
 export — which is what golden `05`'s `citations` array does.
+
+**Slot contract** — tag `^`, `HEAD` in `crates/plugin-cite`:
+
+| position        | lands in       |
+| --------------- | -------------- |
+| `bracket.bare`  | `reference_id` |
+| `bracket.quote` | `locator`      |
+| `bracket.tick`  | `bracket.tick` |
+| `paren.bare`    | `paren.bare`   |
+| `paren.quote`   | `paren.quote`  |
+| `paren.tick`    | `paren.tick`   |
+
+The preset assigns the first two, `citation_number` is owned, and the other four
+are the fallbacks of §0. Its extras side feeds `cite-id` (`specs.id`, else
+`specs.tick` as a slug) and `title` (`specs.quote`), both only at their default
+paths (§0).
 
 A citation is a layer node only when a `Cite` component is configured: the
 built-in `<sup class="cite-ref">` fallback is raw HTML, so a document that keeps
@@ -173,6 +273,22 @@ Source: §7.4/§11 · `crates/plugin-heading` · golden `06-heading`.
 
 `class` is an extra and `type` the routing key (§0); `inner_text` is universal.
 
+**Slot contract** — tag `#`, `HEAD` in `crates/plugin-heading`:
+
+| position        | lands in        |
+| --------------- | --------------- |
+| `bracket.bare`  | `slug`          |
+| `bracket.quote` | `bracket.quote` |
+| `bracket.tick`  | `bracket.tick`  |
+| `paren.bare`    | `paren.bare`    |
+| `paren.quote`   | `title`         |
+| `paren.tick`    | `paren.tick`    |
+
+`depth` and `inner_text` are fields of the element but not positions of the head —
+the `#` run and the Markdown body write them (§7.4) — so the preset assigns only
+the two above. The extras side feeds `slug` (`specs.tick`) and `title`
+(`specs.quote`), each as the fallback of its head position (§0).
+
 `number` is **reserved** once `plugin-number` runs (D-10): an extras
 `number: "auto"` is a diagnostic there, and the only `number` an extract sees is
 the array.
@@ -197,6 +313,22 @@ is gone (§14): `width`, `height`, `loading`, `decoding` are ordinary extras. Th
 built-in `<img>` has no prop for an unknown key, so such an extra reaches the
 element `data-`-prefixed (`data-width`, §6.3) — a bare name, not a field of the
 node.
+
+**Slot contract** — tag `!`, `HEAD` in `crates/plugin-image`:
+
+| position        | lands in        |
+| --------------- | --------------- |
+| `bracket.bare`  | `alt`           |
+| `bracket.quote` | `bracket.quote` |
+| `bracket.tick`  | `bracket.tick`  |
+| `paren.bare`    | `src`           |
+| `paren.quote`   | `paren.quote`   |
+| `paren.tick`    | `paren.tick`    |
+
+Both preset names are **owned** (D-12 rule 5) and both are optional (D-2), so
+`![alt]` and `![]()` are images too. The four bare positions are the fallbacks of
+§0, and the extras side feeds `id` (`specs.tick`, as a slug) and `title`
+(`specs.quote`).
 
 ## 8. `list` — `__layer = "unordered"` / `"ordered"` (the container)
 
@@ -246,9 +378,11 @@ Source: §8 · `crates/plugin-table` · goldens `08`/`09`.
 
 **None.** The `<table>` is the one layer whose head is **outside** the table (§8):
 the decorator line above it writes `type`, `#id` and the extras, so everything the
-node carries is the author's (§0), and `name` is its fallback tag (§0). The
-column / row / foot layers (`thead`, `tbody`, `tfoot`) and the `<caption>`
-element are layers no config name maps to.
+node carries is the author's (§0), and `name` is its fallback tag (§0). It does
+project those extras (§6.3), so an extras `"…"` reaches it as `title` and an extras
+`.published` as `class` — still the author's keys under DOM names, not fields the
+element defines. The column / row / foot layers (`thead`, `tbody`, `tfoot`) and the
+`<caption>` element are layers no config name maps to.
 
 Per-cell fields (`colspan`, `rowspan`, `align`, `id`, `class`) live on `td`/`th`
 nodes, which are **markdown's** nodes, not a Pendon layer: they are out of the
@@ -256,8 +390,9 @@ extract surface until a table layer owns them.
 
 ## 12. Preset table (the code's source of truth)
 
-The `pendon` preset — `recommended = true` today, `preset = "pendon"` from S2-8.2
-— extracts exactly these names, in this order, intersect `only`, minus `omit`:
+The `pendon` preset (`preset = "pendon"`, D-6) extracts exactly these names, in
+this order; `include` adds to it, `only` keeps nothing else, `omit` subtracts
+last:
 
 | element      | preset                                                            |
 | ------------ | ----------------------------------------------------------------- |

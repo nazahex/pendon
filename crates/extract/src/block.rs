@@ -2,8 +2,9 @@
 //!
 //! The block is the unit of configuration (`[[task.<element>.extract]]`) and the
 //! unit `pendon-types` resolves: every destination it names is one rule target,
-//! so two blocks writing the same path override each other (P.1.c) while two
-//! blocks writing different paths both run.
+//! so two blocks naming one path are one target (the later block's rows are the
+//! ones appended to that file, D-20) while two blocks writing different paths
+//! both run.
 
 use pendon_types::Selector;
 
@@ -36,6 +37,59 @@ impl std::fmt::Display for ExtractError {
 
 impl std::error::Error for ExtractError {}
 
+/// Which field list a block starts from (D-6).
+///
+/// The **preset** is a starting point, not a filter: [`Pendon`](Self::Pendon) is
+/// the element's documented list
+/// ([`docs/spec/FIELDS-INVENTORY.md`](../../../docs/spec/FIELDS-INVENTORY.md)
+/// §12), `include` adds names to it, `only` keeps nothing else and `omit`
+/// subtracts last. `All` starts from every field the occurrence carries, which
+/// is what a block with no `preset` did before Stage 2.
+///
+/// `Default` is [`All`](Self::All) until `S2-8.6` flips it to `Pendon` (the
+/// order is deliberate: the flip is one line plus a golden re-freeze, not a
+/// behaviour change hidden inside a refactor).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Preset {
+    /// `preset = "pendon"` — the element's own fields, and nothing an author
+    /// added through extras, a modifier run or a custom assignment.
+    Pendon,
+    /// `preset = "all"` — every field the occurrence carries, internals aside.
+    #[default]
+    All,
+}
+
+impl Preset {
+    /// The two preset names, in the order a diagnostic lists them.
+    pub const NAMES: [&'static str; 2] = ["pendon", "all"];
+
+    /// The preset a config value names, or `None` when it names neither.
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "pendon" => Some(Self::Pendon),
+            "all" => Some(Self::All),
+            _ => None,
+        }
+    }
+
+    /// The value as it is written in a config.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pendon => "pendon",
+            Self::All => "all",
+        }
+    }
+
+    /// The fields the preset starts from: `Some(list)` for [`Pendon`](Self::Pendon),
+    /// `None` for [`All`](Self::All) — "no restriction", not "no fields".
+    pub fn fields(self, element: &str) -> Option<&'static [&'static str]> {
+        match self {
+            Self::Pendon => Some(crate::fields::pendon_preset(element)),
+            Self::All => None,
+        }
+    }
+}
+
 /// The raw block as the task table carries it — every value still a string.
 #[derive(Clone, Debug, Default)]
 pub struct BlockSpec {
@@ -43,9 +97,11 @@ pub struct BlockSpec {
     pub types: Vec<String>,
     pub output: Vec<String>,
     pub format: Vec<String>,
+    /// `preset` as authored; absent is [`Preset::default`].
+    pub preset: Option<String>,
+    pub include: Vec<String>,
     pub only: Vec<String>,
     pub omit: Vec<String>,
-    pub recommended: bool,
     pub export: Option<String>,
 }
 
@@ -55,9 +111,10 @@ pub struct ExtractBlock {
     pub element: &'static str,
     pub selectors: Vec<Selector>,
     pub outputs: Vec<(String, Format)>,
+    pub preset: Preset,
+    pub include: Vec<String>,
     pub only: Vec<String>,
     pub omit: Vec<String>,
-    pub recommended: bool,
     pub export: Option<String>,
 }
 
@@ -80,6 +137,31 @@ impl ExtractBlock {
 
         let selectors = Selector::parse_all(spec.types.iter().map(String::as_str))
             .map_err(|error| ExtractError::new(key("type".to_string()), error.to_string()))?;
+
+        // D-6: the vocabulary is closed — a typo in `preset` is an error naming
+        // both values, never a silent fall back to the default.
+        let preset = match spec.preset.as_deref() {
+            None => Preset::default(),
+            Some(name) => Preset::parse(name).ok_or_else(|| {
+                ExtractError::new(
+                    key("preset".to_string()),
+                    format!(
+                        "unknown preset `{name}`; expected one of {}",
+                        Preset::NAMES.join(", ")
+                    ),
+                )
+            })?,
+        };
+
+        // D-6: `include` adds to the preset and `only` keeps nothing but its own
+        // names, so together they are one command with two readings — an error
+        // rather than a precedence rule nobody would remember.
+        if !spec.only.is_empty() && !spec.include.is_empty() {
+            return Err(ExtractError::new(
+                key("only".to_string()),
+                "`only` cannot be combined with `include`: `include` adds fields to the preset, `only` keeps nothing else (use `include` with `omit`, or `only` alone)",
+            ));
+        }
 
         if spec.output.is_empty() && spec.export.is_none() {
             return Err(ExtractError::new(
@@ -129,9 +211,10 @@ impl ExtractBlock {
             element,
             selectors,
             outputs,
+            preset,
+            include: spec.include,
             only: spec.only,
             omit: spec.omit,
-            recommended: spec.recommended,
             export: spec.export,
         })
     }
@@ -157,6 +240,16 @@ mod tests {
         ExtractBlock::build(spec, index)
             .expect_err("the spec is invalid")
             .to_string()
+    }
+
+    /// A spec that reaches the field-selection checks: one destination, so the
+    /// block passes the "needs a destination" gate first.
+    fn written(element: &str) -> BlockSpec {
+        BlockSpec {
+            output: vec!["out/x.json".to_string()],
+            format: vec!["json".to_string()],
+            ..spec(element)
+        }
     }
 
     #[test]
@@ -285,5 +378,113 @@ mod tests {
         .expect("a valid block");
         assert_eq!(block.destination_count(), 3);
         assert_eq!(block.outputs[1].1, Format::Yaml);
+    }
+
+    fn block(overrides: BlockSpec) -> ExtractBlock {
+        ExtractBlock::build(overrides, 0).expect("a valid block")
+    }
+
+    /// D-6: the preset is a closed vocabulary. `pendon` is the element's own list
+    /// and `all` is "no restriction", which is also what an absent key means until
+    /// `S2-8.6` flips the default.
+    #[test]
+    fn a_preset_name_is_parsed_and_absent_is_the_default() {
+        assert_eq!(
+            block(written("cite")).preset,
+            Preset::All,
+            "an absent `preset` is the default"
+        );
+        assert_eq!(
+            block(BlockSpec {
+                preset: Some("pendon".to_string()),
+                ..written("cite")
+            })
+            .preset,
+            Preset::Pendon
+        );
+        assert_eq!(
+            block(BlockSpec {
+                preset: Some("all".to_string()),
+                ..written("cite")
+            })
+            .preset,
+            Preset::All
+        );
+        // `All` is the "no restriction" arm, not an empty list.
+        assert_eq!(Preset::All.fields("cite"), None);
+        assert_eq!(
+            Preset::Pendon.fields("cite"),
+            Some(crate::fields::pendon_preset("cite"))
+        );
+        assert_eq!(Preset::NAMES, ["pendon", "all"]);
+        assert_eq!(Preset::All.as_str(), "all");
+        assert_eq!(Preset::Pendon.as_str(), "pendon");
+    }
+
+    /// D-6: a typo is an error naming both values — never a silent fall back to
+    /// the default preset (which would quietly change what a file holds).
+    #[test]
+    fn an_unknown_preset_lists_the_names() {
+        let message = error(
+            BlockSpec {
+                preset: Some("pendon-all".to_string()),
+                ..written("cite")
+            },
+            0,
+        );
+        assert!(
+            message.starts_with("task.cite.extract[0].preset: "),
+            "{message}"
+        );
+        assert!(message.contains("unknown preset `pendon-all`"), "{message}");
+        assert!(message.contains("pendon, all"), "{message}");
+    }
+
+    /// D-6: `include` adds to the preset, `only` keeps nothing else — one block
+    /// cannot mean both, so the pair is a config error.
+    #[test]
+    fn only_and_include_cannot_be_combined() {
+        let message = error(
+            BlockSpec {
+                include: vec!["class".to_string()],
+                only: vec!["href".to_string()],
+                ..written("cite")
+            },
+            0,
+        );
+        assert!(
+            message.starts_with("task.cite.extract[0].only: "),
+            "{message}"
+        );
+        assert!(
+            message.contains("cannot be combined with `include`"),
+            "{message}"
+        );
+    }
+
+    /// D-6: the allowed pairs. `omit` may follow either narrow key, and a preset
+    /// may be narrowed by `only` alone (that is PE.4's `[{}]` case).
+    #[test]
+    fn include_and_only_are_each_allowed_with_omit_and_a_preset() {
+        let included = block(BlockSpec {
+            preset: Some("pendon".to_string()),
+            include: vec!["class".to_string()],
+            omit: vec!["title".to_string()],
+            ..written("cite")
+        });
+        assert_eq!(included.preset, Preset::Pendon);
+        assert_eq!(included.include, ["class"]);
+        assert_eq!(included.omit, ["title"]);
+        assert!(included.only.is_empty());
+
+        let exclusive = block(BlockSpec {
+            preset: Some("pendon".to_string()),
+            only: vec!["href".to_string()],
+            omit: vec!["href".to_string()],
+            ..written("cite")
+        });
+        assert_eq!(exclusive.only, ["href"]);
+        assert_eq!(exclusive.omit, ["href"]);
+        assert!(exclusive.include.is_empty());
     }
 }

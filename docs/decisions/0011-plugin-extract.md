@@ -115,3 +115,9 @@ reach document-level outputs at all (`chain.rs` hard-codes `extract-heading`).
   into the nodes `extract` reads; the validator only rejects an element plugin or
   `number` placed after it, so a chain with `extract` before `markdown` is
   accepted and yields half-parsed rows (found while writing golden `32`).
+- **Amended 2026-10-30 — a side file accumulates (D-20).** "One path = one array"
+  above still holds, but the array is no longer _replaced_ by the last writer:
+  blocks, pages and runs **append** to it, a row the file already holds is not
+  written twice, and a block whose `format` disagrees with the file's own
+  (detected) format fails the page instead of mixing two documents
+  ([`D-20`](../workflows/unified-syntax-stage-2/DECISIONS.md), `SYNTAX.md` §21.6).

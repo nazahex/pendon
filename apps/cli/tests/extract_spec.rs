@@ -1,5 +1,5 @@
 //! `[[task.<element>.extract]]` — the CLI side of `plugin-extract`
-//! (P.1 of `docs/issues/plugin-extract.md`, T4.2–T4.4 of
+//! (P.1 of `docs/archive/fulfilled/plugin-extract.md`, T4.2–T4.4 of
 //! [`docs/workflows/TASKS.md`](../../docs/workflows/TASKS.md)).
 //!
 //! Extraction is a **reader**: the page renders exactly as it would without the
@@ -73,6 +73,16 @@ fn run_in(dir: &Path) {
         .success();
 }
 
+/// The `stderr` of a run that is expected to fail.
+fn run_expecting_failure(dir: &Path) -> String {
+    let assert = cargo_bin_cmd!("pendon")
+        .current_dir(dir)
+        .arg("run")
+        .assert()
+        .failure();
+    String::from_utf8_lossy(&assert.get_output().stderr).into_owned()
+}
+
 fn read(dir: &Path, path: &str) -> String {
     fs::read_to_string(dir.join(path)).unwrap_or_else(|error| panic!("{path}: {error}"))
 }
@@ -112,7 +122,7 @@ export = "citationsC"
 output = "./out/rest.yaml"
 format = "yaml"
 export = "citationsC"
-recommended = true
+preset = "pendon"
 only = ["reference_id", "citation_number"]
 omit = ["reference_id"]
 "#,
@@ -160,6 +170,155 @@ omit = ["reference_id"]
     assert!(contains("<Cite").eval(&out), "out = {out}");
 }
 
+/// D-6: `preset` and `include` are one selection — the preset keeps the
+/// element's own fields, `include` adds names back on top, and neither key
+/// replaces the other.
+#[test]
+fn d6_preset_and_include_select_the_rows() {
+    let dir = project(
+        "d6-preset",
+        r#"[[task]]
+name = "Extract"
+input = "./src/doc.mdp"
+output = "./out/doc.jsx"
+plugin = "frontmatter,cite,extract,markdown"
+format = "solid"
+
+[[task.cite.extract]]
+output = "./out/preset.json"
+format = "json"
+preset = "pendon"
+
+[[task.cite.extract]]
+output = "./out/included.json"
+format = "json"
+preset = "pendon"
+include = ["name", "depth"]
+"#,
+    );
+    fs::write(dir.join("src/doc.mdp"), "A [^alpha]@@CiteA.\n").expect("source");
+    with_cite(&dir);
+    run_in(&dir);
+
+    // The preset alone: `name` and `depth` are the citation element's, not its
+    // preset's, so they stay out…
+    let preset: Value = serde_json::from_str(&read(&dir, "out/preset.json")).expect("json");
+    assert_eq!(
+        preset,
+        serde_json::json!([{
+            "citation_number": "1",
+            "reference_id": "alpha",
+            "type": "CiteA",
+        }])
+    );
+    // …and `include` asks for them by name without dropping the preset.
+    let included: Value = serde_json::from_str(&read(&dir, "out/included.json")).expect("json");
+    assert_eq!(
+        included,
+        serde_json::json!([{
+            "citation_number": "1",
+            "reference_id": "alpha",
+            "type": "CiteA",
+            "depth": 1,
+            "name": "sup",
+        }])
+    );
+}
+
+/// D-16: `recommended` was removed in S2-8.2, so a stale config is a **load
+/// error** naming the replacement — never a silent `preset = "all"`.
+#[test]
+fn the_removed_recommended_key_is_a_load_error() {
+    let dir = project(
+        "d6-recommended",
+        r#"[[task]]
+name = "Extract"
+input = "./src/doc.mdp"
+output = "./out/doc.jsx"
+plugin = "frontmatter,cite,extract,markdown"
+format = "solid"
+
+[[task.cite.extract]]
+output = "./out/rest.json"
+format = "json"
+recommended = true
+"#,
+    );
+    fs::write(dir.join("src/doc.mdp"), "A [^alpha]@@CiteA.\n").expect("source");
+    with_cite(&dir);
+
+    let stderr = run_expecting_failure(&dir);
+    assert!(
+        contains("task.cite.extract[0].recommended was removed").eval(&stderr),
+        "stderr = {stderr}"
+    );
+    assert!(
+        contains(r#"use preset = "pendon""#).eval(&stderr),
+        "stderr = {stderr}"
+    );
+}
+
+/// D-6: the preset vocabulary is closed — a typo names both values instead of
+/// falling back to the default.
+#[test]
+fn an_unknown_preset_is_a_load_error() {
+    let dir = project(
+        "d6-unknown-preset",
+        r#"[[task]]
+name = "Extract"
+input = "./src/doc.mdp"
+output = "./out/doc.jsx"
+plugin = "frontmatter,cite,extract,markdown"
+format = "solid"
+
+[[task.cite.extract]]
+output = "./out/rest.json"
+format = "json"
+preset = "recommended"
+"#,
+    );
+    fs::write(dir.join("src/doc.mdp"), "A [^alpha]@@CiteA.\n").expect("source");
+    with_cite(&dir);
+
+    let stderr = run_expecting_failure(&dir);
+    assert!(
+        contains("task.cite.extract[0].preset: unknown preset `recommended`").eval(&stderr),
+        "stderr = {stderr}"
+    );
+    assert!(contains("pendon, all").eval(&stderr), "stderr = {stderr}");
+}
+
+/// D-6: `include` adds to the preset and `only` keeps nothing else, so the pair
+/// is one command with two readings — an error, not a precedence rule.
+#[test]
+fn only_and_include_together_are_a_load_error() {
+    let dir = project(
+        "d6-only-include",
+        r#"[[task]]
+name = "Extract"
+input = "./src/doc.mdp"
+output = "./out/doc.jsx"
+plugin = "frontmatter,cite,extract,markdown"
+format = "solid"
+
+[[task.cite.extract]]
+output = "./out/rest.json"
+format = "json"
+only = ["citation_number"]
+include = ["name"]
+"#,
+    );
+    fs::write(dir.join("src/doc.mdp"), "A [^alpha]@@CiteA.\n").expect("source");
+    with_cite(&dir);
+
+    let stderr = run_expecting_failure(&dir);
+    assert!(
+        contains("task.cite.extract[0].only: `only` cannot be combined with `include`")
+            .eval(&stderr),
+        "stderr = {stderr}"
+    );
+}
+
 /// `output` is project-root-relative like the task `output`, and its `[segment]`
 /// placeholders are substituted per page.
 #[test]
@@ -199,12 +358,12 @@ only = ["reference_id"]
     );
 }
 
-/// A path without a placeholder is one file for the whole task: every page that
-/// resolves to it replaces the previous content, so the file holds one page's
-/// rows — never a merge (P.1). Pages are walked in directory order, so *which*
-/// page wins is not alphabetical; only "one of them" is promised.
+/// A path without a placeholder is **shared**, not owned by the last page: every
+/// page that resolves to it appends its rows, so the one file collects the whole
+/// task (§21.6) instead of holding whichever page rendered last (P.1's old
+/// "replace the content" rule).
 #[test]
-fn a_static_side_path_is_overwritten_not_merged() {
+fn a_static_side_path_collects_every_page() {
     let dir = project(
         "static",
         r#"[[task]]
@@ -230,12 +389,172 @@ only = ["reference_id"]
 
     let rows: Value =
         serde_json::from_str(&read(&dir, "out/all-cite.json")).expect("the file parses");
+    let mut ids: Vec<String> = rows
+        .as_array()
+        .expect("an array of rows")
+        .iter()
+        .filter_map(|row| row["reference_id"].as_str().map(str::to_string))
+        .collect();
+    ids.sort();
+    assert_eq!(ids, ["alpha", "beta"], "one row per page: {rows:?}");
+}
+
+/// The other half of appending: a page that renders **again** adds nothing, so a
+/// cache miss or a deleted page output cannot grow the shared file.
+#[test]
+fn a_rerun_appends_nothing() {
+    let dir = project(
+        "rerun",
+        r#"[[task]]
+name = "Extract"
+input = "./src/doc.mdp"
+output = "./out/doc.jsx"
+plugin = "frontmatter,cite,extract,markdown"
+format = "solid"
+
+[[task.cite.extract]]
+output = "./out/cites.json"
+format = "json"
+only = ["reference_id"]
+"#,
+    );
+    fs::write(dir.join("src/doc.mdp"), "A [^alpha].\n").expect("source");
+    with_cite(&dir);
+    run_in(&dir);
+    let first = read(&dir, "out/cites.json");
+
+    // Force a second render of the same page: the side file is already there.
+    fs::remove_file(dir.join("out/doc.jsx")).expect("delete the page output");
+    run_in(&dir);
+
+    assert_eq!(
+        read(&dir, "out/cites.json"),
+        first,
+        "the rows are already in the file, so a re-render appends nothing"
+    );
+}
+
+/// Two elements sharing one path are two destinations in two groups, so both
+/// writes are queued and the second one appends to the first one's array: one
+/// path is one flat array, whatever element the rows came from.
+#[test]
+fn two_elements_share_one_json_array() {
+    let dir = project(
+        "json-merge",
+        r#"[[task]]
+name = "Extract"
+input = "./src/doc.mdp"
+output = "./out/doc.jsx"
+plugin = "frontmatter,heading,cite,extract,markdown"
+format = "solid"
+
+[[task.heading.extract]]
+output = "./out/all.json"
+format = "json"
+only = ["depth"]
+
+[[task.cite.extract]]
+output = "./out/all.json"
+format = "json"
+only = ["reference_id"]
+"#,
+    );
+    fs::write(dir.join("src/doc.mdp"), "# Intro\n\nA [^alpha].\n").expect("source");
+    with_cite(&dir);
+
+    run_in(&dir);
+
+    // Block order is the config's element order, not the order the file happens
+    // to list them in, so the two rows are checked regardless of position.
+    let rows: Value = serde_json::from_str(&read(&dir, "out/all.json")).expect("json");
     let rows = rows.as_array().expect("an array of rows");
-    assert_eq!(rows.len(), 1, "the shared path holds one page: {rows:?}");
-    let id = rows[0]["reference_id"].as_str().expect("a reference_id");
+    assert_eq!(rows.len(), 2, "{rows:?}");
     assert!(
-        id == "alpha" || id == "beta",
-        "the file is written by a real page: {id}"
+        rows.contains(&serde_json::json!({ "depth": 1 })),
+        "{rows:?}"
+    );
+    assert!(
+        rows.contains(&serde_json::json!({ "reference_id": "alpha" })),
+        "{rows:?}"
+    );
+}
+
+/// TOML has no top-level array, so two elements share one file as two arrays of
+/// tables: the `cite` block appends its `[[cite]]` tables next to `[[heading]]`
+/// instead of replacing the heading block's file.
+#[test]
+fn two_elements_share_one_toml_file() {
+    let dir = project(
+        "toml-merge",
+        r#"[[task]]
+name = "Extract"
+input = "./src/doc.mdp"
+output = "./out/doc.jsx"
+plugin = "frontmatter,heading,cite,extract,markdown"
+format = "solid"
+
+[[task.heading.extract]]
+output = "./out/all.toml"
+format = "toml"
+only = ["depth"]
+
+[[task.cite.extract]]
+output = "./out/all.toml"
+format = "toml"
+only = ["reference_id"]
+"#,
+    );
+    fs::write(dir.join("src/doc.mdp"), "# Intro\n\nA [^alpha].\n").expect("source");
+    with_cite(&dir);
+
+    run_in(&dir);
+
+    let toml = read(&dir, "out/all.toml");
+    assert!(contains("[[heading]]").eval(&toml), "toml = {toml}");
+    assert!(contains("[[cite]]").eval(&toml), "toml = {toml}");
+    assert!(
+        contains(r#"reference_id = "alpha""#).eval(&toml),
+        "toml = {toml}"
+    );
+}
+
+/// §21.6: a file that already holds another format fails the page — `format`
+/// promises the document's shape, it does not convert one into another, and the
+/// file on disk is left exactly as it was.
+#[test]
+fn appending_to_a_file_of_another_format_fails_the_page() {
+    let dir = project(
+        "cross-format",
+        r#"[[task]]
+name = "Extract"
+input = "./src/doc.mdp"
+output = "./out/doc.jsx"
+plugin = "frontmatter,cite,extract,markdown"
+format = "solid"
+
+[[task.cite.extract]]
+output = "./out/shared.json"
+format = "json"
+only = ["reference_id"]
+"#,
+    );
+    fs::write(dir.join("src/doc.mdp"), "A [^alpha].\n").expect("source");
+    with_cite(&dir);
+    fs::create_dir_all(dir.join("out")).expect("out dir");
+    let yaml = "- reference_id: gamma\n";
+    fs::write(dir.join("out/shared.json"), yaml).expect("yaml in the way");
+
+    let stderr = run_expecting_failure(&dir);
+
+    assert!(
+        contains("holds yaml data").eval(&stderr),
+        "stderr = {stderr}"
+    );
+    assert!(contains("writes json").eval(&stderr), "stderr = {stderr}");
+    assert_eq!(
+        read(&dir, "out/shared.json"),
+        yaml,
+        "the file is not overwritten, and not half-merged"
     );
 }
 

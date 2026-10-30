@@ -15,12 +15,12 @@
 use std::collections::{HashMap, HashSet};
 
 use pendon_core::{ContextPipeline, Event, NodeKind};
+use pendon_extract::{ExtractOptions, ExtractOutput};
 use pendon_plugin_anchor::AnchorOptions;
 use pendon_plugin_bind::{Fragment, MdpMode};
 use pendon_plugin_blockquote::BlockquoteOptions;
 use pendon_plugin_custom::PluginSpec;
 use pendon_plugin_directive::DirectiveOptions;
-use pendon_plugin_extract::{ExtractOptions, ExtractOutput};
 use pendon_plugin_heading::HeadingOptions;
 use pendon_plugin_image::ImageOptions;
 use pendon_plugin_latex::LatexOptions;
@@ -66,7 +66,7 @@ pub struct ChainConfig {
     /// `[[task.<element>.number]]` + `[[task.number.custom]]` (ADR-0010).
     pub number: NumberOptions,
     /// `[[task.<element>.extract]]` — the per-element extraction blocks
-    /// (`docs/issues/plugin-extract.md`).
+    /// (`docs/archive/fulfilled/plugin-extract.md`).
     pub extract: ExtractOptions,
 }
 
@@ -188,7 +188,7 @@ pub fn validate_extract_order(task_name: &str, names: &[&str]) -> Result<(), Str
         if index > position && (crate::plugins::NUMBER_ELEMENTS.contains(name) || *name == "number")
         {
             return Err(format!(
-                "[{task_name}] plugin `extract` comes before `{name}`; `extract` must follow every plugin whose attributes it reads (docs/issues/plugin-extract.md)"
+                "[{task_name}] plugin `extract` comes before `{name}`; `extract` must follow every plugin whose attributes it reads (docs/archive/fulfilled/plugin-extract.md)"
             ));
         }
     }
@@ -373,13 +373,13 @@ fn run_chain(
                 pendon_plugin_number::process(&events, &config.number)
             }
             "extract" => {
-                // P.2 of `docs/issues/plugin-extract.md`: extraction only *reads*
+                // P.2 of `docs/archive/fulfilled/plugin-extract.md`: extraction only *reads*
                 // the stream the chain has built so far, so it returns the events
                 // untouched and leaves the rows for `process` to write once the
                 // page itself rendered. The position is validated up front
                 // (`validate_extract_order`): a block that ran before its
                 // element plugin would extract a node without its attributes.
-                state.extract = pendon_plugin_extract::run(&events, &config.extract);
+                state.extract = pendon_extract::run(&events, &config.extract);
                 events
             }
             "heading" => {
@@ -585,7 +585,7 @@ mod tests {
     use super::{
         run_chain, validate_extract_order, validate_number_order, ChainConfig, ChainState, Document,
     };
-    use pendon_plugin_extract::{BlockSpec, ExtractBlock, ExtractOptions};
+    use pendon_extract::{BlockSpec, ExtractBlock, ExtractOptions};
 
     /// ADR-0010: the only accepted shape is "every element plugin, then
     /// `number`, then `markdown`".

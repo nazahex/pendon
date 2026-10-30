@@ -223,7 +223,10 @@ the default is "everything". The proposal replaces this with
 
 **Recommendation.** `ExtractRule { preset: Preset, include: Vec<Path>, only:
 Vec<Path>, omit: Vec<Path> }` where `Preset { Pendon, All }` defaults to
-`Pendon`. Validation, all `Severity::Error` at config load:
+`Pendon` — **from S2-8.6**, which owns the flip and the golden re-freeze it
+implies; S2-8.2 lands the key with the old default (`all`) so the syntax change
+and the output change stay reviewable apart. Validation, all `Severity::Error` at
+config load:
 
 - `only` + `include` → error (proposal says they must not be combined).
 - `include` + `omit`, `only` + `omit` → allowed.
@@ -697,6 +700,63 @@ and it would leave the export as the only place the old names survive.
 
 **Consequence.** §7.3, §20, `FIELDS-INVENTORY.md` and the plugin README document
 the new row shape; goldens `05` / `26` / `33` were re-frozen with it.
+
+---
+
+## D-20 — One destination path accumulates: append, never overwrite
+
+**Context.** P.1 (and §21.6 of `SYNTAX.md`) said several blocks — or several
+pages — resolving to one `output` **overwrite** it, "the later value wins". That
+rule is invisible and lossy exactly where a side file is most useful: a task over
+`./src/[slug]/doc.mdp` that extracts to `./out/all-cite.json` keeps only whichever
+page happened to render last, and the author is never told. `apps/cli/tests/
+extract_spec.rs` froze the loss as a _feature_ (`a_static_side_path_is_overwritten_
+not_merged`).
+
+**Decision.** A destination **accumulates**.
+
+1. **Append, in write order.** A write reads what the file already holds and
+   appends the rows it does not have. JSON and YAML keep one array; TOML keeps one
+   array of tables — `[[heading]]` next to `[[cite]]` — per element.
+2. **Appending is idempotent.** A row the file already holds is not written
+   twice, so a cache miss, a deleted page output or a re-run of the same input
+   changes no byte. Equality is structural (object keys compared sorted) and it is
+   **counted**, so two identical occurrences still produce two rows.
+3. **The file's format comes from its content**, detected as JSON, then TOML, then
+   YAML. A block whose `format` disagrees with the file that is already there is a
+   **task error** naming both formats; nothing is written and the file is left
+   untouched. A file that is none of the three, or the right format in the wrong
+   shape (an object where rows belong), is an error too, with "delete it to
+   rewrite it" as the way out.
+4. **The extension still decides nothing** — `format` is a promise about the
+   document, not a description of what is written into it.
+
+**Why.** The alternative to append is silent data loss, and the alternative to
+"error on a foreign format" is a file that is half JSON and half TOML — worse than
+either. Idempotence is what makes appending compatible with a renderer that
+re-runs pages independently: without it every cache miss would duplicate rows.
+
+**Rejected.**
+
+- **Always overwrite** (P.1's literal rule) — loses a page's rows with no
+  diagnostic.
+- **Merge by a key** (`reference_id`, heading `id`) — invents an identity the
+  configuration never names; a heading and a cite in one TOML file have no common
+  key, and the same citation may legitimately appear twice in a page.
+- **Convert the file to the block's format** — guesses that JSON and TOML rows are
+  interchangeable and destroys the author's formatting.
+- **Append blindly (no "already holds" check)** — every re-run doubles the file.
+
+**Consequence.** §21.6 is rewritten around appending; `crates/extract` owns the
+rule (`Format::extend`, `SideFile::extend`) and the CLI only reads the file
+(`existing_text` + `write_atomically` in `apps/cli/src/process.rs`). The resolver
+is untouched: within one element a path is still **one destination**, so
+`Group::matching` keeps one rule per path and "later block wins" survives there —
+appending applies _across_ destinations (another element, a page, a run). A page
+whose file another page also appends to may re-render once after the other page's
+rows land, because the cache records the content hash it left behind; the next run
+is stable. `apps/cli/tests/extract_spec.rs` covers the shared path, the re-run,
+the two-element JSON array, the TOML tables and the cross-format failure.
 
 ---
 

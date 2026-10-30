@@ -1,10 +1,10 @@
 use pendon_core::{ContextPipeline, Event};
+use pendon_extract::{BlockSpec, ExtractBlock, ExtractOptions};
 use pendon_plugin_anchor::{AnchorCustomNode, AnchorOptions};
 use pendon_plugin_blockquote::{BlockquoteCustomNode, BlockquoteOptions};
 use pendon_plugin_cite::{CitationContext, CiteCustomNode, CiteOptions, ReferencesScope};
 use pendon_plugin_custom::{load_index_from_path, load_spec_from_path, PluginSpec};
 use pendon_plugin_directive::{DirectiveCustomNode, DirectiveOptions};
-use pendon_plugin_extract::{BlockSpec, ExtractBlock, ExtractOptions};
 use pendon_plugin_heading::{HeadingCustomNode, HeadingOptions};
 use pendon_plugin_image::{ImageCustomNode, ImageOptions};
 use pendon_plugin_list::{ListCustomNode, ListOptions};
@@ -856,15 +856,23 @@ fn extract_block(element: &str, rule: &ExtractRule, index: usize) -> Result<Extr
         )?),
         None => None,
     };
+    // D-16: a removed key is a load error, not a silent reinterpretation.
+    if rule.recommended.is_some() {
+        return Err(format!(
+            "task.{element}.extract[{index}].recommended was removed; \
+             use preset = \"pendon\" (§21, D-6)"
+        ));
+    }
     ExtractBlock::build(
         BlockSpec {
             element: element.to_string(),
             types: tokens(&rule.types),
             output: tokens(&rule.output),
             format: tokens(&rule.format),
+            preset: rule.preset.clone(),
+            include: tokens(&rule.include),
             only: tokens(&rule.only),
             omit: tokens(&rule.omit),
-            recommended: rule.recommended,
             export,
         },
         index,
@@ -1786,7 +1794,7 @@ omit = ["instance_id", "extraAttr1"]
         assert_eq!(first.selectors.len(), 2);
         assert_eq!(first.outputs.len(), 2);
         assert_eq!(first.outputs[0].0, "./out/[slug].cite.json");
-        assert_eq!(first.outputs[1].1, pendon_plugin_extract::Format::Yaml);
+        assert_eq!(first.outputs[1].1, pendon_extract::Format::Yaml);
         assert_eq!(first.only, ["citation_number", "instance_id"]);
         assert!(first.export.is_none());
 
@@ -1819,6 +1827,45 @@ format = "toml"
         let elements: Vec<&str> = options.blocks.iter().map(|block| block.element).collect();
         // The order is the element list's, not the config's.
         assert_eq!(elements, ["heading", "table"]);
+    }
+
+    /// §21 / D-6: `preset` comes through as written and `include` takes both
+    /// shapes (`String | [String]`, like `only`/`omit`); the removed
+    /// `recommended` key is a load error naming its replacement (D-16).
+    #[test]
+    fn extract_carries_preset_and_include() {
+        let task = extract_task(
+            r#"
+[[anchor.extract]]
+output = "./out/[slug].anchor.json"
+format = "json"
+preset = "pendon"
+include = "class"
+"#,
+        );
+        let options = build_extract_options(&task).expect("valid blocks");
+        let block = &options.blocks[0];
+        assert_eq!(block.preset, pendon_extract::Preset::Pendon);
+        assert_eq!(block.include, ["class"]);
+        assert!(block.only.is_empty());
+    }
+
+    #[test]
+    fn the_removed_recommended_key_is_rejected() {
+        let task = extract_task(
+            r#"
+[[cite.extract]]
+output = "./out/[slug].cite.json"
+format = "json"
+recommended = true
+"#,
+        );
+        let err = build_extract_options(&task).expect_err("removed key");
+        assert!(
+            err.starts_with("task.cite.extract[0].recommended was removed"),
+            "{err}"
+        );
+        assert!(err.contains(r#"use preset = "pendon""#), "{err}");
     }
 
     /// The crate owns the `task.<element>.extract[i].<key>` prefix; a bad format

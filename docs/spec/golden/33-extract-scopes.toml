@@ -22,9 +22,17 @@ export = "citationsC"
 output = "./out/[slug].rest.yaml"
 format = "yaml"
 export = "citationsC"
-recommended = true
+preset = "pendon"
 only = ["reference_id", "citation_number"]
 omit = ["reference_id"]
+
+# D-6: `include` adds names to the preset instead of replacing it — the citation's
+# own fields stay, and `depth`/`name` (which the preset leaves out) come back.
+[[task.cite.extract]]
+output = "./out/[slug].included.json"
+format = "json"
+preset = "pendon"
+include = ["depth", "name"]
 
 [task.cite]
 reference_source = "external"

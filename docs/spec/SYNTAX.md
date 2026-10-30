@@ -1737,9 +1737,10 @@ type        = <selector> | [<selector>, …]   # default: `_`
 output      = <path>     | [<path>, …]
 format      = "json" | "yaml" | "toml"       # required, one per `output`
 export      = <name>                         # one binding per block
-recommended = <bool>
-only        = [<field>, …]
-omit        = [<field>, …]
+preset      = "pendon" | "all"               # default: `all` (S2-8.6 flips it)
+include     = [<field>, …]                   # adds to the preset; never with `only`
+only        = [<field>, …]                   # keeps nothing else
+omit        = [<field>, …]                   # always wins
 ```
 
 1. **The plugin is `extract`.** The blocks are _validated_ for every task (a typo
@@ -1755,20 +1756,36 @@ omit        = [<field>, …]
    a literal, `?`, `_` or `*`, resolved per element against the types that element
    actually occurs with, so two blocks naming disjoint types cannot both claim a
    node, and an omitted `type` is `_` — the remainder no other block named.
-4. **Field selection** starts from every field the occurrence carries, then
-   `recommended` restricts to the preset, `only` intersects it and **`omit`
-   subtracts last — omit always wins** (P.3). A field the element does not carry
-   is dropped, never emitted empty, even when `only` names it. Internal `__`-keys
-   never ship; an author's extras key passes through under its own name.
+4. **Field selection** starts from a **preset** — `"pendon"` is the element's own
+   field list (§12 of [`FIELDS-INVENTORY.md`](FIELDS-INVENTORY.md)), `"all"` is
+   every field the occurrence carries — then `include` adds names to it, `only`
+   keeps nothing but its own names and **`omit` subtracts last, so omit always
+   wins** (P.3, [D-6](../workflows/unified-syntax-stage-2/DECISIONS.md)). A preset
+   name outside those two is a task error listing both; so is `only` together with
+   `include`, which would be one command with two readings. `include` with `omit`
+   is fine (the `omit` names simply never ship), and `include` on `"all"` is
+   redundant but valid. A field the element does not carry is dropped, never
+   emitted empty, even when `only` names it. Internal `__`-keys never ship; an
+   author's extras key passes through under its own name. `recommended = <bool>`
+   is **gone** (D-16): it was `preset = "pendon"` and is now a load error naming
+   the replacement.
 5. **Two names exist on every element:** `inner_text` (the node's text,
    descendants concatenated, trimmed) and `depth` (the heading's own, a section's
    open-section count, `1` elsewhere).
-6. **One destination path = one array.** Blocks listing several `output`s write
-   the _same_ rows to each; several blocks resolving to one path overwrite it —
-   the later value wins, at the position the first block gave it. `output` and
-   `format` arrays must have the same length, and the **extension never decides
-   the format** (`format = "json"` writes JSON to a `.yaml` path). `paths` are
-   project-root-relative and take the task's `[segment]` captures.
+6. **One destination path = one document, and it accumulates.** Blocks listing
+   several `output`s write the _same_ rows to each. Several blocks — or several
+   pages — resolving to one path **append** to it instead of overwriting it
+   ([D-20](../workflows/unified-syntax-stage-2/DECISIONS.md)): JSON and YAML keep
+   one array, TOML keeps one array of tables **per element** (`[[heading]]` next
+   to `[[cite]]`). Appending is idempotent — a row the file already holds is not
+   written twice, so re-rendering a page does not duplicate its data. The file's
+   format is **detected from its content** (JSON, then TOML, then YAML) and a
+   block whose `format` disagrees with a file that is already there is a task
+   error naming both formats; so is a file of none of the three, or of the right
+   format in the wrong shape. `output` and `format` arrays must have the same
+   length, and the **extension never decides the format** (`format = "json"`
+   writes JSON to a `.yaml` path). `paths` are project-root-relative and take the
+   task's `[segment]` captures.
 7. **`export` is §20's channel**: a `solid` task emits `export const <name>`, a
    non-solid task drops the binding and keeps the files. Two blocks exporting one
    name leave the later value only (D-6).
@@ -1787,5 +1804,6 @@ omit        = [<field>, …]
 Executable contracts: goldens [`32-extract-heading`](golden/README.md) (a heading
 block writing a file _and_ `export const outline`, next to the automatic nested
 `headings`) and [`33-extract-scopes`](golden/README.md) (two `type`-scoped blocks,
-the `_` remainder, a last-wins `export`); `apps/cli/tests/extract_spec.rs` adds
-the dynamic/static path rules, the non-Solid drop and the cache rewrite.
+the `_` remainder, a last-wins `export`, and the `preset` / `preset` + `include`
+pair); `apps/cli/tests/extract_spec.rs` adds the dynamic/static path rules, the
+non-Solid drop, the cache rewrite and every D-6 selection error.

@@ -100,7 +100,7 @@ impl OneOrMany {
 }
 
 /// One `[[task.<element>.extract]]` block (P.1 of
-/// `docs/issues/plugin-extract.md`).
+/// `docs/archive/fulfilled/plugin-extract.md`).
 ///
 /// Every value is still raw: `build_extract_options` turns the rule into a
 /// validated `ExtractBlock`, so an unknown format or a non-extractable element is
@@ -115,13 +115,19 @@ pub struct ExtractRule {
     pub output: Option<OneOrMany>,
     /// `json`, `yaml` or `toml` — one per output.
     pub format: Option<OneOrMany>,
+    /// Which field list the block starts from: `"pendon"` or `"all"` (§21, D-6).
+    /// Absent is the default preset.
+    pub preset: Option<String>,
+    /// Add these fields to the preset. Never with `only` (D-6).
+    pub include: Option<OneOrMany>,
     /// Allowlist: keep only these fields.
     pub only: Option<OneOrMany>,
-    /// Denylist: drop these fields. Always wins over `only`/`recommended`.
+    /// Denylist: drop these fields. Always wins over `preset`/`include`/`only`.
     pub omit: Option<OneOrMany>,
-    /// Narrow the fields to the element's `recommended` preset first.
-    #[serde(default)]
-    pub recommended: bool,
+    /// Removed pre-D-6 key: `recommended = true` meant `preset = "pendon"` and
+    /// `false` meant the default. Parsed only so a stale config is a load error
+    /// naming the replacement instead of silently extracting every field.
+    pub recommended: Option<toml::Value>,
     /// `export const <name>` (solid only); never an array.
     pub export: Option<String>,
 }

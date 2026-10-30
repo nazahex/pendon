@@ -1,19 +1,21 @@
-//! `plugin-extract`: per-element data extraction.
+//! `extract`: per-element data extraction.
 //!
 //! A task block (`[[task.<element>.extract]]`, P.1 of
-//! [`docs/issues/plugin-extract.md`](../../../docs/issues/plugin-extract.md))
+//! [`docs/archive/fulfilled/plugin-extract.md`](../../../docs/archive/fulfilled/plugin-extract.md))
 //! names an element, an optional `type` scope, one or more destinations
 //! (`output` + `format`, `export`, or both) and a field selection
-//! (`recommended`, `only`, `omit`). This crate turns those blocks into a flat
-//! array of objects per destination — one row per element occurrence.
+//! (`preset`, `include`, `only`, `omit` — §21, D-6). This crate turns those
+//! blocks into a flat array of objects per destination — one row per element
+//! occurrence.
 //!
 //! Three invariants shape the implementation:
 //!
 //! - **It only reads.** The event stream is not rewritten (P.2), so adding an
 //!   extract block never changes a rendered byte.
-//! - **The fields are frozen.** [`fields::ELEMENTS`] and [`fields::recommended`]
-//!   mirror [`docs/spec/FIELDS-INVENTORY.md`](../../../docs/spec/FIELDS-INVENTORY.md);
-//!   the extractor knows exactly what a node can carry and nothing else.
+//! - **The fields are frozen.** [`ELEMENTS`] and [`pendon_preset`] mirror
+//!   [`docs/spec/FIELDS-INVENTORY.md`](../../../docs/spec/FIELDS-INVENTORY.md);
+//!   the extractor knows exactly what a node can carry and nothing else, and
+//!   `apps/cli/tests/fields_inventory_spec.rs` compares the two.
 //! - **Disjointness is `pendon-types`.** A block's `type` scope is a
 //!   [`pendon_types::Selector`] list resolved per element, so two blocks that name
 //!   different types cannot both claim a node (P.4).
@@ -23,8 +25,8 @@ mod fields;
 mod format;
 mod scan;
 
-pub use block::{BlockSpec, ExtractBlock, ExtractError};
-pub use fields::{select_fields, ELEMENTS};
+pub use block::{BlockSpec, ExtractBlock, ExtractError, Preset};
+pub use fields::{pendon_preset, select_fields, ELEMENTS};
 pub use format::Format;
 pub use scan::{ElementNode, DEPTH, INNER_TEXT};
 
@@ -59,8 +61,19 @@ pub struct SideFile {
 }
 
 impl SideFile {
+    /// The text for a fresh write: the rows as this format's own document.
     pub fn render(&self) -> Result<String, String> {
         self.format.render(&self.element, &self.rows)
+    }
+
+    /// The text to write when the target already holds `existed`.
+    ///
+    /// `None`/blank is [`render`](Self::render); otherwise the rows are appended
+    /// to the file's own document, and a file written in another format is an
+    /// error (§21.6). The writer passes what it read from disk, so this type
+    /// never touches the filesystem itself.
+    pub fn extend(&self, existed: Option<&str>) -> Result<String, String> {
+        self.format.extend(&self.element, &self.rows, existed)
     }
 }
 
@@ -77,17 +90,16 @@ impl ExtractOutput {
         self.files.is_empty() && self.exports.is_empty()
     }
 
-    /// P.1.c: a later block writing the same path replaces the earlier value;
-    /// the position stays where the first block put it.
+    /// Queues one destination write, in block order.
+    ///
+    /// Two blocks — or two pages — may resolve to one path. That used to make the
+    /// later block *replace* the earlier rows, so only the last one to render was
+    /// in the file; now both writes are queued and the writer **appends** them
+    /// into the one file (§21.6). Nothing is merged here: a path is queued once
+    /// per block, and a block whose `format` disagrees with the file already on
+    /// disk fails at write time.
     fn push_file(&mut self, file: SideFile) {
-        match self
-            .files
-            .iter_mut()
-            .find(|existing| existing.path == file.path)
-        {
-            Some(existing) => *existing = file,
-            None => self.files.push(file),
-        }
+        self.files.push(file);
     }
 
     /// D-6: last registration wins entirely — value *and* position.
@@ -337,7 +349,7 @@ mod tests {
         assert_eq!(depths, [("outer", 1), ("inner", 2)]);
     }
 
-    /// The default block (`recommended = false`, no `type`) writes every field the
+    /// The default block (no `preset`, no `type`) writes every field the
     /// element carries, internal keys excluded.
     #[test]
     fn run_writes_every_carried_field_by_default() {
@@ -440,8 +452,12 @@ mod tests {
         assert_eq!(output.files[1].rows.len(), 1);
     }
 
+    /// Within one element, a path **is** a destination: `Group::matching` keeps
+    /// one rule per destination, so the later block wins and the earlier never
+    /// runs. Appending is what happens *across* destinations — another element's
+    /// group, another page, another run (§21.6).
     #[test]
-    fn two_blocks_on_one_path_last_wins() {
+    fn one_path_is_one_destination_so_the_later_block_wins() {
         let events = heading("2", "intro", None);
         let mut first = block("heading", &[], &["out/x.json"], &["json"], None);
         first.only = vec!["id".to_string()];

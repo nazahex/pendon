@@ -17,8 +17,8 @@ line is done, delete it (the git history is the record) — keep this file short
 ## Current focus
 
 Four proposals, one sequenced plan ([`docs/workflows/`](docs/workflows/), 40 tasks
-in [`TASKS.md`](docs/workflows/TASKS.md)). **Phases 0–6 are landed and Phase 7 is
-open**; the gates and the L37 blocker are what is left.
+in [`TASKS.md`](docs/workflows/TASKS.md)). **Phases 0–7 are landed and Phase 8
+(`extract`) is in progress**; the L37 blocker is what is left.
 
 - **Phase 0/1 — shared types.** `pendon-types` (`Selector`, `TypeSet`, `Rule`,
   `Group`, `winner`, `matching`) answers `type = …` selectors; `D-3a`: the
@@ -39,14 +39,17 @@ open**; the gates and the L37 blocker are what is left.
   `href`/`title` itself, bypassing the `__` skip) — fixed + tested.
 
 **Phase 4 — `plugin-extract` (landed).** `[[task.<element>.extract]]` collects the
-ten extractable elements' fields into flat rows (`type` selectors, `recommended` /
-`only` / `omit` with omit always winning), writes them to side files (`json` /
-`yaml` / `toml`, `[slug]`-dynamic paths, one path = one array) and registers
+ten extractable elements' fields into flat rows (`type` selectors, `preset` /
+`include` / `only` / `omit` with omit always winning), writes them to side files
+(`json` / `yaml` / `toml`, `[slug]`-dynamic paths) and registers
 `export const` on Solid tasks (SYNTAX §21, ADR-0011). `extract` runs as a chain
 stage that only _reads_ the stream, so it must come **last**. Only a `Page`
 writes document-level outputs — a `mdp` payload skips `extract`. Side files are
 `CacheEntry.side_outputs` (`CACHE_VERSION = 2`), so deleting one makes the next
-run rewrite it, through the shared `write_atomically`.
+run rewrite it, through the shared `write_atomically`. One path is one
+**accumulating** document (D-20): blocks, pages and runs append to it and the
+same row is never written twice, while a file holding another format fails the
+page instead of being converted.
 `plugin-extract-heading` is **deleted**; the automatic nested `headings` export is
 now built by `renderer-solid` from the AST (byte-identical for `sandbox/heading`,
 but since it no longer depends on a plugin it appears on every Solid document
@@ -84,7 +87,7 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## In progress
 
-- [ ] **Stage 2 — Phases 0–6 done; Phase 7 in progress (`S2-7.1` done).**
+- [ ] **Stage 2 — Phases 0–7 done; Phase 8 (`extract`) in progress.**
       Docs live in
       [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md).
       **Phase 0 complete 2026-10-28**: D-1…D-17 signed (D-16 = clean total
@@ -422,6 +425,30 @@ exactly one `export const headings` line each (no bytes removed), and
       (written by `plugin-markdown`, not `plugin-list`), and a decorator-bound
       element keeps its extras under `specs.<key>` (`specs.class`), not `class`.
       Two links that pointed at pre-archive paths now resolve.
+      **`S2-7.3` done — the inventory carries the contracts.** §0 states the
+      three shared vocabularies (`specs.*`'s five positions, `number`, and the
+      slot head's six bare fallbacks), and `anchor` / `cite` / `heading` /
+      `image` each print their `SlotContract` as a table beside "lands in =
+      `preset_for`, else the bare fallback" — so the fallbacks are documented
+      once and only the assignments repeat. `blockquote` / `table` stay
+      **none**.
+      **`S2-7.4` done — the inventory is machine-checked.** `fields.rs` keeps the
+      preset in one `pub const PRESETS` (`recommended()` is a lookup) and
+      `apps/cli/tests/fields_inventory_spec.rs` parses `FIELDS-INVENTORY.md`
+      itself (`include_str!`) to assert §12 against that table (order included),
+      every `preset` mark in both directions, that every preset name is a row or
+      a §12 `*`, each contract table against `SlotContract::accepted` /
+      `preset_for`, §0's fallback table against `Slot::ALL × SlotKind::ALL`, its
+      `specs.*` against `SPECS_KEYS` / `universal_field`, and its `number` row
+      against `NUMBER_ATTR`. Seven tests; renaming a field now needs two files or
+      the suite fails. The last eight `docs/issues/<name>.md` links (six
+      `plugin-extract`, one `plugin-number`, one `type-upgrade`) point at
+      `docs/archive/fulfilled/`.
+      **`S2-8.1` done — `extract` is a main crate.** `crates/plugin-extract` →
+      `crates/extract`, package `pendon-extract`: workspace member list,
+      `apps/cli/Cargo.toml` and the seven `pendon_plugin_extract::` paths moved,
+      the doc paths that would have 404'd repaired. Zero output change — the
+      whole suite (78 targets) is green and no golden byte moved.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden
@@ -573,8 +600,9 @@ exactly one `export const headings` line each (no bytes removed), and
   is new — array merge in written order (equal values kept), `class`
   accumulation without a repeated token, head-wins, an unconfigured symbol, a bare
   flag, `loading` → `data-loading`, and a **config-only** entry per element — and
-  its `.out/` freezes the extract pair (`recommended` leaves the modifier fields
-  out, the un-preset block keeps `rel` / `soo.baz` as an array and a dotted path).
+  its `.out/` freezes the extract pair (`preset = "pendon"` leaves the modifier
+  fields out, the un-preset block keeps `rel` / `soo.baz` as an array and a dotted
+  path).
   The one behavioural addition behind it: `ComponentSet` carries config-only
   entries (`ConfigEntry`, D-8) and `field_for` / `modifier_for` are transparent
   across levels, so `field.*` and `bracket.modifier` reach an element that has no

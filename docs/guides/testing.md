@@ -35,6 +35,7 @@ project, rendered with the real CLI, and compared byte-for-byte.
 cargo test -p pendon --test syntax_spec          # 37 fixtures
 cargo test -p pendon --test extras_heads_spec    # extras on every element head
 cargo test -p pendon --test slot_heads_spec      # every slot position on every element
+cargo test -p pendon --test fields_inventory_spec # the inventory vs the code
 ```
 
 `extras_heads_spec` is the **universality** audit (§6.1, D-12): one document per
@@ -46,6 +47,15 @@ in a golden nobody re-read.
 `Slot::ALL × SlotKind::ALL` against the four slot-contracting elements' contracts,
 then runs each element over a head with six distinct values and fails if one value
 — or one `Diagnostic` — is missing.
+
+`fields_inventory_spec` is not a render test at all: it `include_str!`s
+[`../spec/FIELDS-INVENTORY.md`](../spec/FIELDS-INVENTORY.md) and parses its tables
+to check them against the code — §12 against `PRESETS` in
+`crates/extract/src/fields.rs`, every `preset` mark in both directions, the
+four slot-contract tables against each plugin's `HEAD`, and the shared `specs.*` /
+`number` / fallback tables against `crates/extra` and `plugin-number`. Editing a
+table without editing the code (or the reverse) fails it, so §12 and the element
+tables are a two-file change by construction.
 
 A fixture may also freeze the **files** its render writes
 (`docs/spec/golden/NN-name.out/`): an `[[task.<element>.extract]]` block writes
