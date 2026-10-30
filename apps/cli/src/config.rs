@@ -28,6 +28,8 @@ pub struct ConfigTask {
     pub section: Option<SectionTaskConfig>,
     /// `[[task.number.custom]]`: the `%%numberType` group (ADR-0010).
     pub number: Option<NumberTaskConfig>,
+    /// D-14: `[[task.frontmatter.extract]]`.
+    pub frontmatter: Option<FrontmatterTaskConfig>,
     /// `true` bypasses the cache for **this** task only: it is never consulted
     /// and nothing is recorded for it, while the other tasks keep theirs.
     /// See `docs/rfc/no-cache-and-post-hook.md`.
@@ -130,6 +132,16 @@ pub struct ExtractRule {
     pub recommended: Option<toml::Value>,
     /// `export const <name>` (solid only); never an array.
     pub export: Option<String>,
+}
+
+/// `[task.frontmatter]` — D-14: the document's own frontmatter is extractable
+/// like an element, but it has no preset (`only` / `omit` are the selection) and
+/// no `type` (there is one record per document).
+#[derive(Debug, Deserialize, Default)]
+pub struct FrontmatterTaskConfig {
+    /// `[[task.frontmatter.extract]]` — data extraction blocks.
+    #[serde(default)]
+    pub extract: Vec<ExtractRule>,
 }
 
 /// `[task.number]`: the task-level numbering group.

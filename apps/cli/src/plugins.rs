@@ -764,10 +764,11 @@ fn number_block(
 /// Every element a `[[task.<element>.extract]]` section can name
 /// (`docs/spec/FIELDS-INVENTORY.md`).
 ///
-/// The five elements §1 lists as in scope but without a layer tag (`wiki`,
-/// `codeblock`, `latex`, `bind`, `frontmatter`) are absent on purpose: naming one
-/// is a config error (`build_extract_options`) instead of a block that silently
-/// matches nothing.
+/// The elements §1 lists as in scope but without a layer tag (`wiki`,
+/// `codeblock`, `latex`, `bind`) are absent on purpose: naming one is a config
+/// error (`build_extract_options`) instead of a block that silently matches
+/// nothing. `frontmatter` is absent for a different reason — it is extractable
+/// but has no preset and no `type` (D-14), so it is added after this loop.
 pub const EXTRACT_ELEMENTS: [&str; 10] = [
     "anchor",
     "blockquote",
@@ -786,7 +787,10 @@ pub const EXTRACT_ELEMENTS: [&str; 10] = [
 /// export). A block under one of these names is a config *error*, not a silent
 /// no-op — the section is unknown to the schema, so it has to be caught here
 /// before §13's generic unknown-key warning.
-pub const UNEXTRACTABLE_ELEMENTS: [&str; 5] = ["wiki", "codeblock", "latex", "bind", "frontmatter"];
+///
+/// `frontmatter` left this list in S2-8.5: it is extractable (D-14), with its own
+/// `[task.frontmatter]` section rather than an element one.
+pub const UNEXTRACTABLE_ELEMENTS: [&str; 4] = ["wiki", "codeblock", "latex", "bind"];
 
 /// Every extraction block of a task, in the order the sections are read.
 ///
@@ -827,6 +831,14 @@ pub fn build_extract_options(task: &ConfigTask) -> Result<ExtractOptions, String
         };
         for (index, rule) in rules.iter().enumerate() {
             blocks.push(extract_block(element, rule, index)?);
+        }
+    }
+    // D-14: the document's own frontmatter is one more record to extract. It is
+    // not in `EXTRACT_ELEMENTS` because it has no preset and no `type` — the
+    // crate rejects both keys for it.
+    if let Some(config) = task.frontmatter.as_ref() {
+        for (index, rule) in config.extract.iter().enumerate() {
+            blocks.push(extract_block(pendon_extract::FRONTMATTER, rule, index)?);
         }
     }
     Ok(ExtractOptions {

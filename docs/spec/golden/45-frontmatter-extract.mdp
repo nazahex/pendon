@@ -1,0 +1,17 @@
+---
+title: Frontmatter records
+author:
+  name: Pendon
+  meta:
+    tags:
+      - docs
+      - extract
+    flags:
+      enabled: true
+      count: 3
+draft: true
+---
+
+# Extracted
+
+One record per document, narrowed by `only` / `omit` and written in every format.

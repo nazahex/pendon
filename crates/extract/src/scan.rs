@@ -175,6 +175,32 @@ pub fn scan(events: &[Event]) -> Vec<ElementNode> {
     nodes
 }
 
+/// The attribute `micromatter` carries the parsed frontmatter in (§20): one
+/// `Frontmatter` node with a `data` attribute holding compact JSON.
+pub const FRONTMATTER_DATA: &str = "data";
+
+/// The document's frontmatter as one object, when the chain produced a
+/// `Frontmatter` node (D-14).
+///
+/// Frontmatter is not an element occurrence — it has no `__layer` and no
+/// `inner_text` — so it is read straight out of the node `micromatter` writes
+/// instead of going through [`scan`]. Its keys are the fields, and a nested key
+/// is a path, exactly like an attribute path.
+pub fn frontmatter(events: &[Event]) -> Option<Value> {
+    let mut inside = false;
+    for event in events {
+        match event {
+            Event::StartNode(NodeKind::Frontmatter) => inside = true,
+            Event::EndNode(NodeKind::Frontmatter) => inside = false,
+            Event::Attribute { name, value } if inside && name == FRONTMATTER_DATA => {
+                return serde_json::from_str(value).ok();
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 /// The element the node starting at `index` belongs to.
 ///
 /// `__layer` is authoritative (an `img` is `image`);

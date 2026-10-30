@@ -857,3 +857,76 @@ preset = "all"
     assert_eq!(row["type"], "citeShort", "{row}");
     assert_eq!(row["bracket"]["bare"], "p. 1", "{row}");
 }
+
+/// D-14: frontmatter is one record per document, so the keys that only make
+/// sense for an element — `preset`, `include`, `type` — are load errors, and so is
+/// re-defining the const §20 already publishes.
+#[test]
+fn a_frontmatter_block_rejects_element_only_keys() {
+    let cases = [
+        (
+            "preset = \"pendon\"",
+            "task.frontmatter.extract[0].preset: frontmatter has no preset; use only/omit",
+        ),
+        (
+            "include = [\"title\"]",
+            "task.frontmatter.extract[0].preset: frontmatter has no preset; use only/omit",
+        ),
+        (
+            "type = \"FmA\"",
+            "task.frontmatter.extract[0].type: frontmatter is one record per document",
+        ),
+        (
+            "output = \"./out/fm.json\"\nformat = \"json\"\nexport = \"frontmatter\"",
+            "task.frontmatter.extract[0].export: `export = \"frontmatter\"` is already defined",
+        ),
+    ];
+    for (index, (key, expected)) in cases.iter().enumerate() {
+        let mut block = String::from("[[task.frontmatter.extract]]\n");
+        if !key.contains("output =") {
+            block.push_str("output = \"./out/fm.json\"\nformat = \"json\"\n");
+        }
+        block.push_str(key);
+        block.push('\n');
+        let dir = project(
+            &format!("fm-rule-{index}"),
+            &format!(
+                "[[task]]\nname = \"Extract\"\ninput = \"./src/doc.mdp\"\noutput = \"./out/doc.jsx\"\nplugin = \"micromatter,extract,markdown\"\nformat = \"solid\"\n\n{block}"
+            ),
+        );
+        fs::write(dir.join("src/doc.mdp"), "---\ntitle: Demo\n---\n\n# H\n").expect("source");
+        let stderr = run_expecting_failure(&dir);
+        assert!(stderr.contains(expected), "{key}: {stderr}");
+    }
+}
+
+/// D-14: a document without frontmatter writes no file and registers no binding
+/// — the block matched nothing, so it is not an empty record either.
+#[test]
+fn a_document_without_frontmatter_extracts_nothing() {
+    let dir = project(
+        "fm-absent",
+        r#"[[task]]
+name = "Extract"
+input = "./src/doc.mdp"
+output = "./out/doc.jsx"
+plugin = "micromatter,extract,markdown"
+format = "solid"
+
+[[task.frontmatter.extract]]
+output = "./out/fm.json"
+format = "json"
+
+[[task.frontmatter.extract]]
+export = "meta"
+"#,
+    );
+    fs::write(dir.join("src/doc.mdp"), "# No frontmatter here\n").expect("source");
+    run_in(&dir);
+    assert!(
+        !dir.join("out/fm.json").exists(),
+        "no file for an empty block"
+    );
+    let rendered = read(&dir, "out/doc.jsx");
+    assert!(!rendered.contains("export const meta"), "{rendered}");
+}

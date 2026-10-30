@@ -129,7 +129,7 @@ impl ExtractBlock {
     /// so a multi-block task says which block is wrong.
     pub fn build(spec: BlockSpec, index: usize) -> Result<Self, ExtractError> {
         let key = |suffix: String| format!("task.{}.extract[{index}].{suffix}", spec.element);
-        let element = crate::fields::element(&spec.element).ok_or_else(|| {
+        let element = crate::fields::any_element(&spec.element).ok_or_else(|| {
             ExtractError::new(
                 key("element".to_string()),
                 format!(
@@ -142,9 +142,39 @@ impl ExtractBlock {
         let selectors = Selector::parse_all(spec.types.iter().map(String::as_str))
             .map_err(|error| ExtractError::new(key("type".to_string()), error.to_string()))?;
 
+        // D-14: frontmatter is one record per document and has **no** preset — its
+        // fields are whatever the author wrote, so `only` / `omit` are the whole
+        // selection. A `preset` (even `"all"`), an `include` or a `type` would be
+        // a key that silently does nothing, which is exactly what D-16 forbids.
+        let frontmatter = element == crate::fields::FRONTMATTER;
+        if frontmatter {
+            if spec.preset.is_some() || !spec.include.is_empty() {
+                return Err(ExtractError::new(
+                    key("preset".to_string()),
+                    "frontmatter has no preset; use only/omit",
+                ));
+            }
+            if !spec.types.is_empty() {
+                return Err(ExtractError::new(
+                    key("type".to_string()),
+                    "frontmatter is one record per document, so it has no `type` to select",
+                ));
+            }
+            if spec.export.as_deref() == Some(crate::fields::FRONTMATTER) {
+                return Err(ExtractError::new(
+                    key("export".to_string()),
+                    "`export = \"frontmatter\"` is already defined by the renderer (§20); pick another name",
+                ));
+            }
+        }
+
         // D-6: the vocabulary is closed — a typo in `preset` is an error naming
         // both values, never a silent fall back to the default.
         let preset = match spec.preset.as_deref() {
+            // A frontmatter block always starts from every key the author wrote:
+            // `All` here is "no restriction", and it is also what keeps the
+            // record untouched when the default preset flips (S2-8.6).
+            None if frontmatter => Preset::All,
             None => Preset::default(),
             Some(name) => Preset::parse(name).ok_or_else(|| {
                 ExtractError::new(
@@ -569,5 +599,87 @@ mod tests {
         assert_eq!(dotted(&block.include), ["price.details.amount"]);
         assert_eq!(block.include[0].segments().len(), 3);
         assert_eq!(block.include[0].segments()[2], "amount");
+    }
+
+    /// D-14: frontmatter takes `only` / `omit` and the usual destinations, and
+    /// no preset — its starting set is every key the author wrote.
+    #[test]
+    fn a_frontmatter_block_takes_only_and_omit_but_no_preset() {
+        let block = block(BlockSpec {
+            element: "frontmatter".to_string(),
+            output: vec!["out/fm.json".to_string()],
+            format: vec!["json".to_string()],
+            only: vec!["title".to_string(), "meta.tags".to_string()],
+            export: Some("meta".to_string()),
+            ..BlockSpec::default()
+        });
+        assert_eq!(block.element, crate::fields::FRONTMATTER);
+        // No preset key is a starting set of *everything* — and it stays that
+        // way when the default preset flips to `pendon` (S2-8.6).
+        assert_eq!(block.preset, Preset::All);
+        assert_eq!(dotted(&block.only), ["title", "meta.tags"]);
+        assert_eq!(block.export.as_deref(), Some("meta"));
+    }
+
+    /// D-14: `preset`, `include` and `type` are errors for frontmatter, and so is
+    /// exporting the name §20 already owns.
+    #[test]
+    fn a_frontmatter_block_rejects_what_it_cannot_mean() {
+        let frontmatter = || BlockSpec {
+            element: "frontmatter".to_string(),
+            output: vec!["out/fm.json".to_string()],
+            format: vec!["json".to_string()],
+            ..BlockSpec::default()
+        };
+
+        let message = error(
+            BlockSpec {
+                preset: Some("all".to_string()),
+                ..frontmatter()
+            },
+            0,
+        );
+        assert!(
+            message.starts_with("task.frontmatter.extract[0].preset: "),
+            "{message}"
+        );
+        assert!(message.contains("frontmatter has no preset"), "{message}");
+
+        let message = error(
+            BlockSpec {
+                include: vec!["title".to_string()],
+                ..frontmatter()
+            },
+            0,
+        );
+        assert!(message.contains("frontmatter has no preset"), "{message}");
+
+        let message = error(
+            BlockSpec {
+                types: vec!["FmA".to_string()],
+                ..frontmatter()
+            },
+            0,
+        );
+        assert!(
+            message.starts_with("task.frontmatter.extract[0].type: "),
+            "{message}"
+        );
+        assert!(message.contains("no `type` to select"), "{message}");
+
+        let message = error(
+            BlockSpec {
+                output: Vec::new(),
+                format: Vec::new(),
+                export: Some("frontmatter".to_string()),
+                ..frontmatter()
+            },
+            0,
+        );
+        assert!(
+            message.starts_with("task.frontmatter.extract[0].export: "),
+            "{message}"
+        );
+        assert!(message.contains("already defined"), "{message}");
     }
 }

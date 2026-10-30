@@ -1236,11 +1236,37 @@ frontmatter fixtures are frozen.
       (`the_projection_names_the_extracted_fields`), golden 44, and the D-6
       algebra of S2-8.3 unchanged. `cargo test --workspace` green, `cargo fmt
       --all --check`, `dprint check` clean.
-- [ ] **S2-8.5 — Frontmatter extraction.** Dep: S2-8.4.
+- [x] **S2-8.5 — Frontmatter extraction.** Dep: S2-8.4.
       Do: `[[task.frontmatter.extract]]` (D-14); no preset; `only`/`omit` on
       nested keys; all four formats; duplicate `export const frontmatter` →
       error.
       G: one fixture per format + the duplicate error.
+      **Done 2026-10-30.** `fields::FRONTMATTER` is the one element outside
+      [`ELEMENTS`] (it has no field vocabulary and therefore no §12 preset row):
+      `scan::frontmatter` reads the `data` attribute `micromatter` writes on the
+      `Frontmatter` node, and `run`'s `extract_frontmatter` turns it into **one
+      row per document** for every `frontmatter` block — `[ { … } ]` in JSON and
+      YAML, `[[frontmatter]]` in TOML, a one-element array for an `export`.
+      The D-14 rules are checked in `ExtractBlock::build`, so they fail before a
+      document is parsed: `preset` (even `"all"`, which is also what the block
+      starts from), `include` and `type` are errors, and so is
+      `export = "frontmatter"` because §20 already publishes that const from the
+      same record. `only` / `omit` are ordinary §21.4 paths, so a nested key is
+      addressable (`author.meta.tags`) and `omit` still wins. A document without
+      frontmatter — or with an empty map — writes no file and registers no
+      binding. The CLI gained `[task.frontmatter]` (`FrontmatterTaskConfig`),
+      dropped `frontmatter` from `UNEXTRACTABLE_ELEMENTS` (now four) and appends
+      its blocks after the element loop; `validate_extract_order` now also
+      demands that `micromatter` precede `extract`, since it is what builds the
+      node this reads.
+      Tests: three crate cases (one row of the author's keys, nested `only`/`omit`,
+      no frontmatter writes nothing), two in `block.rs` (the accepted keys, every
+      rejected one), two CLI cases (the four load errors, the absent-frontmatter
+      document) and golden **45** (`frontmatter-extract`: JSON + YAML + TOML side
+      files and an `export const meta` beside the automatic `frontmatter`).
+      `FIELDS-INVENTORY.md` §1 loses its `micromatter` row (four in scope, not
+      five) and points at §21 rule 11. `cargo test --workspace` green, `cargo fmt
+      --all --check`, `dprint check` clean.
 - [ ] **S2-8.6 — Flip the default and re-freeze.** Dep: S2-8.5.
       Do: every existing extract config without `preset` now yields the pendon
       preset; re-freeze the extract goldens; record the intentional shrink in the

@@ -42,7 +42,7 @@ The one-key spread `{...{ "specs.tick": "x" }}` is the only spelling (§6.3), so
 fixture cannot freeze invalid output and pass.
 
 ```bash
-cargo test -p pendon --test syntax_spec      # 38 fixtures, none #[ignore]d
+cargo test -p pendon --test syntax_spec      # 39 fixtures, none #[ignore]d
 ```
 
 ## Re-freezing (when output intentionally changes)
@@ -102,6 +102,7 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | 42 | `decorator-rejected` | S2-5.2 — every decorator no pass can claim is removed with a `Warning` (D-10 rule 3): `NotAReceiver` (a thematic break), `ReceiverAbsent` (`section`/`table`/`list`/`blockquote` not in the chain) and `Overridden` (two lines in a row) leave no trace in the output (§9.1) |
 | 43 | `slot-modifiers` | S2-6 — the bracket's `\|…` run is pure configuration (§5.4, D-9): two symbols merge one path into an array in written order (equal values kept), `class` accumulates without repeating a token, the head wins over a run, an unconfigured symbol is a no-op, `true` is a bare flag, `loading` lands as `data-loading`, and a **config-only** entry (D-8) configures anchor/image/heading/cite without naming a component; `.out/` freezes a `preset = "pendon"` extract (modifier fields absent) beside a full one (the merged array present, and the dotted `soo.baz` **nested** as `soo: { baz }` — a field path, S2-8.3) |
 | 44 | `extract-paths`    | S2-8.3/S2-8.4 — PE.1–PE.4: `include` / `only` / `omit` are **dotted paths** over the projected fields, a prefix takes the whole subtree, `omit` wins, and `only` filters the preset instead of adding to it (so PE.4 is `[{}]`, one empty row). A nested extras object is a real value, so `price.details.amount` is a path (§21.4, D-6) |
+| 45 | `frontmatter-extract` | S2-8.5 — `[[task.frontmatter.extract]]` (D-14): the document's own frontmatter is **one record per document**, written as JSON, YAML and TOML with `only` / `omit` on nested keys, plus the `export` channel under a name of its own; `preset` / `include` / `type` and `export = "frontmatter"` are load errors (§21 rule 11) |
 
 Fixtures 17–20 are covered by unit tests in the renderer/CLI crates rather than as
 golden files.

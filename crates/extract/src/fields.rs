@@ -47,6 +47,23 @@ pub fn element_of_layer(layer: &str) -> Option<&'static str> {
     })
 }
 
+/// The one element that is **not** preset-driven: the document's own frontmatter
+/// (D-14).
+///
+/// It is not in [`ELEMENTS`] on purpose — it has no element fields and therefore
+/// no [`PRESETS`] row: its fields are whatever the author wrote, its paths are
+/// the nested keys, and `only` / `omit` are the whole selection.
+pub const FRONTMATTER: &str = "frontmatter";
+
+/// The element a config names, frontmatter included.
+pub fn any_element(name: &str) -> Option<&'static str> {
+    if name == FRONTMATTER {
+        Some(FRONTMATTER)
+    } else {
+        element(name)
+    }
+}
+
 /// The element a config names, or `None` when it is not extractable.
 pub fn element(name: &str) -> Option<&'static str> {
     ELEMENTS

@@ -1,0 +1,12 @@
+[[frontmatter]]
+draft = true
+title = "Frontmatter records"
+
+[frontmatter.author]
+name = "Pendon"
+
+[frontmatter.author.meta]
+tags = [
+    "docs",
+    "extract",
+]

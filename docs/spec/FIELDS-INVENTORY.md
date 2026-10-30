@@ -152,18 +152,24 @@ writes for `%%numberType` (§5) and the numbering pass reads. It never ships, an
 
 ## 1. In scope, not extractable yet
 
-These five are listed by §8.6 but have no row, because a field needs an `emit`
+These four are listed by §8.6 but have no row, because a field needs an `emit`
 site _and_ a golden (§0's source rule) and they have neither. They are not
 silently dropped: `[[task.<element>.extract]]` for one of them is a config error
 naming the element.
 
-| element       | why not                                                                                                                      | follow-up                                           |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `wiki`        | `plugin-wiki` rewrites the text into a plain `Link` with **no `__layer`** tag, so a wikilink and an anchor are the same node | tag it `__layer = "wiki"` (mirrors `plugin-anchor`) |
-| `codeblock`   | the vanilla form is `markdown`'s `CodeFence` node; there is no `plugin-codeblock` crate to emit a layer for it               | decide the layer name, then add a golden            |
-| `latex`       | `plugin-latex` emits `HtmlBlock` / `HtmlInline`, i.e. opaque HTML with **no attributes of its own**                          | none — a math node carries nothing to extract       |
-| `bind`        | `plugin-bind` writes its values onto the **host** element (`<a build=… data=…>`), not onto a node of its own                 | extract the host element (`anchor`) instead         |
-| `micromatter` | `frontmatter` is not an extras-capable element; its data is already the automatic `frontmatter` export (ADR-0009)            | none — `plugin-extract` would duplicate it          |
+| element     | why not                                                                                                                      | follow-up                                           |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `wiki`      | `plugin-wiki` rewrites the text into a plain `Link` with **no `__layer`** tag, so a wikilink and an anchor are the same node | tag it `__layer = "wiki"` (mirrors `plugin-anchor`) |
+| `codeblock` | the vanilla form is `markdown`'s `CodeFence` node; there is no `plugin-codeblock` crate to emit a layer for it               | decide the layer name, then add a golden            |
+| `latex`     | `plugin-latex` emits `HtmlBlock` / `HtmlInline`, i.e. opaque HTML with **no attributes of its own**                          | none — a math node carries nothing to extract       |
+| `bind`      | `plugin-bind` writes its values onto the **host** element (`<a build=… data=…>`), not onto a node of its own                 | extract the host element (`anchor`) instead         |
+
+**`frontmatter` left this list in S2-8.5.** It is extractable (`[[task.frontmatter.extract]]`,
+D-14) but it is not an element with a field vocabulary: its fields are the
+**author's own keys**, a nested key is a path, and it has no preset — `only` /
+`omit` are the whole selection, and `preset`, `include` and `type` are config
+errors. §21 rule 11 has the rules; the automatic `export const frontmatter` (§20) is
+unchanged, which is why `export = "frontmatter"` in such a block is an error.
 
 ## 2. `anchor` — `__layer = "anchor"` (`NodeKind::Link`)
 

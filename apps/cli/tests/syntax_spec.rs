@@ -510,3 +510,12 @@ fn golden_43_slot_modifiers() {
 fn golden_44_extract_paths() {
     assert_fixture("44-extract-paths");
 }
+
+/// §16.3 fixture 45: `[[task.frontmatter.extract]]` (S2-8.5, D-14). The document's
+/// own frontmatter is **one record per document** — written as JSON, YAML and
+/// TOML with `only` / `omit` on nested keys, plus the `export` channel under a
+/// name of its own.
+#[test]
+fn golden_45_frontmatter_extract() {
+    assert_fixture("45-frontmatter-extract");
+}

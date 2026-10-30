@@ -185,7 +185,12 @@ pub fn validate_extract_order(task_name: &str, names: &[&str]) -> Result<(), Str
         return Ok(());
     };
     for (index, name) in names.iter().enumerate() {
-        if index > position && (crate::plugins::NUMBER_ELEMENTS.contains(name) || *name == "number")
+        if index > position
+            && (crate::plugins::NUMBER_ELEMENTS.contains(name)
+                || *name == "number"
+                // D-14: `micromatter` is what turns the `---` block into the
+                // frontmatter node a `[[task.frontmatter.extract]]` reads.
+                || *name == "micromatter")
         {
             return Err(format!(
                 "[{task_name}] plugin `extract` comes before `{name}`; `extract` must follow every plugin whose attributes it reads (docs/archive/fulfilled/plugin-extract.md)"

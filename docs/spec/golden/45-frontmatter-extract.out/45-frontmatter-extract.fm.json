@@ -1,0 +1,19 @@
+[
+  {
+    "author": {
+      "meta": {
+        "flags": {
+          "count": 3,
+          "enabled": true
+        },
+        "tags": [
+          "docs",
+          "extract"
+        ]
+      },
+      "name": "Pendon"
+    },
+    "draft": true,
+    "title": "Frontmatter records"
+  }
+]

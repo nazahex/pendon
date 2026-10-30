@@ -1,0 +1,33 @@
+[[task]]
+name = "Golden 45"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,extract,markdown"
+format = "solid"
+
+# D-14 / §21 rule 11: the document's own frontmatter is extractable as **one
+# record per document** — the author's keys are the fields, a nested key is a
+# path, and there is no preset (`only` / `omit` are the whole selection).
+
+# Every key, as JSON.
+[[task.frontmatter.extract]]
+output = "./out/[slug].fm.json"
+format = "json"
+
+# A nested path kept, its siblings dropped.
+[[task.frontmatter.extract]]
+output = "./out/[slug].fm.yaml"
+format = "yaml"
+only = ["title", "author.meta.tags"]
+
+# A nested path cut out of the whole record.
+[[task.frontmatter.extract]]
+output = "./out/[slug].fm.toml"
+format = "toml"
+omit = ["author.meta.flags"]
+
+# …and the §20 channel, under the block's own name (exporting `frontmatter`
+# itself is an error: the renderer already publishes it, §21 rule 11).
+[[task.frontmatter.extract]]
+export = "meta"
+only = ["author.meta"]

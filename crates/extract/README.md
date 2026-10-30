@@ -126,6 +126,30 @@ applied in this order: **`preset` (the starting set) → `include` (adds paths) 
 `false` = `"all"`). It is **gone**; a config that still has it fails to load with
 an error naming `preset = "pendon"` (D-16 — no compatibility shims).
 
+## Frontmatter (`[[task.frontmatter.extract]]`)
+
+The document's own frontmatter is extractable as **one record per document**
+(D-14, §21 rule 11). Its fields are the top-level keys — a nested key is a path,
+so `only = ["title", "meta.tags"]` keeps those two and drops the rest of `meta`
+— and it has **no preset**: `preset`, `include` and `type` are load errors there,
+which is also why the block's starting set is `all` by construction and the
+S2-8.6 default flip cannot empty it.
+
+```toml
+[[task.frontmatter.extract]]
+output = "./out/[slug].fm.yaml"
+format = "yaml"
+only = ["title", "author.meta.tags"]
+
+[[task.frontmatter.extract]]
+export = "meta"
+```
+
+A JSON/TOML file holds one row (`[ { … } ]`, `[[frontmatter]]`), an `export`
+holds a one-element array. A document with no frontmatter, or an empty one,
+writes no file and registers no binding. `export = "frontmatter"` is an error:
+§20 already publishes that const from the same record.
+
 ## Scope
 
 `apps/cli` rejects a block for the five in-scope-but-not-extractable elements

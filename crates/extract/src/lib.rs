@@ -27,7 +27,7 @@ mod scan;
 mod select;
 
 pub use block::{BlockSpec, ExtractBlock, ExtractError, Preset};
-pub use fields::{pendon_preset, ELEMENTS};
+pub use fields::{pendon_preset, ELEMENTS, FRONTMATTER};
 pub use format::Format;
 pub use scan::{ElementNode, DEPTH, INNER_TEXT};
 pub use select::Selection;
@@ -291,7 +291,53 @@ pub fn run(events: &[Event], options: &ExtractOptions) -> ExtractOutput {
             }
         }
     }
+    extract_frontmatter(events, options, &selections, &mut output);
     output
+}
+
+/// The document's own frontmatter as **one row** (D-14).
+///
+/// It is not an element: there are no occurrences, no `type` selectors and no
+/// preset — the record is whatever the author wrote, narrowed by `only` / `omit`
+/// on its top-level and nested keys. A document without frontmatter writes
+/// nothing, and neither does an empty map (an empty record carries no data).
+fn extract_frontmatter(
+    events: &[Event],
+    options: &ExtractOptions,
+    selections: &[Selection],
+    output: &mut ExtractOutput,
+) {
+    let blocks: Vec<usize> = options
+        .blocks
+        .iter()
+        .enumerate()
+        .filter(|(_, block)| block.element == fields::FRONTMATTER)
+        .map(|(index, _)| index)
+        .collect();
+    if blocks.is_empty() {
+        return;
+    }
+    let Some(data) = scan::frontmatter(events) else {
+        return;
+    };
+    if data.as_object().is_none_or(|object| object.is_empty()) {
+        return;
+    }
+    for index in blocks {
+        let block = &options.blocks[index];
+        let row = selections[index].apply(&data);
+        for (path, format) in &block.outputs {
+            output.push_file(SideFile {
+                path: path.clone(),
+                format: *format,
+                element: fields::FRONTMATTER.to_string(),
+                rows: vec![row.clone()],
+            });
+        }
+        if let Some(name) = &block.export {
+            output.push_export(name.clone(), Value::Array(vec![row.clone()]));
+        }
+    }
 }
 /// One occurrence as a JSON object of the selected fields, or `None` when the
 /// occurrence carries no field at all and therefore has no row (OBJ-7).
@@ -738,5 +784,83 @@ mod tests {
         let row = output.files[0].rows[0].as_object().expect("a row").clone();
         assert!(!row.keys().any(|key| key.starts_with("__")), "{row:?}");
         assert_eq!(row["depth"], 2);
+    }
+
+    /// A document whose chain produced a `micromatter` node: one `data`
+    /// attribute holding the parsed frontmatter (D-14).
+    fn frontmatter_events(data: &str) -> Vec<Event> {
+        vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Frontmatter),
+            attribute("data", data),
+            Event::EndNode(NodeKind::Frontmatter),
+            Event::EndNode(NodeKind::Document),
+        ]
+    }
+
+    fn frontmatter_block(only: &[&str], omit: &[&str], export: Option<&str>) -> ExtractBlock {
+        ExtractBlock::build(
+            BlockSpec {
+                element: "frontmatter".to_string(),
+                output: vec!["out/fm.json".to_string()],
+                format: vec!["json".to_string()],
+                only: only.iter().map(|name| name.to_string()).collect(),
+                omit: omit.iter().map(|name| name.to_string()).collect(),
+                export: export.map(str::to_string),
+                ..BlockSpec::default()
+            },
+            0,
+        )
+        .expect("a valid block")
+    }
+
+    /// D-14: frontmatter is **one row per document** — the author's own map, with
+    /// no preset to narrow it first.
+    #[test]
+    fn frontmatter_is_one_row_of_the_authors_keys() {
+        let events = frontmatter_events(r#"{"title":"Demo","meta":{"tags":["a","b"]}}"#);
+        let output = run(
+            &events,
+            &options(vec![frontmatter_block(&[], &[], Some("meta"))]),
+        );
+        let expected = serde_json::json!([{"meta": {"tags": ["a", "b"]}, "title": "Demo"}]);
+        assert_eq!(output.files.len(), 1);
+        assert_eq!(output.files[0].element, "frontmatter");
+        assert_eq!(Value::Array(output.files[0].rows.clone()), expected);
+        assert_eq!(output.exports.len(), 1);
+        assert_eq!(output.exports[0].0, "meta");
+        assert_eq!(output.exports[0].1, expected);
+    }
+
+    /// A nested key is a path, and `omit` wins over `only` — the same algebra
+    /// every element uses (§21 rule 4), applied to the author's own data.
+    #[test]
+    fn frontmatter_selects_nested_keys() {
+        let events = frontmatter_events(
+            r#"{"title":"Demo","meta":{"tags":["a"],"flags":{"count":3}},"draft":true}"#,
+        );
+        let output = run(
+            &events,
+            &options(vec![frontmatter_block(
+                &["title", "meta"],
+                &["meta.flags"],
+                None,
+            )]),
+        );
+        assert_eq!(
+            output.files[0].rows[0],
+            serde_json::json!({"meta": {"tags": ["a"]}, "title": "Demo"})
+        );
+    }
+
+    /// No frontmatter, or an empty one: no file and no binding (T4.2's rule for a
+    /// block that has nothing to write).
+    #[test]
+    fn a_document_without_frontmatter_writes_nothing() {
+        let missing = heading("2", "intro", None);
+        let empty = frontmatter_events("{}");
+        let options = options(vec![frontmatter_block(&[], &[], Some("meta"))]);
+        assert!(run(&missing, &options).is_empty());
+        assert!(run(&empty, &options).is_empty());
     }
 }

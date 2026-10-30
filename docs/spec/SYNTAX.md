@@ -1833,6 +1833,21 @@ omit        = [<field>, …]                   # always wins
 10. **Only a `Page` extracts.** An `mdp` payload (§19) runs every plugin for its
     in-document effects, but `extract` is skipped there, so a payload writes
     neither a file nor an export.
+11. **Frontmatter is extractable too, as one record** (D-14).
+    `[[task.frontmatter.extract]]` takes the same destinations — `output` +
+    `format` (`json` / `yaml` / `toml`) and/or `export` (§20) — with three
+    differences, because frontmatter is _the author's data_ and not an element's
+    fields: it is **one row per document** (the parsed map, so a JSON file holds
+    `[ { … } ]`), its **fields are the top-level keys** (a nested key is a path:
+    `only = ["title", "meta.tags"]` keeps those two and drops the rest of
+    `meta`, and `omit` wins as in rule 4), and it has **no preset**. `preset`
+    (even `"all"`), `include` and `type` are config errors there — there is
+    nothing to start from and nothing to select by — so `only` / `omit` are the
+    whole selection. A document with no frontmatter, or an empty one, writes no
+    file and registers no binding. `export = "frontmatter"` is an error: §20
+    already publishes that const from the same record. `micromatter` is what
+    turns the `---` block into the node this reads, so `extract` must follow it
+    (rule 1).
 
 Executable contracts: goldens [`32-extract-heading`](golden/README.md) (a heading
 block writing a file _and_ `export const outline`, next to the automatic nested
