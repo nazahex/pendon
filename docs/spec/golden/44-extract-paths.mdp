@@ -1,1 +1,7 @@
+This page's one anchor carries an extras object a path can address and — because
+`[[task.anchor.number]]` selects it — the public numbering fields. A row is built
+from the projected fields the renderer sees, so `number.raw` is reachable by
+`include` / `only` / `preset = "all"` and by nothing else: it is not in the
+`pendon` preset.
+
 @[Jambu biji](/buah/jambu_biji){ price: { details: { currency: "IDR", amount: { total: 12, unit: "thousand" }}}}

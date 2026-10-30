@@ -1,5 +1,10 @@
 [
   {
+    "number": {
+      "raw": [
+        "1"
+      ]
+    },
     "price": {
       "details": {
         "amount": {

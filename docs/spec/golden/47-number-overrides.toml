@@ -2,7 +2,7 @@
 name = "Golden 47"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,heading,anchor,number,markdown"
+plugin = "micromatter,heading,anchor,number,extract,markdown"
 format = "solid"
 
 # `{...attrs}` prints whatever names the counters published, so the three
@@ -39,3 +39,22 @@ style = "decimal"
 field.override.number.raw = "num"
 field.override.number.depth = "num_depth"
 field.override.number.type = "num_type"
+
+# S2-9.4: an extracted row is built from the projected fields, so a rename
+# reaches extraction unchanged — the `HeadingA` rows carry `counter`, the
+# `HeadingB` row carries `number.raw`. Nothing is translated back to a canonical
+# name. `preset = "all"` is what makes them selectable at all: no numbering field
+# is in the `pendon` preset, so `only` over `pendon` would select nothing (PE.4
+# of golden 44).
+[[task.heading.extract]]
+output = "./out/[slug].numbers.json"
+format = "json"
+preset = "all"
+only = ["counter", "number.raw"]
+
+# The anchors' marker group renamed all three, so the row carries `num`.
+[[task.anchor.extract]]
+output = "./out/[slug].anchors.json"
+format = "json"
+preset = "all"
+only = ["num", "num_depth"]

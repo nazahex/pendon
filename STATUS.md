@@ -17,9 +17,10 @@ line is done, delete it (the git history is the record) — keep this file short
 ## Current focus
 
 Four proposals, one sequenced plan ([`docs/workflows/`](docs/workflows/), 40 tasks
-in [`TASKS.md`](docs/workflows/TASKS.md)). **Phases 0–8 are landed** (Phase 8 =
-`extract`: dotted-path selection, the projection, frontmatter, the `pendon`
-default); Phase 9 (`number`) is next. The L37 blocker is what is left.
+in [`TASKS.md`](docs/workflows/TASKS.md)). **Phases 0–9 are landed** (Phase 9 =
+`number`: the `pendon-number` crate, the public `number.*` fields, per-block
+renames and numbering extraction); Phase 10 (editor grammar, docs sweep, the
+sandbox replay) is next. The L37 blocker is what is left.
 
 - **Phase 0/1 — shared types.** `pendon-types` (`Selector`, `TypeSet`, `Rule`,
   `Group`, `winner`, `matching`) answers `type = …` selectors; `D-3a`: the
@@ -88,7 +89,7 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## In progress
 
-- [ ] **Stage 2 — Phases 0–8 done; Phase 9 (`number`) next.**
+- [ ] **Stage 2 — Phases 0–9 done; Phase 10 (editor, docs sweep) next.**
       Docs live in
       [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md).
       **Phase 0 complete 2026-10-28**: D-1…D-17 signed (D-16 = clean total
@@ -462,6 +463,22 @@ exactly one `export const headings` line each (no bytes removed), and
       mind: a structured extras value is a **real object/array** on every path
       (§6.3, golden 25 re-frozen) and a selection that keeps nothing is a `{}`
       row (PE.4). `sandbox/extract` shrinks on the next replay (see "Deferred").
+      **Phase 9 done — `number` is a first-class crate.** `crates/plugin-number`
+      → `crates/number` (package `pendon-number`, `S2-9.1`, zero output change),
+      and the pass now publishes the three fields a component reads —
+      `number.raw`, `number.depth`, `number.type` (`S2-9.2`, ADR-0016, golden 46)
+      — instead of only the internal `attrs.number` array and `__number`. Each
+      numbering block can rename what **it** publishes with
+      `field.override.number.{raw,depth,type}` (`S2-9.3`, golden 47), which is
+      the only place a `%%` group's fields can be renamed once and reach every
+      layer; the override names the write, so the outline and both counters are
+      byte-identical to the un-overridden page. Extraction reads the projection,
+      so a row carries the configured name and `number.*` is reachable by
+      `include` / `only` / `preset = "all"` but never by the `pendon` preset
+      (`S2-9.4`): golden 44's anchor is numbered now, PE.1 freezes `number.raw`
+      and PE.4 stays `[{}]`. The old flat `number` attribute is gone — it is
+      **reserved** by the pass (an authored one becomes a `Warning` and is
+      replaced), because it would compete with `number.raw`.
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden

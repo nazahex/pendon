@@ -1324,27 +1324,68 @@ frontmatter fixtures are frozen.
 Entry: Phase 8 done; D-13 (number) settled. Leave when numbering is optional for
 every element, exposes `number.*`, and is extractable.
 
-- [ ] **S2-9.1 — Promote the crate.** Dep: S2-8.6.
+**Phase 9 is complete (2026-10-30)** — every task below is `[x]`.
+
+- [x] **S2-9.1 — Promote the crate.** Dep: S2-8.6.
       Do: `git mv crates/plugin-number crates/number`; package `pendon-number`;
       workspace + CLI imports + README.
       Exit: green, no output change.
-- [ ] **S2-9.2 — Public `number.*`.** Dep: S2-9.1.
+      **Done 2026-10-30** — `crates/plugin-number` → `crates/number`, package
+      `pendon-number`, `apps/cli/Cargo.toml` + the `pendon_plugin_number::` paths
+      moved, the crate README retitled. No golden byte moved.
+- [x] **S2-9.2 — Public `number.*`.** Dep: S2-9.1.
       Do: projection exposes `number.type`, `number.raw`, `number.depth`; keep
       `__number` internal for nesting (D-4); `number.depth` is the same value the
       nesting counter uses (OBJ-6).
       G: numbered fixture across three levels.
       Exit: internal attrs never appear in output; `number.*` does.
-- [ ] **S2-9.3 — Overrides for numbering.** Dep: S2-9.2.
+      **Done 2026-10-30** — `NumberBlock` writes three attributes instead of the
+      one flat `number` array; `__number` stays the internal marker nesting reads.
+      `number.type` is the block's own type (heading/…) or the marker's for a
+      `%%` group, and an untyped element publishes none. `number` became a
+      **reserved** name: an authored one turns into a `Warning` at the same index
+      (`a_second_depth_style_and_a_type_authored_number`), and a block that names
+      two fields onto one target is a load error plus a pass `debug_assert`.
+      Golden 46 (`number-fields`) freezes three levels, `30-number-heading` /
+      `31-number-custom` were re-frozen by the rename, ADR-0016 rule 2, §10.5 and
+      FIELDS-INVENTORY §0 carry the tables, the crate README the field contract.
+- [x] **S2-9.3 — Overrides for numbering.** Dep: S2-9.2.
       Do: `field.override.number.type|raw|depth`, both per element and in
       `[[task.number.custom]]`; numbering keeps working after the rename.
       G: fixture with all three overridden.
       Exit: overridden names are correct _and_ nesting order is unchanged.
-- [ ] **S2-9.4 — Extract numbering.** Dep: S2-9.3 (and S2-8.4).
+      **Done 2026-10-30** — `NumberBlock::overrides` is a `canonical field →
+      configured name` table read by `public_name` **on the write**, so the
+      rename happens once and every consumer (renderers, `extract`, the AST,
+      JSON/Solid) sees one spelling; nothing is read back, so the counters, the
+      `id`s and the outline are byte-identical with and without it. Both config
+      spellings are accepted (`[[task.<element>.number]]` and
+      `[[task.number.custom]]`, parsed into the same `NumberRule`), plus D-4's
+      per-element `field.override.number.*` — the block keys are what a `%%`
+      group needs, since one table must reach every layer it numbers. Load
+      errors: a non-`override` `field.*` key, a source outside the namespace, a
+      target that is one of the three names the block still publishes, and two
+      renames onto one name. Golden 47 (`number-overrides`) freezes a renamed
+      heading counter next to one that renames nothing plus a renamed marker
+      group; §10.5, the crate README and FIELDS-INVENTORY §0 list the keys.
+- [x] **S2-9.4 — Extract numbering.** Dep: S2-9.3 (and S2-8.4).
       Do: `number.*` extractable from any element that uses numbering; excluded
       from `preset = "pendon"` (PE.1), reachable via `include`/`only`/
       `preset = "all"`.
       G: PE.1 re-frozen with `number.raw`.
       Exit: PE.1 shows `number.raw` only.
+      **Done 2026-10-30** — no code was needed: `scan` hands the projected
+      attributes to `pendon_extra::project`, so the three numbering fields are
+      ordinary public fields, and FIELDS-INVENTORY §0 already keeps them out of
+      every `pendon` preset. What was missing was the proof, so golden 44's anchor
+      is numbered now (`[[task.anchor.number]]`, `number` between `anchor` and
+      `extract`): PE.1 (`include`) freezes `number.raw` **only**, PE.2
+      (`preset = "all"`) adds `number.depth`, PE.3 (`only` over `all`) keeps the
+      one path, and PE.4 (`only` over `pendon`) stays `[{}]` — `only` filters, it
+      never adds. Golden 47 gained two extract blocks (`preset = "all"`, `only`),
+      freezing that a **renamed** field is extracted under its configured name
+      (`counter`, `num`/`num_depth`) beside a counter that kept `number.raw`.
+      §21 rule 4, the golden README rows and FIELDS-INVENTORY §0 say so.
 
 ## Phase 10 — editor, docs, gates
 

@@ -2,6 +2,11 @@
   {
     "href": "/buah/jambu_biji",
     "inner_text": "Jambu biji",
+    "number": {
+      "raw": [
+        "1"
+      ]
+    },
     "price": {
       "details": {
         "amount": {

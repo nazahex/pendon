@@ -117,7 +117,9 @@ applied in this order: **`preset` (the starting set) → `include` (adds paths) 
   `{}` husk behind. `__`-prefixed internal keys are never extractable.
 - A row is built from the **projection** (`pendon_extra::project`, ADR-0014) —
   the same public field map the renderers read — so `field.override.*` renames a
-  field before it is extracted (`reference_id` → `ref_id`), a `specs.*` position
+  field before it is extracted (`reference_id` → `ref_id`), a numbering block's
+  `field.override.number.{raw,depth,type}` renames the counter it publishes (a
+  row carries `counter`, never both spellings; golden 47), a `specs.*` position
   lands under its DOM field, and a row can never spell a field differently from
   the element the page renders (S2-8.4). The CLI passes the `field.*` config in
   (`FieldConfigs`, resolved per layer and `type` marker with

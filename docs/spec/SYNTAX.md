@@ -1828,7 +1828,14 @@ omit        = [<field>, …]                   # always wins
    (D-4 — `reference_id` is published as `ref_id`), a `specs.*` position lands
    under its DOM field, an internal key never reaches a row whatever
    `preset = "all"` says, and a structured value is a real object or array —
-   which is what makes a nested path addressable.
+   which is what makes a nested path addressable. The three numbering fields are
+   projected names like any other: `number.raw` / `number.depth` / `number.type`
+   are extracted exactly as the pass wrote them (§10.5, golden
+   [`44-extract-paths`](golden/README.md)), and a numbering block that renames one
+   with `field.override.number.*` is extracted under the **configured** name —
+   nothing is translated back (golden [`47-number-overrides`](golden/README.md)).
+   None of the three is in the `pendon` preset (D-13), so reaching one takes
+   `include` or `preset = "all"`; `only` alone over `pendon` keeps nothing (PE.4).
 5. **Two names exist on every element:** `inner_text` (the node's text,
    descendants concatenated, trimmed) and `depth` (the heading's own, a section's
    open-section count, `1` elsewhere).
@@ -1884,7 +1891,11 @@ Executable contracts: goldens [`32-extract-heading`](golden/README.md) (a headin
 block writing a file _and_ `export const outline`, next to the automatic nested
 `headings`), [`33-extract-scopes`](golden/README.md) (two `type`-scoped blocks,
 the `_` remainder, a last-wins `export`, and the `preset` / `preset` + `include`
-pair) and [`44-extract-paths`](golden/README.md) (PE.1–PE.4 — one record selected
-four ways with dotted paths); `apps/cli/tests/extract_spec.rs` adds the
-dynamic/static path rules, the non-Solid drop, the cache rewrite, the projection's
-public names and every D-6 selection error.
+pair), [`44-extract-paths`](golden/README.md) (PE.1–PE.4 — one record selected
+four ways with dotted paths, and `number.raw` reached by `include` / `only` /
+`preset = "all"` but not by the `pendon` preset) and
+[`47-number-overrides`](golden/README.md) (a renamed numbering field is extracted
+under its configured name, next to a counter that kept `number.raw`);
+`apps/cli/tests/extract_spec.rs` adds the dynamic/static path rules, the non-Solid
+drop, the cache rewrite, the projection's public names and every D-6 selection
+error.

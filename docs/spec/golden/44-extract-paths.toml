@@ -2,7 +2,7 @@
 name = "Golden 44"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,anchor,extract,markdown"
+plugin = "micromatter,anchor,number,extract,markdown"
 format = "solid"
 
 # D-6 / §21.4: `include` / `only` / `omit` are **dotted paths**, and a prefix
@@ -11,11 +11,22 @@ format = "solid"
 # always wins and `only` can only keep what the preset already reached — so PE.4
 # is `[{}]`, one empty row, not an error and not the whole preset.
 #
-# `number.raw` is named by all four blocks but no element carries it yet: it
-# becomes a public field when Phase 9 exposes `number.*`, and PE.1 is re-frozen
-# with it then (S2-9.4).
+# The anchor is numbered on purpose (S2-9.4): all four blocks name
+# `number.raw`, and the field has to exist before a block can reach it. The
+# numbering pass publishes `number.raw` / `number.depth` (ADR-0016) into the
+# stream's attributes, so extraction sees ordinary fields — none of the three is
+# in the `pendon` preset (D-13), which is why PE.1 must `include` it and PE.4
+# still selects nothing.
 
-# PE.1 — the pendon preset, one nested subtree included, one leaf cut out of it
+# S2-9.4: one counter for the anchors. `number` runs after `anchor` and before
+# `extract`, the only position where it can see the element and extraction can
+# see its fields (ADR-0010).
+[[task.anchor.number]]
+style = "decimal"
+
+# PE.1 — the pendon preset, one nested subtree included, one leaf cut out of it.
+# `number.raw` is the numbering field a component reads; it is not in the preset,
+# so `include` is what reaches it.
 [[task.anchor.extract]]
 output = "./out/[slug].PE.1.json"
 format = "json"
