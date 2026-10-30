@@ -209,7 +209,6 @@ pub struct ChainState {
     pub custom_cache: HashMap<String, PluginSpec>,
     pub hints: Vec<SolidRenderHints>,
     pub used_specs: Vec<PluginSpec>,
-    pub used_quiz: bool,
     pub anchor_ran: bool,
     pub cite_ran: bool,
     /// What this document's `[[task.<element>.extract]]` blocks produced: the
@@ -233,7 +232,6 @@ impl ChainState {
             custom_cache: HashMap::new(),
             hints: Vec::new(),
             used_specs: Vec::new(),
-            used_quiz: false,
             anchor_ran: false,
             cite_ran: false,
             extract: ExtractOutput::default(),
@@ -294,9 +292,6 @@ fn run_chain(
         events = prelude(events, config);
     }
 
-    let mut markdown_ran = false;
-    let mut quiz_pending = false;
-
     for name in plugin_names(config.plugin_list.as_deref()) {
         // `micromatter` already ran in `prelude`, `bind` is a pre-parse +
         // resolve stage with no work of its own inside the loop (ADR-0004).
@@ -337,17 +332,6 @@ fn run_chain(
         }
 
         events = match name {
-            "quiz" => {
-                state.used_quiz = true;
-                if let Some(spec) = state.custom_registry.get("quiz") {
-                    track_used_spec(&mut state.used_specs, spec.clone());
-                }
-                if markdown_ran {
-                    events
-                } else {
-                    events
-                }
-            }
             "image" => {
                 let image_opts = &config.image;
                 let result = pendon_plugin_image::process(&events, image_opts);
@@ -459,18 +443,7 @@ fn run_chain(
                 let receivers = pendon_extra::ReceiverSet::from_plugins(
                     config.enabled.iter().map(String::as_str),
                 );
-                let result = pendon_plugin_markdown::process_with_receivers(
-                    &events,
-                    config.markdown,
-                    receivers,
-                );
-                markdown_ran = true;
-                if quiz_pending {
-                    quiz_pending = false;
-                    events
-                } else {
-                    result
-                }
+                pendon_plugin_markdown::process_with_receivers(&events, config.markdown, receivers)
             }
             other => {
                 if let Some(spec) = state.custom_registry.get(other) {

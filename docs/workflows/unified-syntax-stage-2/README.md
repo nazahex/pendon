@@ -1,8 +1,12 @@
 # Unified Syntaxes — Stage 2 (workflow)
 
-**Status: planning. Nothing implemented.** This folder is the plan of record for
-the rework proposed in
-[`docs/issues/unified-syntax-stage-2.mdp`](../../issues/unified-syntax-stage-2.mdp).
+**Status: landed — all 40 tasks checked, Phase 10 closed 2026-10-31.** This
+folder is the plan of record for the rework proposed in
+[`docs/issues/unified-syntax-stage-2.mdp`](../../issues/unified-syntax-stage-2.mdp);
+the grammar it produced is [`docs/spec/SYNTAX.md`](../../spec/SYNTAX.md), and
+[`TASKS.md`](TASKS.md) keeps the per-task record. Two follow-ups are scheduled
+outside this workflow: [`docs/issues/syntax-spec-rewrite.md`](../../issues/syntax-spec-rewrite.md)
+and [`docs/issues/plugin-wiki-rework.md`](../../issues/plugin-wiki-rework.md).
 
 | file                           | job                                                                |
 | ------------------------------ | ------------------------------------------------------------------ |

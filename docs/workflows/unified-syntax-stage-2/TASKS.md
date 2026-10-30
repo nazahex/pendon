@@ -1465,15 +1465,41 @@ re-rendered, the editor grammar matches, and `STATUS.md` is quiet again.
       `#[deprecated]` / `TODO: remove` / `MIGRATION.md` / `backward compat` greps
       now hit only ADR-0018's own prohibition and that test's header;
       `cargo test --workspace` is 79 targets green.
-- [ ] **S2-10.4 — Full gate + sandboxes.** Dep: S2-10.3.
+- [x] **S2-10.4 — Full gate + sandboxes.** Dep: S2-10.3.
       Do: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets`,
       `cargo test --workspace`; re-render every `sandbox/*`, review the diff;
       update `STATUS.md` and the memory bank (`progress.md`, `activeContext.md`).
       Exit: all three commands green, sandbox diffs explained, STATUS short.
-- [ ] **S2-10.5 — Schedule the follow-ups.** Dep: S2-10.4.
+      **Done 2026-10-31.** `cargo fmt --all -- --check`, `cargo clippy
+      --workspace --all-targets` (0 errors; the warnings are the pre-existing
+      ones in `plugin-markdown`/`plugin-section`/`plugin-codeblock`), `cargo test
+      --workspace` (79 targets), `dprint check` and `editors/vscode`'s
+      `npm run check` (2 grammars / 92 fixtures / 60 scopes, 13 scope cases) are
+      all green. The replay re-rendered every sandbox with a top-level
+      `pendon.toml` and moved 42 files; **every** diff traced to a stale source or
+      pre-Stage-2 baseline (`!?~`, `[^^]`, `@@`-less decorators, `|…|` tables,
+      `[.class, foo: "x"]` link extras, `ref_id`/`loc`, a flat `number`), so the
+      replay was reverted rather than committed (AGENTS.md rule 7) and `STATUS.md`
+      "Deferred" now records that no sandbox tracks `HEAD`, plus the D-20 warning
+      that an `extract` side file accumulates over old rows. While reviewing the
+      chain, the audit's last dead stub went too: `apps/cli/src/chain.rs` had a
+      `"quiz"` arm that returned its input unchanged on both branches (with a
+      write-only `used_quiz` and a `quiz_pending` that was never set) — `quiz` now
+      reaches the custom registry, or warns once (§13). `STATUS.md` was compressed
+      from 641 to ~180 lines (the phase-by-phase narrative is now one paragraph plus
+      the links it points at).
+- [x] **S2-10.5 — Schedule the follow-ups.** Dep: S2-10.4.
       Do: open issues for the clean top-to-bottom `SYNTAX.md` rewrite (D-15's
       rejected option) and for `plugin-wiki`'s overhaul. Start neither.
       Exit: two issue files + `docs/INDEX.md` rows.
+      **Done 2026-10-31.** Two issue files, both "scheduled, not started":
+      [`docs/issues/syntax-spec-rewrite.md`](../../issues/syntax-spec-rewrite.md)
+      (D-15's rejected option — the top-to-bottom `SYNTAX.md` rewrite, with the
+      no-golden-may-move constraint and the §-link checklist) and
+      [`docs/issues/plugin-wiki-rework.md`](../../issues/plugin-wiki-rework.md)
+      (delete the infobox half, keep wikilinks, add `[task.wiki.custom]` so §11 and
+      `field.*` reach the `<a>`). `docs/INDEX.md` gained a row for both plus an
+      `issues/` line in the layout map.
 
 ## Sequencing notes
 
