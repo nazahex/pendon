@@ -1267,11 +1267,30 @@ frontmatter fixtures are frozen.
       `FIELDS-INVENTORY.md` §1 loses its `micromatter` row (four in scope, not
       five) and points at §21 rule 11. `cargo test --workspace` green, `cargo fmt
       --all --check`, `dprint check` clean.
-- [ ] **S2-8.6 — Flip the default and re-freeze.** Dep: S2-8.5.
+- [x] **S2-8.6 — Flip the default and re-freeze.** Dep: S2-8.5.
       Do: every existing extract config without `preset` now yields the pendon
       preset; re-freeze the extract goldens; record the intentional shrink in the
       commit message.
       Exit: no un-attributed change in any `.json`/`.yaml`/`.toml` golden.
+      **Done 2026-10-30.** `Preset::default()` is `Pendon`: an extract block that
+      names no `preset` starts from the element's own list (§12), so a new block
+      never ships an author's extras by accident — `preset = "all"` is how you
+      ask for them. Frontmatter is unaffected by construction: its block is
+      built with `Preset::All` (D-14 has no preset to flip).
+      Goldens: the only fixture that relied on the old default was **43**, whose
+      second block said nothing and meant "everything"; it now says
+      `preset = "all"`, so its frozen bytes did not move, and a **third** block
+      with no `preset` was added (`43-slot-modifiers.anchor-default.json`) to
+      freeze what the default actually yields — the same rows as the
+      `preset = "pendon"` block, modifier fields and `depth` absent. 32, 33, 44
+      and 45 re-rendered byte-identical: their blocks either name a preset or
+      carry only preset fields. No `.json`/`.yaml`/`.toml` byte moved without
+      that attribution, and the fixture config change _is_ the migration a user
+      faces (a config that wants extras must say so).
+      Docs: the §21 grammar line, the crate README and `Preset`'s own comment now
+      say the default is `pendon`; `sandbox/extract`'s output shrinks on the next
+      replay (maintainer-owned, STATUS "Deferred"). `cargo test --workspace`
+      green, `cargo fmt --all --check`, `dprint check` clean.
 - [x] **S2-8.7 — One destination path accumulates.** Dep: S2-8.1.
       Do: P.1/§21.6 said several blocks or pages on one `output` overwrite it
       ("later wins"), which silently loses a page's rows. Make the write append

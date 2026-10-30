@@ -102,9 +102,10 @@ applied in this order: **`preset` (the starting set) → `include` (adds paths) 
   (§21.4).
 - `preset = "pendon"` is the element's own field list — §12 of
   [`FIELDS-INVENTORY.md`](../../docs/spec/FIELDS-INVENTORY.md), the same table as
-  [`pendon_preset`]. `preset = "all"` is every field the occurrence carries, and
-  it is what an **absent** `preset` means today (S2-8.6 flips the default to
-  `"pendon"`). Any other name is a config error listing both values.
+  [`pendon_preset`] — and it is what an **absent** `preset` means (the default
+  since S2-8.6). `preset = "all"` is every field the occurrence carries, author
+  extras included, so a block that wants those has to ask for them. Any other
+  name is a config error listing both values.
 - `include` adds paths to the preset instead of replacing it; on `"all"` it is
   redundant but valid. `only` keeps nothing but its own paths — it is a filter,
   not an addition — so `only` **and** `include` in one block is a config error:

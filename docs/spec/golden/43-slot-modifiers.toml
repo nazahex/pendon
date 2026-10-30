@@ -33,8 +33,17 @@ output = "./out/[slug].anchor-preset.json"
 format = "json"
 preset = "pendon"
 
-# …while a block with no preset reaches every field the node carries, the merged
-# `rel` array and the dotted `soo.baz` included.
+# …while `preset = "all"` reaches every field the node carries, the merged `rel`
+# array and the dotted `soo.baz` included. (S2-8.6 made `pendon` the default, so
+# "everything" has to be asked for; this block used to say nothing at all.)
 [[task.anchor.extract]]
 output = "./out/[slug].anchor-all.json"
+format = "json"
+preset = "all"
+
+# A block with **no** `preset` is the default, and the default is the element's
+# own list: the modifier fields (`rel`, `class`, `soo.baz`) stay out, exactly
+# like the `preset = "pendon"` block above.
+[[task.anchor.extract]]
+output = "./out/[slug].anchor-default.json"
 format = "json"

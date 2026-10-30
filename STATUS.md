@@ -17,8 +17,9 @@ line is done, delete it (the git history is the record) — keep this file short
 ## Current focus
 
 Four proposals, one sequenced plan ([`docs/workflows/`](docs/workflows/), 40 tasks
-in [`TASKS.md`](docs/workflows/TASKS.md)). **Phases 0–7 are landed and Phase 8
-(`extract`) is in progress**; the L37 blocker is what is left.
+in [`TASKS.md`](docs/workflows/TASKS.md)). **Phases 0–8 are landed** (Phase 8 =
+`extract`: dotted-path selection, the projection, frontmatter, the `pendon`
+default); Phase 9 (`number`) is next. The L37 blocker is what is left.
 
 - **Phase 0/1 — shared types.** `pendon-types` (`Selector`, `TypeSet`, `Rule`,
   `Group`, `winner`, `matching`) answers `type = …` selectors; `D-3a`: the
@@ -87,7 +88,7 @@ exactly one `export const headings` line each (no bytes removed), and
 
 ## In progress
 
-- [ ] **Stage 2 — Phases 0–7 done; Phase 8 (`extract`) in progress.**
+- [ ] **Stage 2 — Phases 0–8 done; Phase 9 (`number`) next.**
       Docs live in
       [`docs/workflows/unified-syntax-stage-2/`](docs/workflows/unified-syntax-stage-2/README.md).
       **Phase 0 complete 2026-10-28**: D-1…D-17 signed (D-16 = clean total
@@ -449,6 +450,18 @@ exactly one `export const headings` line each (no bytes removed), and
       `apps/cli/Cargo.toml` and the seven `pendon_plugin_extract::` paths moved,
       the doc paths that would have 404'd repaired. Zero output change — the
       whole suite (78 targets) is green and no golden byte moved.
+      **Phase 8 done — `extract` is the data layer.** The crate moved out of the
+      `plugin-` namespace (`S2-8.1`), learned `preset` / `include` / `only` /
+      `omit` (`S2-8.2`), made them **dotted paths** whose prefix takes a subtree
+      (`S2-8.3`), and now reads the **projection** so a row carries the same
+      public names the page renders (`S2-8.4`) — golden 44 freezes PE.1–PE.4.
+      Frontmatter is extractable as one record per document (`S2-8.5`, golden
+      45), and `pendon` is the default preset (`S2-8.6`: a block that wants an
+      author's extras says `preset = "all"`). One destination path accumulates
+      instead of overwriting (`S2-8.7`, D-20). Two behaviour changes to keep in
+      mind: a structured extras value is a **real object/array** on every path
+      (§6.3, golden 25 re-frozen) and a selection that keeps nothing is a `{}`
+      row (PE.4). `sandbox/extract` shrinks on the next replay (see "Deferred").
 - [ ] **Editor grammars (`editors/vscode/`).** Block + inline rules landed
       (`syntaxes/pendon.tmLanguage.json`, plus the injection that adds them to
       `.md`), and the harness (`tools/self-test.mjs`) is green on every golden

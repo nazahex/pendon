@@ -209,13 +209,13 @@ mod tests {
         assert_eq!(selection.apply(&occurrence()), occurrence());
     }
 
-    /// The default preset is `all` until `S2-8.6` flips it, so an absent
-    /// `preset` and `preset = "all"` are the same selection.
+    /// The default preset is `pendon` (S2-8.6), so an absent `preset` and
+    /// `preset = "pendon"` are the same selection.
     #[test]
-    fn an_absent_preset_is_the_default_preset() {
+    fn an_absent_preset_is_the_pendon_preset() {
         assert_eq!(
             Selection::new(&block(None, &[], &[], &[])).apply(&occurrence()),
-            Selection::new(&block(Some("all"), &[], &[], &[])).apply(&occurrence())
+            Selection::new(&block(Some("pendon"), &[], &[], &[])).apply(&occurrence())
         );
     }
 

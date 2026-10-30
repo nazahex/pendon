@@ -48,16 +48,16 @@ impl std::error::Error for ExtractError {}
 /// subtracts last. `All` starts from every field the occurrence carries, which
 /// is what a block with no `preset` did before Stage 2.
 ///
-/// `Default` is [`All`](Self::All) until `S2-8.6` flips it to `Pendon` (the
-/// order is deliberate: the flip is one line plus a golden re-freeze, not a
-/// behaviour change hidden inside a refactor).
+/// `Default` is [`Pendon`](Self::Pendon) (S2-8.6): an extract block that names no
+/// `preset` starts from the element's own fields, so a new block never ships an
+/// author's extras by accident — `preset = "all"` is how you ask for them.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Preset {
     /// `preset = "pendon"` — the element's own fields, and nothing an author
     /// added through extras, a modifier run or a custom assignment.
+    #[default]
     Pendon,
     /// `preset = "all"` — every field the occurrence carries, internals aside.
-    #[default]
     All,
 }
 
@@ -448,14 +448,14 @@ mod tests {
     }
 
     /// D-6: the preset is a closed vocabulary. `pendon` is the element's own list
-    /// and `all` is "no restriction", which is also what an absent key means until
-    /// `S2-8.6` flips the default.
+    /// and `all` is "no restriction"; the default is `pendon` since S2-8.6, so an
+    /// absent key and `preset = "pendon"` are the same block.
     #[test]
     fn a_preset_name_is_parsed_and_absent_is_the_default() {
         assert_eq!(
             block(written("cite")).preset,
-            Preset::All,
-            "an absent `preset` is the default"
+            Preset::Pendon,
+            "an absent `preset` is the default, and the default is `pendon`"
         );
         assert_eq!(
             block(BlockSpec {
