@@ -131,7 +131,7 @@ fn emit_wikilink_extras(head: Option<&ExtrasHead>, out: &mut Vec<Event>) {
             }),
             ExtrasAttr::Value(value) => out.push(Event::Attribute {
                 name: key.to_string(),
-                value: value.literal(),
+                value: value.transport_for(key),
             }),
         }
     }

@@ -302,7 +302,7 @@ fn merge_heading_extras(
                 }
             }
             ExtrasAttr::Value(value) => {
-                let text = value.literal();
+                let text = value.transport_for(key);
                 match key {
                     // §7.4/§6.2: the head's `[slug]` wins over the extras slug,
                     // which is the fallback; either way the field is published

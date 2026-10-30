@@ -1189,12 +1189,53 @@ frontmatter fixtures are frozen.
       `JSON_ATTR_PREFIX`-encoded), so `price.details.amount` is not yet a path.
       `cargo test --workspace` green (85 + 17 + … targets), `cargo fmt --all
       --check` clean.
-- [ ] **S2-8.4 — Extract final public fields.** Dep: S2-8.3 (needs D-3's
+- [x] **S2-8.4 — Extract final public fields.** Dep: S2-8.3 (needs D-3's
       projection). Do: read the projection only — `specs.*`, `number.*`,
       slot-derived, override-renamed, modifier-derived; never internals
       (`reference_id`, `__number`).
       G: PE.1, PE.2 (type-scoped) and the §9 `preset = "all"` example.
       Exit: PE.1–PE.4 byte-exact; `preset = "all"` excludes internals.
+      **Done 2026-10-30.** `scan::ElementNode::fields` now builds a
+      `{"attrs": …}` node and hands it to `pendon_extra::project` — the one
+      function the renderers call — so a row and the rendered element cannot
+      spell a field differently: `field.override.*` renames before extraction
+      (D-4: `reference_id` → `ref_id`, `citation_number` → `no`,
+      `locator` → `loc`), a `specs.*` position lands under its DOM field, and an
+      internal `__`-key never reaches a row however `preset = "all"` is set
+      (`project` drops it, per ADR-0014 rule 1 — not the selection). `depth` and
+      `inner_text` are added to the node before projecting, so the derived depth
+      (never the string attribute) ships and an override can rename either.
+      The config is resolved by the **CLI** and passed in as
+      `ExtractOptions::fields` (`FieldConfigs`): `plugins::field_configs` walks
+      every layer's `ComponentSet` and records one entry per literal `type`
+      marker plus the layer default via `ComponentSet::field_for` (so D-8
+      transparency and "exact marker beats the default" stay the renderer's rule,
+      not a second copy). `ElementNode` carries the raw `__layer` (`img`,
+      `unordered`) because that — not the normalised element — is what the sets
+      are keyed by.
+      Golden **44** (`extract-paths`) freezes PE.1–PE.4 byte-exact against the
+      issue's §9 examples: `include` reaches `price.details.amount`, `omit` cuts
+      `…amount.unit` out of it, `only` keeps both paths and nothing else, and
+      PE.4 is `[{}]`. `number.raw` is named by all four blocks and no element
+      carries it yet, so it stays absent until Phase 9 exposes `number.*`
+      (S2-9.4 re-freezes PE.1 with it).
+      That fixture needed one §6.3 fix: an extras **object/array** value was
+      emitted as compact JSON _text_, so `price.details.amount` was one string
+      and no path could address it — while `bind` and a modifier contribution
+      already carried the same value as `JSON_ATTR_PREFIX` + JSON.
+      `AttrValue::transport` now applies the transport everywhere a value becomes
+      an attribute (the eight plugins' extras passthrough), `transport_for` keeps
+      an internal `__`-key's plain literal (`__number`'s marker is parsed by
+      `plugin-number` before any renderer runs), and `plugin-bind` strips the
+      prefix before re-resolving `$var`s inside such a value. §6.3 now states the
+      uniform rule (and its renderer table); golden 25 re-frozen, where the
+      built-in `<div>` rows printed an escaped JSON string while the component
+      rows already printed `bags={[…]}` — one field, one spelling.
+      Tests: three crate cases (override renames, typed entry beats the layer
+      default, internals never ship), a CLI case for the override names
+      (`the_projection_names_the_extracted_fields`), golden 44, and the D-6
+      algebra of S2-8.3 unchanged. `cargo test --workspace` green, `cargo fmt
+      --all --check`, `dprint check` clean.
 - [ ] **S2-8.5 — Frontmatter extraction.** Dep: S2-8.4.
       Do: `[[task.frontmatter.extract]]` (D-14); no preset; `only`/`omit` on
       nested keys; all four formats; duplicate `export const frontmatter` →

@@ -434,9 +434,20 @@ Mapping to the event IR (`Event::Attribute { name, value: String }`):
   slot unset does not emit `k=""`. `alt` is the single exception: an empty
   `alt=""` is meaningful (a decorative image) and always renders.
 - `Object` / `Array` ([ADR-0005](../decisions/0005-structured-extras-values.md))
-  → **compact JSON** text in `value` (`{"b":1}`), the stringly-typed form every
-  renderer understands. Verified: with no data-binding plugin enabled,
-  `@[a](/u)@@anchorA{a: {b: 1}}` renders `a="&#123;&quot;b&quot;:1&#125;"`.
+  → **`JSON_ATTR_PREFIX` (`U+E001`) + compact JSON** in `value`, so the AST — and
+  therefore `plugin-extract` — keeps an object or an array instead of a string
+  that merely looks like one (`AttrValue::transport`). `renderer-ast` strips the
+  prefix and re-hydrates the value: `renderer-solid` prints it as `k={…}`,
+  `renderer-html` as the escaped JSON text (`k="&#123;…&#125;"`), and the
+  JSON/AST renderers carry the value itself. Verified: with no data-binding
+  plugin enabled, `@[a](/u)@@anchorA{a: {b: 1}}` renders
+  `a={{b: 1}}` in Solid and `a="&#123;&quot;b&quot;:1&#125;"` in HTML.
+  A **selection path** can address a leaf of it (§21.4: `a.b` is one segment
+  deep), which is the reason the value is structured and not text.
+  An **internal** `__`-key is the one exception (`AttrValue::transport_for`): it
+  keeps the plain literal its consumer parses — `__number`'s
+  `{"depth":…,"type":…}` marker is read by `plugin-number` before any renderer
+  runs (ADR-0010) and never reaches an AST, a renderer or a projection.
 - **JSX expression token.** A `{ … }` group whose body is a single identifier or
   dot-separated path — e.g. `{valueA}` or `{frontmatter.fm1}` — is a JSX
   expression rather than an object. It is transported as `JSX_ATTR_PREFIX`
@@ -444,11 +455,13 @@ Mapping to the event IR (`Event::Attribute { name, value: String }`):
   `k={valueA}` so the value is passed as a variable reference, not a string
   literal. `crates/extra` MUST NOT emit `U+E002` outside this form — only the
   JSX-expression value produces it (`crates/core/src/event.rs`).
-- **Structured transport.** With `plugin-bind` enabled (§19), a `$var`-bearing
-  value is carried as `JSON_ATTR_PREFIX` (`U+E001`) + compact JSON;
+- **Structured transport.** A value that structurally **is** an object or an
+  array travels as `JSON_ATTR_PREFIX` (`U+E001`) + compact JSON, and
   `renderer-ast` strips the prefix and re-hydrates a real JSON value, which
-  `renderer-solid` spreads as `k={…}`. `crates/extra` MUST NOT emit `U+E001` —
-  only `plugin-bind` may (`crates/core/src/event.rs`).
+  `renderer-solid` spreads as `k={…}`. Two producers emit it: `crates/extra`
+  (an extras or modifier value — [`AttrValue::transport`]) and `plugin-bind`
+  (a `$var`-bearing value, §19). Nothing else may, and an internal `__`-key is
+  never prefixed (`AttrValue::transport_for`).
 - **`Null` is not authorable.** No head, slot or decorator can spell `null`, so
   the value type gains it only so the public field map can carry an AST value
   the projection reads back verbatim (`crates/extra::project`,
@@ -458,11 +471,11 @@ Mapping to the event IR (`Event::Attribute { name, value: String }`):
 
 Renderers:
 
-| Renderer                 | flag                               | typed string | Int/Float                     | structured (`{…}` / `[…]`)                                       |
-| ------------------------ | ---------------------------------- | ------------ | ----------------------------- | ---------------------------------------------------------------- |
-| `renderer-solid`         | `k` (bare JSX shorthand, verbatim) | `k="v"`      | `k="12"` (fallback path only) | `k="{…}"`, or `k={…}` under `bind` or for a JSX-expression token |
-| `renderer-html`          | `k`                                | `k="v"`      | `k="12"`                      | `k="{…}"` (escaped)                                              |
-| `renderer-json` / `-ast` | `{ "name": "k", "kind": "flag" }`  | string       | string                        | string (compact JSON)                                            |
+| Renderer                 | flag                               | typed string | Int/Float                     | structured (`{…}` / `[…]`)          |
+| ------------------------ | ---------------------------------- | ------------ | ----------------------------- | ----------------------------------- |
+| `renderer-solid`         | `k` (bare JSX shorthand, verbatim) | `k="v"`      | `k="12"` (fallback path only) | `k={…}` (a real object/array, §6.3) |
+| `renderer-html`          | `k`                                | `k="v"`      | `k="12"`                      | `k="{…}"` (escaped)                 |
+| `renderer-json` / `-ast` | `{ "name": "k", "kind": "flag" }`  | string       | string                        | the value itself (object / array)   |
 
 Custom components receive the **typed** form through the `attrs` map
 (`{...attrs}` spread), because that path serialises `AttrValue` as JSON
@@ -1779,7 +1792,12 @@ omit        = [<field>, …]                   # always wins
    extracts nothing at all (PE.4). A path the element does not carry is dropped,
    never emitted empty, and a path that lost every child takes its container with
    it (no `{}` husk). Internal `__`-keys never ship; an author's extras key passes
-   through under its own path.
+   through under its own path. The names a row carries are the **projection's**
+   (ADR-0014, §6.3): `field.override.*` renames a field before it is extracted
+   (D-4 — `reference_id` is published as `ref_id`), a `specs.*` position lands
+   under its DOM field, an internal key never reaches a row whatever
+   `preset = "all"` says, and a structured value is a real object or array —
+   which is what makes a nested path addressable.
 5. **Two names exist on every element:** `inner_text` (the node's text,
    descendants concatenated, trimmed) and `depth` (the heading's own, a section's
    open-section count, `1` elsewhere).
@@ -1818,7 +1836,9 @@ omit        = [<field>, …]                   # always wins
 
 Executable contracts: goldens [`32-extract-heading`](golden/README.md) (a heading
 block writing a file _and_ `export const outline`, next to the automatic nested
-`headings`) and [`33-extract-scopes`](golden/README.md) (two `type`-scoped blocks,
+`headings`), [`33-extract-scopes`](golden/README.md) (two `type`-scoped blocks,
 the `_` remainder, a last-wins `export`, and the `preset` / `preset` + `include`
-pair); `apps/cli/tests/extract_spec.rs` adds the dynamic/static path rules, the
-non-Solid drop, the cache rewrite and every D-6 selection error.
+pair) and [`44-extract-paths`](golden/README.md) (PE.1–PE.4 — one record selected
+four ways with dotted paths); `apps/cli/tests/extract_spec.rs` adds the
+dynamic/static path rules, the non-Solid drop, the cache rewrite, the projection's
+public names and every D-6 selection error.

@@ -1,5 +1,5 @@
 use pendon_core::{ContextPipeline, Event};
-use pendon_extract::{BlockSpec, ExtractBlock, ExtractOptions};
+use pendon_extract::{BlockSpec, ExtractBlock, ExtractOptions, FieldConfigs};
 use pendon_plugin_anchor::{AnchorCustomNode, AnchorOptions};
 use pendon_plugin_blockquote::{BlockquoteCustomNode, BlockquoteOptions};
 use pendon_plugin_cite::{CitationContext, CiteCustomNode, CiteOptions, ReferencesScope};
@@ -26,6 +26,8 @@ use crate::config::{
 };
 use crate::utils::{substitute_output, validate_export_identifier};
 use pendon_types::Selector;
+
+use crate::chain::ChainConfig;
 
 #[derive(Clone)]
 pub struct DocumentContext {
@@ -827,7 +829,11 @@ pub fn build_extract_options(task: &ConfigTask) -> Result<ExtractOptions, String
             blocks.push(extract_block(element, rule, index)?);
         }
     }
-    Ok(ExtractOptions { blocks })
+    Ok(ExtractOptions {
+        blocks,
+        // Filled by the caller once the plugin options exist (S2-8.4).
+        fields: FieldConfigs::default(),
+    })
 }
 
 /// One `[[task.<element>.extract]]` entry as a validated [`ExtractBlock`].
@@ -878,6 +884,72 @@ fn extract_block(element: &str, rule: &ExtractRule, index: usize) -> Result<Extr
         index,
     )
     .map_err(|error| error.to_string())
+}
+
+/// ADR-0014's read side for the extraction pass (S2-8.4): every layer's
+/// `field.*`, resolved per `type` marker exactly as the renderer resolves it
+/// (`ComponentSet::field_for`, D-8 transparency included).
+///
+/// Extraction reads the projection, so it must see the same config the page
+/// does: `field.override.reference_id = "ref_id"` publishes `ref_id`, and a
+/// row can never carry one name while the rendered element carries another.
+/// An empty table is "nothing configured" — the plain attribute names.
+pub fn field_configs(config: &ChainConfig, cite: &CiteOptions) -> FieldConfigs {
+    let mut fields = FieldConfigs::default();
+    push_layer_fields(&mut fields, "anchor", &config.anchor.custom);
+    push_layer_fields(&mut fields, "blockquote", &config.blockquote.custom);
+    push_layer_fields(&mut fields, "cite", &cite.custom);
+    push_layer_fields(&mut fields, "directive", &config.directive.custom);
+    push_layer_fields(&mut fields, "heading", &config.heading.custom);
+    push_layer_fields(&mut fields, "img", &config.image.img);
+    push_layer_fields(&mut fields, "list", &config.list.list);
+    push_layer_fields(&mut fields, "unordered", &config.list.unordered);
+    push_layer_fields(&mut fields, "ordered", &config.list.ordered);
+    push_layer_fields(&mut fields, "marker", &config.marker.custom);
+    push_layer_fields(&mut fields, "section", &config.section.section);
+    if let Some(table) = &config.table.custom_node {
+        // Every table layer keeps its own `field.*`; extraction only ever sees
+        // the `table` and `caption` ones (`element_of_layer`), but a lookup for
+        // any other layer is then still answered rather than silently ignored.
+        push_layer_fields(&mut fields, "table", &table.table);
+        push_layer_fields(&mut fields, "caption", &table.caption);
+        push_layer_fields(&mut fields, "thead", &table.thead);
+        push_layer_fields(&mut fields, "tbody", &table.tbody);
+        push_layer_fields(&mut fields, "tfoot", &table.tfoot);
+        push_layer_fields(&mut fields, "row", &table.row);
+        push_layer_fields(&mut fields, "cell", &table.cell);
+    }
+    fields
+}
+
+/// One layer's component set → one entry per literal `type` marker, plus the
+/// layer default. Wildcards are resolved per document by the renderer (D-3a), so
+/// they name no entry here — a wildcard-only entry contributes its default.
+fn push_layer_fields<C>(fields: &mut FieldConfigs, layer: &str, set: &ComponentSet<C>) {
+    let mut markers: Vec<String> = Vec::new();
+    let selectors = set
+        .entries()
+        .iter()
+        .map(|entry| &entry.selectors)
+        .chain(set.configs().iter().map(|entry| &entry.selectors));
+    for selector in selectors {
+        markers.extend(
+            selector
+                .iter()
+                .filter_map(Selector::literal)
+                .map(str::to_string),
+        );
+    }
+    markers.sort();
+    markers.dedup();
+    for marker in &markers {
+        if let Some(field) = set.field_for(Some(marker)) {
+            fields.insert(layer, Some(marker), field.clone());
+        }
+    }
+    if let Some(field) = set.field_for(None) {
+        fields.insert(layer, None, field.clone());
+    }
 }
 
 pub fn track_used_spec(list: &mut Vec<PluginSpec>, spec: PluginSpec) {

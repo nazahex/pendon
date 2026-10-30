@@ -801,3 +801,59 @@ only = ["price", "price..amount"]
         "{stderr}"
     );
 }
+
+/// S2-8.4 / ADR-0014: extraction reads the **projection**, so a `field.*`
+/// override renames the row exactly as it renames the rendered prop (D-4). The
+/// processor's own `reference_id` / `citation_number` / `locator` never ship
+/// under those names once an entry renames them.
+#[test]
+fn the_projection_names_the_extracted_fields() {
+    let dir = project(
+        "projection",
+        r#"[[task]]
+name = "Extract"
+input = "./src/doc.mdp"
+output = "./out/doc.jsx"
+plugin = "micromatter,cite,extract,markdown"
+format = "solid"
+
+[task.cite]
+reference_source = "internal"
+
+[[task.cite.custom]]
+type = ["citeShort"]
+name = "CiteShort"
+template = "<CiteShort {...attrs} />"
+field.bracket.tick = "reference_id"
+field.bracket.quote = "locator"
+field.override.reference_id = "ref_id"
+field.override.citation_number = "no"
+field.override.locator = "loc"
+
+[[task.cite.extract]]
+output = "./out/cite.json"
+format = "json"
+preset = "all"
+"#,
+    );
+    fs::write(
+        dir.join("src/doc.mdp"),
+        "---\nreferences:\n  book:\n    id: book\n    title: A Book\n---\n\nMinim [^p. 1 `book`]@@citeShort esse.\n",
+    )
+    .expect("source");
+    run_in(&dir);
+
+    let rows: Value = serde_json::from_str(&read(&dir, "out/cite.json")).expect("json");
+    let row = &rows[0];
+    assert_eq!(row["ref_id"], "book", "{row}");
+    assert_eq!(row["no"], "1", "{row}");
+    for hidden in ["reference_id", "citation_number", "locator"] {
+        assert!(
+            row.get(hidden).is_none(),
+            "`{hidden}` was renamed by the projection: {row}"
+        );
+    }
+    // The built-in fields the entry does not touch keep their names.
+    assert_eq!(row["type"], "citeShort", "{row}");
+    assert_eq!(row["bracket"]["bare"], "p. 1", "{row}");
+}

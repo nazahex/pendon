@@ -500,3 +500,13 @@ fn golden_42_decorator_rejected() {
 fn golden_43_slot_modifiers() {
     assert_fixture("43-slot-modifiers");
 }
+
+/// §16.3 fixture 44: PE.1–PE.4 of the Stage-2 issue (§9) — the same anchor
+/// record selected four ways with **dotted paths** (S2-8.3/S2-8.4). `include`
+/// reaches `price.details.amount` and `omit` cuts one leaf out of it, `only`
+/// keeps both paths and nothing else, and the same `only` under the `pendon`
+/// preset is `[{}]` — one empty row (PE.4).
+#[test]
+fn golden_44_extract_paths() {
+    assert_fixture("44-extract-paths");
+}

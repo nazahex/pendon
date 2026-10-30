@@ -411,7 +411,7 @@ fn emit_decorator_attrs(attrs: &Attrs, specs: &Specs, out: &mut Vec<Event>) {
             }),
             ExtrasAttr::Value(value) => out.push(Event::Attribute {
                 name: name.to_string(),
-                value: value.literal(),
+                value: value.transport_for(name),
             }),
         }
     }

@@ -1045,7 +1045,11 @@ fn resolve_value(
         };
     }
 
-    let Ok(mut parsed) = serde_json::from_str::<Value>(value) else {
+    // §4 transport: a structured extra already carries `JSON_ATTR_PREFIX`
+    // (S2-8.4), so strip the sentinel to parse and let `encode_json` put it back
+    // when a reference inside the value moved.
+    let payload = pendon_core::json_attr_payload(value).unwrap_or(value);
+    let Ok(mut parsed) = serde_json::from_str::<Value>(payload) else {
         return value.to_string();
     };
     if !matches!(parsed, Value::Object(_) | Value::Array(_)) {

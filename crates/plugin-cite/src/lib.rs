@@ -924,7 +924,7 @@ fn merge_cite_extras(
                 }
             }
             ExtrasAttr::Value(value) => {
-                let text = value.literal();
+                let text = value.transport_for(key);
                 if key == "class" {
                     for token in text.split_whitespace() {
                         extra.classes.push(token.to_string());

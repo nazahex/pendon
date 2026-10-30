@@ -15,7 +15,7 @@ use crate::plugins::{
     build_anchor_options, build_bind_injects, build_blockquote_options, build_cite_options,
     build_directive_options, build_extract_options, build_heading_options, build_image_options,
     build_list_options, build_marker_options, build_number_options, build_section_options,
-    build_table_options, has_plugin, merge_solid_hints, DocumentContext,
+    build_table_options, field_configs, has_plugin, merge_solid_hints, DocumentContext,
 };
 use crate::utils::{
     extract_frontmatter_for_cite, maybe_pretty, merge_refs_for_context, substitute_output,
@@ -164,6 +164,11 @@ pub fn process_single_file(
         path_str,
         Some(map)
     ));
+    // S2-8.4: the extraction pass reads the projection, so it needs the same
+    // `field.*` config the element plugins were built with — resolved here, once
+    // the component sets (and the cite set, which is built above) exist.
+    let fields = field_configs(&config, &cite_options);
+    config.extract.fields = fields;
     let frontmatter_data = extract_frontmatter_for_cite(&events);
     let front_refs = frontmatter_data
         .as_ref()

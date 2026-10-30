@@ -325,7 +325,9 @@ fn build_attributes(
                 // §6.3: a bare flag stays a bare attribute (`<a isFoo>`).
                 ExtrasAttr::Flag => parts.flags.push(key.to_string()),
                 ExtrasAttr::Value(value) => {
-                    parts.values.insert(key.to_string(), value.literal());
+                    parts
+                        .values
+                        .insert(key.to_string(), value.transport_for(key));
                 }
             }
         }

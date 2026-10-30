@@ -114,6 +114,13 @@ applied in this order: **`preset` (the starting set) → `include` (adds paths) 
   `only` names it, and an unmatched `only` yields an **empty row** (`[{}]`, PE.4)
   rather than a fall back to the preset. A path that lost every child leaves no
   `{}` husk behind. `__`-prefixed internal keys are never extractable.
+- A row is built from the **projection** (`pendon_extra::project`, ADR-0014) —
+  the same public field map the renderers read — so `field.override.*` renames a
+  field before it is extracted (`reference_id` → `ref_id`), a `specs.*` position
+  lands under its DOM field, and a row can never spell a field differently from
+  the element the page renders (S2-8.4). The CLI passes the `field.*` config in
+  (`FieldConfigs`, resolved per layer and `type` marker with
+  `ComponentSet::field_for`), because only it knows what the task configured.
 
 `recommended = <bool>` was the pre-D-6 spelling of this (`true` = `"pendon"`,
 `false` = `"all"`). It is **gone**; a config that still has it fails to load with

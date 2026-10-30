@@ -67,6 +67,42 @@ impl AttrValue {
         }
     }
 
+    /// The event-stream form of a value (§6.3 transport).
+    ///
+    /// A **structured** value (an object or an array) travels as
+    /// [`pendon_core::JSON_ATTR_PREFIX`] + compact JSON, so the AST — and
+    /// therefore `plugin-extract` — keeps an object or an array instead of a
+    /// string that merely looks like one; every scalar keeps [`literal`]'s
+    /// spelling. A modifier contribution already travels this way
+    /// ([`crate::modifier::Contribution::text`]); this is the same rule for an
+    /// extras head, so the two cannot disagree about what a nested value *is*.
+    ///
+    /// [`literal`]: AttrValue::literal
+    pub fn transport(&self) -> String {
+        match self {
+            Self::Object(_) | Self::Array(_) => format!(
+                "{}{}",
+                pendon_core::JSON_ATTR_PREFIX,
+                serde_json::to_string(&self.to_json()).unwrap_or_else(|_| "null".to_string())
+            ),
+            other => other.literal(),
+        }
+    }
+
+    /// [`transport`](Self::transport) for a **named** attribute.
+    ///
+    /// An internal `__`-key keeps the plain literal its consumer parses —
+    /// `__number`'s `{"depth":…,"type":…}` marker is read by `plugin-number`
+    /// before any renderer runs (ADR-0010) and never reaches an AST, a renderer
+    /// or a projection, so prefixing it would only break the reader.
+    pub fn transport_for(&self, key: &str) -> String {
+        if key.starts_with("__") {
+            self.literal()
+        } else {
+            self.transport()
+        }
+    }
+
     /// Reads an AST value back into the typed form — the half of the bridge the
     /// projection ([`crate::project`]) uses, the inverse of [`AttrValue::to_json`].
     ///

@@ -9,6 +9,7 @@
 use pendon_core::{
     is_json_attr, is_jsx_attr, json_attr_payload, jsx_attr_payload, Event, NodeKind,
 };
+use pendon_extra::FieldConfig;
 use serde_json::{Map, Value};
 
 use crate::fields::element_of_layer;
@@ -25,6 +26,9 @@ pub const DEPTH: &str = "depth";
 #[derive(Clone, Debug)]
 pub struct ElementNode {
     pub element: &'static str,
+    /// The `__layer` value the node carries (`img` for an image, `unordered` for
+    /// a bullet list) — what a `field.*` lookup is keyed by (D-7).
+    pub layer: String,
     /// Attributes in emission order, `__`-prefixed internal keys removed.
     pub attrs: Vec<(String, String)>,
     /// The node's text, descendants included, whitespace collapsed.
@@ -44,30 +48,42 @@ impl ElementNode {
     /// The occurrence's fields as one nested object — the tree `include` /
     /// `only` / `omit` walk (§21 rule 4).
     ///
-    /// Two things become structure: a dotted attribute name (`soo.baz` nests as
-    /// `soo` → `baz`, exactly the path a config has to write) and a structured
-    /// value that is an object (`price` → `details` → `amount`). An array is a
-    /// leaf: paths address fields, never indices. `inner_text` and `depth` are
-    /// fields like any other, so a selection names them next to an attribute.
-    pub fn fields(&self) -> Value {
-        let mut root = Map::new();
+    /// Every field goes through **the projection** ([`pendon_extra::project`]),
+    /// the same function the renderers call, so extraction can never disagree
+    /// with the page about what a public field is called: `field.override.*`
+    /// renames apply (D-4), `specs.*` positions land under their DOM names, and
+    /// a `__`-prefixed internal key never reaches the row (S2-8.4).
+    ///
+    /// What this adds to the node before projecting: the **derived** `depth`
+    /// (the attribute it was read from is a string, and a heading's depth is
+    /// clamped), and `inner_text`, which is not an attribute at all. Both go in
+    /// as attributes so an override can rename them like any other field.
+    ///
+    /// Nesting is the projection's: a dotted path (`soo.baz`, `specs.tick`) is
+    /// two segments, an object value keeps its shape, and an array stays a leaf.
+    pub fn fields(&self, config: Option<&FieldConfig>) -> Value {
+        let mut attrs = Map::new();
         for (name, raw) in &self.attrs {
-            // `depth` is the *derived* outline depth (clamped for a heading, the
-            // open-section count for a section), so the attribute it was read
-            // from never reaches the row as a bare string.
+            // Replaced below: `depth` ships the derived value, never the string
+            // the emitter wrote.
             if name == DEPTH {
                 continue;
             }
-            insert_path(&mut root, name, attribute_value(raw));
+            insert_path(&mut attrs, name, attribute_value(raw));
         }
+        insert_path(&mut attrs, DEPTH, Value::from(self.depth));
         if !self.inner_text.is_empty() {
-            root.insert(
-                INNER_TEXT.to_string(),
+            insert_path(
+                &mut attrs,
+                INNER_TEXT,
                 Value::String(self.inner_text.clone()),
             );
         }
-        root.insert(DEPTH.to_string(), Value::from(self.depth));
-        Value::Object(root)
+        let node = Value::Object(Map::from_iter([(
+            "attrs".to_string(),
+            Value::Object(attrs),
+        )]));
+        pendon_extra::project(&node, config).to_value().to_json()
     }
 }
 
@@ -121,7 +137,7 @@ pub fn scan(events: &[Event]) -> Vec<ElementNode> {
                 if matches!(kind, NodeKind::Section) {
                     sections = sections.saturating_add(1);
                 }
-                let Some(element) = element_at(events, index, kind) else {
+                let Some((element, layer)) = element_at(events, index, kind) else {
                     continue;
                 };
                 let (attrs, inner_text) = consume(events, index, kind);
@@ -144,6 +160,7 @@ pub fn scan(events: &[Event]) -> Vec<ElementNode> {
                 };
                 nodes.push(ElementNode {
                     element,
+                    layer: layer.to_string(),
                     attrs,
                     inner_text,
                     depth,
@@ -163,17 +180,21 @@ pub fn scan(events: &[Event]) -> Vec<ElementNode> {
 /// `__layer` is authoritative (an `img` is `image`);
 /// a bare `Heading` node with no layer is a heading too, because the heading
 /// plugin owns that node kind outright.
-fn element_at(events: &[Event], index: usize, kind: &NodeKind) -> Option<&'static str> {
+fn element_at<'a>(
+    events: &'a [Event],
+    index: usize,
+    kind: &NodeKind,
+) -> Option<(&'static str, &'a str)> {
     for event in &events[index + 1..] {
         match event {
             Event::Attribute { name, value } if name == "__layer" => {
-                return element_of_layer(value);
+                return element_of_layer(value).map(|element| (element, value.as_str()));
             }
             Event::Attribute { .. } | Event::AttributeFlag { .. } | Event::Diagnostic { .. } => {}
             _ => break,
         }
     }
-    matches!(kind, NodeKind::Heading).then_some("heading")
+    matches!(kind, NodeKind::Heading).then_some(("heading", "heading"))
 }
 
 /// The attribute run and the text of the node starting at `start`.

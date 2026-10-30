@@ -204,7 +204,7 @@ fn push_attrs(parsed: &ParsedDirective, out: &mut Vec<Event>) {
             ExtrasAttr::Flag => out.push(Event::AttributeFlag { name: key.clone() }),
             ExtrasAttr::Value(value) => out.push(Event::Attribute {
                 name: key.clone(),
-                value: value.literal(),
+                value: value.transport_for(key),
             }),
         }
     }

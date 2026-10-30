@@ -1,0 +1,48 @@
+[[task]]
+name = "Golden 44"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "micromatter,anchor,extract,markdown"
+format = "solid"
+
+# D-6 / §21.4: `include` / `only` / `omit` are **dotted paths**, and a prefix
+# takes the whole subtree. PE.1–PE.4 are the proposal's four worked examples
+# (§9 of the Stage-2 issue): the same record selected four ways, where `omit`
+# always wins and `only` can only keep what the preset already reached — so PE.4
+# is `[{}]`, one empty row, not an error and not the whole preset.
+#
+# `number.raw` is named by all four blocks but no element carries it yet: it
+# becomes a public field when Phase 9 exposes `number.*`, and PE.1 is re-frozen
+# with it then (S2-9.4).
+
+# PE.1 — the pendon preset, one nested subtree included, one leaf cut out of it
+[[task.anchor.extract]]
+output = "./out/[slug].PE.1.json"
+format = "json"
+preset = "pendon"
+include = ["number.raw", "price.details.amount"]
+omit = ["price.details.amount.unit"]
+
+# PE.2 — the same, on `all`: `include` is redundant there but still valid
+[[task.anchor.extract]]
+output = "./out/[slug].PE.2.json"
+format = "json"
+preset = "all"
+include = ["number.raw", "price.details.amount"]
+omit = ["price.details.amount.unit"]
+
+# PE.3 — `only` keeps those two paths and nothing else
+[[task.anchor.extract]]
+output = "./out/[slug].PE.3.json"
+format = "json"
+preset = "all"
+only = ["number.raw", "price.details.amount"]
+omit = ["price.details.amount.unit"]
+
+# PE.4 — `only` cannot add: neither path is in the anchor preset, so `[{}]`
+[[task.anchor.extract]]
+output = "./out/[slug].PE.4.json"
+format = "json"
+preset = "pendon"
+only = ["number.raw", "price.details.amount"]
+omit = ["price.details.amount.unit"]

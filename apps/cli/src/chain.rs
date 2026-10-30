@@ -689,6 +689,7 @@ mod tests {
         .expect("valid block");
         config.extract = ExtractOptions {
             blocks: vec![block],
+            ..ExtractOptions::default()
         };
         let context =
             crate::plugins::DocumentContext::new(pendon_plugin_cite::CitationContext::new(

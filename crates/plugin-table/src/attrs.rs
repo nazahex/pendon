@@ -80,7 +80,9 @@ fn layer_from_attrs(parsed: &Attrs, type_marker: Option<&str>, specs: &Specs) ->
             (name, ExtrasAttr::Value(value)) if name.starts_with("--") => {
                 styles.push(format!("{}:{}", name, value.literal()))
             }
-            (name, ExtrasAttr::Value(value)) => props.push((name.to_string(), value.literal())),
+            (name, ExtrasAttr::Value(value)) => {
+                props.push((name.to_string(), value.transport_for(name)))
+            }
             (name, ExtrasAttr::Flag) => layer.flags.push(name.to_string()),
         }
     }

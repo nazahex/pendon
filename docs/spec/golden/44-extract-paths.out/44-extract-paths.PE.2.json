@@ -1,0 +1,15 @@
+[
+  {
+    "depth": 1,
+    "href": "/buah/jambu_biji",
+    "inner_text": "Jambu biji",
+    "price": {
+      "details": {
+        "amount": {
+          "total": 12
+        },
+        "currency": "IDR"
+      }
+    }
+  }
+]

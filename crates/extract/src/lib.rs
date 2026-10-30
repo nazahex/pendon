@@ -35,6 +35,7 @@ pub use select::Selection;
 use std::collections::BTreeMap;
 
 use pendon_core::Event;
+use pendon_extra::FieldConfig;
 use pendon_types::{Group, Rule, Selector, TypeId, TypeSet};
 use serde_json::Value;
 
@@ -42,11 +43,65 @@ use serde_json::Value;
 #[derive(Clone, Debug, Default)]
 pub struct ExtractOptions {
     pub blocks: Vec<ExtractBlock>,
+    /// The `field.*` side of the projection (D-4, D-7).
+    pub fields: FieldConfigs,
 }
 
 impl ExtractOptions {
     pub fn is_empty(&self) -> bool {
         self.blocks.is_empty()
+    }
+}
+
+/// Which `field.*` config applies to an occurrence (D-4, D-7).
+///
+/// Extraction reads the **projection** ([`pendon_extra::project`]), which is
+/// where `field.override.*` renames a public field, so it has to resolve the
+/// same config the renderer does — per layer, and per `type` marker for a layer
+/// with several `custom` entries. The CLI fills this from the
+/// `ComponentSet`s it already built (`ComponentSet::field_for`), so neither side
+/// can decide a field's public name on its own.
+///
+/// An empty table is "nothing configured", which is the plain attribute order.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct FieldConfigs {
+    /// `(layer, type marker or `None` for the layer default, config)`.
+    /// A later entry for one pair replaces the earlier one, so a caller that
+    /// walks its sets in any order still gets one answer per pair.
+    entries: Vec<(String, Option<String>, FieldConfig)>,
+}
+
+impl FieldConfigs {
+    /// Records the config that answers `type_marker` on `layer`.
+    pub fn insert(&mut self, layer: &str, type_marker: Option<&str>, config: FieldConfig) {
+        let entry = (layer.to_string(), type_marker.map(str::to_string), config);
+        match self
+            .entries
+            .iter_mut()
+            .find(|(existing_layer, existing_type, _)| {
+                *existing_layer == entry.0 && *existing_type == entry.1
+            }) {
+            Some(existing) => existing.2 = entry.2,
+            None => self.entries.push(entry),
+        }
+    }
+
+    /// The config for one occurrence: an exact `type` match beats the layer
+    /// default, which is the renderer's own rule (§11 rule 3).
+    pub fn get(&self, layer: &str, type_marker: Option<&str>) -> Option<&FieldConfig> {
+        if let Some(marker) = type_marker {
+            let exact = self
+                .entries
+                .iter()
+                .find(|(candidate, kind, _)| candidate == layer && kind.as_deref() == Some(marker));
+            if let Some((_, _, config)) = exact {
+                return Some(config);
+            }
+        }
+        self.entries
+            .iter()
+            .find(|(candidate, kind, _)| candidate == layer && kind.is_none())
+            .map(|(_, _, config)| config)
     }
 }
 
@@ -203,8 +258,15 @@ pub fn run(events: &[Event], options: &ExtractOptions) -> ExtractOutput {
                     claimed.push(rule.payload);
                 }
             }
+            if claimed.is_empty() {
+                continue;
+            }
+            // The projection is per occurrence, not per block (S2-8.4): every
+            // block reads the same public fields under the same names.
+            let config = options.fields.get(&node.layer, node.get("type"));
+            let fields = node.fields(config);
             for index in claimed {
-                if let Some(row) = row_of(&selections[index], node) {
+                if let Some(row) = row_of(&selections[index], &fields) {
                     rows.entry(index).or_default().push(row);
                 }
             }
@@ -236,10 +298,9 @@ pub fn run(events: &[Event], options: &ExtractOptions) -> ExtractOutput {
 ///
 /// A selection that keeps nothing is still a row — `{}`, never an error and
 /// never a fall back to the whole preset (PE.4).
-fn row_of(selection: &Selection, node: &ElementNode) -> Option<Value> {
-    let fields = node.fields();
+fn row_of(selection: &Selection, fields: &Value) -> Option<Value> {
     let empty = fields.as_object().is_none_or(|object| object.is_empty());
-    (!empty).then(|| selection.apply(&fields))
+    (!empty).then(|| selection.apply(fields))
 }
 
 #[cfg(test)]
@@ -298,7 +359,10 @@ mod tests {
     }
 
     fn options(blocks: Vec<ExtractBlock>) -> ExtractOptions {
-        ExtractOptions { blocks }
+        ExtractOptions {
+            blocks,
+            ..ExtractOptions::default()
+        }
     }
 
     #[test]
@@ -312,7 +376,7 @@ mod tests {
         assert_eq!(node.get("id"), Some("intro"));
         assert_eq!(node.get("__layer"), None);
         assert_eq!(node.get("__number"), None);
-        let fields = node.fields();
+        let fields = node.fields(None);
         assert_eq!(fields["id"], "intro");
         assert_eq!(fields["depth"], 2);
         assert_eq!(fields["inner_text"], "Intro");
@@ -339,7 +403,7 @@ mod tests {
         ];
         let nodes = scan::scan(&events);
         assert_eq!(
-            nodes[0].fields(),
+            nodes[0].fields(None),
             serde_json::json!({ "depth": 1, "href": "/x", "soo": { "baz": "wax" } })
         );
     }
@@ -590,5 +654,89 @@ mod tests {
         );
         let rendered = output.files[0].render().expect("toml renders");
         assert!(rendered.starts_with("[[heading]]\n"), "{rendered}");
+    }
+
+    /// A `field.*` override renames a public field **before** it is extracted
+    /// (D-4/ADR-0014): the row carries `ref_id`, never `reference_id`, because
+    /// the projection is the one source of public names (S2-8.4).
+    #[test]
+    fn an_override_renames_the_extracted_field() {
+        let events = heading("2", "intro", None);
+        let mut config = FieldConfig::new();
+        config
+            .add_override(
+                Path::from_dotted("id").expect("a path"),
+                Path::from_dotted("slug").expect("a path"),
+            )
+            .expect("one override");
+        let mut options = options(vec![block(
+            "heading",
+            &[],
+            &["out/h.json"],
+            &["json"],
+            None,
+        )]);
+        options.fields.insert("heading", None, config);
+        let output = run(&events, &options);
+        assert_eq!(
+            output.files[0].rows[0],
+            serde_json::json!({"depth": 2, "inner_text": "Intro", "slug": "intro"}),
+            "the row publishes the public name: {output:?}"
+        );
+    }
+
+    /// An exact `type` marker beats the layer default, which is how the renderer
+    /// resolves §11 too — so two `custom` entries of one layer extract under
+    /// their own names.
+    #[test]
+    fn a_typed_entry_beats_the_layer_default() {
+        let events = heading("2", "intro", Some("HeadingA"));
+        let mut typed = FieldConfig::new();
+        typed
+            .add_override(
+                Path::from_dotted("id").expect("a path"),
+                Path::from_dotted("slug").expect("a path"),
+            )
+            .expect("one override");
+        let mut default = FieldConfig::new();
+        default
+            .add_override(
+                Path::from_dotted("id").expect("a path"),
+                Path::from_dotted("anchor_id").expect("a path"),
+            )
+            .expect("one override");
+        let mut options = options(vec![block(
+            "heading",
+            &[],
+            &["out/h.json"],
+            &["json"],
+            None,
+        )]);
+        options.fields.insert("heading", Some("HeadingA"), typed);
+        options.fields.insert("heading", None, default);
+        let output = run(&events, &options);
+        let row = output.files[0].rows[0].as_object().expect("a row").clone();
+        assert!(row.contains_key("slug"), "{row:?}");
+        assert!(!row.contains_key("anchor_id"), "{row:?}");
+    }
+
+    /// Internal `__`-keys never reach a row, whatever `preset = "all"` says: the
+    /// projection drops them (ADR-0014 rule 1), not the selection.
+    #[test]
+    fn internal_keys_never_reach_a_row() {
+        let events = heading("2", "intro", None);
+        let output = run(
+            &events,
+            &options(vec![block(
+                "heading",
+                &[],
+                &["out/h.json"],
+                &["json"],
+                None,
+            )]),
+        );
+        let row = output.files[0].rows[0].as_object().expect("a row").clone();
+        assert!(!row.keys().any(|key| key.starts_with("__")), "{row:?}");
+        assert_eq!(row["depth"], 2);
     }
 }
