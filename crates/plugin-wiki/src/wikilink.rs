@@ -1,7 +1,7 @@
 use pendon_core::{Event, NodeKind};
 use pendon_extra::{
     emit_attr_issues, issue_event, owns_field, parse_extras, to_attributes, ExtrasAttr, ExtrasHead,
-    ExtrasIssue, ExtrasMatch, FieldName, Specs, SpecsKey,
+    ExtrasIssue, ExtrasMatch, FieldName, Specs,
 };
 
 use crate::options::WikiOptions;
@@ -117,10 +117,9 @@ fn emit_wikilink_extras(head: Option<&ExtrasHead>, out: &mut Vec<Event>) {
         }
     }
 
-    // §6.3: the link's own positions — `class` / `id` / `style` are the
-    // universal DOM fields and an extras `"title"` is the `title` this plugin
-    // produces itself (§7.5).
-    for (key, value) in specs.dom_fields(&attrs.items, &[(SpecsKey::Quote, "title")]) {
+    // §6.3: `class` / `id` / `style` are the universal DOM fields; the quote is a
+    // neutral position, so an extras `"…"` stays `specs.quote` (D-7).
+    for (key, value) in specs.dom_fields(&attrs.items, &[]) {
         if owns_field(OWNED, key) {
             out.push(issue_event("wiki", &ExtrasIssue::owned_key(key)));
             continue;
@@ -317,16 +316,19 @@ mod tests {
         )));
     }
 
-    /// D-12 rule 5: the link writes `title` too, so an extras quote moved onto it
-    /// is the same `Error` (it is an `Error`, not the §6.2 `Warning`).
+    /// D-12 rule 5: the link writes `title` itself, but an extras **quote** is not a
+    /// title any more (§6.2): it stays `specs.quote`, so nothing collides.
     #[test]
-    fn title_is_not_overridable_by_extras() {
+    fn an_extras_quote_keeps_its_own_path() {
         let out = events_of("[[Anim Esta]]@@wikiA{\"Evil\"}");
         assert_eq!(attr(&out, "title").as_deref(), Some("Anim Esta"));
-        assert!(out.iter().any(|event| matches!(
+        assert_eq!(attr(&out, "specs.quote").as_deref(), Some("Evil"));
+        assert!(!out.iter().any(|event| matches!(
             event,
-            Event::Diagnostic { message, severity: pendon_core::Severity::Error, .. }
-                if message.contains("`title`")
+            Event::Diagnostic {
+                severity: pendon_core::Severity::Error,
+                ..
+            }
         )));
     }
 

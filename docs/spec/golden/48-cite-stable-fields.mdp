@@ -1,0 +1,41 @@
+---
+references:
+  book:
+    id: book
+    type: book
+    title: A Book
+  paper:
+    id: paper
+    type: article
+    title: A Paper
+---
+
+§7.3: `citation_number` is stable for a repeated **identity**, and the identity is
+whatever `[task.cite] stable_fields` lists — public field paths, before
+`field.override` (D-4), in comparison order. `citeX` here produces all four names
+listed in the config: `reference_id`, the paren's bare content as `locator_type`,
+the paren's quote as `locator_value`, and the extras `"…"` as `author`:
+
+First [^book "p. 1"](paper "ed. 2001")@@citeX{"Smith"} esse do ut anim proident.
+
+The same four values keep the number — only the physical anchor `cite-<n>` is new:
+
+Second [^book "p. 1"](paper "ed. 2001")@@citeX{"Smith"} esse.
+
+One listed field changing is enough for a new number. Here the author differs:
+
+[^book "p. 1"](paper "ed. 2001")@@citeX{"Jones"} esse.
+
+And here `locator_value` does:
+
+[^book "p. 1"](paper "ed. 2002")@@citeX{"Smith"} esse.
+
+`citeY` reads the same `stable_fields`, but it produces only two of them: the
+reference comes from the paren's quote and the author from the extras tick, while
+`locator_type` and `locator_value` stay absent. An absent field still counts as a
+value, so two `citeY` citations match each other — and a `citeY` never matches a
+`citeX`, because "no `locator_type`" is not `paper`:
+
+[^]("book")@@citeY{`Smith`} esse.
+
+[^]("book")@@citeY{`Smith`} esse.

@@ -43,7 +43,7 @@ Minim [^book "hlm. 45" |?]@@citeX{.hero} esse do ut anim proident.
 
 A citation reads the same run, and a `true` contribution is a **bare flag**
 (`compact`), never `compact="compact"` (§6.3). The run is configuration, so it
-never writes the reference or the locator: the citation still numbers as usual.
+never writes the reference: the citation still numbers as usual.
 
 #[mod-head |?]("Modifier heading")
 

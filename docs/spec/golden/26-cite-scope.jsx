@@ -1,6 +1,6 @@
 export const frontmatter = {"references":{"book":{"id":"book","title":"A Book","type":"book"},"paper":{"id":"paper","title":"A Paper","type":"article"}}};
 export const references = {"book":{"id":"book","title":"A Book","type":"book"},"paper":{"id":"paper","title":"A Paper","type":"article"}};
-export const citations = [{"citation_number":1,"locator":"hlm. 45","reference_id":"book"}];
+export const citations = [{"citation_number":1,"reference_id":"book"}];
 export default function PendonView() { return (<>
 <p>Frontmatter references are authored for <em>this</em> document, so the <code>references</code>
 export carries all of them by default (<code>references_scope = &quot;all&quot;</code>, §2.6 of

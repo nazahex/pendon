@@ -1,7 +1,7 @@
 export const frontmatter = {"references":{"book":{"id":"book","title":"A Book","type":"book"}}};
 export const headings = [{"id":"slot-modifiers","level":1,"text":"Slot modifiers"},{"id":"mod-head","level":1,"text":""}];
 export const references = {"book":{"id":"book","title":"A Book","type":"book"}};
-export const citations = [{"citation_number":1,"locator":"hlm. 45","reference_id":"book"}];
+export const citations = [{"citation_number":1,"reference_id":"book"}];
 export default function PendonView() { return (<>
 <h1>Slot modifiers</h1>
 <p>The bracket&#39;s <code>|…</code> run is <strong>pure configuration</strong> (§5.4, D-9): every symbol names
@@ -34,11 +34,11 @@ the losing contribution is dropped with a warning.
 <p>A block image reads the same run: <code>?</code> adds <code>class</code>, and <code>loading</code> is a prop the
 <code>&lt;img&gt;</code> has no attribute for, so it lands under the <code>data-</code> prefix (§6.3).
 </p>
-<p>Minim <sup class="hero cited"><a href="#1-book" id="cite-1" data-type="citeX" compact>[1]</a></sup> esse do ut anim proident.
+<p>Minim <sup class="hero cited"><a href="#1-book" id="cite-1" data-bracket-quote="hlm. 45" data-type="citeX" compact>[1]</a></sup> esse do ut anim proident.
 </p>
 <p>A citation reads the same run, and a <code>true</code> contribution is a <strong>bare flag</strong>
 (<code>compact</code>), never <code>compact=&quot;compact&quot;</code> (§6.3). The run is configuration, so it
-never writes the reference or the locator: the citation still numbers as usual.
+never writes the reference: the citation still numbers as usual.
 </p>
 <h1 class="marked" title="Modifier heading"></h1>
 <p>This heading and the one above differ only by the run: the entry defines no

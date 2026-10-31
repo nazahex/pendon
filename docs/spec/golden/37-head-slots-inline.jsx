@@ -1,6 +1,6 @@
 export const frontmatter = {"references":{"book":{"id":"book","title":"A Book"}}};
 export const references = {"book":{"id":"book","title":"A Book"}};
-export const citations = [{"citation_number":1,"locator":"p. 12","reference_id":"book"}];
+export const citations = [{"citation_number":1,"reference_id":"book"}];
 export default function PendonView() { return (<>
 <p>§6.5/D-7: a claimed head is read <strong>whole</strong>. The preset names some of its
 positions, and every other content becomes a bare field under its slot-qualified
@@ -17,12 +17,13 @@ remaining positions stay fields of their own:
 </p>
 <p>Mid-sentence <img alt="an image" {...{ "bracket.quote": "image quote" }} {...{ "bracket.tick": "image tick" }} {...{ "paren.quote": "image paren quote" }} {...{ "paren.tick": "image paren tick" }} src="img.png" /> stays inline.
 </p>
-<p>The citation presets <code>bracket.bare → reference_id</code> and <code>bracket.quote → locator</code>.
-The built-in <code>&lt;sup&gt;</code> has no prop for the other four, so it writes them under the
+<p>The citation presets <code>bracket.bare → reference_id</code> and nothing else: a location
+is whatever the document names it, so the bracket&#39;s quote stays <code>bracket.quote</code>.
+The built-in <code>&lt;sup&gt;</code> has no prop for the other five, so it writes them under the
 <code>data-</code> prefix — <code>bracket.tick</code> becomes <code>data-bracket-tick</code>, the spelling a dotted
 path takes when it cannot be a prop (§6.3, §7.3):
 </p>
-<p>A <sup><a href="#1-book" id="cite-1" data-bracket-tick="cite tick" data-paren-bare="paperback" data-paren-quote="cite paren quote" data-paren-tick="cite paren tick">[1]</a></sup> citation.
+<p>A <sup><a href="#1-book" id="cite-1" data-bracket-quote="p. 12" data-bracket-tick="cite tick" data-paren-bare="paperback" data-paren-quote="cite paren quote" data-paren-tick="cite paren tick">[1]</a></sup> citation.
 </p>
 <p>None of the above is a diagnostic: an unpreset position is a field, not a mistake.
 </p>

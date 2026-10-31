@@ -20,7 +20,7 @@ under their slot-qualified names — kept, never dropped (D-7).
 </p>
 <p>§6.2: the construct head wins over the extras, and the extras value is dropped.
 </p>
-<p><a href="/docs" title="Head title" type="anchorA">Head title wins</a>
+<p><a href="/docs" {...{ "specs.quote": "Extras title" }} title="Head title" type="anchorA">Head title wins</a>
 </p>
 <p><code>#id</code> is the only id (§6.3); the tick carries no default meaning, so an extras
 slug stays the <code>specs.tick</code> field of the author&#39;s own (§6.2).

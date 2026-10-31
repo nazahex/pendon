@@ -64,10 +64,10 @@ pub const HEAD: ElementHead = ElementHead::new(
 )
 .with_owned(OWNED);
 
-/// The extras positions this element reads as a DOM field of its own (§6.3): an
-/// extras `"quote"` is the `<img>`'s `title`, while `class` / `id` / `style` are
-/// the universal ones. Every other extras path is already a field of its own.
-const ELEMENT_READS: &[(SpecsKey, &str)] = &[(SpecsKey::Quote, "title")];
+/// No extras position is read as a DOM field of this element's own (§6.3):
+/// `class` / `id` / `style` are universal and already spelled as themselves, and
+/// the quote is neutral (`specs.quote`), like the tick (D-7).
+const ELEMENT_READS: &[(SpecsKey, &str)] = &[];
 
 // --- Configuration ---
 

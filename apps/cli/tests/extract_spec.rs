@@ -804,8 +804,9 @@ only = ["price", "price..amount"]
 
 /// S2-8.4 / ADR-0014: extraction reads the **projection**, so a `field.*`
 /// override renames the row exactly as it renames the rendered prop (D-4). The
-/// processor's own `reference_id` / `citation_number` / `locator` never ship
-/// under those names once an entry renames them.
+/// processor's own `reference_id` / `citation_number` never ship under those names
+/// once an entry renames them, and neither does the entry's own `locator` (§7.3:
+/// a location is the author's field, not the plugin's).
 #[test]
 fn the_projection_names_the_extracted_fields() {
     let dir = project(

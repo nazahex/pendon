@@ -10,23 +10,25 @@ references:
     language: en
 ---
 
-The citation head is `[^reference_id "locator"]`: the caret is the slot tag, the
-bare content is the reference and the quoted one the locator (§7.3). They land in
-the preset's two fields, so the node carries `reference_id` and `locator`, and an
-adjacent extras head decorates the node without ever writing them (§6.2):
+The citation head is `[^reference_id]`: the caret is the slot tag and the bare
+content is the reference (§7.3). Every other position is an ordinary field of the
+author's — the bracket's quote included — so a head never loses content for want
+of a preset row, and an adjacent extras head decorates the node without ever
+writing the reference (§6.2):
 
 Minim [^book "hlm. 45"]@@citeX{.paper, #smith, note: "short"} esse do ut anim proident.
 
-The locator stays the construct value even when the extras ask for one:
+`locator` is not a cite field any more, so an extras `locator:` prop is an ordinary
+prop like any other — the head's quote stays `bracket.quote`:
 
-[^book "hlm. 45"]@@citeX{locator: "dropped", .thin}
+[^book "hlm. 45"]@@citeX{locator: "kept", .thin}
 
-A locator is part of the citation identity: the same reference with a different
-(or no) locator gets a new number.
+`citation_number` is stable by the reference alone (`stable_fields` defaults to
+`["reference_id"]`), so a second mention keeps the number whatever else differs:
 
 [^book]@@citeX{.repeat}
 
-A repeated `(reference_id, locator)` keeps its `citation_number`:
+A repeated citation keeps its number; only its anchor is new (`cite-<n>`):
 
 [^book]@@citeX{.again}
 
@@ -35,9 +37,9 @@ are ordinary fields of the node (§6.1, D-7):
 
 [^book "hlm. 7"](paperback "Reprint")@@citeX
 
-A head without a reference is an error, not a citation (§7.3): `[^]` and
-`[^"book"]` stay text, and so does a citation of a reference the document does
-not know. The retired `[^^](book "hlm. 45")` spelling is not a citation either —
-its second caret is now the reference:
+A head without a reference is an error, not a citation (§7.3): `[^]` and `[^"book"]`
+stay text, and so does a citation of a reference the document does not know. The
+retired `[^^](book "hlm. 45")` spelling is not a citation either — its second caret
+is now the reference:
 
 [^] and [^"book"] and [^nosuch]

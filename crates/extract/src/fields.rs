@@ -95,10 +95,7 @@ pub fn element(name: &str) -> Option<&'static str> {
 pub const PRESETS: [(&str, &[&str]); 10] = [
     ("anchor", &["href", "title", "type", "inner_text"]),
     ("blockquote", &["type", "inner_text"]),
-    (
-        "cite",
-        &["reference_id", "locator", "citation_number", "type"],
-    ),
+    ("cite", &["reference_id", "citation_number", "type"]),
     ("directive", &["type", "level", "summary", "inner_text"]),
     ("heading", &["depth", "slug", "title", "type", "inner_text"]),
     ("image", &["src", "alt", "width", "height", "type"]),
@@ -156,7 +153,7 @@ mod tests {
     #[test]
     fn an_unknown_element_has_no_preset() {
         assert!(pendon_preset("figure").is_empty());
-        assert_eq!(pendon_preset("cite").len(), 4);
+        assert_eq!(pendon_preset("cite").len(), 3);
     }
 
     #[test]

@@ -9,9 +9,10 @@ references:
 ---
 
 A `field.*` block moves a position (§6.1) and can rename a public field (D-4).
-This entry is the proposal's "simpler version": `reference_id` sits in the tick
-and `locator` in the bare content, while the node publishes them as `ref_id` and
-`loc` and numbers them as `no`:
+This entry puts `reference_id` in the tick and the author's own `locator` in the
+bare content, while the node publishes them as `ref_id` and `loc` and numbers them
+as `no`. `stable_fields = ["reference_id", "locator"]` is what keeps the pair
+meaningful: the identity follows the **names**, never the positions:
 
 Minim [^p. 1 `book`]@@citeShort esse.
 
@@ -23,7 +24,7 @@ stays the author's own field:
 
 [^p. 9]@@citeShort
 
-The same citation seen twice keeps one number, because the identity is still the
-`(reference_id, locator)` pair:
+The same citation seen twice keeps one number, because `stable_fields` lists
+`reference_id` and `locator` and both match:
 
 [^p. 1 `book`]@@citeShort again.

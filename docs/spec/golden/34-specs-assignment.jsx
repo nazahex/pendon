@@ -11,7 +11,7 @@ The entry below assigns all five, so every content lands exactly where it was pu
 <code>class</code> / <code>id</code> / <code>style</code> are the universal DOM fields (§0), the anchor reads the
 quote as its <code>title</code> (§6.2), and the tick stays <code>specs.tick</code> — it is never an id:
 </p>
-<p><a class="cta" href="/docs" id="main" {...{ "specs.tick": "slug-a" }} style="--tone: red" title="Docs Title" type="anchorZ">Kept</a>
+<p><a class="cta" href="/docs" id="main" {...{ "specs.quote": "Docs Title" }} {...{ "specs.tick": "slug-a" }} style="--tone: red" type="anchorZ">Kept</a>
 </p>
 <p>A moved position is the author&#39;s own field, so an element does not read it:
 <code>moveA</code>&#39;s tick is a plain <code>slug</code> attribute and never an id — and the unclaimed

@@ -116,8 +116,25 @@ What is left: the **L37 blocker** below, the maintainer's sandbox replay (see
 
 ## Golden & freeze status (see [`docs/spec/golden/README.md`](docs/spec/golden/README.md))
 
-- Golden fixtures `01–12`, `14–16`, `21–28`, `30–43` are frozen and green; none
-  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (37 fixtures) is the gate.
+- Golden fixtures `01–12`, `14–16`, `21–28`, `30–48` are frozen and green; none
+  `#[ignore]`d. `cargo test -p pendon --test syntax_spec` (42 fixtures) is the gate.
+- The cite-identity pass re-froze `05-cite`, `26-cite-scope`, `27-bind-mdp`,
+  `35-cite-fields`, `37-head-slots-inline` and `43-slot-modifiers` and added
+  `48-cite-stable-fields`: `plugin-cite` no longer has a `locator` — the bracket's
+  quote is an ordinary field — and `citation_number` is stable for
+  `[task.cite] stable_fields` (default `["reference_id"]`, `[]` = one number per
+  occurrence).
+- The universal-field pass re-froze `06-heading`, `28-type-selectors`,
+  `30/31/46/47` and `32-extract-heading` (a heading with no `[slug]` publishes a
+  slug of its text again) plus `34-specs-assignment`'s prose; nothing else moved.
+  `id` / `class` / `style` are the DOM fields themselves (no `specs.*` spelling
+  anywhere, §6.3) and are in no `pendon` preset except `section`'s derived `id`
+  (§0/§10/§12).
+- The neutral-specs pass re-froze `01-extras-head`, `04-anchor`, `08-table-head`
+  and `34-specs-assignment`: an extras `"…"` (the quote) is no longer a `title` on
+  any element — it stays `specs.quote`, exactly like `` `tick` `` stays
+  `specs.tick`; a `title` comes from a slot preset (`paren.quote → title`).
+
 - Phase 3 re-froze `06-heading` (it loses the numbers `plugin-heading` used to
   compute and keeps its authored `number:` props) and `28-type-selectors`
   (dropped `auto_number`, no output change).

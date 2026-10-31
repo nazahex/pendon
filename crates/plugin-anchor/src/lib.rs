@@ -5,7 +5,7 @@ use pendon_extra::{
     append_class, issue_event, modifier_contributions, parse_extras, parse_slots, to_attributes,
     ElementHead, ExtrasAttr, ExtrasHead, ExtrasIssue, ExtrasMatch, FieldConfig, FieldName,
     ModifierConfig, Preset, Slot, SlotContract, SlotError, SlotKind, SlotMatch, SlotPair, SlotPos,
-    SlotTag, SpecsKey, SpecsResolver,
+    SlotTag, SpecsResolver,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 
@@ -295,10 +295,9 @@ fn build_attributes(
         let specs = specs(head.type_marker.as_deref());
         let parsed = to_attributes(head, &specs);
         issues.extend(parsed.issues.iter().cloned());
-        // §6.3: the anchor's own positions — an extras `"title"` is the link's
-        // `title` (at the default path), and `class` / `id` / `style` are the
-        // universal DOM fields.
-        for (key, value) in specs.dom_fields(&parsed.items, &[(SpecsKey::Quote, "title")]) {
+        // §6.3: `class` / `id` / `style` are the universal DOM fields; the quote is
+        // a neutral position, so an extras `"…"` stays `specs.quote` (D-7).
+        for (key, value) in specs.dom_fields(&parsed.items, &[]) {
             if HEAD.owns(key) {
                 // D-12's built-in collision: `href` is written by the link, so a
                 // `href:` extra is an `Error`, and `field.override.href` (D-4) is
@@ -410,7 +409,7 @@ fn flush_text(normal: &mut String, out: &mut Vec<Event>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pendon_extra::{AttrValue, FieldConfig, Path};
+    use pendon_extra::{AttrValue, FieldConfig, Path, SpecsKey};
     use pendon_renderer_solid::TypedComponent;
 
     /// §7.2's preset, position by position (S2-2.5). This is the element's
@@ -907,15 +906,18 @@ mod tests {
     }
 
     #[test]
-    fn head_title_wins_over_an_extras_title() {
+    fn an_extras_quote_is_not_a_title() {
         let emitted = emit("@[foo](/docs \"Head title\")@anchor{\"Extras title\"}");
         // `@anchor{…}` is not a head (single `@`), so it stays literal text.
         assert_eq!(value(&emitted, "title"), Some("Head title"));
         assert!(emitted.text.contains("@anchor"));
 
+        // §6.2: the quote is neutral, like the tick — the head's own `("…")` is the
+        // `title` (its slot preset) and an extras `"…"` stays `specs.quote`.
         let emitted = emit("@[foo](/docs \"Head title\")@@anchor{\"Extras title\"}");
         assert_eq!(value(&emitted, "title"), Some("Head title"));
-        assert!(emitted.mentions("`title`"), "{:?}", emitted.diagnostics);
+        assert_eq!(value(&emitted, "specs.quote"), Some("Extras title"));
+        assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
     }
 
     /// §6.2: the tick position carries no default meaning — an extras

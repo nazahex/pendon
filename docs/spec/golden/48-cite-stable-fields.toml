@@ -1,0 +1,40 @@
+[[task]]
+name = "Golden 48"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "frontmatter,cite,markdown"
+format = "solid"
+
+[task.cite]
+reference_source = "internal"
+# §7.3: the fields whose values make `citation_number` stable, in the order they
+# are compared. The plugin has no `locator` of its own — which fields a location
+# has is the author's decision, and so is whether it splits the number.
+stable_fields = ["reference_id", "locator_type", "locator_value", "author"]
+
+# `citeX`: the head carries the reference and the two halves of a location, the
+# extras quote the author. One slot key voids the preset (D-7), so the bare
+# content is re-declared. The override renames the public field only (D-4).
+[[task.cite.custom]]
+type = ["citeX"]
+name = "Cite"
+imports = "import { Cite } from '@comp/Cite'"
+template = "<Cite reference={references[\"{attrs.ref_id_overriden}\"]} {...attrs} />"
+field.bracket.bare = "reference_id"
+field.paren.bare = "locator_type"
+field.paren.quote = "locator_value"
+field.specs.quote = "author"
+field.override.reference_id = "ref_id_overriden"
+
+# `citeY`: the same task-wide `stable_fields`, but this entry produces only two of
+# the four names. A listed field the citation does not carry counts as absent, so
+# two `citeY` citations that both leave `locator_type` out still match — and a
+# `citeY` never matches a `citeX`, because their `locator_type` differs (absent vs
+# set).
+[[task.cite.custom]]
+type = ["citeY"]
+name = "CiteY"
+imports = "import { CiteY } from '@comp/CiteY'"
+template = "<CiteY {...attrs} />"
+field.specs.tick = "author"
+field.paren.quote = "reference_id"

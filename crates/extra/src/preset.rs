@@ -456,8 +456,9 @@ mod tests {
 
     #[test]
     fn a_position_may_move_to_another_slot_content() {
-        // §7.3's "simpler version": `reference_id` moves from bare to tick, and
-        // `locator` has to be redefined because the preset is void.
+        // A two-row preset of this test's own (a moved pair of names, the shape
+        // §7.3's `field.*` block produces): the quote row has to be redefined
+        // because one assignment voids the whole preset.
         const CITE_PRESET: &[Preset] = &[
             Preset::new(
                 Slot::Bracket,

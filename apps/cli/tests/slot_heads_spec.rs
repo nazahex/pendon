@@ -166,8 +166,8 @@ fn published(element: &str, source: &str) -> String {
             // §7.3: a citation needs a reference. It is injected as the merged
             // reference set the real chain would have collected, so the case
             // stays one legal head and nothing else — and the `citations`
-            // binding the solid renderer exports is read alongside the node,
-            // because that is where `locator` lives.
+            // binding the solid renderer exports is read alongside the node, so
+            // the reference and the ordinal are checked too.
             let mut ctx = pendon_plugin_cite::CitationContext::new(
                 serde_json::json!({ "v-bare": { "id": "v-bare", "title": "Sentinel" } }),
                 pendon_plugin_cite::CiteOptions::default(),

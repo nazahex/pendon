@@ -13,8 +13,8 @@
 //! element did not read, and `@@` surviving in the output means the head fell
 //! back to literal text (§4.3).
 //!
-//! Element-specific projection is *not* what this test checks (an image carries
-//! the quote as `data-title`, a heading lets its own head win the title): `#id`
+//! Element-specific projection is *not* what this test checks (only an element's
+//! **slot** preset publishes a `title`, never the extras quote): `#id`
 //! is universal (§6.3), so every element publishes it as `id`, and the per-row
 //! expectations are the element's documented output, while the *same* two
 //! checks — the positions are accepted, nothing is literal — run for every row.
@@ -53,7 +53,7 @@ const CASES: &[Case] = &[
         expect: &[
             r#"class="cls""#,
             r#"id="elem-x""#,
-            r#"title="Title X""#,
+            r#"specs.quote": "Title X""#,
             r#"type="anchorX""#,
         ],
     },
@@ -65,7 +65,7 @@ const CASES: &[Case] = &[
         expect: &[
             r#"alt="Alt""#,
             r#"class="cls""#,
-            r#"data-title="Title X""#,
+            r#"specs.quote": "Title X""#,
             r#"id="elem-x""#,
             r#"type="imageX""#,
         ],
@@ -85,13 +85,13 @@ name = "Cite"
 imports = "import { Cite } from '@comp/Cite'"
 template = "<Cite {...attrs} />"
 "#,
-        // §7.3/§6.3: the reference the head assigns, the universal `id` and the
-        // quote as its `title`.
+        // §7.3/§6.3: the reference the head assigns, the universal `id`, and the
+        // quote staying where it lands (no element reads it, §6.2).
         expect: &[
             r#"reference_id="alpha""#,
             r#"id="elem-x""#,
             r#"class="cls""#,
-            r#"title="Title X""#,
+            r#"specs.quote": "Title X""#,
         ],
     },
     Case {
@@ -99,7 +99,8 @@ template = "<Cite {...attrs} />"
         plugins: "heading,markdown",
         source: "##[h](\"HT\")@@headingX{HEAD} Heading text\n",
         extra: "",
-        // The heading's own `("HT")` wins the title (§6.2); the rest is extras.
+        // The heading's own `("HT")` slot is its `title` (§6.2); the extras quote
+        // is a neutral position and stays dotted.
         expect: &[
             r#"class="cls""#,
             r#"id="elem-x""#,
@@ -162,11 +163,11 @@ template = "<Cite {...attrs} />"
         source: "@@tableX{HEAD}\n| A | B |\n| :--- | :--- |\n| a | c |\n",
         extra: "",
         // §8/§9.1: the `<table>` head is the decorator line above the table, so
-        // the quote lands as `title` and every specs position reaches the node.
+        // every specs position reaches the node and the quote stays dotted.
         expect: &[
             r#"class="cls""#,
             r#"id="elem-x""#,
-            r#"title="Title X""#,
+            r#"specs.quote": "Title X""#,
             r#"type="tableX""#,
         ],
     },
@@ -179,7 +180,7 @@ template = "<Cite {...attrs} />"
         expect: &[
             r#"class="cls""#,
             r#"id="elem-x""#,
-            r#"title="Title X""#,
+            r#"specs.quote": "Title X""#,
             r#"type="cellX""#,
         ],
     },

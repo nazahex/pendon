@@ -363,12 +363,30 @@ pub fn build_cite_options(
             imports: entry.imports.clone(),
         })
     })?;
+    // §7.3: `stable_fields` is a list of **public field paths**, validated like
+    // every other user-written name, so a typo fails the load instead of quietly
+    // making every citation of a reference look alike.
+    let stable_fields = match config.stable_fields.as_deref() {
+        None => defaults.stable_fields.clone(),
+        Some(names) => names
+            .iter()
+            .enumerate()
+            .map(|(index, name)| {
+                pendon_extra::Path::from_dotted(name).map_err(|error| {
+                    format!(
+                        "task.cite.stable_fields[{index}]: `{name}` is not a field path: {error}"
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+    };
     Ok(CiteOptions {
         references_export,
         citations_export,
         references_scope,
         custom,
         external_references,
+        stable_fields,
     })
 }
 
@@ -1644,6 +1662,54 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
             "{err}"
         );
         assert!(err.contains("cited") && err.contains("all"), "{err}");
+    }
+
+    /// §7.3: `stable_fields` is an ordered list of public field paths. Unset keeps
+    /// the plugin's `["reference_id"]`; `[]` is legal (nothing is stable); a name
+    /// that is not a field path is a load error that names its index.
+    #[test]
+    fn cite_reads_and_validates_the_stable_fields() {
+        let cite: CiteTaskConfig =
+            toml::from_str("reference_source = \"internal\"\n").expect("valid cite config");
+        let options = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
+            .expect("valid cite options");
+        assert_eq!(
+            options
+                .stable_fields
+                .iter()
+                .map(pendon_extra::Path::dotted)
+                .collect::<Vec<_>>(),
+            ["reference_id"],
+            "unset must keep the plugin default"
+        );
+
+        let cite: CiteTaskConfig = toml::from_str(
+            "stable_fields = [\"reference_id\", \"locator_type\", \"specs.quote\"]\n",
+        )
+        .expect("valid cite config");
+        let options = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
+            .expect("valid cite options");
+        assert_eq!(
+            options
+                .stable_fields
+                .iter()
+                .map(pendon_extra::Path::dotted)
+                .collect::<Vec<_>>(),
+            ["reference_id", "locator_type", "specs.quote"],
+            "the order is the config's"
+        );
+
+        let cite: CiteTaskConfig = toml::from_str("stable_fields = []\n").expect("empty list");
+        let options = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
+            .expect("an empty list is legal: nothing is stable");
+        assert!(options.stable_fields.is_empty());
+
+        let cite: CiteTaskConfig =
+            toml::from_str("stable_fields = [\"a..b\"]\n").expect("valid toml");
+        let err = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
+            .expect_err("not a field path");
+        assert!(err.contains("task.cite.stable_fields[0]"), "{err}");
+        assert!(err.contains("`a..b` is not a field path"), "{err}");
     }
 
     /// `image` reads its one `img` layer and rejects the retired `figure` layer

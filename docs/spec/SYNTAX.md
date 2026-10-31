@@ -331,9 +331,10 @@ ws          = 1*( " " | "\t" )
 > `class`, `id` and `style` are the **universal DOM fields**: the head publishes
 > them under the attribute's own name, so every consumer — HTML, JSX, JSON and AST
 > — prints `class="extra class" id="id" style="--style-var: 2rem"` and nothing is
-> renamed on the way out. What the tick and the quote become is the element's own
-> decision (§6.1, §6.3, §7.x): with no element claiming them they stay `specs.tick`
-> and `specs.quote`. This exact map is asserted by
+> renamed on the way out. Neither the tick nor the quote carries a default
+> meaning: no element reads them (§6.2), so they stay `specs.tick` / `specs.quote`
+> — a `title` is a slot preset instead (`paren.quote → title`, §6.6). This exact
+> map is asserted by
 > `crates/extra/tests/extras_spec.rs::spec_worked_example`.
 
 ### 5.2 Slots
@@ -486,12 +487,12 @@ the same seven rows are the doc of `Specs` in `crates/extra/src/typed.rs`.
 
 Three of the seven are the **universal DOM fields**: `class`, `id` and `style` are
 published under the attribute's own name, so no renderer has a rename to do and no
-element prefixes them (§6.5). The other four have no meaning of their own — what a
-title or a slot content _is_ belongs to the element, which may read it in §6.2 and
-project it onto a field of its own (an anchor's quote → its `title`). The tick is
-the neutral position: no element reads it as a slug and nothing derives an id from
-it, so it stays in the map under its dotted spelling unless an element explicitly
-names it.
+element prefixes them (§6.5). The other four are positions, not fields: the slot
+groups (`bracket.bare` / `paren.bare`) and the two **neutral** specs positions. No
+element reads the tick as a slug or the quote as a title, and nothing derives an id
+from either, so both stay in the map under their dotted spellings (`specs.tick` /
+`specs.quote`) unless an element explicitly names one — a `title` is a slot preset
+(`paren.quote → title`, §6.6, §7.x), never the extras quote.
 
 Each slot has all three contents as positions — `bracket.bare`,
 `bracket.quote`, `bracket.tick`, `paren.bare`, `paren.quote`, `paren.tick` — and
@@ -514,13 +515,13 @@ public path, not a slot's home. There is no separate naming key (§14).
 `crates/extra::field`), and only three of their **default** paths carry meaning:
 `class` / `id` / `style` are the DOM fields themselves — the element's class list,
 its id and its inline style (§6.3). `specs.tick` / `specs.quote` are neutral —
-an element that wants a quote as its title names the position (§7), and the tick is
-never an id.
+neither is ever read as a slug, a title or an id; an element that wants one names
+the position explicitly in its own head (§7).
 
 Once an entry assigns a position elsewhere (`field.specs.quote = "_note"`,
 `field.specs.id = "foo.id"`), that content is a **public field of the author's
 own**: nothing is published at the default path any more, and the element neither
-reads it (an anchor's `title`) nor writes it as a DOM field — `foo.id` stays
+reads it as a field of its own nor writes it as a DOM field — `foo.id` stays
 `foo.id`, because the author already named it. `Specs::element_path` in
 `crates/extra::typed` is that boundary: it answers the default path for an
 unassigned position and `None` for a moved one.
@@ -842,8 +843,8 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
   and `paren.tick` are read as bare fields under their slot-qualified names, so
   no content of a claimed head is dropped (D-7).
 - `href` is a **built-in** field: an extras `href:` is `Severity::Error` naming
-  `field.override.href` (§13, D-12 rule 5). `title` is not — the extras
-  `"quote"` is the link's title only when the head has none (§6.2).
+  `field.override.href` (§13, D-12 rule 5). `title` is not built-in either: it is
+  `paren.quote`, and an extras `"quote"` is not a title at all (§6.2).
 - Extras attach to the `<a>`, and the construct head wins over a same-named extras
   item (§6.2). An `id` comes from the universal extras `#id` and from nowhere else
   (§6.2): the tick is a field of the author's (`specs.tick`).
@@ -864,52 +865,85 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
 ```ebnf
 cite     = "[" tag bracket [ "(" slots ")" ] extras?
 tag      = "^"                                  # inside the bracket (§5.3)
-bracket  = slots                                # reference_id, locator
+bracket  = slots                                # reference_id, then fields
 extras   = §5 extras-head                       # the shared {…} / @@type{…} head
 ```
 
 ```mdp
-[^reference_id "locator" `bracket tick`](paren bare "paren quote" `paren tick`)
+[^reference_id "bracket quote" `bracket tick`](paren bare "paren quote" `paren tick`)
 ```
 
 - The tag is the caret **inside** the bracket: `[^book]` is a citation, `[book]`
   is not (`plugin-markdown`'s text), and `[^^](book)` is not either — its second
   caret becomes the reference `^` (§14).
-- `bracket.bare` → `reference_id`, `bracket.quote` → `locator`. **`reference_id`
-  is mandatory**: a head that assigns it nowhere (an empty bracket, a quoted-only
-  one, or an entry whose `field.*` voided the preset and did not redefine it) is
-  an `Error` and the text stays as written. `locator` is optional.
-- Every other claimed position (the tick, the whole paren) is an ordinary field:
-  unassigned positions keep their slot-qualified path (`bracket.tick`,
-  `paren.bare`, `paren.quote`, `paren.tick`) per D-7.
-- Positions are movable: `field.bracket.tick = "reference_id"` +
-  `field.bracket.quote = "locator"` is the documented way to put the reference in
-  the tick (voiding the preset renames **every** row, so both must be assigned —
-  §6.1). The processor reads `reference_id` / `locator` **by name**, so a moved or
-  publicly renamed field (`field.override.reference_id = "ref_id"`) never changes
-  numbering or identity (D-4).
+- `bracket.bare` → `reference_id`. **`reference_id` is mandatory**: a head that
+  assigns it nowhere (an empty bracket, a quoted-only one, or an entry whose
+  `field.*` voided the preset and did not redefine it) is an `Error` and the text
+  stays as written.
+- Every other claimed position (the bracket's quote and tick, the whole paren) is
+  an ordinary field of the author's: unassigned positions keep their
+  slot-qualified path (`bracket.quote`, `bracket.tick`, `paren.bare`,
+  `paren.quote`, `paren.tick`) per D-7. **A location is not a cite field** — the
+  form of one varies per author, so a document that wants one names it
+  (`field.bracket.quote = "locator"`, `field.paren.bare = "locator_type"`, …) and
+  decides itself whether it belongs to the citation's identity.
+- Positions are movable: `field.bracket.tick = "reference_id"` is the documented
+  way to put the reference in the tick (voiding the preset renames **every** row, so
+  a position the entry still wants must be assigned too — §6.1). The processor
+  reads `reference_id` **by name**, so a moved or publicly renamed field
+  (`field.override.reference_id = "ref_id"`) never changes numbering or identity
+  (D-4).
 - Extras attach to the citation node and MUST touch the closing `)`; an item
   that spells a name the head produced is dropped with a warning (§6.2). An
   extras `#id` is the node's `id` — the universal DOM field, not a `cite-id`
-  (§6.2, §6.3) — and an extras quote is its `title`. The tick is a field of the
-  author's: `specs.tick`.
-- The citation's fields are `reference_id`, `locator` and `citation_number` (the
-  display ordinal, assigned by the processor; a repeated
-  `(reference_id, locator)` keeps its number). There is no `instance_index`
-  (§14) — a per-occurrence ordinal is `number`'s job (§10.5).
+  (§6.2, §6.3) — and the neutral extras positions stay the author's own fields
+  (`specs.tick`, `specs.quote`).
+- The citation's own fields are `reference_id` and `citation_number` — the display
+  ordinal, assigned by the processor. Its identity is `[task.cite]
+  stable_fields`, an ordered list of public field paths (before `field.override`,
+  D-4): a repeated identity keeps its number, a citation whose listed fields
+  differ gets a new one, and a listed field the citation does not carry counts as
+  absent. The default is `["reference_id"]`; `[]` means nothing is stable, so
+  every physical occurrence gets a fresh number. Both the head's positions
+  (`bracket.quote`, `paren.tick`) and the extras' paths (`specs.quote`, or the name
+  `field.specs.<k>` assigned) are addressable:
+
+  ```toml
+  [task.cite]
+  stable_fields = ["reference_id", "locator_type", "locator_value", "author"]
+
+  [[task.cite.custom]]
+  type = ["citeX"]
+  name = "Cite"
+  imports = "import { Cite } from '@comp/Cite'"
+
+  field.bracket.bare = "reference_id" # one slot key voids the preset: re-declare it
+  field.paren.bare = "locator_type"
+  field.paren.quote = "locator_value"
+  field.specs.quote = "author" # the extras `"Smith"`
+  field.override.reference_id = "ref_id"
+  ```
+
+  `[^book "p. 1"](paper "2001")@@citeX{"Smith"}` then numbers by all four fields, so
+  the same citation seen twice keeps one number and any of the four changing gives
+  it a new one. The complete example — with a second component entry (`citeY`)
+  that produces only two of the four names, so the other two count as absent — is
+  golden `48-cite-stable-fields`.
+- There is no `instance_index` (§14) — a per-occurrence ordinal is `number`'s job
+  (§10.5).
 - Without a `cite` component the built-in markup is
   `<sup><a href="#1-book" id="cite-1">[1]</a></sup>`: it ships no class and no
   prefix, because a site that wants its own spelling configures a `Cite`
   component (§7.3 config above, §14). `class` and `id` are the universal DOM
   fields, so they appear on the `<sup>` only when the head supplied them, and
   the `cite-<n>` backlink anchor is the markup's own. The fields are kept: the
-  four positions the markup has no prop for are written anyway, as
+  five positions the markup has no prop for are written anyway, as
   `data-<slot>-<kind>` (`bracket.tick` → `data-bracket-tick`). A
   dotted path is not an attribute name in JSX (§6.3) and raw markup cannot spread
   one, so the `data-` prefix — the convention the built-in `<img>` already uses
   for a key it has no attribute for — is what keeps a citation head from losing
-  content (fixture 37). `reference_id` stays the `href`, `citation_number` the
-  label, and `locator` the `citations` binding (§20), as before.
+  content (fixture 37). `reference_id` stays the `href` and `citation_number` the
+  label; a row of the `citations` binding (§20) is exactly that pair.
 
 ### 7.4 Heading (`plugin-heading`)
 
@@ -1668,7 +1702,7 @@ table is the only place they are recorded.
 | `backtick_key` / `quote_key` / `bracket_key` / `parentheses_key`        | naming is `field.*` only (§6.1), so the four keys are unknown and a config that still sets them fails to load (§13).                                                                                                 |
 | `[^^](ref "loc")` cite head                                             | the caret is the tag and sits inside the bracket (§7.3), so the old form's second caret becomes the reference; a cite head without `reference_id` is an `Error`.                                                     |
 | `[task.cite]` `citation_class` / `ref_id_prefix` / `citation_id_prefix` | the built-in `<sup>` markup's class and prefixes are constants (§7.3), so the three keys are unknown and a config that sets them fails to load (§13).                                                                |
-| `citation_number`'s sibling `instance_index`                            | the per-occurrence ordinal is not a citation field (§7.3); the export carries `reference_id`, `locator` and `citation_number` only.                                                                                  |
+| `citation_number`'s sibling `instance_index`                            | the per-occurrence ordinal is not a citation field (§7.3); the export carries `reference_id` and `citation_number` only.                                                                                             |
 | `recommended = <bool>` on an extract rule                               | `preset` is the only spelling (§21 rule 4), so a stale boolean fails to load with an error naming it (§13).                                                                                                          |
 
 ## 15. Open decisions
@@ -1939,13 +1973,13 @@ name        = ( ALPHA | "_" | "$" ) { ALPHA | DIGIT | "_" | "$" }
 
 Current producers:
 
-| Name                                    | Producer                     | Notes                                                                                                  |
-| --------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `frontmatter`                           | `renderer-solid` (automatic) | only when the document has frontmatter                                                                 |
-| `headings`                              | `renderer-solid` (automatic) | built from the AST (§21); only when it has headings; nested shape                                      |
-| `references`, `citations`               | `plugin-cite` (§7.3)         | names configurable; references first; a `citations` row is `{reference_id, locator?, citation_number}` |
-| `[[task.bind.inject]]`'s `export`       | `plugin-bind` (§19)          | whole file payloads; Solid tasks only                                                                  |
-| `[[task.<element>.extract]]`'s `export` | `plugin-extract` (§21)       | one flat row per occurrence; Solid tasks only                                                          |
+| Name                                    | Producer                     | Notes                                                                                        |
+| --------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------- |
+| `frontmatter`                           | `renderer-solid` (automatic) | only when the document has frontmatter                                                       |
+| `headings`                              | `renderer-solid` (automatic) | built from the AST (§21); only when it has headings; nested shape                            |
+| `references`, `citations`               | `plugin-cite` (§7.3)         | names configurable; references first; a `citations` row is `{reference_id, citation_number}` |
+| `[[task.bind.inject]]`'s `export`       | `plugin-bind` (§19)          | whole file payloads; Solid tasks only                                                        |
+| `[[task.<element>.extract]]`'s `export` | `plugin-extract` (§21)       | one flat row per occurrence; Solid tasks only                                                |
 
 The automatic `headings` outline used to be injected into the event stream by
 `plugin-extract-heading`; the renderer now builds it from the `Heading` nodes

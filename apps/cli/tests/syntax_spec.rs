@@ -419,10 +419,10 @@ fn golden_34_specs_assignment() {
 }
 
 /// §16.3 fixture 35: cite's fields under a `field.*` block (S2-4.4, §7.3). The
-/// entry moves `reference_id` to the tick and `locator` to the quote, and
-/// publishes them as `ref_id` / `loc` and the number as `no` (D-4) — the
-/// processor still numbers off its own names, so the identity and the ordinals
-/// are unchanged.
+/// entry moves `reference_id` to the tick and names the quote `locator` (a
+/// location is the author's field, not the plugin's), publishing them as `ref_id`
+/// / `loc` and the number as `no` (D-4); `stable_fields` lists both, so the
+/// identity follows the names, never the positions.
 #[test]
 fn golden_35_cite_fields() {
     assert_fixture("35-cite-fields");
@@ -440,9 +440,9 @@ fn golden_36_table_slots() {
 /// §16.3 fixture 37: the **inline** element group reads its head whole
 /// (S2-4.12, D-7). Anchor, image and citation each carry all six positions —
 /// bare, quote and tick in both groups — so every value is either a preset field
-/// (`inner_text` / `href` / `title`, `alt` / `src`, `reference_id` / `locator`)
-/// or a slot-qualified bare field (`bracket.tick`, `paren.quote`, …). The
-/// built-in `<sup>` writes the four positions it has no prop for, so not one
+/// (`inner_text` / `href` / `title`, `alt` / `src`, `reference_id`)
+/// or a slot-qualified bare field (`bracket.quote`, `paren.tick`, …). The
+/// built-in `<sup>` writes the five positions it has no prop for, so not one
 /// value is lost for want of a component.
 #[test]
 fn golden_37_head_slots_inline() {
@@ -541,4 +541,15 @@ fn golden_46_number_fields() {
 #[test]
 fn golden_47_number_overrides() {
     assert_fixture("47-number-overrides");
+}
+
+/// §16.3 fixture 48: `[task.cite] stable_fields` (§7.3). `citation_number` is
+/// stable for the fields the task lists, in comparison order; the plugin has no
+/// `locator` of its own, so the entry decides which positions carry a location
+/// and whether it splits the number. `citeX` produces all four listed names,
+/// `citeY` only two, which freezes "a listed field the citation does not carry
+/// counts as absent".
+#[test]
+fn golden_48_cite_stable_fields() {
+    assert_fixture("48-cite-stable-fields");
 }

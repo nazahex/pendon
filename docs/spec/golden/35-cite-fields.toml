@@ -7,10 +7,13 @@ format = "solid"
 
 [task.cite]
 reference_source = "internal"
+# §7.3: the identity is names, not positions — `reference_id` follows the tick and
+# `locator` is the author's own field, listed so it still splits the number.
+stable_fields = ["reference_id", "locator"]
 
-# §7.3: one slot assignment voids the preset (D-7), so both fields are redefined;
-# the overrides publish them under shorter names (D-4). The processor is not
-# affected by either — it reads `reference_id` / `locator` by name.
+# One slot assignment voids the preset (D-7), so both positions are redefined; the
+# overrides publish them under shorter names (D-4). The processor is not affected
+# by either — it reads `reference_id` by name.
 [[task.cite.custom]]
 type = ["citeShort"]
 name = "CiteShort"

@@ -10,7 +10,7 @@ extra HTML attributes, and external reference files.
 
 ## What This Plugin Does
 
-- Parses the tag-and-slots head `[^reference_id]` / `[^reference_id "locator"]`
+- Parses the tag-and-slots head `[^reference_id]` / `[^reference_id "location"]`
   (§7.3 of `docs/spec/SYNTAX.md`), including every other slot position as an
   ordinary field
 - Maintains a **shared citation context** so citations in image captions, blockquotes, and other sub-pipelines share the same numbering
@@ -19,15 +19,15 @@ extra HTML attributes, and external reference files.
 - Supports extra classes, IDs, data attributes, and CSS custom properties on each citation
 - Loads references from frontmatter YAML or external YAML files
 - Filters the `references` export with `references_scope` (`cited` / `all`)
-- Assigns `citation_number` and deduplicates it by the `(reference_id, locator)`
-  tuple only
-- Keeps the processor's two inputs (`reference_id`, `locator`) independent of
-  where the head puts them and of how they are published (`field.*`, D-4)
+- Assigns `citation_number` and deduplicates it by `[task.cite] stable_fields`
+  (default `["reference_id"]`; `[]` gives every occurrence its own number)
+- Keeps the processor's one input (`reference_id`) independent of where the head
+  puts it and of how it is published (`field.*`, D-4)
 - Emits diagnostics when a referenced ID is not found
 - Declares its slot contract and preset assignment as data (`pub const HEAD`,
   `crates/extra`'s `ElementHead`) — the single copy of §7.3's
-  `bracket.bare → reference_id` / `bracket.quote → locator` mapping, plus
-  `citation_number` as the one field the processor **owns** (D-12 rule 5)
+  `bracket.bare → reference_id` mapping, plus `citation_number` as the one field
+  the processor **owns** (D-12 rule 5)
 
 ## Recommended Plugin Order
 
@@ -63,6 +63,11 @@ According to recent research [^suryana-2026], software engineering is evolving.
 
 ### Citation with Location
 
+A location is an ordinary field: it sits in whichever position the document names
+for it (`field.bracket.quote = "locator"` in golden `35-cite-fields`, which also
+lists it in `stable_fields`), and the bracket's quote keeps it as `bracket.quote`
+when nothing is configured.
+
 ```md
 As noted in the literature [^suryana-2026 "hlm. 45"], this trend is accelerating.
 ```
@@ -73,10 +78,12 @@ As noted in the literature [^suryana-2026 "hlm. 45"], this trend is accelerating
 See [^suryana-2026 "hlm. 123"](paperback){.highlight, .urgent, #my-cite, foo: "bar", --color: "red"}
 ```
 
-The citation head is the bracket, whose tag is the caret: `[^reference_id "locator"]`.
-`reference_id` is **mandatory** and `locator` optional; every other position (the
-tick, the whole paren) is an ordinary field of the node. The extras head that may
-follow it uses the shared `{…}` syntax:
+The citation head is the bracket, whose tag is the caret: `[^reference_id]`.
+`reference_id` is **mandatory**; every other position (the bracket's quote and
+tick, the whole paren) is an ordinary field of the node. There is no built-in
+location field — the form of one varies per author, so a document names it itself
+(see [Stable Fields](#stable-fields-73)). The extras head that may follow the
+bracket uses the shared `{…}` syntax:
 
 - `.class` — appended to the class list; `#id` — the extra ID
 - `key: "value"` — extra props; `--css-var: "value"` — CSS custom properties
@@ -101,31 +108,76 @@ slug or an id. How the remaining keys are emitted depends on the render target:
 
 ### The Node's Fields
 
-A citation node carries the preset fields plus the number the processor owns:
+A citation node carries the preset field plus the number the processor owns:
 
-| Field             | Meaning                                                                          |
-| :---------------- | :------------------------------------------------------------------------------- |
-| `reference_id`    | The reference the head names. Mandatory (§7.3).                                  |
-| `locator`         | The optional quoted location; part of the identity.                              |
-| `citation_number` | Display ordinal `[1], [2]`, deduplicated by the `(reference_id, locator)` tuple. |
+| Field             | Meaning                                                                  |
+| :---------------- | :----------------------------------------------------------------------- |
+| `reference_id`    | The reference the head names. Mandatory (§7.3).                          |
+| `citation_number` | Display ordinal `[1], [2]`, deduplicated by `stable_fields` (see below). |
 
 ```md
-First mention [^book "p. 1"] and second mention [^book "p. 1"] both get [1],
+First mention [^book] and second mention [^book] both get [1],
 but they are anchors `cite-1` and `cite-2`.
-Different location [^book "p. 2"] gets [2].
+Another reference [^paper] gets [2].
 ```
 
-Deduplication follows academic practice (CSL, IEEE, Vancouver): the tuple is
-`(reference_id, locator)`, never `reference_id` alone.
+Every other position is the author's own field (`bracket.quote`, `paren.tick`, …),
+so a location is whatever the document calls it — `plugin-cite` has no opinion.
 
-- same `reference_id` + same `locator` -> same `citation_number`
-- same `reference_id` + different `locator` -> **different** `citation_number`
-- `locator` present vs. absent -> **different** `citation_number`
-
-Neither position is fixed: `field.bracket.tick = "reference_id"` moves it (§6.1),
-and `field.override.reference_id = "ref_id"` renames it publicly (D-4). The
-processor reads the two names, so numbering is unaffected by either — see golden
+`reference_id` is not fixed either: `field.bracket.tick = "reference_id"` moves it
+(§6.1), and `field.override.reference_id = "ref_id"` renames it publicly (D-4). The
+processor reads the name, so numbering is unaffected by either — see golden
 `35-cite-fields`.
+
+## Stable Fields (§7.3)
+
+`citation_number` is stable for a repeated **identity**, and the identity is
+whatever `[task.cite] stable_fields` lists — public field paths, in the order they
+are compared:
+
+```toml
+[task.cite]
+stable_fields = ["reference_id", "locator_type", "locator_value", "author"]
+
+[[task.cite.custom]]
+type = ["citeX"]
+name = "Cite"
+imports = "import { Cite } from '@comp/Cite'"
+template = "<Cite reference={references["{attrs.ref_id}"]} {...attrs} />"
+
+field.bracket.bare = "reference_id" # one slot key voids the preset: re-declare it
+field.paren.bare = "locator_type"
+field.paren.quote = "locator_value"
+field.specs.quote = "author"        # the extras `"Smith"`
+field.override.reference_id = "ref_id"
+```
+
+With that config `[^book "p. 1"](paper "2001")@@citeX{"Smith"}` publishes
+`reference_id`, `locator_type`, `locator_value` and `author`, and all four decide
+its number:
+
+- same four values -> same `citation_number`
+- any of them different -> **different** `citation_number`
+- a listed field the citation does not carry (say `citeY` has no `locator_value`)
+  counts as absent, so two citations that both leave it out still match
+
+The names are the paths **before** `field.override` (D-4), which is what the
+processor reads. Both kinds of position are addressable: a head position
+(`reference_id`, `bracket.quote`, `paren.tick`, or whatever `field.<slot>.<kind>`
+renamed it to) and an extras position (`specs.quote`, or the name
+`field.specs.<k>` gave it). The universal DOM fields `class`, `id` and `style` are
+addressable too.
+
+The defaults matter:
+
+| `stable_fields`         | Meaning                                                  |
+| :---------------------- | :------------------------------------------------------- |
+| unset                   | `["reference_id"]` — one number per reference            |
+| `[]`                    | nothing is stable — every occurrence gets a fresh number |
+| `["reference_id", "…"]` | the listed values, in order                              |
+
+A name that is not a field path (`.a`, `a..b`, `1x`) is a **config error**; golden
+`48-cite-stable-fields` runs the example above end to end.
 
 ## References Configuration
 
@@ -165,13 +217,14 @@ The `reference_file` path supports the same capture group substitution as `input
 
 ### Options
 
-| Key                 | Default       | Description                                                  |
-| :------------------ | :------------ | :----------------------------------------------------------- |
-| `reference_source`  | `frontmatter` | `frontmatter` / `internal` / `external`                      |
-| `reference_file`    | —             | YAML file read when `reference_source = "external"`          |
-| `references_export` | `references`  | Name of the exported reference map (must be a JS identifier) |
-| `citations_export`  | `citations`   | Name of the exported citation list (must be a JS identifier) |
-| `references_scope`  | see below     | `cited` / `all` — which references the export carries (§2.6) |
+| Key                 | Default            | Description                                                  |
+| :------------------ | :----------------- | :----------------------------------------------------------- |
+| `reference_source`  | `frontmatter`      | `frontmatter` / `internal` / `external`                      |
+| `reference_file`    | —                  | YAML file read when `reference_source = "external"`          |
+| `references_export` | `references`       | Name of the exported reference map (must be a JS identifier) |
+| `citations_export`  | `citations`        | Name of the exported citation list (must be a JS identifier) |
+| `references_scope`  | see below          | `cited` / `all` — which references the export carries (§2.6) |
+| `stable_fields`     | `["reference_id"]` | Field paths that make `citation_number` stable (§7.3)        |
 
 ## Custom Components
 
@@ -188,8 +241,8 @@ template = "<Citation reference={references[\"{attrs.reference_id}\"]} {...attrs
 
 The `reference` prop binds the _resolved_ entry from the module-level reference
 export (§2.3), so the component never has to look the id up itself; `{...attrs}`
-spreads the remaining props typed (`citation_number={1}`, `locator="hlm. 45"`,
-plus the extras and any other slot field as the one-key spread
+spreads the remaining props typed (`citation_number={1}`, plus the extras and
+any other slot field as the one-key spread
 `{...{ "bracket.tick": "…" }}`, §6.3). Omit the `template` key and the same shape is
 used as a fallback, with the configured `references_export` name in place of
 `references`.
@@ -205,8 +258,7 @@ Available template attributes:
 | Attribute                 | Description                                                          |
 | :------------------------ | :------------------------------------------------------------------- |
 | `{attrs.reference_id}`    | The reference the head names (§7.3) — or its public override name    |
-| `{attrs.locator}`         | Location string (if provided)                                        |
-| `{attrs.citation_number}` | Display ordinal (1-based, deduplicated by `(reference_id, locator)`) |
+| `{attrs.citation_number}` | Display ordinal (1-based, deduplicated by `stable_fields`)           |
 | `{attrs.bracket.tick}`    | Any other claimed position, under its (moved) field name (D-7)       |
 | `{attrs.class}`           | Space-separated extra classes                                        |
 | `{attrs.id}`              | Extra `#id` from the attribute block (universal, §6.3)               |
@@ -229,11 +281,11 @@ spelling configures a `Cite` component. `class` and `id` are the universal DOM
 fields, so they appear on the `<sup>` only when the head supplied them, and the
 `cite-<n>` backlink anchor is the markup's own, not a field.
 
-The markup is fixed, but the head is not (§7.3, D-7): a position beyond
-`reference_id` / `locator` — `bracket.tick` in the example above — is written on
-the `<a>` as `data-<slot>-<kind>`, because a dotted path is not an attribute name
-in JSX (§6.3) and raw markup cannot spread one. `reference_id` stays the `href`,
-`citation_number` the label, and `locator` the `citations` binding (§20). A head
+The markup is fixed, but the head is not (§7.3, D-7): every position beyond
+`reference_id` — `bracket.tick` in the example above — is written on the `<a>` as
+`data-<slot>-<kind>`, because a dotted path is not an attribute name in JSX (§6.3)
+and raw markup cannot spread one. `reference_id` stays the `href` and
+`citation_number` the label; a `citations` row (§20) is that pair. A head
 therefore never loses a value for want of a component (fixture
 `37-head-slots-inline`).
 
@@ -278,8 +330,8 @@ export const references = {
 };
 
 export const citations = [
-  { "reference_id": "suryana-2026", "citation_number": 1 },
-  { "reference_id": "suryana-2026", "locator": "hlm. 45", "citation_number": 2 }
+  { "citation_number": 1, "reference_id": "suryana-2026" },
+  { "citation_number": 2, "reference_id": "other-2021" }
 ];
 ```
 
@@ -293,7 +345,7 @@ export const citations = [
 
 `references_scope` decides how much of the reference map reaches the
 `references` binding. It has no effect on `citations`, on `citation_number` /
-`reference_id` / `locator` assignment, or on diagnostics.
+`reference_id` assignment, or on diagnostics.
 
 | Value   | Export                                                                         |
 | :------ | :----------------------------------------------------------------------------- |
@@ -350,7 +402,7 @@ name = "CiteShort"
 imports = "import { CiteShort } from '@comp/CiteShort'"
 template = "<CiteShort reference={references["{attrs.ref_id}"]} {...attrs} />"
 field.bracket.tick = "reference_id"   # the preset is void as a whole (D-7)…
-field.bracket.quote = "locator"       # …so both fields are redefined here
+field.bracket.bare = "locator"        # …so a position the entry wants is named here
 field.override.reference_id = "ref_id"
 field.override.citation_number = "no"
 field.override.locator = "loc"
@@ -360,7 +412,7 @@ One slot key voids the whole preset for that entry, so a position it leaves out
 falls back to its qualified name (`bracket.bare`, `paren.bare`, …) and a head
 that then carries no `reference_id` is an `Error` (§7.3). `field.override.*`
 only renames the public field: the renderer applies it to the projection, and the
-processor keeps reading `reference_id` / `locator` (D-4).
+processor keeps reading `reference_id` (D-4).
 
 The complete example is golden `35-cite-fields`; the unconfigured preset is
 `05-cite`.
@@ -371,8 +423,8 @@ The bracket's `|…` run contributes configured fields to the citation (§5.4,
 [ADR-0017](../../docs/decisions/0017-slot-modifiers.md)). The run is **pure
 configuration**, so it contributes last: a field the node already carries wins
 with a `Warning`, `class` accumulates (§6.4) and a `true` contribution becomes a
-bare attribute. The run never writes the reference or the locator, so citation
-identity and numbering are unaffected. A symbol with no
+bare attribute. The run never writes the reference, so citation identity and
+numbering are unaffected. A symbol with no
 `bracket.modifier."<symbol>"` config contributes nothing, and a config-only entry
 (no `name` / `template`) is enough to define one (D-8) — the built-in `<sup>`
 keeps rendering. Golden `43-slot-modifiers` is the end-to-end example.
@@ -389,7 +441,8 @@ keeps rendering. Golden `43-slot-modifiers` is the end-to-end example.
 
 - A head is a slot bracket (`[^id]`, `[^id "loc"]`), not a paren call: the
   retired `[^^](id)` form is literal text (§14)
-- Named parameters beyond `locator` are not supported (use extra attrs instead)
+- A location (`locator`) is not a field of its own: name a position for it
+  (`field.bracket.quote = "locator"`) or use an extras prop
 - Reference files must be valid YAML with string keys at the top level
 - The plugin does not format bibliography entries — that responsibility belongs to the custom bibliography component
 

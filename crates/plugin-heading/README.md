@@ -181,10 +181,10 @@ which this element neither reads nor renames (`Specs::element_path` answers
 [`docs/spec/SYNTAX.md` §6.1](../../docs/spec/SYNTAX.md).
 
 Only the **extras** head is affected: the `[slug]` bracket and `("title")`
-parentheses are §7.4's fixed slots and are not renamed. The element reads the
-`specs.tick` and `specs.quote` positions into `slug` / `title` only while the
-matched entry leaves them on their default paths — move one and it becomes a field
-of the author's own (D-7).
+parentheses are §7.4's fixed slots and are not renamed. The element reads **no**
+neutral extras position: an extras `` `tick` `` stays `specs.tick` and an extras
+`"quote"` stays `specs.quote`, so neither can fill in for a missing slot — the
+`slug` / `title` of a heading come from its own head only (§6.2, §7.4).
 
 ## Slot modifiers (§5.4, D-9)
 

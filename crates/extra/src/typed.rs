@@ -47,9 +47,10 @@ pub enum ExtrasItem {
     Class(String),
     /// `#name`
     Id(String),
-    /// `` `value` `` — mapped to the `tick` name (`slug` by default).
+    /// `` `value` `` — mapped to the `tick` position (`specs.tick` by default).
     Slug(String),
-    /// `"value"` / `'value'` — mapped to the `quote` name (`title` by default).
+    /// `"value"` / `'value'` — mapped to the `quote` position (`specs.quote` by
+    /// default); no element reads it (§6.2).
     Title(String),
     /// `key: value`
     Prop { key: String, value: AttrValue },

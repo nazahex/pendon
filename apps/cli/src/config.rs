@@ -220,6 +220,10 @@ pub struct CiteTaskConfig {
     /// §2.6 of RFC-0002: which references the export carries — `cited` or
     /// `all`. Unset keeps the source-dependent default.
     pub references_scope: Option<String>,
+    /// §7.3: the fields whose values make `citation_number` stable, in the order
+    /// they are compared. Unset is `["reference_id"]`; an empty array means
+    /// nothing is stable, so every occurrence gets a fresh number.
+    pub stable_fields: Option<Vec<String>>,
     /// §11 layer component sets: `[[task.cite.custom]]` (primary layer `cite`).
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.cite.custom_node]`, §14).

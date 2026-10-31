@@ -114,7 +114,7 @@ for interpreting the parsed properties.
   collision itself is reported by the element as `ExtrasIssue::owned_key`.
 - **Specs** — `Specs` / `SpecsResolver`: _where_ each of the head's contents
   lands — the slot groups `bracket` / `paren` and the five specs positions
-  [`SpecsKey`]: `tick` / `quote` (a construct's slug and title) and the universal
+  [`SpecsKey`]: `tick` / `quote` (both neutral — no element reads them) and the universal
   `class` / `id` / `style`. [`Specs::resolve`] is the only read side of the
   entry's `field.*` naming (`field.bracket.bare` / `field.paren.bare` /
   `field.specs.<k>` — §6.1, D-5); an entry that configures nothing keeps the
@@ -129,9 +129,9 @@ for interpreting the parsed properties.
 - **The DOM projection** (`Specs::dom_fields(items, element)`, `src/typed.rs`)
   — the §6.3 boundary: the three universal positions (`class` / `id` / `style`)
   already carry the DOM field's own name as their default path, so nothing is
-  renamed anywhere; an element that reads the neutral positions names them
-  itself (a cite's quote → `title`), and everything else keeps its path
-  (`specs.tick`, `bracket.bare`). Every match is on the **path**, not the
+  renamed anywhere; nothing reads the neutral positions, so they keep their path
+  (`specs.tick`, `specs.quote`, `bracket.bare`) and a `title` is a slot preset
+  (§6.6) instead. Every match is on the **path**, not the
   position, so a `field.specs.<k>` assignment that moved a position (`foo.class`,
   `bar.id`) is left alone — it is the author's field, with no DOM meaning and no
   rename (§6.1). `dom_fields` returns borrowed `(field, value)` pairs, so a

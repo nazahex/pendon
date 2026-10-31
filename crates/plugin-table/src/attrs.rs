@@ -1,7 +1,7 @@
 // src/attrs.rs
 use crate::parser::Align;
 use pendon_core::Event;
-use pendon_extra::{to_attributes, Attrs, BoundDecorator, ExtrasAttr, ExtrasHead, Specs, SpecsKey};
+use pendon_extra::{to_attributes, Attrs, BoundDecorator, ExtrasAttr, ExtrasHead, Specs};
 
 /// The attributes of one table layer (table/caption/thead/tbody/tfoot/row/cell).
 ///
@@ -58,9 +58,9 @@ fn layer_from_attrs(parsed: &Attrs, type_marker: Option<&str>, specs: &Specs) ->
 
     let mut styles: Vec<String> = Vec::new();
     let mut props: Vec<(String, String)> = Vec::new();
-    // §6.3: a layer's own positions — `class` / `id` / `style` are the universal
-    // DOM fields and an extras `"title"` is the `title`.
-    for (key, value) in specs.dom_fields(&parsed.items, &[(SpecsKey::Quote, "title")]) {
+    // §6.3: `class` / `id` / `style` are the universal DOM fields; the quote is a
+    // neutral position, so an extras `"…"` stays `specs.quote` (D-7).
+    for (key, value) in specs.dom_fields(&parsed.items, &[]) {
         match (key, value) {
             ("class", ExtrasAttr::Value(value)) => layer
                 .attrs

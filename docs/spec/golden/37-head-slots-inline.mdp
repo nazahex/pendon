@@ -20,8 +20,9 @@ remaining positions stay fields of their own:
 
 Mid-sentence ![an image "image quote" `image tick`](img.png "image paren quote" `image paren tick`) stays inline.
 
-The citation presets `bracket.bare → reference_id` and `bracket.quote → locator`.
-The built-in `<sup>` has no prop for the other four, so it writes them under the
+The citation presets `bracket.bare → reference_id` and nothing else: a location
+is whatever the document names it, so the bracket's quote stays `bracket.quote`.
+The built-in `<sup>` has no prop for the other five, so it writes them under the
 `data-` prefix — `bracket.tick` becomes `data-bracket-tick`, the spelling a dotted
 path takes when it cannot be a prop (§6.3, §7.3):
 
