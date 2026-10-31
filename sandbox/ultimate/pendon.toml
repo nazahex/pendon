@@ -1,0 +1,7 @@
+[[task]]
+name = "Ultimate Sandbox - Complete Syntaxes"
+plugin = "frontmatter,section,heading,table,image,directive,cite,wiki,anchor,marker,blockquote,list,markdown,latex"
+input = "./src/complete.mdp"
+output = "./out/complete.jsx"
+format = "solid"
+no_cache = true

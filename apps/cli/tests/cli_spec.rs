@@ -1160,3 +1160,97 @@ fn run_task_post_hook_does_not_rerun_for_cached_files() {
         "a changed post_hook must reach already-cached files: {log}"
     );
 }
+
+/// `task.include` merges an included file's `task` content (array form,
+/// `[[task]]`) into the including task before deserialisation.
+#[test]
+fn run_task_include_merges_array_form() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    std::fs::create_dir_all(dir.path().join("src")).expect("src dir");
+    std::fs::write(
+        dir.path().join("src/a.md"),
+        "# [slug](\"T\") Heading\n\nA para.\n",
+    )
+    .expect("source");
+    std::fs::write(
+        dir.path().join("included.toml"),
+        "[[task]]\nmarkdown_strip_comments = true\n",
+    )
+    .expect("included config");
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        "[[task]]\nname = \"Demo\"\ninput = \"./src/a.md\"\noutput = \"./out/a.html\"\nplugin = \"markdown\"\nformat = \"html\"\ninclude = [\"included.toml\"]\n",
+    )
+    .expect("config");
+
+    run_pendon(dir.path()).success();
+    assert!(dir.path().join("out").join("a.html").exists());
+}
+
+/// `task.include` merges an included file's `task` content (table form,
+/// `[[task.anchor.custom]]`) into the including task.
+#[test]
+fn run_task_include_merges_table_form() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    std::fs::create_dir_all(dir.path().join("src")).expect("src dir");
+    std::fs::write(dir.path().join("src/a.md"), "# [slug](\"T\") Heading\n").expect("source");
+    std::fs::write(
+        dir.path().join("included.toml"),
+        "[[task.anchor.custom]]\ntype = [\"AnchorA\"]\nname = \"AnchorComp\"\ntemplate = \"<AnchorComp {...attrs}>{children}</AnchorComp>\"\n",
+    )
+    .expect("included config");
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        "[[task]]\nname = \"Demo\"\ninput = \"./src/a.md\"\noutput = \"./out/a.jsx\"\nplugin = \"anchor\"\nformat = \"solid\"\ninclude = [\"included.toml\"]\n",
+    )
+    .expect("config");
+
+    run_pendon(dir.path()).success();
+    assert!(dir.path().join("out").join("a.jsx").exists());
+}
+
+/// `task.include` with a missing file fails the build.
+#[test]
+fn run_task_include_missing_file_errors() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    std::fs::create_dir_all(dir.path().join("src")).expect("src dir");
+    std::fs::write(dir.path().join("src/a.md"), "# [slug](\"T\") Heading\n").expect("source");
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        "[[task]]\nname = \"Demo\"\ninput = \"./src/a.md\"\noutput = \"./out/a.html\"\nplugin = \"markdown\"\nformat = \"html\"\ninclude = [\"does-not-exist.toml\"]\n",
+    )
+    .expect("config");
+
+    run_pendon(dir.path())
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("cannot read"));
+}
+
+/// `task.include` with a circular include fails the build.
+#[test]
+fn run_task_include_circular_errors() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    std::fs::create_dir_all(dir.path().join("src")).expect("src dir");
+    std::fs::write(dir.path().join("src/a.md"), "# [slug](\"T\") Heading\n").expect("source");
+    std::fs::write(
+        dir.path().join("a.toml"),
+        "[[task]]\ninclude = [\"b.toml\"]\n",
+    )
+    .expect("include a");
+    std::fs::write(
+        dir.path().join("b.toml"),
+        "[[task]]\ninclude = [\"a.toml\"]\n",
+    )
+    .expect("include b");
+    std::fs::write(
+        dir.path().join("pendon.toml"),
+        "[[task]]\nname = \"Demo\"\ninput = \"./src/a.md\"\noutput = \"./out/a.html\"\nplugin = \"markdown\"\nformat = \"html\"\ninclude = [\"a.toml\"]\n",
+    )
+    .expect("config");
+
+    run_pendon(dir.path())
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("circular include"));
+}

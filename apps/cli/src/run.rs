@@ -4,6 +4,7 @@ use pico_args::Arguments;
 use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
+use toml::Value;
 use walkdir::WalkDir;
 
 use crate::cache::{hash_content, hash_file, CacheStore};
@@ -18,6 +19,32 @@ pub fn run_from_config() -> ExitCode {
         Ok(s) => s,
         Err(e) => {
             eprintln!("Error: cannot read pendon.toml: {}", e);
+            return ExitCode::from(2);
+        }
+    };
+    // Parse as `toml::Value` first so `task.include` can be resolved before
+    // deserialising into `PendonConfig`. Included files' task content is
+    // deep-merged into the including task, then `include` is dropped so it
+    // never surfaces as an unknown key (§13).
+    let mut cfg_value: Value = match toml::from_str(&cfg_text) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: invalid pendon.toml: {}", e);
+            return ExitCode::from(2);
+        }
+    };
+
+    if let Err(msg) = resolve_includes(&mut cfg_value) {
+        eprintln!("Error: {msg}");
+        return ExitCode::from(2);
+    }
+
+    // Round-trip through TOML text to deserialise the merged value into
+    // `PendonConfig` (toml 1.x has no `from_value`).
+    let cfg_text = match toml::to_string(&cfg_value) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error: cannot serialise merged config: {e}");
             return ExitCode::from(2);
         }
     };
@@ -356,4 +383,267 @@ pub fn run_from_config() -> ExitCode {
         );
     }
     exit
+}
+
+/// Resolve all `task.include` directives in `cfg_value`, merging included
+/// files' `task` content into the including task and removing `include` keys.
+///
+/// Paths in `include` are relative to `pendon.toml`'s directory (the CWD,
+/// since `pendon.toml` is read from there).
+///
+/// Returns an error on missing files, parse errors, or circular includes.
+fn resolve_includes(cfg: &mut Value) -> Result<(), String> {
+    let mut chain: Vec<String> = Vec::new();
+    resolve_includes_inner(cfg, &mut chain, 0)
+}
+
+fn resolve_includes_inner(
+    cfg: &mut Value,
+    chain: &mut Vec<String>,
+    depth: usize,
+) -> Result<(), String> {
+    const MAX_DEPTH: usize = 16;
+
+    if depth > MAX_DEPTH {
+        return Err("task.include: maximum include depth exceeded (circular include?)".to_string());
+    }
+
+    let tasks = match cfg.get_mut("task") {
+        Some(Value::Array(tasks)) => tasks,
+        // A table-form `task` (e.g. from `[[task.anchor.custom]]` in an
+        // included file) has no `[[task]]` entries to scan for `include`,
+        // so there is nothing to resolve here.
+        Some(_) => return Ok(()),
+        None => return Ok(()),
+    };
+
+    let mut i = 0;
+    while i < tasks.len() {
+        let task = match tasks.get_mut(i) {
+            Some(task) => task,
+            _ => {
+                i += 1;
+                continue;
+            }
+        };
+
+        let include_paths = match task.get("include") {
+            Some(Value::Array(paths)) => {
+                let mut result = Vec::new();
+                for p in paths {
+                    match p {
+                        Value::String(s) => result.push(s.clone()),
+                        _ => return Err("`include` must be an array of strings".to_string()),
+                    }
+                }
+                result
+            }
+            Some(_) => return Err("`include` must be an array of strings".to_string()),
+            None => {
+                i += 1;
+                continue;
+            }
+        };
+
+        // Remove `include` so it never surfaces as an unknown key (§13).
+        if let Value::Table(ref mut task_map) = task {
+            task_map.remove("include");
+        }
+
+        for path in &include_paths {
+            if chain.contains(path) {
+                return Err(format!(
+                    "task.include: circular include detected: {}",
+                    chain.join(" -> ") + " -> " + path
+                ));
+            }
+            chain.push(path.clone());
+
+            let included = match load_included_file(path) {
+                Ok(v) => v,
+                Err(msg) => {
+                    chain.pop();
+                    return Err(msg);
+                }
+            };
+
+            // Resolve includes within the included file first (nested includes).
+            let mut included_mut = included;
+            resolve_includes_inner(&mut included_mut, chain, depth + 1)?;
+
+            chain.pop();
+
+            // Merge the included file's `task` content into this task.
+            if let Some(included_task) = included_mut.get("task") {
+                merge_task_content(task, included_task);
+            }
+        }
+
+        i += 1;
+    }
+
+    Ok(())
+}
+
+/// Read and parse an included TOML file. Paths are relative to the CWD
+/// (where `pendon.toml` lives).
+fn load_included_file(path: &str) -> Result<Value, String> {
+    let text = match fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) => return Err(format!("task.include: cannot read '{path}': {e}")),
+    };
+    toml::from_str(&text).map_err(|e| format!("task.include: invalid TOML in '{path}': {e}"))
+}
+
+/// Merge an included file's `task` content into a target task table.
+///
+/// - If the included `task` is a table (e.g. from `[[task.anchor.custom]]`),
+///   its fields are deep-merged into the target.
+/// - If the included `task` is an array (e.g. from `[[task]]`), each element
+///   is deep-merged into the target in order.
+fn merge_task_content(target: &mut Value, included: &Value) {
+    match (target, included) {
+        (Value::Table(target_map), Value::Table(source_map)) => {
+            for (key, value) in source_map {
+                if let Some(existing) = target_map.get_mut(key.as_str()) {
+                    merge_value(existing, value);
+                } else {
+                    target_map.insert(key.clone(), value.clone());
+                }
+            }
+        }
+        (Value::Table(target_map), Value::Array(source_arr)) => {
+            for element in source_arr {
+                if let Value::Table(element_map) = element {
+                    for (key, value) in element_map {
+                        if let Some(existing) = target_map.get_mut(key.as_str()) {
+                            merge_value(existing, value);
+                        } else {
+                            target_map.insert(key.clone(), value.clone());
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Deep-merge `source` into `target`, modifying `target` in place.
+///
+/// - Tables merge recursively.
+/// - Arrays concatenate.
+/// - Scalars: `source` wins.
+fn merge_value(target: &mut Value, source: &Value) {
+    if target.as_table().is_some() && source.as_table().is_some() {
+        let t = target.as_table_mut().expect("target is a table");
+        let s = source.as_table().expect("source is a table");
+        for (k, v) in s {
+            if let Some(e) = t.get_mut(k.as_str()) {
+                merge_value(e, v);
+            } else {
+                t.insert(k.clone(), v.clone());
+            }
+        }
+    } else if target.as_array().is_some() && source.as_array().is_some() {
+        let t = target.as_array_mut().expect("target is an array");
+        let s = source.as_array().expect("source is an array");
+        t.extend(s.iter().cloned());
+    } else {
+        *target = source.clone();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_value(src: &str) -> Value {
+        toml::from_str(src).expect("valid toml")
+    }
+
+    /// Deep-merge: scalars, source wins.
+    #[test]
+    fn merge_value_scalars_source_wins() {
+        let mut target = parse_value("a = 1\nb = 2");
+        let source = parse_value("b = 3\nc = 4");
+        merge_value(&mut target, &source);
+        assert_eq!(target.get("a").and_then(|v| v.as_integer()), Some(1));
+        assert_eq!(target.get("b").and_then(|v| v.as_integer()), Some(3));
+        assert_eq!(target.get("c").and_then(|v| v.as_integer()), Some(4));
+    }
+
+    /// Deep-merge: tables merge recursively.
+    #[test]
+    fn merge_value_tables_recursive() {
+        let mut target = parse_value("a = 1\n[b]\nx = 1");
+        let source = parse_value("[b]\ny = 2\n[c]\nz = 3");
+        merge_value(&mut target, &source);
+        assert_eq!(target.get("a").and_then(|v| v.as_integer()), Some(1));
+        let b = target.get("b").and_then(|v| v.as_table()).expect("b table");
+        assert_eq!(b.get("x").and_then(|v| v.as_integer()), Some(1));
+        assert_eq!(b.get("y").and_then(|v| v.as_integer()), Some(2));
+        let c = target.get("c").and_then(|v| v.as_table()).expect("c table");
+        assert_eq!(c.get("z").and_then(|v| v.as_integer()), Some(3));
+    }
+
+    /// Deep-merge: arrays concatenate.
+    #[test]
+    fn merge_value_arrays_concatenate() {
+        let mut target = parse_value("items = [{a = 1}]");
+        let source = parse_value("items = [{b = 2}]");
+        merge_value(&mut target, &source);
+        let items = target
+            .get("items")
+            .and_then(|v| v.as_array())
+            .expect("items array");
+        assert_eq!(items.len(), 2);
+    }
+
+    /// `merge_task_content`: table form (e.g. `[[task.anchor.custom]]`).
+    #[test]
+    fn merge_task_content_table_form() {
+        let mut target = parse_value("name = \"Demo\"");
+        let included = parse_value("task = { anchor = { custom = [{ type = [\"A\"] }] } }");
+        merge_task_content(&mut target, included.get("task").unwrap());
+        assert_eq!(target.get("name").and_then(|v| v.as_str()), Some("Demo"));
+        let anchor = target
+            .get("anchor")
+            .and_then(|v| v.as_table())
+            .expect("anchor table");
+        let custom = anchor
+            .get("custom")
+            .and_then(|v| v.as_array())
+            .expect("custom array");
+        assert_eq!(custom.len(), 1);
+        let entry = custom.first().unwrap().as_table().unwrap();
+        assert_eq!(
+            entry.get("type").and_then(|v| v.as_array()).unwrap().len(),
+            1
+        );
+    }
+
+    /// `merge_task_content`: array form (e.g. `[[task]]`).
+    #[test]
+    fn merge_task_content_array_form() {
+        let mut target = parse_value("name = \"Demo\"");
+        let included = parse_value("task = [{ markdown_strip_comments = true }]");
+        merge_task_content(&mut target, included.get("task").unwrap());
+        assert_eq!(target.get("name").and_then(|v| v.as_str()), Some("Demo"));
+        assert_eq!(
+            target
+                .get("markdown_strip_comments")
+                .and_then(|v| v.as_bool()),
+            Some(true)
+        );
+    }
+
+    /// `merge_value`: mismatched types — source overrides target.
+    #[test]
+    fn merge_value_type_mismatch_source_wins() {
+        let mut target = parse_value("key = { a = 1 }");
+        let source = parse_value("key = \"override\"");
+        merge_value(&mut target, &source);
+        assert_eq!(target.get("key").and_then(|v| v.as_str()), Some("override"));
+    }
 }
