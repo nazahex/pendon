@@ -32,8 +32,7 @@
   "type": "commonjs",
   "main": "./src/extension.js",
   "activationEvents": [
-    "onLanguage:markdown",
-    "onLanguage:pendon"
+    "onLanguage:markdown"
   ],
   "scripts": {
     "check": "node tools/self-test.mjs && node tools/scope-cases.mjs",
