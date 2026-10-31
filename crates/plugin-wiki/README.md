@@ -67,7 +67,7 @@ positions yet (see below).
 ## Recommended order
 
 ```text
-micromatter,image,cite,wiki,anchor,markdown
+frontmatter,image,cite,wiki,anchor,markdown
 ```
 
 `wiki` runs before `anchor` because `[[…]]` is more specific than a generic

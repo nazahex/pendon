@@ -51,8 +51,8 @@ JSX text. Four problems followed:
 5. **`resolve` runs after every plugin's extras emit and before the citation
    export** (ADR-0004's order, which now matters because a payload may cite), so
    a payload's citations are numbered with the page's.
-6. **`micromatter` is the one stage before the citation context.** The context is
-   built from the `Frontmatter` node that `micromatter` produces, so the CLI runs
+6. **`frontmatter` is the one stage before the citation context.** The context is
+   built from the `Frontmatter` node that `frontmatter` produces, so the CLI runs
    a `prelude` (text stages) _before_ constructing `DocumentContext` and the rest
    of the chain after it.
 
@@ -65,8 +65,8 @@ JSX text. Four problems followed:
   Solid would have to re-parse HTML, and the AST could not describe the payload.
 - **Keep raw JSX in the IR (`U+E002`).** Solid's syntax in the model: HTML/JSON
   can only escape it, which is exactly the output that had to be re-frozen.
-- **Extract frontmatter before `micromatter`.** At that point the block is still
-  plain text — it only _becomes_ a `Frontmatter` node inside `micromatter` — so
+- **Extract frontmatter before `frontmatter`.** At that point the block is still
+  plain text — it only _becomes_ a `Frontmatter` node inside `frontmatter` — so
   the citation context would always be empty. This is the regression that
   `cli_spec::run_config_cite_frontmatter_defaults_to_all_and_honours_cited`
   pins, and the reason for the `prelude` stage.

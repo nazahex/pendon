@@ -16,12 +16,12 @@ Advanced, AsciiDoc-inspired table syntax plugin for Pendon.
 ## Recommended Plugin Order
 
 ```text
-micromatter,image,table,cite,wiki,anchor,markdown
+frontmatter,image,table,cite,wiki,anchor,markdown
 ```
 
 **Why this order matters:**
 
-1. `micromatter` must run first to extract frontmatter for citation contexts.
+1. `frontmatter` must run first to extract frontmatter for citation contexts.
 2. `img` runs before `table` so that standalone image paragraphs are processed before the table interceptor scans the document.
 3. `table` runs before `markdown` to hijack raw paragraph text and prevent the standard parser from misinterpreting custom delimiters.
 4. `cite`, `wiki`, and `anchor` are registered in the inline pipeline and process cell content internally.
@@ -33,7 +33,7 @@ Example task config:
 [[task]]
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "micromatter,image,table,cite,wiki,anchor,markdown"
+plugin = "frontmatter,image,table,cite,wiki,anchor,markdown"
 format = "solid"
 ```
 

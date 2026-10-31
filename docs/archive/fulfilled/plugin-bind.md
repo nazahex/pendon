@@ -317,7 +317,7 @@ Recorded so they are not re-proposed (each was considered and rejected):
   and `$1.50` are text, and a currency/price value is written literally
   (§2.2). The only shape that could re-open the question is a path-looking
   literal (`$a.b`), which §2.5 answers.
-- **Frontmatter / micromatter as a payload source.** A payload declaration must
+- **Frontmatter / frontmatter as a payload source.** A payload declaration must
   be visible at its point of use; a second, document-head location would make
   "where does `$this` come from?" a two-file question, and Pendon's extras model
   is explicitly local.
@@ -469,7 +469,7 @@ escape hatch" sound (§2.2, §2.5).
   whether `mdp` gets a `(…)` file payload at all (§2.7 decision 10).
 - **Deferred — `[task.bind]`.** No config keys are needed; the table stays
   reserved.
-- **Declined.** `\$` escape, frontmatter/micromatter source, free-text
+- **Declined.** `\$` escape, frontmatter/frontmatter source, free-text
   interpolation, reactive/runtime binding, prop type-checking — see §2.8.
 
 ## 8. Brief example

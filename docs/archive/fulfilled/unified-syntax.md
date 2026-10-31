@@ -209,7 +209,7 @@ Lorem ::::type[foo-bar]("Foo Bar"){`slug-foo`, "Title Foo", .extra, .class, #id,
 name = "Unified Demo"
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "micromatter,table,img,directive,cite,wiki,anchor,markdown,latex,syntect,heading,sectionize"
+plugin = "frontmatter,table,img,directive,cite,wiki,anchor,markdown,latex,syntect,heading,sectionize"
 format = "solid"
 markdown_strip_comments = true
 markdown_allow_html = true

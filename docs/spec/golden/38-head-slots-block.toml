@@ -2,5 +2,5 @@
 name = "Golden 38"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,heading,image,markdown"
+plugin = "frontmatter,heading,image,markdown"
 format = "solid"

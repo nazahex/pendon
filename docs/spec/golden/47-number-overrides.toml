@@ -2,7 +2,7 @@
 name = "Golden 47"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,heading,anchor,number,extract,markdown"
+plugin = "frontmatter,heading,anchor,number,extract,markdown"
 format = "solid"
 
 # `{...attrs}` prints whatever names the counters published, so the three

@@ -119,7 +119,7 @@ export default function PendonView() { … }
 ## Decided against
 
 `\$` escape (unnecessary — a reference starts with a letter, so `$100` is text),
-frontmatter/micromatter as a payload source, free-text interpolation,
+frontmatter/frontmatter as a payload source, free-text interpolation,
 reactive/runtime binding, and type-checking a bound value against a component's
 props. Rationale: RFC §2.8.
 

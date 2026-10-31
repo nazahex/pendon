@@ -2,7 +2,7 @@
 name = "Golden 14"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,marker,markdown"
+plugin = "frontmatter,marker,markdown"
 format = "solid"
 
 [[task.marker.custom]]

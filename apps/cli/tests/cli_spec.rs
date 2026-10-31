@@ -507,7 +507,7 @@ fn ast_frontmatter_payload_is_exposed() {
 
     let output = cmd
         .arg("--plugin")
-        .arg("micromatter,markdown")
+        .arg("frontmatter,markdown")
         .arg("--format")
         .arg("ast")
         .write_stdin(input)
@@ -557,7 +557,7 @@ fn json_renderer_carries_frontmatter_blockquote_and_table() {
 
     let output = cmd
         .arg("--plugin")
-        .arg("micromatter,markdown")
+        .arg("frontmatter,markdown")
         .arg("--format")
         .arg("json")
         .write_stdin(input)
@@ -758,7 +758,7 @@ fn render_cite_scope(frontmatter: bool, scope: &str) -> String {
         dir.path().join("pendon.toml"),
         format!(
             "[[task]]\ninput = \"./src/[slug].md\"\noutput = \"./out/[slug].jsx\"\n\
-             plugin = \"micromatter,cite,markdown\"\nformat = \"solid\"\n\n\
+             plugin = \"frontmatter,cite,markdown\"\nformat = \"solid\"\n\n\
              [task.cite]\n{source}{scope}"
         ),
     )

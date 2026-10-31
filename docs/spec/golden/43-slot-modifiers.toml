@@ -2,7 +2,7 @@
 name = "Golden 43"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,anchor,image,heading,cite,extract,markdown"
+plugin = "frontmatter,anchor,image,heading,cite,extract,markdown"
 format = "solid"
 
 # §5.4 / D-9: a symbol means only what an entry says. These entries carry no

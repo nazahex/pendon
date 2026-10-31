@@ -2,7 +2,7 @@
 name = "Golden 33"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,cite,extract,markdown"
+plugin = "frontmatter,cite,extract,markdown"
 format = "solid"
 
 # P.1.a: one block, two paths, two formats — the rows are the `CiteA`+`CiteB` slice.

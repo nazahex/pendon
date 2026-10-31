@@ -153,7 +153,7 @@ The config runner may additionally own cache, file discovery, task interpolation
 
 When changing plugin order, verify:
 
-- `micromatter` runs before frontmatter-dependent context construction;
+- `frontmatter` runs before frontmatter-dependent context construction;
 - inline plugins run only when enabled;
 - Markdown runs at the intended phase;
 - citation finalization runs after all citation-producing transforms;

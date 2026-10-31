@@ -40,7 +40,7 @@ These were removed in the Stage-2 rework and are **not syntax**:
 ## Recommended Plugin Order
 
 ```text
-micromatter,image,cite,wiki,anchor,markdown
+frontmatter,image,cite,wiki,anchor,markdown
 ```
 
 **Why this order matters:**
@@ -55,7 +55,7 @@ Example task config:
 [[task]]
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "micromatter,image,cite,wiki,anchor,markdown"
+plugin = "frontmatter,image,cite,wiki,anchor,markdown"
 format = "solid"
 ```
 

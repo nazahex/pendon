@@ -59,7 +59,7 @@ let jsx = render_solid_with_hints(&events, hints);
   module scope, so a non-Solid task drops the list
   ([ADR-0009](../../docs/decisions/0009-generic-data-exports.md)).
 - **`metadata.rs`** — the two automatic registrations. `frontmatter` is the JSON
-  text `micromatter` put on its node; `headings` is the **nested** outline of
+  text `frontmatter` put on its node; `headings` is the **nested** outline of
   every `Heading` node, built here from the AST (id chain: enclosing section →
   `id` → `slug` → slugified text; `subheadings` nested by level, omitted when
   empty, keys alphabetical). It used to be injected by `plugin-extract-heading`;

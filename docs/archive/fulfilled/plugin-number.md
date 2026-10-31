@@ -24,7 +24,7 @@ Every element gets one extra configuration, `[task.<element>.number]`.
 [[task]]
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,marker,cite,heading,image,number,markdown"
+plugin = "frontmatter,marker,cite,heading,image,number,markdown"
 format = "solid"
 
 [[task.heading.number]]

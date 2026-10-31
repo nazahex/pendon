@@ -175,7 +175,7 @@ pub fn scan(events: &[Event]) -> Vec<ElementNode> {
     nodes
 }
 
-/// The attribute `micromatter` carries the parsed frontmatter in (§20): one
+/// The attribute `frontmatter` carries the parsed frontmatter in (§20): one
 /// `Frontmatter` node with a `data` attribute holding compact JSON.
 pub const FRONTMATTER_DATA: &str = "data";
 
@@ -183,7 +183,7 @@ pub const FRONTMATTER_DATA: &str = "data";
 /// `Frontmatter` node (D-14).
 ///
 /// Frontmatter is not an element occurrence — it has no `__layer` and no
-/// `inner_text` — so it is read straight out of the node `micromatter` writes
+/// `inner_text` — so it is read straight out of the node `frontmatter` writes
 /// instead of going through [`scan`]. Its keys are the fields, and a nested key
 /// is a path, exactly like an attribute path.
 pub fn frontmatter(events: &[Event]) -> Option<Value> {

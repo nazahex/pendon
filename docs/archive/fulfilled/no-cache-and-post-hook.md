@@ -19,7 +19,7 @@ When `no_cache = true`:
 name = "Cite Sandbox (Solid)"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,cite,markdown"
+plugin = "frontmatter,cite,markdown"
 format = "solid"
 no_cache = true
 ```
@@ -47,7 +47,7 @@ Add a new optional config field to execute arbitrary shell commands after a task
 name = "Cite Sandbox (Solid)"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,cite,markdown"
+plugin = "frontmatter,cite,markdown"
 format = "solid"
 # Single command
 post_hook = "prettier --write ./out/[slug].jsx"
@@ -56,7 +56,7 @@ post_hook = "prettier --write ./out/[slug].jsx"
 name = "Cite Sandbox (HTML)"
 input = "./src/[slug].mdp"
 output = "./out/[slug].html"
-plugin = "micromatter,cite,markdown"
+plugin = "frontmatter,cite,markdown"
 format = "html"
 # Multiple sequential commands
 post_hook = [

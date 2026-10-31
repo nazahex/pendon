@@ -102,16 +102,16 @@ eq("comment: mid-line <!-- is inline", outline("text <!-- not a block\n\n# Real\
 // An unterminated comment runs to EOF (CommonMark html block).
 eq("comment: unterminated runs to EOF", outline("<!--\n# Lost\n\n# Also lost\n"), [])
 
-// --- frontmatter (plugin-micromatter) ---------------------------------------
-// A closed `---` pair at the document start: micromatter removes the span
-// entirely; without micromatter the `#` stays inside a paragraph. Either way
+// --- frontmatter (plugin-frontmatter) ---------------------------------------
+// A closed `---` pair at the document start: frontmatter removes the span
+// entirely; without frontmatter the `#` stays inside a paragraph. Either way
 // it is not an outline heading (verified both ways with the real CLI).
 eq(
   "frontmatter: closed pair skipped",
   outline('---\ntitle: "Demo"\n# FmComment\n---\n\n# After\n'),
   [[1, "After"]],
 )
-// An *unclosed* pair is not frontmatter (micromatter errors, content stays).
+// An *unclosed* pair is not frontmatter (frontmatter errors, content stays).
 eq("frontmatter: unclosed pair keeps content", outline("---\n# Visible\n\n# Also visible\n"), [
   [1, "Visible"],
   [1, "Also visible"],
@@ -124,7 +124,7 @@ eq("frontmatter: mid-document --- is a thematic break", outline("# A\n\n---\n# V
 
 // --- bind data blocks (plugin-bind, §19) ------------------------------------
 // The pre-parse stage removes the whole block (verified with --format ast on
-// `--plugin micromatter,markdown,bind`).
+// `--plugin frontmatter,markdown,bind`).
 eq("bind: body block skipped", outline("# A\n\n{{{toml[dataY]\n# Comment\n}}}\n\n# B\n"), [
   [1, "A"],
   [1, "B"],

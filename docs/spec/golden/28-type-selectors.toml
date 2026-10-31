@@ -2,7 +2,7 @@
 name = "Golden 28"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,heading,markdown"
+plugin = "frontmatter,heading,markdown"
 format = "solid"
 
 [task.heading]

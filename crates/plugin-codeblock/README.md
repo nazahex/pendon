@@ -22,7 +22,7 @@ Syntax-highlights code fences using `syntect` and rewrites them into raw HTML pa
 CLI (after Markdown so code fences exist):
 
 ```bash
-pendon --plugin micromatter,markdown,syntect --format html --input ./doc.md
+pendon --plugin frontmatter,markdown,syntect --format html --input ./doc.md
 ```
 
 Library:

@@ -2,7 +2,7 @@
 name = "Golden 09"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,table,markdown"
+plugin = "frontmatter,table,markdown"
 format = "solid"
 
 [[task.table.custom.row]]

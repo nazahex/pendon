@@ -27,11 +27,11 @@ The plugin keeps Markdown formatting inside fragments (for example `*emphasis*`,
 
 Recommended order:
 
-- `micromatter,dialog,markdown`
+- `frontmatter,dialog,markdown`
 
 Reason:
 
-- `dialog` needs frontmatter data produced by `micromatter` (for `charmap` classes).
+- `dialog` needs frontmatter data produced by `frontmatter` (for `charmap` classes).
 - `dialog` emits HTML blocks that should pass through subsequent Markdown processing.
 
 ## Input Rules
@@ -88,7 +88,7 @@ In `pendon.toml` task config:
 name = "Dialog Demo (HTML)"
 input = "./demo.md"
 output = "./out/demo.html"
-plugin = "micromatter,dialog,markdown"
+plugin = "frontmatter,dialog,markdown"
 format = "html"
 pretty = true
 markdown_allow_html = true

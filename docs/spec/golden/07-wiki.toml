@@ -2,6 +2,6 @@
 name = "Golden 07"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,wiki,markdown"
+plugin = "frontmatter,wiki,markdown"
 format = "solid"
 wiki_link_prefix = "/id/wiki"

@@ -2,7 +2,7 @@
 name = "Golden 36"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,table,number,markdown"
+plugin = "frontmatter,table,number,markdown"
 format = "solid"
 
 # §8/§10.5: one `%%numberType` group per layer, so a table, its caption, a

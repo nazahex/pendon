@@ -17,7 +17,7 @@ changed order. Editing a table is therefore a two-file change, not a doc fix.
 
 Scope is fixed by §8.6 of the workflow: `anchor`, `blockquote`, `cite`,
 `directive`, `heading`, `image`, `marker`, `list`, `section`, `table`, `wiki`
-(wikilink only), `codeblock` (vanilla), `latex`, `bind`, `micromatter`. §1 lists
+(wikilink only), `codeblock` (vanilla), `latex`, `bind`, `frontmatter`. §1 lists
 the five in-scope elements that are **not** extractable yet and why; §2–§11 are
 the tables. Out of scope and deliberately absent: `quiz`, `codeblock-syntect`,
 `vicado`, `dialog`, and `plugin-custom`'s `toml:` specs.

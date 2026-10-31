@@ -20,7 +20,7 @@ Concretely, today:
 - Diagnostics are pushed by the core parser (`crates/core/src/parser.rs` — the
   `max_doc_bytes` / `max_line_len` / `max_blank_run` guards and
   `crates/core/src/validate.rs`) and by plugins (`plugin-bind`,
-  `plugin-micromatter`, `plugin-image`, `plugin-cite`, `plugin-marker`,
+  `plugin-frontmatter`, `plugin-image`, `plugin-cite`, `plugin-marker`,
   `plugin-directive`, `extra::emit`, …).
 - The `span` field **exists but is never populated**: every emitter in the
   workspace passes `span: None`, so no diagnostic currently carries a source

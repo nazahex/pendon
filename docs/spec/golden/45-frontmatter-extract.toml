@@ -2,7 +2,7 @@
 name = "Golden 45"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,extract,markdown"
+plugin = "frontmatter,extract,markdown"
 format = "solid"
 
 # D-14 / §21 rule 11: the document's own frontmatter is extractable as **one

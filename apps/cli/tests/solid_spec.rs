@@ -55,7 +55,7 @@ fn solid_exports_frontmatter_object() {
     let input = "---\ntitle: \"Demo\"\ndraft: false\nscore: 95.5\n---\n\n# Hello\n";
     let (_code, out, _err) = run_cli(
         input,
-        &["--plugin", "micromatter,markdown", "--format", "solid"],
+        &["--plugin", "frontmatter,markdown", "--format", "solid"],
     );
     let fm_line = out
         .lines()

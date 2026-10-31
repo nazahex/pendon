@@ -2,7 +2,7 @@
 name = "Golden 44"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,anchor,number,extract,markdown"
+plugin = "frontmatter,anchor,number,extract,markdown"
 format = "solid"
 
 # D-6 / §21.4: `include` / `only` / `omit` are **dotted paths**, and a prefix

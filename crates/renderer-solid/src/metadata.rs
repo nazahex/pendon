@@ -1,7 +1,7 @@
 //! The two automatic `export const` registrations (§20, [ADR-0009]).
 //!
 //! Both are properties of the **document**, not of a plugin, so the renderer
-//! computes them from the AST: `frontmatter` is the JSON text `micromatter` put
+//! computes them from the AST: `frontmatter` is the JSON text `frontmatter` put
 //! on its node, and `headings` is the outline built from every `Heading` node.
 //! The retired `plugin-extract-heading` used to inject that outline as a
 //! `Headings` node; building it here removes the node from the IR without moving

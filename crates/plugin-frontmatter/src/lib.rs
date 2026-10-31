@@ -27,7 +27,7 @@ pub fn process(events: &[Event]) -> Vec<Event> {
             let mut out = events.to_vec();
             let diag = Event::Diagnostic {
                 severity: Severity::Error,
-                message: format!("[micromatter] {}", msg),
+                message: format!("[frontmatter] {}", msg),
                 span: None,
             };
             let insert_at = if out.len() > 1 { 1 } else { 0 };
@@ -169,7 +169,7 @@ fn yaml_key_to_string(value: &serde_yaml::Value) -> Result<String, String> {
 mod tests {
     use super::*;
 
-    fn run_micromatter(input: &str) -> Vec<Event> {
+    fn run_frontmatter(input: &str) -> Vec<Event> {
         let events = pendon_core::parse(input, &pendon_core::Options::default());
         process(&events)
     }
@@ -186,7 +186,7 @@ mod tests {
 
     #[test]
     fn parses_nested_yaml_frontmatter() {
-        let events = run_micromatter(
+        let events = run_frontmatter(
             "---\ntitle: Demo\nmeta:\n  tags:\n    - a\n    - b\n  flags:\n    enabled: true\n    count: 3\n---\n\n# Hello\n",
         );
 
@@ -199,7 +199,7 @@ mod tests {
 
     #[test]
     fn parses_block_scalar_and_flow_sequence() {
-        let events = run_micromatter(
+        let events = run_frontmatter(
             "---\nsummary: |\n  line one\n  line two\nitems: [one, two, three]\n---\n",
         );
 
@@ -210,7 +210,7 @@ mod tests {
 
     #[test]
     fn emits_error_for_invalid_yaml() {
-        let events = run_micromatter("---\nfoo: [1, two\n---\n");
+        let events = run_frontmatter("---\nfoo: [1, two\n---\n");
         assert!(events.iter().any(|ev| matches!(ev, Event::Diagnostic { severity: Severity::Error, message, .. } if message.contains("invalid YAML frontmatter"))));
     }
 }

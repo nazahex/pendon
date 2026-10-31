@@ -7,7 +7,7 @@ element to a counter and a style, and publishes the result as the `number.*`
 **fields**.
 
 ```text
-plugin = "micromatter,heading,anchor,image,number,markdown"
+plugin = "frontmatter,heading,anchor,image,number,markdown"
 ```
 
 `number` must run **after** every element plugin that produces the nodes it

@@ -34,8 +34,8 @@ pendon --format ast --input ./doc.md
 - Micomatter frontmatter (run it before markdown):
 
 ```bash
-pendon --plugin micromatter,markdown --format ast --input ./doc.md
-pendon --plugin micromatter,markdown --format solid --input ./doc.md
+pendon --plugin frontmatter,markdown --format ast --input ./doc.md
+pendon --plugin frontmatter,markdown --format solid --input ./doc.md
 ```
 
 - Enable the Markdown plugin to normalize common structures:
@@ -65,7 +65,7 @@ Unrecognized or unsupported Markdown patterns remain as plain text inside `Parag
   - AST/JSON: frontmatter node is present with `attrs.data`.
   - Solid: `export const frontmatter = {...}` is emitted above the component.
   - HTML: frontmatter is skipped.
-- Use `--plugin micromatter,markdown` (micromatter first) so the block is stripped before markdown parsing.
+- Use `--plugin frontmatter,markdown` (frontmatter first) so the block is stripped before markdown parsing.
 
 ## Syntax Highlighting (code fences)
 

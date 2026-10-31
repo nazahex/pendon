@@ -786,7 +786,7 @@ mod tests {
         assert_eq!(row["depth"], 2);
     }
 
-    /// A document whose chain produced a `micromatter` node: one `data`
+    /// A document whose chain produced a `frontmatter` node: one `data`
     /// attribute holding the parsed frontmatter (D-14).
     fn frontmatter_events(data: &str) -> Vec<Event> {
         vec![

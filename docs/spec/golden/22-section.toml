@@ -2,7 +2,7 @@
 name = "Golden 22"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,section,heading,markdown"
+plugin = "frontmatter,section,heading,markdown"
 format = "solid"
 
 # §9.5: `section` runs before `heading` (and `heading` before `markdown`) so the

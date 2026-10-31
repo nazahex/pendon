@@ -2,7 +2,7 @@
 name = "Golden 27"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,heading,table,image,cite,wiki,anchor,bind,markdown,latex"
+plugin = "frontmatter,heading,table,image,cite,wiki,anchor,bind,markdown,latex"
 format = "solid"
 
 # The payload's citation is the page's citation: one context, one numbering.

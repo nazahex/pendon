@@ -232,17 +232,17 @@ function plainLabel(text) {
  *
  * Lines inside the four regions the engine never turns into document-level
  * headings are skipped (each verified with `pendon run --format ast` on the
- * full chain `micromatter,markdown,bind`):
+ * full chain `frontmatter,markdown,bind`):
  *
  *   - fenced code blocks, including ones opened with an info string
  *     (```` ```yaml ````);
  *   - HTML comments (`<!-- … -->`), which markdown-it nests inside a paragraph
  *     and `markdown_strip_comments` drops from output — a `#` there is comment
  *     text, exactly as in vanilla Markdown;
- *   - frontmatter (`---` at the document start … closing `---`): `micromatter`
+ *   - frontmatter (`---` at the document start … closing `---`): `frontmatter`
  *     removes the whole span; without it the content stays a paragraph and the
  *     `#` still never reaches the document level. Either way it is not an
- *     outline heading. Only a *closed* span counts — micromatter reports
+ *     outline heading. Only a *closed* span counts — frontmatter reports
  *     `missing closing ---` and leaves the content as ordinary markup;
  *   - `plugin-bind` data blocks (`{{{lang[var] … }}}`, §19), removed by the
  *     pre-parse stage. An *unterminated* block is "left as text" (§19), so its
@@ -261,7 +261,7 @@ function scanHeadings(text) {
   const lines = text.split("\n").map(normalize)
 
   // Frontmatter: a `---` fence pair at the very start of the document
-  // (micromatter's rule). A span with no closing `---` is not frontmatter.
+  // (frontmatter's rule). A span with no closing `---` is not frontmatter.
   let frontmatterEnd = -1
   if (lines[0] !== undefined && lines[0].trim() === "---") {
     for (let i = 1; i < lines.length; i++) {

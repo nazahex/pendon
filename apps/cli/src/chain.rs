@@ -188,9 +188,9 @@ pub fn validate_extract_order(task_name: &str, names: &[&str]) -> Result<(), Str
         if index > position
             && (crate::plugins::NUMBER_ELEMENTS.contains(name)
                 || *name == "number"
-                // D-14: `micromatter` is what turns the `---` block into the
+                // D-14: `frontmatter` is what turns the `---` block into the
                 // frontmatter node a `[[task.frontmatter.extract]]` reads.
-                || *name == "micromatter")
+                || *name == "frontmatter")
         {
             return Err(format!(
                 "[{task_name}] plugin `extract` comes before `{name}`; `extract` must follow every plugin whose attributes it reads (docs/archive/fulfilled/plugin-extract.md)"
@@ -255,12 +255,12 @@ enum Document {
 /// Step 1 of the chain: the stages that must run **before** the citation
 /// context is built.
 ///
-/// `micromatter` rewrites the raw text, and it is what turns a leading `---`
+/// `frontmatter` rewrites the raw text, and it is what turns a leading `---`
 /// block into the `Frontmatter` node the context reads its `references` from —
 /// so the context cannot be constructed before it runs. Every other plugin
 /// needs the context, so this is the only stage that comes first.
 pub fn prelude(events: Vec<Event>, config: &ChainConfig) -> Vec<Event> {
-    if config.has("micromatter") {
+    if config.has("frontmatter") {
         pendon_plugin_frontmatter::process(&events)
     } else {
         events
@@ -293,9 +293,9 @@ fn run_chain(
     }
 
     for name in plugin_names(config.plugin_list.as_deref()) {
-        // `micromatter` already ran in `prelude`, `bind` is a pre-parse +
+        // `frontmatter` already ran in `prelude`, `bind` is a pre-parse +
         // resolve stage with no work of its own inside the loop (ADR-0004).
-        if name == "micromatter" || name == "bind" {
+        if name == "frontmatter" || name == "bind" {
             continue;
         }
         // Only a `Page` writes document-level outputs: `extract`'s blocks describe
@@ -571,7 +571,7 @@ mod tests {
     fn number_after_the_elements_and_before_markdown_is_accepted() {
         assert!(validate_number_order(
             "T",
-            &["micromatter", "heading", "anchor", "number", "markdown"]
+            &["frontmatter", "heading", "anchor", "number", "markdown"]
         )
         .is_ok());
         // `markdown` is optional (a chain may end with `number`).

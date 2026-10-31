@@ -1535,7 +1535,7 @@ plugins (events → events). The new syntax therefore needs two stages:
 
 Every construct parser strips its head + extras from the source text and
 replaces them with a **sentinel** so the removed information survives
-micromatter/markdown untouched. Sentinels are line-scoped and self-delimiting:
+frontmatter/markdown untouched. Sentinels are line-scoped and self-delimiting:
 
 ```text
 <U+E000>pendon:1:<payload><U+E000>
@@ -1850,7 +1850,7 @@ path       = any non-empty text up to the closing ")"
   `price: $100` (verified). Quoting exists for whitespace and separators, not for
   escaping a `$`.
 - **Non-goals.** No free-text interpolation (`Total: $sum` stays literal); no
-  `\$` escape; no frontmatter/micromatter payload source; resolution is a
+  `\$` escape; no frontmatter/frontmatter payload source; resolution is a
   **build-time** transform with no reactive/runtime binding.
 - A whole file may also be published at module scope, without naming it in the
   Markdown: `[[task.bind.inject]]` with `source` (project-root-relative, may use
@@ -2052,7 +2052,7 @@ omit        = [<field>, …]                   # always wins
     nothing to start from and nothing to select by — so `only` / `omit` are the
     whole selection. A document with no frontmatter, or an empty one, writes no
     file and registers no binding. `export = "frontmatter"` is an error: §20
-    already publishes that const from the same record. `micromatter` is what
+    already publishes that const from the same record. `frontmatter` is what
     turns the `---` block into the node this reads, so `extract` must follow it
     (rule 1).
 

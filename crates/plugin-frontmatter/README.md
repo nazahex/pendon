@@ -1,6 +1,6 @@
 # pendon-plugin-frontmatter
 
-Micromatter is a frontmatter parser for Pendon that uses full YAML parsing. It emits a `Frontmatter` node with a single `data` attribute containing normalized JSON, so renderers can expose the data without re-parsing.
+Frontmatter is a frontmatter parser for Pendon that uses full YAML parsing. It emits a `Frontmatter` node with a single `data` attribute containing normalized JSON, so renderers can expose the data without re-parsing.
 
 ## Format (full YAML)
 
@@ -24,7 +24,7 @@ tags: ["specification", "metadata", "performance"]
 
 - Detects frontmatter only at the very start of the document, bounded by `---` fences that the core parser emits as `ThematicBreak` nodes.
 - On success, injects a `Frontmatter` node under `Document` with `attrs.data` holding a JSON string.
-- On error (invalid grammar, mixed array types, missing closing fence), emits a `Diagnostic::Error` with a `[micromatter]` prefix and leaves the original events intact.
+- On error (invalid grammar, mixed array types, missing closing fence), emits a `Diagnostic::Error` with a `[frontmatter]` prefix and leaves the original events intact.
 - Downstream renderers:
   - AST/JSON: `Frontmatter` node is present with `attrs.data` JSON.
   - Solid: exports `export const frontmatter = {...}` before the component.
@@ -32,25 +32,25 @@ tags: ["specification", "metadata", "performance"]
 
 ## CLI usage
 
-Run micromatter before markdown so the block is stripped and normalized:
+Run frontmatter before markdown so the block is stripped and normalized:
 
 ```bash
-pendon --plugin micromatter,markdown --format ast --input ./doc.md
-pendon --plugin micromatter,markdown --format solid --input ./doc.md
+pendon --plugin frontmatter,markdown --format ast --input ./doc.md
+pendon --plugin frontmatter,markdown --format solid --input ./doc.md
 ```
 
-In `pendon.toml` tasks, list `micromatter` first in `plugin` values:
+In `pendon.toml` tasks, list `frontmatter` first in `plugin` values:
 
 ```toml
-plugin = "micromatter,markdown"
+plugin = "frontmatter,markdown"
 ```
 
 ## Diagnostics
 
 Typical error messages:
 
-- `[micromatter] missing closing ---`
-- `[micromatter] invalid YAML frontmatter: ...`
-- `[micromatter] YAML mapping keys must be scalar values`
+- `[frontmatter] missing closing ---`
+- `[frontmatter] invalid YAML frontmatter: ...`
+- `[frontmatter] YAML mapping keys must be scalar values`
 
 Use `--strict` to treat these diagnostics as errors for the CLI exit code.

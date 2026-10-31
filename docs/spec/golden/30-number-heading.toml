@@ -2,7 +2,7 @@
 name = "Golden 30"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,heading,number,markdown"
+plugin = "frontmatter,heading,number,markdown"
 format = "solid"
 
 # §11 component set: one entry with no `type` is the layer default, so every

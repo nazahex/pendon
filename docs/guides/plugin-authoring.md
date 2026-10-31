@@ -14,7 +14,7 @@ pre-markdown (text → text, "protect")   OR   post-markdown (events → events,
 
 Every plugin has a narrow responsibility and a clear phase:
 
-- preprocessing — frontmatter / document metadata (`plugin-micromatter`);
+- preprocessing — frontmatter / document metadata (`plugin-frontmatter`);
 - block transformation — headings, tables, images, lists, blocks;
 - inline transformation — links, citations, wiki links, inline custom syntax;
 - finalization — document-wide state (citation numbering, frontmatter updates).

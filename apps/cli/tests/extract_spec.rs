@@ -814,7 +814,7 @@ fn the_projection_names_the_extracted_fields() {
 name = "Extract"
 input = "./src/doc.mdp"
 output = "./out/doc.jsx"
-plugin = "micromatter,cite,extract,markdown"
+plugin = "frontmatter,cite,extract,markdown"
 format = "solid"
 
 [task.cite]
@@ -891,7 +891,7 @@ fn a_frontmatter_block_rejects_element_only_keys() {
         let dir = project(
             &format!("fm-rule-{index}"),
             &format!(
-                "[[task]]\nname = \"Extract\"\ninput = \"./src/doc.mdp\"\noutput = \"./out/doc.jsx\"\nplugin = \"micromatter,extract,markdown\"\nformat = \"solid\"\n\n{block}"
+                "[[task]]\nname = \"Extract\"\ninput = \"./src/doc.mdp\"\noutput = \"./out/doc.jsx\"\nplugin = \"frontmatter,extract,markdown\"\nformat = \"solid\"\n\n{block}"
             ),
         );
         fs::write(dir.join("src/doc.mdp"), "---\ntitle: Demo\n---\n\n# H\n").expect("source");
@@ -910,7 +910,7 @@ fn a_document_without_frontmatter_extracts_nothing() {
 name = "Extract"
 input = "./src/doc.mdp"
 output = "./out/doc.jsx"
-plugin = "micromatter,extract,markdown"
+plugin = "frontmatter,extract,markdown"
 format = "solid"
 
 [[task.frontmatter.extract]]

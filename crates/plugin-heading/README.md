@@ -29,7 +29,7 @@ owns `attrs.number` (ADR-0010).
 ## Recommended Plugin Order
 
 ```text
-micromatter,heading,anchor,image,number,markdown
+frontmatter,heading,anchor,image,number,markdown
 ```
 
 **Why this order matters:**
@@ -46,7 +46,7 @@ Example task config:
 [[task]]
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,heading,anchor,image,number,markdown"
+plugin = "frontmatter,heading,anchor,image,number,markdown"
 format = "solid"
 
 [[task.heading.number]]

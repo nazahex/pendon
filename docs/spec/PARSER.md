@@ -46,5 +46,5 @@ See `SYNTAX.md` §6.3 for the values and §6.5 for how a renderer names them.
 
 ## Not in this contract
 
-- Setext headings (never existed; `---` is micromatter / `<hr />` only).
+- Setext headings (never existed; `---` is frontmatter / `<hr />` only).
 - The retired legacy `[.class,#id]{k:v}` extras form.

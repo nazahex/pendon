@@ -111,7 +111,7 @@ that render the same `input`.
 name = "Cite Sandbox (Solid)"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,cite,markdown"
+plugin = "frontmatter,cite,markdown"
 format = "solid"
 no_cache = true
 ```

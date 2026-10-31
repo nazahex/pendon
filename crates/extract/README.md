@@ -12,7 +12,7 @@ The `type = …` selector vocabulary is §11 of
 `[[task.<element>.extract]]` blocks into rows and hands them to a destination.
 
 ```text
-plugin = "micromatter,heading,cite,number,extract,markdown"
+plugin = "frontmatter,heading,cite,number,extract,markdown"
 ```
 
 `extract` **reads** the event stream and returns it untouched (P.2), so adding a
@@ -156,7 +156,7 @@ writes no file and registers no binding. `export = "frontmatter"` is an error:
 ## Scope
 
 `apps/cli` rejects a block for the five in-scope-but-not-extractable elements
-(`wiki`, `codeblock`, `latex`, `bind`, `micromatter`) with an error naming the
+(`wiki`, `codeblock`, `latex`, `bind`, `frontmatter`) with an error naming the
 element — see §1 of the inventory for why each has no field yet.
 
 `plugin-extract-heading` no longer exists (T4.5): the **nested** outline it used

@@ -461,7 +461,7 @@ contain headings gained exactly one line (`06`, `16`, `21`, `22`, `25`, `28`,
 
 In scope: `anchor`, `blockquote`, `cite`, `directive`, `heading`, `image`,
 `marker`, `list`, `section`, `table`, `wiki` (wikilink only), `codeblock`
-(vanilla), `latex`, `bind`, `micromatter`. Out of scope, and left out of
+(vanilla), `latex`, `bind`, `frontmatter`. Out of scope, and left out of
 `EXTRAS-INVENTORY.md`: `quiz`, `codeblock-syntect`, `vicado`, `dialog`, and
 `plugin-custom`'s `toml:` specs.
 

@@ -163,9 +163,9 @@ and the real engine (verified against `pendon run --format ast`):
   comment (`<!-- … -->`), inside a closed `---` frontmatter pair at the document
   start, or inside a `plugin-bind` `{{{lang[var] … }}}` block (§19) never reaches
   the engine's document level — verified with `pendon run --format ast` on
-  `micromatter,markdown,bind` — so the scanner skips those spans. An _unclosed_
+  `frontmatter,markdown,bind` — so the scanner skips those spans. An _unclosed_
   comment runs to EOF (CommonMark), while an unclosed frontmatter pair or bind
-  block stays ordinary text (micromatter/§19 leave it intact) and its headings
+  block stays ordinary text (frontmatter/§19 leave it intact) and its headings
   keep counting.
 
 Each heading becomes a `DocumentSymbol` (`SymbolKind.String`, like Markdown),

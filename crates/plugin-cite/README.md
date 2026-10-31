@@ -32,13 +32,13 @@ extra HTML attributes, and external reference files.
 ## Recommended Plugin Order
 
 ```text
-micromatter,image,cite,wiki,anchor,markdown
+frontmatter,image,cite,wiki,anchor,markdown
 ```
 
 **Why this order matters:**
 `
 
-1. `micromatter` **must** run first — it parses the `---` delimited frontmatter block into a `Frontmatter` node that cite needs to read references from
+1. `frontmatter` **must** run first — it parses the `---` delimited frontmatter block into a `Frontmatter` node that cite needs to read references from
 2. `img` runs before cite so image captions can use the shared citation context
 3. `cite` runs before `wiki` and `anchor` because `[^…]` is more specific than `[text](url)` or `[[wiki]]`
 4. `markdown` runs last to handle remaining inline formatting
@@ -49,7 +49,7 @@ Example task config:
 [[task]]
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "micromatter,image,cite,wiki,anchor,markdown"
+plugin = "frontmatter,image,cite,wiki,anchor,markdown"
 format = "solid"
 ```
 

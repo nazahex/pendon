@@ -2,7 +2,7 @@
 name = "Golden 46"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,heading,anchor,number,markdown"
+plugin = "frontmatter,heading,anchor,number,markdown"
 format = "solid"
 
 # `{...attrs}` is how a client reads the public numbering fields: three dotted

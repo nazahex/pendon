@@ -41,7 +41,7 @@ Typical pipeline (the order matters — `section` before `heading` before
 `markdown`):
 
 ```bash
-pendon --plugin micromatter,section,heading,markdown --format solid --input ./doc.md
+pendon --plugin frontmatter,section,heading,markdown --format solid --input ./doc.md
 ```
 
 Library:

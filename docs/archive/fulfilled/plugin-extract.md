@@ -14,7 +14,7 @@ We want an extraction system that is **flexible, precise, and in-depth**.
 
 This extraction plugin is designed to work on **all core elements** supported by the Pendon ecosystem.
 
-These elements include _anchor_, _blockquote_, _cite_, _directive_, _heading_, _image_, _marker_, _list_, _section_, _table_, _wiki_ (_wikilink_ only), _codeblock_ (_vanilla_), _latex_, _bind_, and _micromatter_ (_frontmatter_).
+These elements include _anchor_, _blockquote_, _cite_, _directive_, _heading_, _image_, _marker_, _list_, _section_, _table_, _wiki_ (_wikilink_ only), _codeblock_ (_vanilla_), _latex_, _bind_, and _frontmatter_ (_frontmatter_).
 
 Conversely, some modules are **intentionally excluded** from this scope.
 
@@ -38,7 +38,7 @@ Let's walk through how this configuration works in practice, using TOML format.
 [[task]]
 input = "./src/[category]/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,marker,cite,extract,markdown"
+plugin = "frontmatter,marker,cite,extract,markdown"
 format = "solid"
 
 # P.1.a
@@ -75,15 +75,15 @@ omit = ["instance_id", "extraAttr1"]
 
 ```toml
 # SETTING P.2
-[[task.micromatter.extract]]
+[[task.frontmatter.extract]]
 output = "./out/[slug].json"
 format = "json"
 export = "frontmatter_2"
 ```
 
-In scenario **P.2**, we see _micromatter_ (frontmatter) extraction exporting to the variable `frontmatter_2`.
+In scenario **P.2**, we see _frontmatter_ (frontmatter) extraction exporting to the variable `frontmatter_2`.
 
-Although `plugin-micromatter` already exports automatically to `const frontmatter`, this duplication is **still considered valid** and does not trigger a system warning. If `micromatter.extract` targets the same variable as the automatic export (`export = "frontmatter"`), `micromatter.extract` wins over the automatic export. This is useful when the client wants to drop certain fields.
+Although `plugin-frontmatter` already exports automatically to `const frontmatter`, this duplication is **still considered valid** and does not trigger a system warning. If `frontmatter.extract` targets the same variable as the automatic export (`export = "frontmatter"`), `frontmatter.extract` wins over the automatic export. This is useful when the client wants to drop certain fields.
 
 ## Filter Hierarchy: Omit, Only, and Recommended
 

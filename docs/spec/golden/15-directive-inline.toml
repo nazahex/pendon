@@ -2,7 +2,7 @@
 name = "Golden 15"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,directive,markdown"
+plugin = "frontmatter,directive,markdown"
 format = "solid"
 
 # §10.2: the `directive` primary layer, addressed by the plugin's own key.

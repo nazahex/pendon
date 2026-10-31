@@ -45,12 +45,12 @@ only the `!` that touches `[` claims a head.
 ## Recommended Plugin Order
 
 ```text
-micromatter,image,cite,wiki,anchor,markdown
+frontmatter,image,cite,wiki,anchor,markdown
 ```
 
 **Why this order matters:**
 
-1. `micromatter` must run first if frontmatter is present
+1. `frontmatter` must run first if frontmatter is present
 2. `image` runs before markdown so its heads become `<img>` nodes instead of
    CommonMark images, and so their extras are not lost
 3. `cite`, `wiki` and `anchor` process the text around an image; an image head
@@ -63,7 +63,7 @@ Example task config:
 [[task]]
 input = "./src/[slug].md"
 output = "./out/[slug].jsx"
-plugin = "micromatter,image,cite,wiki,anchor,markdown"
+plugin = "frontmatter,image,cite,wiki,anchor,markdown"
 format = "solid"
 ```
 

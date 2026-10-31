@@ -24,7 +24,7 @@ Last updated: 2026-01-21
 - CLI:
   - Input via stdin or `--input <path>`.
   - Formats: `json` (default), `events`, `ast`, `html`, `solid`.
-  - Plugins: `--plugin micromatter,markdown[,syntect]`; config-driven tasks in `pendon.toml` honor plugin order.
+  - Plugins: `--plugin frontmatter,markdown[,syntect]`; config-driven tasks in `pendon.toml` honor plugin order.
   - `--tui` optional (stderr-only spinner, no impact on stdout/IR).
   - Strict/guards flags: `--strict`, `--max-doc-bytes`, `--max-line-len`, `--max-blank-run` with non-zero exit on Errors.
 - TUI crate: spinner/progress-bar, themes, helpers (inactive unless `--tui`).
@@ -34,7 +34,7 @@ Last updated: 2026-01-21
 
 - Core parser: newline segmentation, CRLF normalization, paragraph counts, blank-run diagnostics, strict escalation.
 - Lexer: CRLF and fence/hash detection.
-- CLI: stdin/file inputs, multiline, unknown block preserved as text, file-not-found, strict+guard exit behavior; AST/JSON/Solid/HTML cover headings, lists, blockquote, tables, code fences, and micromatter frontmatter.
+- CLI: stdin/file inputs, multiline, unknown block preserved as text, file-not-found, strict+guard exit behavior; AST/JSON/Solid/HTML cover headings, lists, blockquote, tables, code fences, and frontmatter frontmatter.
 
 ## Developer Flags (CLI)
 

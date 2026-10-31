@@ -2,7 +2,7 @@
 name = "Golden 06"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,heading,markdown"
+plugin = "frontmatter,heading,markdown"
 format = "solid"
 
 # Numbering moved to `number` (ADR-0010): a heading no longer counts, and

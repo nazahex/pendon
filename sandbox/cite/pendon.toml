@@ -4,7 +4,7 @@
 name = "Cite Sandbox (Solid)"
 input = "./src/[slug].mdp"
 output = "./out/[slug].jsx"
-plugin = "micromatter,marker,cite,markdown"
+plugin = "frontmatter,marker,cite,markdown"
 format = "solid"
 no_cache = true
 markdown_allow_html = true
@@ -34,7 +34,7 @@ template = "<Bibliography references={references} citations={citations} {...attr
 # name = "Cite Sandbox (HTML)"
 # input = "./src/[slug].mdp"
 # output = "./out/[slug].html"
-# plugin = "micromatter,cite,markdown"
+# plugin = "frontmatter,cite,markdown"
 # format = "html"
 # pretty = true
 # markdown_allow_html = true
