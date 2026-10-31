@@ -4,6 +4,7 @@ demo/
 bug/
 memory-bank/
 /docs/issues/draft/
+*vsix
 
 # Pendon incremental build cache
 .pendon/
