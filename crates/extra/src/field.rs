@@ -411,8 +411,8 @@ impl FieldMap {
 ///    config (`ComponentTemplate::field`), so an override reaches `{attrs.k}` and
 ///    `{...attrs}`; the built-in element path and `renderer-html` pass `None`,
 ///    because no entry answers those nodes;
-/// 4. the entries are ordered by their **public** path, so the §6.3 rename
-///    `specs.class` → `class` writes the same attribute in the same place.
+/// 4. the entries are ordered by their **public** path, so an override writes the
+///    same attribute in the same place.
 pub fn project(node: &serde_json::Value, config: Option<&FieldConfig>) -> FieldMap {
     let mut map = FieldMap::new();
     let Some(attrs) = node.get("attrs").and_then(serde_json::Value::as_object) else {
@@ -432,22 +432,11 @@ pub fn project(node: &serde_json::Value, config: Option<&FieldConfig>) -> FieldM
             .and_then(|table| table.get(&path))
             .cloned()
             .unwrap_or(path);
-        // §6.3/S2-3.4: a **universal** specs path is written as the DOM field it
-        // names (`specs.class` → `class`). The element-specific positions
-        // (`specs.tick`, `specs.quote`, the slot groups) keep their dotted path:
-        // what a slug or a title means is the element's business (§7), and each
-        // plugin projects those before the node is built (`Specs::dom_fields`).
-        let target = match crate::typed::universal_field(&target.dotted()) {
-            Some(field) => {
-                Path::from_dotted(field).expect("a universal specs field name is a valid path")
-            }
-            None => target,
-        };
         entries.push((target, value));
     }
     // The map is ordered by the **public** path, not by the node's spelling: a
-    // node arrives name-ordered (`attrs` is a sorted map), so renaming
-    // `specs.class` → `class` must not move the attribute it writes.
+    // node arrives name-ordered (`attrs` is a sorted map), so an override must not
+    // move the attribute it writes.
     entries.sort_by_cached_key(|(path, _)| path.dotted());
     for (path, value) in entries {
         // One attribute is one entry, so the only structural clash left is an

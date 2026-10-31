@@ -37,8 +37,8 @@ structure the AST renderer produces.
   writes a specific field itself (`href`/`title` on `Link`, `depth`/`id` on
   `Heading`, `start` on a list) still reads that field from the node; Phase 4
   moves each of those to the projection as the element's preset lands.
-- Attribute **names** are public field paths: `specs.class`/`specs.id`/`specs.style`
-  reach the map as `class`/`id`/`style` (§6.5), and a dotted path
+- Attribute **names** are public field paths: the universal fields reach the map
+  as `class`/`id`/`style` — the DOM names are the paths (§6.5) — and a dotted path
   (`specs.tick`, `bracket.bare`) is printed verbatim — `specs.tick="x"` is a legal
   HTML attribute name, so no escaping or renaming happens here. JSON/AST keep the
   dotted path unchanged.

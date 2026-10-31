@@ -104,8 +104,13 @@ applied in this order: **`preset` (the starting set) → `include` (adds paths) 
   [`FIELDS-INVENTORY.md`](../../docs/spec/FIELDS-INVENTORY.md), the same table as
   [`pendon_preset`] — and it is what an **absent** `preset` means (the default
   since S2-8.6). `preset = "all"` is every field the occurrence carries, author
-  extras included, so a block that wants those has to ask for them. Any other
-  name is a config error listing both values.
+  extras included, so a block that wants those has to ask for them. The universal
+  DOM fields (`id`, `class`, `style`) are the DOM names a head's `#id` / `.class` /
+  `style:` publish (§0 of the inventory), so they are in no element's own list —
+  except `section`, whose preset carries the `id` it derives from its decorator and
+  outline. Everywhere else `preset = "pendon"` leaves them out and `include = ["id"]`
+  (or `preset = "all"`) is how a block asks for them. Any other preset name is a
+  config error listing both values.
 - `include` adds paths to the preset instead of replacing it; on `"all"` it is
   redundant but valid. `only` keeps nothing but its own paths — it is a filter,
   not an addition — so `only` **and** `include` in one block is a config error:

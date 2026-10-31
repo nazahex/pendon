@@ -295,21 +295,10 @@ fn build_attributes(
         let specs = specs(head.type_marker.as_deref());
         let parsed = to_attributes(head, &specs);
         issues.extend(parsed.issues.iter().cloned());
-        // §6.2/§6.3: the tick position feeds the id fallback **while it keeps its
-        // default path**; `field.specs.tick = "x"` moves it to a field of the
-        // author's own, which the anchor then does not read.
-        let tick = specs.element_path(SpecsKey::Tick);
-        let specs_id = tick
-            .and_then(|path| parsed.value(path))
-            .map(|value| value.literal());
         // §6.3: the anchor's own positions — an extras `"title"` is the link's
         // `title` (at the default path), and `class` / `id` / `style` are the
-        // universal DOM fields. The extras slug is the id fallback below, never an
-        // attribute of its own.
+        // universal DOM fields.
         for (key, value) in specs.dom_fields(&parsed.items, &[(SpecsKey::Quote, "title")]) {
-            if tick == Some(key) {
-                continue;
-            }
             if HEAD.owns(key) {
                 // D-12's built-in collision: `href` is written by the link, so a
                 // `href:` extra is an `Error`, and `field.override.href` (D-4) is
@@ -329,15 +318,6 @@ fn build_attributes(
                         .values
                         .insert(key.to_string(), value.transport_for(key));
                 }
-            }
-        }
-        if let Some(id) = specs_id {
-            if parts.values.contains_key("id") {
-                issues.push(ExtrasIssue::warning(
-                    "extras `slug` was dropped because the element already has an id",
-                ));
-            } else {
-                parts.values.insert("id".to_string(), id);
             }
         }
         // §11 rule 3: the `@@type{…}` marker is the routing key of the instance. It
@@ -938,20 +918,19 @@ mod tests {
         assert!(emitted.mentions("`title`"), "{:?}", emitted.diagnostics);
     }
 
+    /// §6.2: the tick position carries no default meaning — an extras
+    /// `` `slug-a` `` stays the `specs.tick` field of the author's own and never
+    /// becomes an `id`; only an extras `#id` writes one (§6.3).
     #[test]
-    fn extras_slug_becomes_the_element_id() {
+    fn an_extras_tick_is_not_an_id() {
         let emitted = emit("@[foo](/docs)@@anchor{`slug-a`}");
-        assert_eq!(value(&emitted, "id"), Some("slug-a"));
-        assert!(value(&emitted, "slug").is_none());
+        assert_eq!(value(&emitted, "id"), None);
+        assert_eq!(value(&emitted, "specs.tick"), Some("slug-a"));
+        assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
 
-        // §6.2: `#id` > head slug > extras slug.
         let emitted = emit("@[foo](/docs)@@anchor{`slug-a`, #explicit}");
         assert_eq!(value(&emitted, "id"), Some("explicit"));
-        assert!(
-            emitted.mentions("extras `slug`"),
-            "{:?}",
-            emitted.diagnostics
-        );
+        assert_eq!(value(&emitted, "specs.tick"), Some("slug-a"));
     }
 
     /// §6.3 — the proposal's "Assign specs fields": an assigned specs position is

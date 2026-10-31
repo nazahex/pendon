@@ -58,18 +58,9 @@ fn layer_from_attrs(parsed: &Attrs, type_marker: Option<&str>, specs: &Specs) ->
 
     let mut styles: Vec<String> = Vec::new();
     let mut props: Vec<(String, String)> = Vec::new();
-    // §6.2: the extras slug (the tick position, at its default path) is the id
-    // fallback; a `field.specs.*` assignment moves it out of the layer's reach.
-    let tick = specs.element_path(SpecsKey::Tick);
-    let extras_slug = tick
-        .and_then(|path| parsed.value(path))
-        .map(|value| value.literal());
     // §6.3: a layer's own positions — `class` / `id` / `style` are the universal
     // DOM fields and an extras `"title"` is the `title`.
     for (key, value) in specs.dom_fields(&parsed.items, &[(SpecsKey::Quote, "title")]) {
-        if tick == Some(key) {
-            continue;
-        }
         match (key, value) {
             ("class", ExtrasAttr::Value(value)) => layer
                 .attrs
@@ -85,9 +76,6 @@ fn layer_from_attrs(parsed: &Attrs, type_marker: Option<&str>, specs: &Specs) ->
             }
             (name, ExtrasAttr::Flag) => layer.flags.push(name.to_string()),
         }
-    }
-    if layer.attrs.id.is_none() {
-        layer.attrs.id = extras_slug;
     }
 
     if let Some(marker) = &layer.type_marker {

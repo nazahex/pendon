@@ -1,16 +1,19 @@
 [
   {
     "depth": 1,
-    "inner_text": "Lorem Isum"
+    "inner_text": "Lorem Isum",
+    "slug": "lorem-isum"
   },
   {
     "depth": 2,
     "inner_text": "Foo Bar",
+    "slug": "foo-bar",
     "title": "Foo Bar"
   },
   {
     "depth": 2,
-    "inner_text": "Bar Foo"
+    "inner_text": "Bar Foo",
+    "slug": "bar-foo"
   },
   {
     "depth": 1,
@@ -18,7 +21,8 @@
   },
   {
     "depth": 1,
-    "inner_text": "Hiz"
+    "inner_text": "Hiz",
+    "slug": "hiz"
   },
   {
     "depth": 1,

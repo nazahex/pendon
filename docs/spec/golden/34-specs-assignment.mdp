@@ -1,18 +1,17 @@
 §6.1: `field.specs.*` **moves** a position to a public field of the author's own.
 The entry below assigns all five, so every content lands exactly where it was put
-— no `class` / `id` / `style` rename (§6.3 rule 1) and no default path left
-behind (§6.1):
+— no default path (`class` / `id` / `style`, §6.3) survives beside it (§6.1):
 
 @[Moved](/pricing)@@moveA{`price_slug`, "Price Title", .price-detail, #john-foo, style: "--width: 200px"}
 
 The same item kinds on an entry that assigns nothing keep the default paths:
-`class` / `id` / `style` are the DOM fields they name (§6.3), and the anchor reads
-the tick as its id fallback (§6.2) and the quote as its `title`:
+`class` / `id` / `style` are the universal DOM fields (§0), the anchor reads the
+quote as its `title` (§6.2), and the tick stays `specs.tick` — it is never an id:
 
 @[Kept](/docs)@@anchorZ{`slug-a`, "Docs Title", .cta, #main, style: "--tone: red"}
 
 A moved position is the author's own field, so an element does not read it:
-`moveA`'s tick is a plain `slug` attribute and never an id, while the unclaimed
-type still falls back to it:
+`moveA`'s tick is a plain `slug` attribute and never an id — and the unclaimed
+type keeps the dotted default path:
 
 @[Fallback](/x)@@anchorZ{`slug-b`}

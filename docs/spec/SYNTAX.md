@@ -65,8 +65,9 @@ Implementation units that own this grammar:
   an element claims, and the tag that claims a standalone slot for it (§6.1,
   §6.6).
 - **specs** — the five named positions of a head (tick, quote, class, id, style)
-  that any element can read, named `specs.tick` … `specs.style` by default
-  (§6.1). A `k: v` item is an ordinary prop, not a specs position.
+  that any element can read: `specs.tick` / `specs.quote` by default, and the DOM
+  field itself for `class` / `id` / `style` (§6.1). A `k: v` item is an ordinary
+  prop, not a specs position.
 - **extras** — the shared `{…}` body of a head, optionally `@@`-prefixed and
   typed: specs items (`` `slug` ``, `"title"`, `.class`, `#id`, `--var`, `style:`),
   props, flags and nested values (§5).
@@ -315,22 +316,24 @@ ws          = 1*( " " | "\t" )
 > line (§4.3). This exact example is asserted by
 > `crates/extra/tests/extras_spec.rs::spec_worked_example`.
 
-| item                  | kind   | public field (§6.1)           |
-| --------------------- | ------ | ----------------------------- |
-| `` `slug-foo` ``      | slug   | `specs.tick = "slug-foo"`     |
-| `"Title Foo"`         | title  | `specs.quote = "Title Foo"`   |
-| `.extra` `.class`     | class  | `specs.class = "extra class"` |
-| `#id`                 | id     | `specs.id = "id"`             |
-| `foo: "bar"`          | prop   | `foo = "bar"`                 |
-| `bar: 12`             | prop   | `bar = 12` (Int)              |
-| `isFoo: true`         | prop   | `isFoo = true` (Bool)         |
-| `--style-var: "2rem"` | cssvar | merged into `specs.style`     |
-| `isBar`               | flag   | bare attribute `isBar`        |
+| item                  | kind   | public field (§6.1)    |
+| --------------------- | ------ | ---------------------- |
+| `` `slug-foo` ``      | slug   | `specs.tick`           |
+| `"Title Foo"`         | title  | `specs.quote`          |
+| `.extra` `.class`     | class  | `class`                |
+| `#id`                 | id     | `id`                   |
+| `foo: "bar"`          | prop   | `foo = "bar"`          |
+| `bar: 12`             | prop   | `bar = 12` (Int)       |
+| `isFoo: true`         | prop   | `isFoo = true` (Bool)  |
+| `--style-var: "2rem"` | cssvar | merged into `style`    |
+| `isBar`               | flag   | bare attribute `isBar` |
 
-> Three of those paths are universal, so a DOM renderer prints them as the fields
-> they name — `class="extra class" id="id" style="--style-var: 2rem"` — while what
-> the tick and the quote become is the element's own decision (§6.1, §6.3,
-> §7.x). This exact map is asserted by
+> `class`, `id` and `style` are the **universal DOM fields**: the head publishes
+> them under the attribute's own name, so every consumer — HTML, JSX, JSON and AST
+> — prints `class="extra class" id="id" style="--style-var: 2rem"` and nothing is
+> renamed on the way out. What the tick and the quote become is the element's own
+> decision (§6.1, §6.3, §7.x): with no element claiming them they stay `specs.tick`
+> and `specs.quote`. This exact map is asserted by
 > `crates/extra/tests/extras_spec.rs::spec_worked_example`.
 
 ### 5.2 Slots
@@ -465,11 +468,11 @@ the **positions** a construct can attach meaning to (`SPECS_KEYS` in
 
 | content                 | config key           | default path   | meaning                            |
 | ----------------------- | -------------------- | -------------- | ---------------------------------- |
-| `` `x` `` (tick)        | `field.specs.tick`   | `specs.tick`   | the construct's slug (short id)    |
-| `"x"` (quote)           | `field.specs.quote`  | `specs.quote`  | the construct's title              |
-| `.x` / `class: "x"`     | `field.specs.class`  | `specs.class`  | the class list (accumulates, D-12) |
-| `#x`                    | `field.specs.id`     | `specs.id`     | the element id                     |
-| `--x: v` / `style: "…"` | `field.specs.style`  | `specs.style`  | inline style declarations          |
+| `` `x` `` (tick)        | `field.specs.tick`   | `specs.tick`   | none — element's business (§6.2)   |
+| `"x"` (quote)           | `field.specs.quote`  | `specs.quote`  | none — element's business (§6.2)   |
+| `.x` / `class: "x"`     | `field.specs.class`  | `class`        | the class list (accumulates, D-12) |
+| `#x`                    | `field.specs.id`     | `id`           | the element id                     |
+| `--x: v` / `style: "…"` | `field.specs.style`  | `style`        | inline style declarations          |
 | `[x]` (bracket)         | `field.bracket.bare` | `bracket.bare` | the bracket's bare content         |
 | `("x")` (paren)         | `field.paren.bare`   | `paren.bare`   | the paren's bare content           |
 
@@ -481,13 +484,14 @@ entry configures nothing — it is the machine-readable
 `crates/extra/tests/extras_spec.rs::specs_keys_cover_the_specs_vocabulary`), and
 the same seven rows are the doc of `Specs` in `crates/extra/src/typed.rs`.
 
-Three of the seven are **universal**: a DOM renderer writes `specs.class`,
-`specs.id` and `specs.style` as the fields they name (`class`, `id`, `style`,
-§6.5 rule 1). The other four have no DOM meaning of their own — what a slug, a
-title or a slot content _is_ belongs to the element, which reads it in §6.2 and,
-in some cases, projects it onto its own DOM field (an anchor's quote → its
-`title`, a citation's id → its `cite-id`). A default path an element does not name
-stays in the map under its dotted spelling.
+Three of the seven are the **universal DOM fields**: `class`, `id` and `style` are
+published under the attribute's own name, so no renderer has a rename to do and no
+element prefixes them (§6.5). The other four have no meaning of their own — what a
+title or a slot content _is_ belongs to the element, which may read it in §6.2 and
+project it onto a field of its own (an anchor's quote → its `title`). The tick is
+the neutral position: no element reads it as a slug and nothing derives an id from
+it, so it stays in the map under its dotted spelling unless an element explicitly
+names it.
 
 Each slot has all three contents as positions — `bracket.bare`,
 `bracket.quote`, `bracket.tick`, `paren.bare`, `paren.quote`, `paren.tick` — and
@@ -498,8 +502,8 @@ an ordinary field under its slot-qualified spelling (D-7).
 An entry that configures **no** `field.<slot>.<kind>` key keeps every default path
 above and its element keeps its preset (§6.6, D-7). Once it configures one, the
 preset is void as a whole (D-7): a position it leaves unassigned falls back to its
-own qualified name (`bracket.bare`, `paren.bare`, `specs.tick`, `specs.class`, …),
-never to a name the author chose for another position. A `field.specs.*` or
+own qualified name (`bracket.bare`, `paren.bare`, `specs.tick`, `class`, …), never
+to a name the author chose for another position. A `field.specs.*` or
 `field.override.*` key does not void anything — it names an extras item or a
 public path, not a slot's home. There is no separate naming key (§14).
 
@@ -507,19 +511,19 @@ public path, not a slot's home. There is no separate naming key (§14).
 
 `field.specs.<k>` moves a **position**, not just its spelling. There are five
 (`tick`, `quote`, `class`, `id`, `style` — `SPECS_KEYS` in
-`crates/extra::field`), and only their **default** paths carry meaning: at
-`specs.tick` / `specs.quote` the content is a construct's slug or title, at
-`specs.class` / `specs.id` / `specs.style` it is the element's class list, its id
-and its inline style (§6.3).
+`crates/extra::field`), and only three of their **default** paths carry meaning:
+`class` / `id` / `style` are the DOM fields themselves — the element's class list,
+its id and its inline style (§6.3). `specs.tick` / `specs.quote` are neutral —
+an element that wants a quote as its title names the position (§7), and the tick is
+never an id.
 
 Once an entry assigns a position elsewhere (`field.specs.quote = "_note"`,
 `field.specs.id = "foo.id"`), that content is a **public field of the author's
-own**: nothing is published at the default path any more, the element neither
-reads it (the anchor's id fallback, a citation's `cite-id`, a heading's `title`)
-nor renames it (`specs.class` → `class`), and no other element gains a meaning
-for the assigned name. `Specs::element_path` in `crates/extra::typed` is that
-boundary: it answers the default path for an unassigned position and `None` for
-a moved one.
+own**: nothing is published at the default path any more, and the element neither
+reads it (an anchor's `title`) nor writes it as a DOM field — `foo.id` stays
+`foo.id`, because the author already named it. `Specs::element_path` in
+`crates/extra::typed` is that boundary: it answers the default path for an
+unassigned position and `None` for a moved one.
 
 Fixture [`34-specs-assignment`](golden/34-specs-assignment.mdp) is the
 executable form of both halves: one entry assigns all five positions and an
@@ -546,14 +550,17 @@ emitted):
 
 ```text
 @[Foo](url "Head title")@@type{"Extras title"}   → title = "Head title"
-###[slug-a]("Head")@@type{`slug-b`} Foo         → id = "slug-a", title = "Head"
+###[slug-a]("Head")@@type{`slug-b`} Foo         → slug = "slug-a", title = "Head"
 ```
 
-Additionally, a plugin that owns an element id (`heading`, `image`, `anchor`,
-`cite`, table/cell layers) MUST use `slug` as `id` when no explicit `#id` is
-present: `#id` > head slug > extras slug. The **extras** slug counts only while
-the tick position keeps its default path — `field.specs.tick = "x"` publishes
-the item as `x`, and an element id has no `x` to read (§6.1).
+An element id comes from **one** place: the universal extras `#id` (published as
+the DOM `id`, §6.3). No element derives an id from a head slot, a tick or a slug
+of its text, and `specs.tick` carries no meaning for any element (§6.1). A
+construct that needs an id in its own markup asks the author for `#id`; a site
+that wants slugs writes them with `field.specs.tick` and its own component. A
+`[slug]` is a slug — the heading's own field — and never an id (§7.4). The one
+exception is `plugin-section` (§9.5), which builds its outline id from its
+decorator and the heading it wraps.
 
 ### 6.3 Value typing (IR mapping)
 
@@ -659,9 +666,9 @@ so the map — and with it every golden fixture — is stable:
    the first `style:` prop or `--var` item appeared.
 
 Each step names a **position**, and the step writes it at the path the entry
-resolved for it: the default ones are `specs.class` / `specs.id` /
-`specs.style`, `specs.tick` / `specs.quote` and `bracket.bare` / `paren.bare`
-(§6.1); a moved one is written at the assigned path and never at the default.
+resolved for it: the default ones are `class` / `id` / `style` (the universal DOM
+fields), `specs.tick` / `specs.quote` and `bracket.bare` / `paren.bare` (§6.1); a
+moved one is written at the assigned path and never at the default.
 
 Duplicates are [D-12](../workflows/unified-syntax-stage-2/DECISIONS.md)'s rule,
 not a merge: two sources for one public path are `Severity::Error`, and the
@@ -675,39 +682,38 @@ Whitespace-only differences MUST NOT change the output.
 
 The list above is the order a head's items are **assigned** in. The DOM renderers
 emit the **projection's** order instead: `project` sorts by the public path, which
-is what keeps the §6.5 rename (`specs.class` → `class`) from moving the attribute
-it writes, and what keeps a moved position's output just as deterministic
+is what keeps an override (`field.override.*`) from moving the attribute it writes,
+and what keeps a moved position's output just as deterministic
 ([ADR-0014](../decisions/0014-field-model.md)).
 
 ### 6.5 The public field projection
 
 A public field is a **path**
-([ADR-0014](../decisions/0014-field-model.md) rule 1), so a renderer has to
-decide what the attribute is _called_. Two rules:
+([ADR-0014](../decisions/0014-field-model.md) rule 1). Three of them are the
+**universal DOM fields**, and their default path _is_ the attribute name:
+`class`, `id`, `style` (`SpecsKey::default_path` in `crates/extra::typed`). That is
+why nothing renames anything — the event stream, the JSON and AST renderers, and
+the HTML/JSX writers all carry the same three names, and a decorator-bound element
+(`blockquote`, `list`, `marker`, `directive`) spells them exactly like an element
+that projects its own extras.
 
-1. **A position's _default_ path becomes its DOM field.** `specs.class` →
-   `class`, `specs.id` → `id`, `specs.style` → `style` (`universal_field` in
-   `crates/extra::typed`, applied by `project`). It is a rename only: the map is
-   ordered by the _public_ path (§6.4), so `class` is written where `specs.class`
-   sat. The rename belongs to the **default** path, not to the position: with
-   `field.specs.class = "foo.class"` the item is written `foo.class` and never
-   `class`, because the author already named it (§6.1). An **element assignment
-   wins** the same way — a `field.specs.id` that names `cite-id` is written
-   `cite-id` and never `id`, because only the element knows what its id _is_
-   (§7). That is why an element projects its own head through
-   `Specs::dom_fields(items, …)` instead of leaving the universal path to the
-   renderer: both halves (`Specs::element_path` / `universal_field`) test the
-   _path_, so a moved position falls through untouched.
-2. **Every other path keeps its dotted spelling** — `specs.tick`, `specs.quote`,
-   the slot positions `bracket.bare` / `paren.bare`, and an assigned
-   `heading.anchor`. A cross-element position has no DOM meaning (§6.1), and the
-   path is the field's public identity.
+The other paths keep their spelling:
 
-| Renderer                 | `specs.class` | `specs.tick`                                       |
-| ------------------------ | ------------- | -------------------------------------------------- |
-| `renderer-html`          | `class="…"`   | `specs.tick="…"` (verbatim; HTML allows that name) |
-| `renderer-solid`         | `class="…"`   | `{...{ "specs.tick": "…" }}` (JSX has no `a.b=`)   |
-| `renderer-json` / `-ast` | `specs.class` | `specs.tick` (the path; no rename happens there)   |
+1. **`specs.tick` / `specs.quote`** — the two neutral positions. An element that
+   wants one of them as a field of its own names it through its preset or its
+   extras table (`Specs::dom_fields(items, …)`), which is why `plugin-anchor`,
+   `plugin-heading` and `plugin-cite` project before the node is built; the
+   position only matches while it sits on its default path, so a moved one falls
+   through untouched.
+2. **`bracket.bare` / `paren.bare`**, and any path an author assigned
+   (`field.specs.id = "foo.id"` → `foo.id`). A cross-element position has no DOM
+   meaning (§6.1), and the path is the field's public identity.
+
+| Renderer                 | `class`     | `specs.tick`                                       |
+| ------------------------ | ----------- | -------------------------------------------------- |
+| `renderer-html`          | `class="…"` | `specs.tick="…"` (verbatim; HTML allows that name) |
+| `renderer-solid`         | `class="…"` | `{...{ "specs.tick": "…" }}` (JSX has no `a.b=`)   |
+| `renderer-json` / `-ast` | `class`     | `specs.tick` (the path)                            |
 
 JSX reads `a.b=` as a member expression, not as an attribute name, so
 `renderer-solid` emits a dotted field as a one-key spread and keeps the path as
@@ -796,9 +802,9 @@ extras    = §5 extras-head                         # the shared {…} / @@type{
   `alt` renders even when the bracket is empty, because an empty `alt=""` is the
   one meaningful empty value (§6.3): `![](src)` is a decorative image.
 - Extras attach to the `<img>` **itself** — there is no second node — and the
-  construct head wins over a same-named extras item (§6.2). An extras
-  `` `slug` `` is the `id` fallback when neither `#id` nor a head-supplied id
-  exists; `--x: v` folds into `style` like everywhere else.
+  construct head wins over a same-named extras item (§6.2). An `id` comes from
+  the universal extras `#id` and from nowhere else (§6.2); `--x: v` folds into
+  `style` like everywhere else.
 - The head is **one node**: a line whose whole content is a head is a block image
   (the `<img>` replaces its paragraph), while a head that shares its line with
   text stays inline inside that paragraph. Text after the head is ordinary
@@ -839,8 +845,8 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
   `field.override.href` (§13, D-12 rule 5). `title` is not — the extras
   `"quote"` is the link's title only when the head has none (§6.2).
 - Extras attach to the `<a>`, and the construct head wins over a same-named extras
-  item (§6.2). An extras `` `slug` `` is the `id` fallback when neither `#id` nor
-  a head-supplied id exists.
+  item (§6.2). An `id` comes from the universal extras `#id` and from nowhere else
+  (§6.2): the tick is a field of the author's (`specs.tick`).
 - There is **no** automatic external-link handling and **no** URL-suffix modifier
   (§14, D-16): `target`, `rel`, `hreflang`, … are ordinary extras keys, and `^`,
   `!`, `$`, `;;`, `--` at the end of a target are ordinary characters of it.
@@ -884,18 +890,21 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
   numbering or identity (D-4).
 - Extras attach to the citation node and MUST touch the closing `)`; an item
   that spells a name the head produced is dropped with a warning (§6.2). An
-  extras `#id` / `` `slug` `` feeds the node's `cite-id`, and an extras quote is
-  its `title` (§6.3).
+  extras `#id` is the node's `id` — the universal DOM field, not a `cite-id`
+  (§6.2, §6.3) — and an extras quote is its `title`. The tick is a field of the
+  author's: `specs.tick`.
 - The citation's fields are `reference_id`, `locator` and `citation_number` (the
   display ordinal, assigned by the processor; a repeated
   `(reference_id, locator)` keeps its number). There is no `instance_index`
   (§14) — a per-occurrence ordinal is `number`'s job (§10.5).
 - Without a `cite` component the built-in markup is
-  `<sup class="cite-ref"><a href="#citeref-1-book" id="cite-1">[1]</a></sup>`:
-  the class and the two prefixes are fixed, because a site that wants its own
-  spelling configures a `Cite` component (§7.3 config above, §14). The markup is
-  fixed, the fields are not: the four positions it has no prop for are written
-  anyway, as `data-<slot>-<kind>` (`bracket.tick` → `data-bracket-tick`). A
+  `<sup><a href="#1-book" id="cite-1">[1]</a></sup>`: it ships no class and no
+  prefix, because a site that wants its own spelling configures a `Cite`
+  component (§7.3 config above, §14). `class` and `id` are the universal DOM
+  fields, so they appear on the `<sup>` only when the head supplied them, and
+  the `cite-<n>` backlink anchor is the markup's own. The fields are kept: the
+  four positions the markup has no prop for are written anyway, as
+  `data-<slot>-<kind>` (`bracket.tick` → `data-bracket-tick`). A
   dotted path is not an attribute name in JSX (§6.3) and raw markup cannot spread
   one, so the `data-` prefix — the convention the built-in `<img>` already uses
   for a key it has no attribute for — is what keeps a citation head from losing
@@ -924,15 +933,20 @@ extras   = §5 extras-head                       # the shared {…} / @@type{…
   MUST NOT become part of the title, nor of `inner_text`).
 - **Fields.** `depth` (`1..6`), `slug`, `title`, `id`, the extras attributes and
   `inner_text` (the visible text — the node's content, never an attribute).
-  `slug` falls back to a slug of `inner_text`; `id` is the extras `#id`, else the
-  `[slug]`, else the extras `` `tick` `` — which the element reads through
-  `specs.tick` while that position keeps its default path (§6.1, §6.2) — else the
-  auto slug.
+  `slug` is the bracket when the head carries one, and otherwise — or when the
+  bracket is bare — a slug of the heading's own text: `slugify` of `inner_text`
+  (lowercase, every run of non-alphanumerics collapsed into `-`), which is the same
+  function §9.5's id chain and the renderer's outline use. Text with no
+  alphanumeric character has no slug at all, so the field is absent. `id` is the
+  universal extras `#id` and nothing else (§6.3) — a `[slug]` is a slug, never an
+  id, and the text fallback never fills one in.
 - Extras attach to the heading element; the construct head wins over an extras
-  slot filling the same field (§6.2, e.g. an extras `` `tick` `` when `[slug]`
-  exists).
-- With `plugin-section` owning the outline the heading emits **neither** `id` nor
-  `slug`; the id transfers to the section (§9.5).
+  item filling the same field (§6.2). An extras `` `tick` `` is the plain
+  `specs.tick` field of the author's, so it neither clashes with `[slug]` nor
+  feeds an id or the text fallback.
+- `plugin-section` does not change what the heading emits: the heading publishes
+  its `slug` and its extras `#id` as usual, while the section builds its own
+  outline id from the decorator and the head (§9.5).
 - The heading does **not** number itself: `[[task.heading.number]]` and
   `%%numberType` are `number`'s (§10.5), which reads `depth` as the
   natural depth and writes `number.raw` / `number.depth` / `number.type`. An
@@ -1221,11 +1235,13 @@ as an attribute.
 
 - The section **id** is the first available of `#sectionID` (the decorator's
   `#id`) > `` `slug-section` `` (the decorator's slug) > `` `slug-head` `` (the
-  heading's `[slug]`) > `` `slug-head-extras` `` (the heading's extras slug) >
+  heading's `[slug]`) > `` `slug-head-extras` `` (the heading's extras tick) >
   the slug of the heading title. A heading's own extras `#id` is **not** part of
-  the chain; it is ignored with a `Warning`.
-- When `plugin-section` owns the outline the heading never emits an `id` (or its
-  fallback `slug`): the id always transfers to the section.
+  the chain: the heading keeps it as its own universal `id` (§6.3) and the
+  section reports it with a `Warning` rather than consuming it.
+- The section is the **only** element that owns an id chain (§6.2). It reads the
+  decorator's `#id` / tick and the heading's head, and every other element —
+  the heading included — takes its `id` from the universal extras `#id` alone.
 - The decorator's `type` selects a §11 `section`-layer component; without one the
   built-in `<section>` element is used (D8).
 - **Level markers.** A line whose trimmed content is exactly `<--->` deepens the
@@ -1309,15 +1325,15 @@ another type cannot replace it.
 
 ### 10.4 Priority summary
 
-| Slot                     | Winner                                                      |
-| ------------------------ | ----------------------------------------------------------- |
-| element `id`             | `#id` > head slug > extras slug                             |
-| `title`                  | head `("…")` > extras `"…"`                                 |
-| `class`                  | union of head classes and `.x` items, in source order       |
-| `href` / `src` / `start` | construct-owned, never overridable                          |
-| slot vs body             | the slot (`[…]` / `(…)`) wins; body value dropped (§6.4)    |
-| `number`                 | `%%numberType` marker > `[[task.<element>.number]]` (§10.5) |
-| any other key            | head prop > extras prop                                     |
+| Slot                     | Winner                                                                    |
+| ------------------------ | ------------------------------------------------------------------------- |
+| element `id`             | the extras `#id` only (universal, §6.2); `section` derives its own (§9.5) |
+| `title`                  | head `("…")` > extras `"…"`                                               |
+| `class`                  | union of head classes and `.x` items, in source order                     |
+| `href` / `src` / `start` | construct-owned, never overridable                                        |
+| slot vs body             | the slot (`[…]` / `(…)`) wins; body value dropped (§6.4)                  |
+| `number`                 | `%%numberType` marker > `[[task.<element>.number]]` (§10.5)               |
+| any other key            | head prop > extras prop                                                   |
 
 ### 10.5 Numbering (`number`)
 
@@ -1604,7 +1620,6 @@ attributes — this is the item layer (L2/L3, §9.3), which is still pending.
 | duplicate `#id` / `` `slug` `` / `"title"` / prop / flag in one head                 | **Error (first wins)**                             |
 | extras `k` naming a built-in field of the element (`href`, `src`, `citation_number`) | **Error (construct wins; use `field.override.k`)** |
 | repeated `style:` property or `--var` (last value wins, CSS)                         | none                                               |
-| extras `id` overriding a head slug                                                   | Warning                                            |
 | decorator with no following block                                                    | Warning                                            |
 | dropped decorator (consecutive decorators)                                           | Warning                                            |
 | dropped extras value because a head value won                                        | Warning                                            |
@@ -1994,8 +2009,8 @@ omit        = [<field>, …]                   # always wins
    it (no `{}` husk). Internal `__`-keys never ship; an author's extras key passes
    through under its own path. The names a row carries are the **projection's**
    (ADR-0014, §6.3): `field.override.*` renames a field before it is extracted
-   (D-4 — `reference_id` is published as `ref_id`), a `specs.*` position lands
-   under its DOM field, an internal key never reaches a row whatever
+   (D-4 — `reference_id` is published as `ref_id`), the universal positions are
+   the DOM fields `class` / `id` / `style`, an internal key never reaches a row whatever
    `preset = "all"` says, and a structured value is a real object or array —
    which is what makes a nested path addressable. The three numbering fields are
    projected names like any other: `number.raw` / `number.depth` / `number.type`

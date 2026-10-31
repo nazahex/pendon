@@ -118,7 +118,7 @@ An extras head may be attached immediately after the closing parenthesis:
 
 The head is a single `{…}` block; the `@@type` prefix is optional and, when
 present, is the §11 routing marker of the instance. `.class` items accumulate in
-the `class` list, `#id` (or a positional `` `slug` ``) sets the element `id`, and
+the `class` list, `#id` sets the element `id` (the universal DOM field, §6.3), and
 `key: "value"` items set arbitrary attributes. `--x: v` folds into the `style`
 attribute (§6.3).
 
@@ -128,8 +128,8 @@ Special handling (§6.2, D-12):
   filled is a `Warning` and is dropped (`![a "B"](u)@@i{"C"}` keeps `B`)
 - An item that names a field this element writes itself (`alt`, `src`) is an
   `Error` naming `field.override.<field>`
-- `.class` items accumulate; `#id` wins the `id`, and a positional `` `slug` ``
-  is the `id` **fallback** when no `#id` exists
+- `.class` items accumulate, and `#id` is the only source of the `id`; the tick
+  position carries no default meaning, so a `` `slug` `` stays `specs.tick`
 - Every other key is an ordinary prop: a component receives it verbatim, the
   built-in `<img>` fallback carries it under the `data-` prefix
 
@@ -175,7 +175,7 @@ template = "<ImageThumb {...attrs} />"
 | `{attrs.alt}`   | `bracket.bare` — the alternative text                |
 | `{attrs.src}`   | `paren.bare` — the image source                      |
 | `{attrs.class}` | Class list from the extras head (if provided)        |
-| `{attrs.id}`    | `#id`, or the extras slug when no `#id` exists       |
+| `{attrs.id}`    | The extras `#id` (universal, §6.3)                   |
 | `{attrs.type}`  | The `@@type{…}` marker, so an entry can read it back |
 
 Every other extras key reaches the template as a prop of the same name; a dotted

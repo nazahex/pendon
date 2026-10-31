@@ -9,7 +9,7 @@ bare content is the reference and the quoted one the locator (§7.3). They land 
 the preset&#39;s two fields, so the node carries <code>reference_id</code> and <code>locator</code>, and an
 adjacent extras head decorates the node without ever writing them (§6.2):
 </p>
-<p>Minim <Cite reference={references["book"]} citation_number={1} cite-id="smith" class="paper" locator="hlm. 45" note="short" type="citeX" /> esse do ut anim proident.
+<p>Minim <Cite reference={references["book"]} citation_number={1} class="paper" id="smith" locator="hlm. 45" note="short" type="citeX" /> esse do ut anim proident.
 </p>
 <p>The locator stays the construct value even when the extras ask for one:
 </p>

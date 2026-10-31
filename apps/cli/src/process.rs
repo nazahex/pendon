@@ -142,9 +142,7 @@ pub fn process_single_file(
         config.table = plugin_options!(build_table_options(task.table.as_ref()));
     }
     if config.has("heading") {
-        let mut heading = plugin_options!(build_heading_options(task.heading.as_ref()));
-        heading.section_owns_id = config.has("section");
-        config.heading = heading;
+        config.heading = plugin_options!(build_heading_options(task.heading.as_ref()));
     }
     // ADR-0010: the numbering blocks are validated for every task, so a typo in
     // a `type` selector fails even before the plugin is enabled; the pass itself

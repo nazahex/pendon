@@ -4,7 +4,7 @@ export default function PendonView() { return (<>
 <code>bracket.bare → slug</code> and <code>paren.quote → title</code>; its depth is the <code>#</code> run, not a
 position (D-11), and the four contents left over are fields:
 </p>
-<h1 {...{ "bracket.quote": "heading quote" }} {...{ "bracket.tick": "heading tick" }} id="heading" {...{ "paren.bare": "hp" }} {...{ "paren.tick": "heading paren tick" }} title="heading paren quote">Heading text</h1>
+<h1 {...{ "bracket.quote": "heading quote" }} {...{ "bracket.tick": "heading tick" }} {...{ "paren.bare": "hp" }} {...{ "paren.tick": "heading paren tick" }} title="heading paren quote">Heading text</h1>
 <p>A head alone on its line is a <strong>block image</strong> (§7.1): the <code>&lt;img&gt;</code> replaces the
 paragraph, and the six positions are the inline form&#39;s six:
 </p>

@@ -150,47 +150,39 @@ mod tests {
         ]
     }
 
-    /// S2-3.4/§6.3: the universal specs positions are real DOM attributes in both
-    /// modes — `class`, `id` and `style` are what the browser gets.
+    /// §6.3: `class`, `id` and `style` are the universal DOM fields, and their
+    /// universal names **are** the DOM names — both HTML modes print them as they
+    /// arrive.
     #[test]
-    fn specs_class_renders_as_the_dom_class() {
-        let events = paragraph_with_attr("specs.class", "lead big");
-        let compact = render_html(&events);
-        assert!(
-            compact.contains("<p class=\"lead big\">"),
-            "compact = {compact}"
-        );
-        let pretty = render_html_pretty(&events);
-        assert!(
-            pretty.contains("<p class=\"lead big\">"),
-            "pretty = {pretty}"
-        );
-    }
-
-    /// S2-3.4/§6.3: `specs.id` is the DOM `id`.
-    #[test]
-    fn specs_id_renders_as_the_dom_id() {
-        let events = paragraph_with_attr("specs.id", "p1");
-        for output in [render_html(&events), render_html_pretty(&events)] {
-            assert!(output.contains("<p id=\"p1\">"), "output = {output}");
+    fn the_universal_fields_reach_the_dom_as_themselves() {
+        for (name, value, expected) in [
+            ("class", "lead big", r#"<p class="lead big">"#),
+            ("id", "p1", r#"<p id="p1">"#),
+            ("style", "--tone: red", r#"<p style="--tone: red">"#),
+        ] {
+            let events = paragraph_with_attr(name, value);
+            for output in [render_html(&events), render_html_pretty(&events)] {
+                assert!(output.contains(expected), "{name}: output = {output}");
+            }
         }
     }
 
-    /// S2-3.4/§6.3: `specs.style` is the DOM `style`.
+    /// §6.3/D-5: a `specs.*` spelling that is not one of the two neutral
+    /// positions is a field of the author's own — no rename happens anywhere.
     #[test]
-    fn specs_style_renders_as_the_dom_style() {
-        let events = paragraph_with_attr("specs.style", "--tone: red");
+    fn a_specs_prefixed_author_field_is_not_renamed() {
+        let events = paragraph_with_attr("specs.class", "lead big");
         for output in [render_html(&events), render_html_pretty(&events)] {
             assert!(
-                output.contains("<p style=\"--tone: red\">"),
+                output.contains(r#"<p specs.class="lead big">"#),
                 "output = {output}"
             );
         }
     }
 
-    /// S2-3.4: an element-specific position keeps the field map's dotted path.
-    /// HTML has no attribute-name restriction that would forbid it, so
-    /// `specs.tick` is printed verbatim (the JSX renderer spreads it instead).
+    /// §6.3: `specs.tick` is not universal, so it keeps the field map's dotted
+    /// path. HTML has no attribute-name restriction that would forbid it, so it is
+    /// printed verbatim (the JSX renderer spreads it instead).
     #[test]
     fn specs_tick_keeps_its_dotted_name() {
         let events = paragraph_with_attr("specs.tick", "listing-1");
@@ -202,8 +194,8 @@ mod tests {
         }
     }
 
-    /// S2-3.4: `specs.quote` keeps its dotted path, and paths are emitted in the
-    /// projection's order (`specs.quote` before `specs.tick`).
+    /// §6.3: `specs.quote` keeps its dotted path, and paths are emitted in the
+    /// projection's order (`class`, then `specs.quote`, then `specs.tick`).
     #[test]
     fn specs_quote_keeps_its_dotted_name() {
         let events = vec![
@@ -218,7 +210,7 @@ mod tests {
                 value: "T".to_string(),
             },
             Event::Attribute {
-                name: "specs.class".to_string(),
+                name: "class".to_string(),
                 value: "lead".to_string(),
             },
             Event::EndNode(NodeKind::Paragraph),
@@ -226,7 +218,7 @@ mod tests {
         ];
         let output = render_html(&events);
         assert!(
-            output.contains("<p class=\"lead\" specs.quote=\"T\" specs.tick=\"listing-1\">"),
+            output.contains(r#"<p class="lead" specs.quote="T" specs.tick="listing-1">"#),
             "output = {output}"
         );
     }

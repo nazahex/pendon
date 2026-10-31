@@ -22,7 +22,7 @@ The built-in <code>&lt;sup&gt;</code> has no prop for the other four, so it writ
 <code>data-</code> prefix — <code>bracket.tick</code> becomes <code>data-bracket-tick</code>, the spelling a dotted
 path takes when it cannot be a prop (§6.3, §7.3):
 </p>
-<p>A <sup class="cite-ref"><a href="#citeref-1-book" id="cite-1" data-bracket-tick="cite tick" data-paren-bare="paperback" data-paren-quote="cite paren quote" data-paren-tick="cite paren tick">[1]</a></sup> citation.
+<p>A <sup><a href="#1-book" id="cite-1" data-bracket-tick="cite tick" data-paren-bare="paperback" data-paren-quote="cite paren quote" data-paren-tick="cite paren tick">[1]</a></sup> citation.
 </p>
 <p>None of the above is a diagnostic: an unpreset position is a field, not a mistake.
 </p>

@@ -400,18 +400,9 @@ fn merge_extras(parts: &mut ImageParts, extras: &ExtrasHead, options: &ImageOpti
     let parsed = to_attributes(extras, &specs);
     parts.issues.extend(parsed.issues.iter().cloned());
 
-    // §6.2/§6.3: the tick position feeds the id fallback **while it keeps its
-    // default path**; `field.specs.tick = "x"` moves it to a field of the
-    // author's own, which the image then does not read.
-    let tick = specs.element_path(SpecsKey::Tick);
-    let specs_id = tick
-        .and_then(|path| parsed.value(path))
-        .map(|value| value.literal());
-
+    // §6.3: the image's own positions — an extras `"quote"` is the `<img>`'s
+    // `title`, and `class` / `id` / `style` are the universal DOM fields.
     for (key, value) in specs.dom_fields(&parsed.items, ELEMENT_READS) {
-        if tick == Some(key) {
-            continue;
-        }
         if HEAD.owns(key) && parts.has(key) {
             // D-12's built-in collision: `<img>` writes `alt`/`src` itself, so an
             // extras item that spells one is an `Error`, and `field.override.alt`
@@ -445,17 +436,6 @@ fn merge_extras(parts: &mut ImageParts, extras: &ExtrasHead, options: &ImageOpti
                 }
                 parts.set(key, text);
             }
-        }
-    }
-
-    // §6.2: `#id` beats the extras `slug` (the tick position, at its default path).
-    if let Some(id) = specs_id {
-        if parts.has("id") {
-            parts.issues.push(ExtrasIssue::warning(
-                "extras `slug` was dropped because the element already has an id",
-            ));
-        } else {
-            parts.set("id", id);
         }
     }
 
@@ -931,16 +911,28 @@ mod tests {
         assert_eq!(parts.get("class"), Some("head extra tail"));
     }
 
+    /// §6.2/§6.3: the tick position carries no default meaning, so an extras
+    /// `` `the-image` `` stays the `specs.tick` field of the author's own; only
+    /// `#id` writes the universal `id`.
     #[test]
-    fn extras_slug_fills_the_id_when_no_id_is_present() {
+    fn an_extras_tick_is_not_the_element_id() {
         let Read::Image { parts, .. } = read_head(
             "![Alt](https://x.test/a.webp){`the-image`}",
             &ImageOptions::default(),
         ) else {
             panic!("a head");
         };
-        // §6.2: `#id` > extras slug.
-        assert_eq!(parts.get("id"), Some("the-image"));
+        assert_eq!(parts.get("id"), None);
+        assert_eq!(parts.get("specs.tick"), Some("the-image"));
+
+        let Read::Image { parts, .. } = read_head(
+            "![Alt](https://x.test/a.webp){`the-image`, #explicit}",
+            &ImageOptions::default(),
+        ) else {
+            panic!("a head");
+        };
+        assert_eq!(parts.get("id"), Some("explicit"));
+        assert_eq!(parts.get("specs.tick"), Some("the-image"));
     }
 
     #[test]

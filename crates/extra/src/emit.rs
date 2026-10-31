@@ -141,14 +141,7 @@ mod tests {
             .collect();
         assert_eq!(
             names,
-            vec![
-                "specs.class",
-                "specs.id",
-                "specs.tick",
-                "specs.quote",
-                "foo",
-                "isFoo"
-            ]
+            vec!["class", "id", "specs.tick", "specs.quote", "foo", "isFoo"]
         );
         assert!(matches!(out[5], Event::AttributeFlag { .. }));
     }
@@ -158,7 +151,7 @@ mod tests {
         let attrs = Attrs {
             items: Vec::new(),
             issues: vec![
-                ExtrasIssue::duplicate("specs.id"),
+                ExtrasIssue::duplicate("id"),
                 ExtrasIssue::overridden("title"),
             ],
         };
@@ -172,7 +165,7 @@ mod tests {
                 span,
             } => {
                 assert_eq!(*severity, Severity::Error);
-                assert!(message.starts_with("[anchor] `specs.id`"), "{message}");
+                assert!(message.starts_with("[anchor] `id`"), "{message}");
                 assert!(span.is_none());
             }
             other => panic!("unexpected event {other:?}"),

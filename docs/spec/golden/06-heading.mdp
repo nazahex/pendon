@@ -6,4 +6,7 @@
 
 ###[unrouted]@@unknownZ{.x} An unclaimed marker keeps the layer default
 
+§7.4: no `[slug]` bracket, so `slug` is a slug of the text itself — the built-in
+`<hN>` hides it (`slug` is a template-only read), an extract sees it.
+
 ## A plain heading without extras

@@ -36,8 +36,8 @@ written in source order.
    array + array → nested array; object + object → deep merge; irreconcilable
    types → `Severity::Error`, and that element falls back to **no** modifier
    contribution at all.
-4. Contributions are **specs-level fields** — they land beside `specs.class`,
-   never inside `field.*`. (`specs` is a field namespace, not a slot.)
+4. Contributions are **specs-level fields** — they land beside `class` and
+   `specs.tick`, never inside `field.*`. (`specs` is a field namespace, not a slot.)
 5. **Modifiers are bracket-only.** One in `(…)` is literal content, not an error.
 6. `|` may be escaped only in a bracket that is empty or bare-only; `[Foo "Bar"
    \|?x]` is `Severity::Error` because it would put bare after quote (slot order,

@@ -30,11 +30,10 @@
 //! The section id is the first available of `#sectionID` (the decorator's `#id`)
 //! > `` `slug-section` `` (the decorator's slug) > `` `slug-head` `` (the
 //! heading's `[slug]`) > `` `slug-head-extras` `` (the heading's extras slug) >
-//! the slug of the heading title. When `plugin-section` owns the outline the
-//! heading never owns an `id`: `plugin-heading` yields it
-//! (`HeadingOptions::section_owns_id`). A heading's own extras `#id` is **not**
-//! part of the chain (the RFC lists only the two above); it is ignored with a
-//! warning.
+//! the slug of the heading title. A heading's own extras `#id` is **not** part of
+//! the chain (the RFC lists only the two above): the heading keeps it as its own
+//! universal `id` (§6.3), the section reports it and derives its own, and the two
+//! never stand in for each other.
 //!
 //! # Level markers
 //!
@@ -240,7 +239,8 @@ fn open_heading(
     let chain = heading_chain(&heading_text(events, heading, end), level, options);
     if chain.extras_id.is_some() {
         out.push(diagnostic(
-            "the heading's extras `#id` is ignored; the id transfers to the section",
+            "the heading's extras `#id` is not part of the section id chain; \
+             the heading keeps it as its own id",
         ));
     }
     close_sections(stack, out, level);
@@ -397,8 +397,8 @@ fn section_id(decorator: Option<&BoundDecorator>, chain: &HeadInfo) -> String {
 }
 
 /// Pushes a decorator's attributes, minus `#id` and the extras slug (both were
-/// consumed by the id chain), in canonical order (§6.4) with its `specs.*` paths
-/// projected (§6.3).
+/// consumed by the id chain), in canonical order (§6.4) with the universal DOM
+/// fields spelled as themselves (§6.3).
 fn emit_decorator_attrs(attrs: &Attrs, specs: &Specs, out: &mut Vec<Event>) {
     let tick = specs.element_path(SpecsKey::Tick);
     for (name, value) in specs.dom_fields(&attrs.items, &[]) {
@@ -434,7 +434,7 @@ struct HeadInfo {
     slug_head: Option<String>,
     /// The extras `` `slug` `` — the `` `slug-head-extras` `` of the chain.
     extras_slug: Option<String>,
-    /// The extras `#id`; ignored by the section (reported).
+    /// The extras `#id`; not part of the chain (reported, §6.3).
     extras_id: Option<String>,
     /// The heading text after the head; slugified as the last fallback.
     title: String,
@@ -659,15 +659,16 @@ mod tests {
         assert_eq!(attr(&out, "id").as_deref(), Some("hello-world"));
     }
 
-    /// §9.5: the heading's own extras `#id` is ignored with a warning.
+    /// §9.5/§6.3: the heading's own extras `#id` is not part of the chain, so the
+    /// section derives its own id and reports the heading's.
     #[test]
-    fn heading_extras_id_is_ignored() {
+    fn heading_extras_id_is_not_part_of_the_chain() {
         let out = run("##[slug-head]@@h{#headingID} Title\n");
         assert_eq!(attr(&out, "id").as_deref(), Some("slug-head"));
         assert!(
             out.iter()
                 .any(|e| matches!(e, Event::Diagnostic { message, .. }
-                if message.contains("the id transfers to the section"))),
+                if message.contains("not part of the section id chain"))),
             "{out:?}"
         );
     }

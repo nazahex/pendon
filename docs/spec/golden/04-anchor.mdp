@@ -23,8 +23,8 @@ Inline: see @[the docs](/docs) for details.
 
 @[Head title wins](/docs "Head title")@@anchorA{"Extras title"}
 
-`#id` beats the extras slug, and an extras slug becomes the id when nothing else
-did (§6.2).
+`#id` is the only id (§6.3); the tick carries no default meaning, so an extras
+slug stays the `specs.tick` field of the author's own (§6.2).
 
 @[Explicit id](/docs)@@anchorA{`slug-extras`, #explicit}
 

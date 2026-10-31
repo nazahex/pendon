@@ -28,9 +28,10 @@ then parses the interior of every `Section` this plugin emits.
 - **ID priority.** The section id is the first available of `#sectionID`
   (decorator `#id`) > `` `slug-section` `` (decorator slug) > `` `slug-head` ``
   (heading `[slug]`) > `` `slug-head-extras` `` (heading extras slug) > the slug
-  of the heading title. A heading's own extras `#id` is not part of the chain and
-  is ignored with a warning. When `plugin-section` owns the outline the heading
-  never emits an `id` or fallback `slug` (see `HeadingOptions::section_owns_id`).
+  of the heading title. A heading's own extras `#id` is not part of the chain: the
+  heading keeps it as its own universal `id` (§6.3) and the section reports it
+  with a warning. The section is the only element with an id chain (§6.2) — a
+  heading derives nothing for it.
 - **Level markers.** A line that is exactly `<--->` deepens the outline by one
   nested section (capped at level 6); a line that is exactly `>---<` closes the
   innermost section. Both are consumed and never rendered.

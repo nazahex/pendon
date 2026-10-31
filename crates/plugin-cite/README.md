@@ -89,14 +89,15 @@ A head that assigns no `reference_id` — `[^]`, `[^"ref"]`, or an entry whose
 text stays as written (§7.3). The retired `[^^](ref "loc")` spelling is not a
 citation either: its second caret becomes the reference (§14).
 
-How the remaining keys are emitted depends on the render target:
+`class`, `id` and `style` are the universal DOM fields (§6.3), so they keep those
+names everywhere; the tick is a field of the author's (`specs.tick`), never a
+slug or an id. How the remaining keys are emitted depends on the render target:
 
 - **Default HTML** (no custom component): non-`--` keys become `data-{key}`
-  attributes, and `#id` is emitted as `data-cite-id`.
+  attributes, and a dotted path is hyphenated (`data-specs-tick`).
 - **Custom component** (`[task.cite.custom]`): keys are passed through verbatim as
   component props (`key={...}`), since Solid components expect plain props
-  without a `data-` prefix. `#id` is emitted as `cite-id` so it stays distinct
-  from the citation reference `id`.
+  without a `data-` prefix.
 
 ### The Node's Fields
 
@@ -208,7 +209,7 @@ Available template attributes:
 | `{attrs.citation_number}` | Display ordinal (1-based, deduplicated by `(reference_id, locator)`) |
 | `{attrs.bracket.tick}`    | Any other claimed position, under its (moved) field name (D-7)       |
 | `{attrs.class}`           | Space-separated extra classes                                        |
-| `{attrs.cite-id}`         | Extra `#id` from the attribute block                                 |
+| `{attrs.id}`              | Extra `#id` from the attribute block (universal, §6.3)               |
 | `{attrs.<key>}`           | Extra prop passed verbatim (e.g. `{attrs.foo}` for `{ foo: "val" }`) |
 | `{attrs.style}`           | Inline style string from `{ --var: "val" }`                          |
 
@@ -217,12 +218,16 @@ Available template attributes:
 Without a custom node, citations render as standard HTML:
 
 ```html
-<sup class="cite-ref highlight urgent" data-foo="bar" style="--color:red;">
-  <a href="#citeref-1-suryana-2026" id="cite-1" data-bracket-tick="p. 2">[1]</a>
+<sup class="highlight urgent" data-foo="bar" id="my-cite" style="--color:red;">
+  <a href="#1-suryana-2026" id="cite-1" data-bracket-tick="p. 2">[1]</a>
 </sup>
 ```
 
-Extra classes are appended to the base `cite-ref` class. Data attributes and styles are placed on the `<sup>` wrapper.
+The markup ships no class and no `href` / `id` prefix (`citation_class`,
+`ref_id_prefix` and `citation_id_prefix` are gone, §14): a site that wants its own
+spelling configures a `Cite` component. `class` and `id` are the universal DOM
+fields, so they appear on the `<sup>` only when the head supplied them, and the
+`cite-<n>` backlink anchor is the markup's own, not a field.
 
 The markup is fixed, but the head is not (§7.3, D-7): a position beyond
 `reference_id` / `locator` — `bracket.tick` in the example above — is written on

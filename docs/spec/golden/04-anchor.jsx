@@ -22,12 +22,12 @@ under their slot-qualified names — kept, never dropped (D-7).
 </p>
 <p><a href="/docs" title="Head title" type="anchorA">Head title wins</a>
 </p>
-<p><code>#id</code> beats the extras slug, and an extras slug becomes the id when nothing else
-did (§6.2).
+<p><code>#id</code> is the only id (§6.3); the tick carries no default meaning, so an extras
+slug stays the <code>specs.tick</code> field of the author&#39;s own (§6.2).
 </p>
-<p><a href="/docs" id="explicit" type="anchorA">Explicit id</a>
+<p><a href="/docs" id="explicit" {...{ "specs.tick": "slug-extras" }} type="anchorA">Explicit id</a>
 </p>
-<p><a href="/docs" id="slug-only" type="anchorA">Slug only</a>
+<p><a href="/docs" {...{ "specs.tick": "slug-only" }} type="anchorA">Slug only</a>
 </p>
 <p><code>href</code> is owned by the link; the extras value is an <code>Error</code> that names
 <code>field.override.href</code> (§13, D-12 rule 5).

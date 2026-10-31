@@ -1,11 +1,10 @@
-use pendon_core::{Event, NodeKind};
+use pendon_core::{slugify, Event, NodeKind};
 use pendon_extra::{
     append_class, issue_event, modifier_contributions, parse_extras, parse_slots, to_attributes,
     ElementHead, ExtrasAttr, ExtrasHead, ExtrasIssue, ExtrasMatch, FieldName, ModifierConfig,
-    Preset, Slot, SlotContract, SlotKind, SlotMatch, SlotPair, SlotPos, SlotTag, SpecsKey,
+    Preset, Slot, SlotContract, SlotKind, SlotMatch, SlotPair, SlotPos, SlotTag,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -33,13 +32,6 @@ const PRESET: &[Preset] = &[
     Preset::new(Slot::Paren, SlotKind::Quote, FieldName::new("title")),
 ];
 
-/// §6.1/§6.2: the `specs.*` positions heading reads into a field of its own — the
-/// extras tick is the id chain's third link (`#id` > head slug > extras slug) and
-/// the extras quote is the fallback of the head's `("title")`. Both count only
-/// while the matched entry keeps the position on its default path; a
-/// `field.specs.<k>` assignment moves it out of reach (`Specs::element_path`).
-const ELEMENT_READS: &[(SpecsKey, &str)] = &[(SpecsKey::Tick, "slug"), (SpecsKey::Quote, "title")];
-
 /// The tag that claims heading's head (D-11), the positions it claims, and their
 /// fallback-to-preset assignment (§6.1, §6.6, D-7).
 pub const HEAD: ElementHead = ElementHead::new(
@@ -58,10 +50,6 @@ pub struct HeadingOptions {
     /// default, resolved for the whole document by the renderer against the
     /// `@@type{…}` markers it occurs (rule 3, ADR-0008 `D-3a`).
     pub custom: ComponentSet<HeadingCustomNode>,
-    /// §9.5: when `plugin-section` owns the outline the heading must not emit an
-    /// `id` — or its fallback `slug` — because the id transfers to the section.
-    #[serde(default)]
-    pub section_owns_id: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -285,12 +273,10 @@ fn merge_heading_extras(
         items.push((key.clone(), value.clone()));
     }
 
-    // §6.3: `class` / `id` / `style` are the universal DOM fields; §6.2 adds the
-    // two positions *this* element reads into its own fields — the extras tick is
-    // the id chain's third link and the extras quote its `title` fallback. Both
-    // only count while the position keeps its default path (§6.1), which is
-    // exactly what `dom_fields`'s element table checks.
-    for (key, value) in specs.dom_fields(&items, ELEMENT_READS) {
+    // §6.3: `class` / `id` / `style` are the universal DOM fields. Every other
+    // extras path — `specs.tick`, `specs.quote`, the slot groups, `k: v` props —
+    // is a field of its own and kept under the name it carries (§6.1).
+    for (key, value) in specs.dom_fields(&items, &[]) {
         match value {
             ExtrasAttr::Flag => {
                 if head.attrs.contains_key(key) {
@@ -304,9 +290,7 @@ fn merge_heading_extras(
             ExtrasAttr::Value(value) => {
                 let text = value.transport_for(key);
                 match key {
-                    // §7.4/§6.2: the head's `[slug]` wins over the extras slug,
-                    // which is the fallback; either way the field is published
-                    // once, as `slug`.
+                    // An explicit `slug:` prop publishes the `slug` field.
                     "slug" => match &head.slug {
                         Some(_) => head.issues.push(ExtrasIssue::warning(
                             "`slug` was dropped because the construct head already sets it",
@@ -316,8 +300,7 @@ fn merge_heading_extras(
                         }
                         None => {}
                     },
-                    // §7.4: `("title")` is the head's; an extras `"title"` only
-                    // fills in for it.
+                    // An explicit `title:` prop publishes the `title` field.
                     "title" => match &head.title {
                         Some(_) => head.issues.push(ExtrasIssue::warning(
                             "`title` was dropped because the construct head already sets it",
@@ -361,21 +344,24 @@ fn merge_heading_extras(
     }
 }
 
-/// §7.4: the `slug` fallback — `inner_text`, lowercased, with every run of
-/// non-alphanumerics collapsed into a `-`.
-fn slug_of(inner_text: &str, slug_regex: &Regex) -> Option<String> {
-    let slug = slug_regex
-        .replace_all(&inner_text.trim().to_lowercase(), "-")
-        .trim_matches('-')
-        .to_string();
-    (!slug.is_empty()).then_some(slug)
-}
-
 // --- Main Processor ---
+
+/// §7.4: the `slug` **fallback** — a slug of the heading's own text, used when
+/// the head carries no `[slug]` bracket and no explicit `slug:` prop.
+///
+/// The algorithm is [`pendon_core::slugify`], the one the section id chain and
+/// the renderer's outline use, so a heading and the section that wraps it agree.
+/// Text with no ASCII alphanumeric character has no slug at all (`None`), which
+/// keeps `slugify`'s `section` placeholder out of a public field.
+fn slug_of(inner_text: &str) -> Option<String> {
+    let text = inner_text.trim();
+    text.chars()
+        .any(|character| character.is_ascii_alphanumeric())
+        .then(|| slugify(text))
+}
 
 pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
     let mut out = Vec::with_capacity(events.len());
-    let slug_regex = Regex::new(r"[^a-z0-9]+").unwrap();
 
     let mut i = 0;
     while i < events.len() {
@@ -461,10 +447,11 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
                 inner_events.retain(|e| !matches!(e, Event::Text(t) if t.is_empty()));
             }
 
-            // 4. §7.4: the element's fields. `slug` is the bracket, else a slug
-            // of `inner_text`; `id` is an extras `#id` (§6.3) and falls back to
-            // the slug (§6.2); `depth` is the run without its tag. `inner_text`
-            // itself is the node's content, never an attribute (§7.4).
+            // 4. §7.4: the element's fields. `slug` is the bracket — else a slug
+            // of `inner_text` — `title` the paren quote, `id` is the universal
+            // extras `#id` (§6.3) and `depth` is the run without its tag.
+            // `inner_text` itself is the node's content, never an attribute
+            // (§7.4).
             let inner_text = raw_text[consumed..].to_string();
             let mut attrs = head.attrs.clone();
             for (name, value) in &head.values {
@@ -474,18 +461,8 @@ pub fn process(events: &[Event], options: &HeadingOptions) -> Vec<Event> {
                 attrs.insert("title".to_string(), title.clone());
             }
             attrs.insert("depth".to_string(), depth.to_string());
-            // §9.5: when the section owns the ids, the heading emits neither.
-            if !options.section_owns_id {
-                if let Some(slug) = head
-                    .slug
-                    .clone()
-                    .or_else(|| slug_of(&inner_text, &slug_regex))
-                {
-                    attrs
-                        .entry("id".to_string())
-                        .or_insert_with(|| slug.clone());
-                    attrs.insert("slug".to_string(), slug);
-                }
+            if let Some(slug) = head.slug.clone().or_else(|| slug_of(&inner_text)) {
+                attrs.insert("slug".to_string(), slug);
             }
 
             // 5. Emit StartNode, the §11 layer tag, the §13 diagnostics and the
@@ -593,18 +570,27 @@ mod tests {
         assert_eq!(HEAD.preset_for(Slot::Bracket, SlotKind::Quote), None);
     }
 
-    /// §6.2: the extras slug is the id chain's third link (`#id` > head slug >
-    /// extras slug), so it becomes the heading's `slug` when no `[slug]` head
-    /// exists — and loses, with a warning, when one does.
+    /// §6.2: the tick position carries no default meaning. An extras
+    /// `` `slug-a` `` neither fills in a missing `[slug]` nor clashes with one —
+    /// it stays the `specs.tick` field of the author's own.
     #[test]
-    fn the_extras_slug_fills_in_for_a_missing_head_slug() {
+    fn an_extras_tick_never_becomes_the_slug() {
         let (_, head) = head_of("#@@headingX{`slug-a`, .fancy} A typed heading");
-        assert_eq!(head.slug.as_deref(), Some("slug-a"));
+        assert_eq!(head.slug, None);
         assert_eq!(head.attrs.get("class").map(String::as_str), Some("fancy"));
+        assert_eq!(
+            head.attrs.get("specs.tick").map(String::as_str),
+            Some("slug-a")
+        );
+        assert!(head.issues.is_empty(), "{:?}", head.issues);
 
         let (_, head) = head_of("#[head-slug]@@headingX{`extras-slug`}");
         assert_eq!(head.slug.as_deref(), Some("head-slug"));
-        assert!(head.issues.iter().any(|i| i.message.contains("`slug`")));
+        assert_eq!(
+            head.attrs.get("specs.tick").map(String::as_str),
+            Some("extras-slug")
+        );
+        assert!(head.issues.is_empty(), "{:?}", head.issues);
     }
 
     /// §6.1: once the matched entry moves the tick position, the item is a field
@@ -628,7 +614,6 @@ mod tests {
                 },
             )
             .with_field(field)]),
-            ..HeadingOptions::default()
         };
         let (_, head) = head_of_with("#@@headingX{`moved`} Title", &options);
         assert_eq!(head.slug, None);
@@ -683,7 +668,6 @@ mod tests {
                 },
             )
             .with_modifier(modifier)]),
-            section_owns_id: false,
         };
         // The run is consumed with the bracket: it is configuration, not slug.
         let (consumed, head) = head_of_with("#[foo |?] Title", &options);
@@ -778,7 +762,7 @@ mod tests {
     /// §6.2: an extras `#id` beats the head slug, and both are published — the
     /// processor's `id` fallback then keeps the explicit one.
     #[test]
-    fn an_extras_id_beats_the_head_slug() {
+    fn the_extras_id_and_the_head_slug_are_separate_fields() {
         let (_, head) = head_of("#[slug]@@heading{#explicit}");
         assert_eq!(head.slug.as_deref(), Some("slug"));
         assert_eq!(head.attrs.get("id").map(String::as_str), Some("explicit"));
@@ -846,12 +830,14 @@ mod tests {
     }
 
     /// §7.4: `inner_text` is the node's text, never an attribute, and `slug`
-    /// falls back to a slug of it.
+    /// **falls back** to a slug of it when the head has no `[slug]` bracket —
+    /// but the fallback never becomes an `id`: `id` is the universal extras
+    /// `#id` alone (§6.2).
     #[test]
     fn the_slug_falls_back_to_the_heading_text() {
         let out = process(&heading("## A Fine Head!"), &HeadingOptions::default());
         assert_eq!(attr(&out, "slug").as_deref(), Some("a-fine-head"));
-        assert_eq!(attr(&out, "id").as_deref(), Some("a-fine-head"));
+        assert_eq!(attr(&out, "id"), None);
         assert_eq!(attr(&out, "inner_text"), None);
         assert_eq!(attr(&out, "raw_title"), None);
         assert!(out
@@ -859,18 +845,32 @@ mod tests {
             .any(|e| matches!(e, Event::Text(text) if text == "A Fine Head!")));
     }
 
-    /// §9.5: when the section owns the ids, the heading emits neither `id` nor
-    /// `slug`.
+    /// §7.4: the bracket wins over the fallback, and text without an ASCII
+    /// alphanumeric character has no slug at all (`slugify`'s placeholder never
+    /// reaches a public field).
     #[test]
-    fn the_section_owns_the_id() {
-        let options = HeadingOptions {
-            section_owns_id: true,
-            ..HeadingOptions::default()
-        };
-        let out = process(&heading("##[own] Title"), &options);
-        assert_eq!(attr(&out, "id"), None);
+    fn the_bracket_beats_the_text_slug() {
+        let out = process(&heading("##[own] A Fine Head!"), &HeadingOptions::default());
+        assert_eq!(attr(&out, "slug").as_deref(), Some("own"));
+
+        let out = process(&heading("## — —"), &HeadingOptions::default());
         assert_eq!(attr(&out, "slug"), None);
-        assert_eq!(attr(&out, "depth").as_deref(), Some("1"));
+    }
+
+    /// §6.2/§7.4: `[slug]` is a field of its own and never becomes an `id`;
+    /// the universal extras `#id` is the only id source.
+    #[test]
+    fn the_head_slug_never_becomes_an_id() {
+        let out = process(&heading("##[own] Title"), &HeadingOptions::default());
+        assert_eq!(attr(&out, "slug").as_deref(), Some("own"));
+        assert_eq!(attr(&out, "id"), None);
+
+        let out = process(
+            &heading("##[own]@@heading{#the-id} Title"),
+            &HeadingOptions::default(),
+        );
+        assert_eq!(attr(&out, "slug").as_deref(), Some("own"));
+        assert_eq!(attr(&out, "id").as_deref(), Some("the-id"));
     }
 
     #[test]
@@ -879,7 +879,8 @@ mod tests {
             &heading("##[foo]@@heading{.c,isFoo} Title"),
             &HeadingOptions::default(),
         );
-        assert_eq!(attr(&out, "id").as_deref(), Some("foo"));
+        assert_eq!(attr(&out, "slug").as_deref(), Some("foo"));
+        assert_eq!(attr(&out, "id"), None);
         assert_eq!(attr(&out, "class").as_deref(), Some("c"));
         assert!(out
             .iter()

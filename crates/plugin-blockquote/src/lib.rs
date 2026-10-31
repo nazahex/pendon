@@ -302,7 +302,7 @@ mod tests {
         assert_eq!(element(&out).as_deref(), Some("blockquote"), "{out:?}");
         assert_eq!(attr(&out, "__layer").as_deref(), Some("blockquote"));
         assert_eq!(attr(&out, "type"), None, "{out:?}");
-        assert_eq!(attr(&out, "specs.class"), None, "{out:?}");
+        assert_eq!(attr(&out, "class"), None, "{out:?}");
         assert!(text(&out).contains("@@bqA{.x} body"), "{:?}", text(&out));
         // The `>` marker is still gone and the paragraph wrapper with it.
         assert!(!text(&out).contains('>'), "{:?}", text(&out));
@@ -335,7 +335,7 @@ mod tests {
         // renderer's to apply (it answers every instance of the layer).
         assert_eq!(element(&out).as_deref(), Some("blockquote"), "{out:?}");
         assert_eq!(attr(&out, "__layer").as_deref(), Some("blockquote"));
-        assert_eq!(attr(&out, "specs.class").as_deref(), Some("u"));
+        assert_eq!(attr(&out, "class").as_deref(), Some("u"));
         assert!(!text(&out).contains("@@"));
         assert!(text(&out).contains("quoted"));
     }
@@ -348,7 +348,7 @@ mod tests {
         assert!(custom(&out).is_none(), "{out:?}");
         assert_eq!(element(&out).as_deref(), Some("blockquote"));
         assert_eq!(attr(&out, "type").as_deref(), Some("bqZ"));
-        assert_eq!(attr(&out, "specs.class").as_deref(), Some("z"));
+        assert_eq!(attr(&out, "class").as_deref(), Some("z"));
     }
 
     /// A plain quote keeps its text and gains no `type`.

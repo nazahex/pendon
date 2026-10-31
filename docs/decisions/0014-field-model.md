@@ -14,8 +14,9 @@
 
 ## Context
 
-The proposal's field names are dotted (`specs.class`, `number.raw`,
-`price.details.amount`), but the IR carries flat attributes that _internal_
+The proposal's field names are paths (`specs.tick`, `number.raw`,
+`price.details.amount`; `class` / `id` / `style` are the DOM fields and spell
+themselves), but the IR carries flat attributes that _internal_
 processors read: `reference_id` feeds `citation_number`, `__number` feeds
 nesting. Renaming attributes in place would force every plugin to speak the public
 vocabulary, and the proposal explicitly forbids that for overrides ("must not
@@ -66,7 +67,7 @@ taxonomy.
 
 - **Dotted names in the IR.** Leaks user configuration into plugin logic and kills
   rule 3.
-- **Flat public names.** Cannot distinguish `specs.class` from a user's `class`,
+- **Flat public names.** Cannot distinguish `specs.tick` from a user's `tick`,
   and `include`/`only`/`omit` need paths.
 - **Applying overrides to the AST.** Looks simpler, breaks numbering, citations
   and section nesting — and only goldens would catch it, late.

@@ -540,11 +540,7 @@ pub fn build_heading_options(config: Option<&HeadingTaskConfig>) -> Result<Headi
             imports: entry.imports.clone(),
         })
     })?;
-    Ok(HeadingOptions {
-        custom,
-        // §9.5: the CLI flips this when `plugin-section` is enabled.
-        section_owns_id: false,
-    })
+    Ok(HeadingOptions { custom })
 }
 
 /// Reads a required field from a task component config.

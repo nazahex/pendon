@@ -19,7 +19,8 @@
 //!   sentence above the table, the positions from `SlotContract::accepted`, and
 //!   the landing field from `ElementHead::preset_for` (else the slot-qualified
 //!   fallback, §0);
-//! * §0's `specs.*` table — `SPECS_KEYS` and `universal_field`;
+//! * §0's neutral-position table — `SpecsKey::Tick` / `Quote`, at their default
+//!   paths — and its universal-DOM-field table — `class` / `id` / `style`;
 //! * §0's `number` table — the three public `number.*` fields the numbering pass
 //!   publishes.
 //!
@@ -29,9 +30,7 @@
 
 use std::collections::BTreeMap;
 
-use pendon_extra::{
-    fallback_path, universal_field, ElementHead, Slot, SlotKind, SPECS_KEYS, SPECS_NAMESPACE,
-};
+use pendon_extra::{fallback_path, ElementHead, Slot, SlotKind, SpecsKey, SPECS_NAMESPACE};
 use pendon_extract::{pendon_preset, ELEMENTS};
 use pendon_plugin_anchor::HEAD as ANCHOR;
 use pendon_plugin_cite::HEAD as CITE;
@@ -451,42 +450,67 @@ fn the_fallback_table_is_every_position() {
     );
 }
 
-/// §0's `specs.*` table is the code's vocabulary: the five keys, their default
-/// paths, and which of them are universal DOM fields.
+/// §0's neutral-position table is the code's vocabulary: the two positions that
+/// keep a `specs.*` spelling, at their default paths.
 #[test]
 fn the_specs_table_is_the_code_vocabulary() {
     let table = tables(DOC)
         .into_iter()
         .find(|table| table.column("default path").is_some())
-        .expect("§0 prints the five `specs.*` positions");
+        .expect("§0 prints the neutral `specs.*` positions");
     let path_column = table
         .column("default path")
         .expect("a `default path` column");
-    let dom_column = table.column("DOM field").expect("a `DOM field` column");
 
-    let mut keys: Vec<String> = Vec::new();
+    let mut paths: Vec<String> = Vec::new();
     for row in &table.rows {
         let path = plain(&row[path_column]);
-        let key = path
-            .strip_prefix(SPECS_NAMESPACE)
-            .and_then(|rest| rest.strip_prefix('.'))
-            .unwrap_or_else(|| panic!("`{path}` is not a `{SPECS_NAMESPACE}.*` path"));
-        match universal_field(&path) {
-            Some(field) => assert_eq!(
-                row[dom_column],
-                format!("`{field}`"),
-                "`{path}` is projected onto `{field}` (§6.3)"
-            ),
-            None => assert_eq!(
-                row[dom_column], "—",
-                "`{path}` is not a DOM field, so its cell is `—`"
-            ),
-        }
-        keys.push(key.to_string());
+        assert!(
+            path.starts_with(&format!("{SPECS_NAMESPACE}.")),
+            "a neutral position keeps its `{SPECS_NAMESPACE}.*` spelling, got `{path}`"
+        );
+        paths.push(path);
     }
 
-    let expected: Vec<String> = SPECS_KEYS.iter().map(|key| key.to_string()).collect();
-    assert_eq!(keys, expected, "§0 lists exactly the five positions");
+    let expected: Vec<String> = [SpecsKey::Tick, SpecsKey::Quote]
+        .iter()
+        .map(|key| key.default_path().to_string())
+        .collect();
+    assert_eq!(
+        paths, expected,
+        "§0 lists exactly the two neutral positions, in code order"
+    );
+}
+
+/// §0's universal table is the other half: `class` / `id` / `style` are DOM fields
+/// with the DOM's own names, and no `specs.*` prefix survives anywhere (§6.3).
+#[test]
+fn the_universal_table_is_the_dom_vocabulary() {
+    let table = tables(DOC)
+        .into_iter()
+        .find(|table| table.header == ["item", "field", "meaning"])
+        .expect("§0 prints the three universal DOM fields");
+    let field_column = table.column("field").expect("a `field` column");
+
+    let got: Vec<String> = table
+        .rows
+        .iter()
+        .map(|row| plain(&row[field_column]))
+        .collect();
+    let expected: Vec<String> = [SpecsKey::Class, SpecsKey::Id, SpecsKey::Style]
+        .iter()
+        .map(|key| key.default_path().to_string())
+        .collect();
+    assert_eq!(
+        got, expected,
+        "§0 lists exactly the three universal fields, at their DOM names"
+    );
+    for field in &got {
+        assert!(
+            !field.starts_with(&format!("{SPECS_NAMESPACE}.")),
+            "`{field}` is universal, so it carries no `{SPECS_NAMESPACE}.*` spelling"
+        );
+    }
 }
 
 /// §0's `number` table is the three public fields the numbering pass publishes

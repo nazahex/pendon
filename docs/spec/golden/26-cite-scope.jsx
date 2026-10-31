@@ -6,7 +6,7 @@ export default function PendonView() { return (<>
 export carries all of them by default (<code>references_scope = &quot;all&quot;</code>, §2.6 of
 RFC-0002). <code>paper</code> is never cited below, yet it still ships:
 </p>
-<p>Minim <sup class="cite-ref"><a href="#citeref-1-book" id="cite-1">[1]</a></sup> esse do ut anim proident.
+<p>Minim <sup><a href="#1-book" id="cite-1">[1]</a></sup> esse do ut anim proident.
 </p>
 <p><code>references_scope = &quot;cited&quot;</code> would drop <code>paper</code> from that export. The setting
 never touches <code>citations</code>, <code>reference_id</code> or <code>citation_number</code>.

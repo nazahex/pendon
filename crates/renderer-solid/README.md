@@ -86,8 +86,8 @@ so a payload's `~?!!…` figure still contributes its `Figure` import.
 ### Attribute names
 
 The fields come from the projection, so a name is a **path**, not automatically a
-JSX attribute name. `specs.class`/`specs.id`/`specs.style` are already renamed to
-`class`/`id`/`style` by `pendon_extra::project` (§6.5), and a dotted path
+JSX attribute name. `class`/`id`/`style` are the universal DOM fields and their
+path _is_ the attribute name (§6.5), and a dotted path
 (`specs.tick`, `bracket.bare`, an assigned `heading.anchor`) is emitted as a
 one-key spread — `<p {...{ "specs.tick": "x" }}>` — because `a.b=` would parse as a
 member expression. The path survives verbatim into the DOM, matching what

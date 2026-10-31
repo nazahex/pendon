@@ -118,25 +118,24 @@ for interpreting the parsed properties.
   `class` / `id` / `style`. [`Specs::resolve`] is the only read side of the
   entry's `field.*` naming (`field.bracket.bare` / `field.paren.bare` /
   `field.specs.<k>` — §6.1, D-5); an entry that configures nothing keeps the
-  built-in default paths (`specs.tick` / `specs.quote` / `specs.class` /
-  `specs.id` / `specs.style` and `bracket.bare` / `paren.bare`).
+  built-in default paths (`specs.tick` / `specs.quote`, the DOM names `class` /
+  `id` / `style` and `bracket.bare` / `paren.bare`).
   [`Specs::path`] says where a position is _published_; [`Specs::element_path`]
   is the only view an element
   may use — it answers the default path while the position is unassigned and
   `None` once `field.specs.<k>` moved it, because the assigned path is the
   author's own public field (§6.1). The type's doc carries the
   **`default path` / `meaning`** table, because only a default path has semantics.
-- **The DOM projection** (`Specs::dom_fields(items, element)` +
-  `universal_field`, `src/typed.rs`) — the §6.3 boundary: the three universal
-  positions (`specs.class` / `specs.id` / `specs.style`) are written as the DOM
-  fields they name, the element's own assignment wins when it renames one (a
-  cite's `#id` → `cite-id`), and everything else keeps its dotted path
-  (`specs.tick`, `bracket.bare`). Both halves match the **path**, not the
+- **The DOM projection** (`Specs::dom_fields(items, element)`, `src/typed.rs`)
+  — the §6.3 boundary: the three universal positions (`class` / `id` / `style`)
+  already carry the DOM field's own name as their default path, so nothing is
+  renamed anywhere; an element that reads the neutral positions names them
+  itself (a cite's quote → `title`), and everything else keeps its path
+  (`specs.tick`, `bracket.bare`). Every match is on the **path**, not the
   position, so a `field.specs.<k>` assignment that moved a position (`foo.class`,
   `bar.id`) is left alone — it is the author's field, with no DOM meaning and no
-  rename (§6.1). `dom_fields` returns borrowed `(field, value)` pairs, and
-  `project` applies the universal half on its own, so a renderer that emits
-  whatever the map holds is on the §6.3 side of the contract.
+  rename (§6.1). `dom_fields` returns borrowed `(field, value)` pairs, so a
+  renderer that emits whatever the map holds is on the §6.3 side of the contract.
 
 ## The retired form
 

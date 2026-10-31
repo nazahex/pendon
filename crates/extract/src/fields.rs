@@ -86,32 +86,26 @@ pub fn element(name: &str) -> Option<&'static str> {
 /// `*`): a preset *recommends* names, and a field an occurrence does not carry is
 /// dropped from that occurrence ([`crate::select`]), so an inert name costs
 /// nothing.
+///
+/// `id`, `class` and `style` are **universal DOM fields** (§0), so no element's
+/// preset names them as its own vocabulary — with one exception: `section`
+/// *derives* an `id` (§9.5, `plugin-section`'s id chain), so its preset lists it.
+/// Elsewhere they stay reachable through `preset = "all"` or `include = ["id"]`,
+/// which is what "universal" means for a selection.
 pub const PRESETS: [(&str, &[&str]); 10] = [
-    ("anchor", &["href", "id", "title", "type", "inner_text"]),
-    ("blockquote", &["type", "id", "class", "inner_text"]),
+    ("anchor", &["href", "title", "type", "inner_text"]),
+    ("blockquote", &["type", "inner_text"]),
     (
         "cite",
-        &[
-            "reference_id",
-            "locator",
-            "citation_number",
-            "cite-id",
-            "type",
-        ],
+        &["reference_id", "locator", "citation_number", "type"],
     ),
-    (
-        "directive",
-        &["type", "id", "level", "summary", "inner_text"],
-    ),
-    (
-        "heading",
-        &["depth", "id", "slug", "title", "type", "inner_text"],
-    ),
-    ("image", &["src", "alt", "width", "height", "type", "id"]),
-    ("list", &["type", "id", "start", "inner_text"]),
-    ("marker", &["type", "slug", "id", "title", "inner_text"]),
-    ("section", &["id", "type", "class", "depth"]),
-    ("table", &["type", "id", "caption"]),
+    ("directive", &["type", "level", "summary", "inner_text"]),
+    ("heading", &["depth", "slug", "title", "type", "inner_text"]),
+    ("image", &["src", "alt", "width", "height", "type"]),
+    ("list", &["type", "start", "inner_text"]),
+    ("marker", &["type", "slug", "title", "inner_text"]),
+    ("section", &["type", "id", "depth"]),
+    ("table", &["type", "caption"]),
 ];
 
 /// The `preset = "pendon"` field list of `element` — §12 of the inventory, read
@@ -162,7 +156,7 @@ mod tests {
     #[test]
     fn an_unknown_element_has_no_preset() {
         assert!(pendon_preset("figure").is_empty());
-        assert_eq!(pendon_preset("cite").len(), 5);
+        assert_eq!(pendon_preset("cite").len(), 4);
     }
 
     #[test]

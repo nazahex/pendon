@@ -316,8 +316,8 @@ mod tests {
         assert_eq!(attr(&out, "__plugin_kind").as_deref(), Some("unordered"));
         assert_eq!(attr(&out, "__layer").as_deref(), Some("unordered"));
         assert_eq!(attr(&out, "type").as_deref(), Some("unorderedA"));
-        assert_eq!(attr(&out, "specs.class").as_deref(), Some("u"));
-        assert_eq!(attr(&out, "specs.id").as_deref(), Some("l03"));
+        assert_eq!(attr(&out, "class").as_deref(), Some("u"));
+        assert_eq!(attr(&out, "id").as_deref(), Some("l03"));
         // The marker lines stay untouched for `plugin-markdown` (§9.3).
         assert!(text(&out).contains("- one"), "{:?}", text(&out));
         assert!(!text(&out).contains("@@"));
@@ -330,7 +330,7 @@ mod tests {
         assert_eq!(element(&out).as_deref(), Some("ul"), "{out:?}");
         assert_eq!(attr(&out, "__layer").as_deref(), Some("unordered"));
         assert_eq!(attr(&out, "type"), None);
-        assert_eq!(attr(&out, "specs.class").as_deref(), Some("u"));
+        assert_eq!(attr(&out, "class").as_deref(), Some("u"));
     }
 
     /// §9.4: the marker decides the layer, not the decorator's type.
@@ -361,7 +361,7 @@ mod tests {
     fn a_head_inside_an_item_is_content() {
         let out = run("@@{.u}\n\n- @@unorderedA{.x} one\n- two\n");
         assert_eq!(element(&out).as_deref(), Some("ul"), "{out:?}");
-        assert_eq!(attr(&out, "specs.class").as_deref(), Some("u"));
+        assert_eq!(attr(&out, "class").as_deref(), Some("u"));
         assert_eq!(attr(&out, "type"), None, "{out:?}");
         assert!(
             text(&out).contains("- @@unorderedA{.x} one"),

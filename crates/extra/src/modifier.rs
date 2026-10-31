@@ -17,17 +17,16 @@
 //!    — the element then drops the whole run ([`merge`]).
 //!
 //! Contributions are **specs-level fields**: they are ordinary public field
-//! paths (`class`, `rel`, `soo.baz`), mapped through
-//! [`universal_field`](crate::typed::universal_field) exactly like a specs
-//! position, and never renamed from `field.*` config (D-5: a modifier is not a
-//! field config key).
+//! paths (`class`, `rel`, `soo.baz`), written exactly as the config spells them —
+//! `class` is the universal DOM field, so no rename happens — and never renamed
+//! from `field.*` config (D-5: a modifier is not a field config key).
 
 use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::field::{FieldMap, FieldMapError, Path};
 use crate::slot::SlotPair;
-use crate::typed::{universal_field, ExtrasAttr};
+use crate::typed::ExtrasAttr;
 use crate::value::AttrValue;
 
 /// One entry's `bracket.modifier."<symbol>"` tables: the fields each symbol of
@@ -78,8 +77,9 @@ impl ModifierConfig {
 /// One field a modifier run contributes to the element (§5.4, D-9).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Contribution {
-    /// The public field name — already mapped through the universal DOM fields,
-    /// so `specs.class` arrives as `class`.
+    /// The public field name, exactly as the config spelled it: `class` is the
+    /// universal DOM field, so it needs no mapping, and a dotted path is the
+    /// author's own.
     pub name: String,
     /// The symbol that first contributed this path; named by the diagnostic a
     /// field the element already carries raises.
@@ -171,7 +171,7 @@ pub fn merge(
     let mut origin: BTreeMap<String, char> = BTreeMap::new();
     for &symbol in modifiers {
         for (path, value) in config.for_symbol(symbol) {
-            let target = public_path(path);
+            let target = path.clone();
             let merged = match fields.get(&target) {
                 None => value.clone(),
                 Some(existing) => merge_value(existing, value.clone()).ok_or_else(|| {
@@ -210,17 +210,6 @@ pub fn contributions(
     pair: &SlotPair,
 ) -> Result<Vec<Contribution>, ModifierError> {
     merge(config, &pair.modifiers)
-}
-
-/// §6.3: a universal specs path is written as the DOM field it names
-/// (`specs.class` → `class`) — the same rename [`project`](crate::project) does
-/// for a node attribute, applied here because a contribution never passes
-/// through `to_attributes`.
-fn public_path(path: &Path) -> Path {
-    match universal_field(&path.dotted()) {
-        Some(field) => Path::from_dotted(field).expect("a universal field name is a valid path"),
-        None => path.clone(),
-    }
 }
 
 /// `true` / a bare flag aside, two contributions to one path merge per D-9 — but
@@ -448,12 +437,13 @@ mod tests {
         assert!(error.message().contains("soo.baz"), "{}", error.message());
     }
 
-    /// §6.3: a contribution is a public field, so `specs.class` is `class` —
-    /// and two symbols writing the two spellings merge into one path.
+    /// §6.3: a contribution is a public field, written exactly as the config
+    /// spells it — `class` is the universal DOM field, so there is no rename and
+    /// two symbols writing it merge into one path.
     #[test]
-    fn universal_specs_paths_are_renamed() {
+    fn a_contribution_keeps_the_path_the_config_spells() {
         let mut config = ModifierConfig::new();
-        config.define('?', vec![(path("specs.class"), text("a"))]);
+        config.define('?', vec![(path("class"), text("a"))]);
         config.define('!', vec![(path("class"), text("b"))]);
         let fields = merge(Some(&config), &['?', '!']).expect("mergeable");
         assert_eq!(names(&fields), ["class"]);
@@ -461,6 +451,13 @@ mod tests {
             fields[0].attr,
             ExtrasAttr::Value(AttrValue::Array(vec![text("a"), text("b")]))
         );
+
+        // A dotted path is a field of the author's own: it is never folded onto
+        // the DOM name, because the author already named it (D-5).
+        let mut config = ModifierConfig::new();
+        config.define('?', vec![(path("foo.class"), text("a"))]);
+        let fields = merge(Some(&config), &['?']).expect("mergeable");
+        assert_eq!(names(&fields), ["foo.class"]);
     }
 
     /// `true` is a bare flag (§6.3); every other value keeps its literal text,

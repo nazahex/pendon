@@ -100,10 +100,7 @@ impl ChainConfig {
         } else {
             None
         };
-        // §9.5: when the section outline owns the ids, the heading yields its id
-        // (it transfers to the section).
-        let mut heading = build_heading_options(None)?;
-        heading.section_owns_id = enabled.contains("section");
+        let heading = build_heading_options(None)?;
 
         Ok(Self {
             task_name: task_name.to_string(),

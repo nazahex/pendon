@@ -480,13 +480,13 @@ mod tests {
             &paragraph("{{note}}@@noteX{.hero}"),
             &MarkerOptions::default(),
         );
-        assert_eq!(attr(&adjacent, "specs.class").as_deref(), Some("hero"));
+        assert_eq!(attr(&adjacent, "class").as_deref(), Some("hero"));
 
         let spaced = run(
             &paragraph("{{note}} @@noteX{.hero}"),
             &MarkerOptions::default(),
         );
-        assert_eq!(attr(&spaced, "specs.class"), None);
+        assert_eq!(attr(&spaced, "class"), None);
         assert!(text_of(&spaced).contains("@@noteX"), "{}", text_of(&spaced));
     }
 
@@ -510,9 +510,9 @@ mod tests {
             &paragraph("{{note}}@@noteX{.hero, level: 2, --tone: \"red\", isOpen}"),
             &MarkerOptions::default(),
         );
-        assert_eq!(attr(&out, "specs.class").as_deref(), Some("hero"));
+        assert_eq!(attr(&out, "class").as_deref(), Some("hero"));
         assert_eq!(attr(&out, "level").as_deref(), Some("2"));
-        assert_eq!(attr(&out, "specs.style").as_deref(), Some("--tone: red"));
+        assert_eq!(attr(&out, "style").as_deref(), Some("--tone: red"));
         assert!(flag(&out, "isOpen"));
     }
 
@@ -537,7 +537,7 @@ mod tests {
         );
         assert_eq!(attr(&out, "bracket.bare").as_deref(), Some("intro"));
         assert_eq!(attr(&out, "paren.bare").as_deref(), Some("T"));
-        assert_eq!(attr(&out, "specs.class").as_deref(), Some("hero"));
+        assert_eq!(attr(&out, "class").as_deref(), Some("hero"));
 
         // Adjacency: a space before `[` keeps the rest literal.
         let out = run(
@@ -662,7 +662,7 @@ mod tests {
     fn an_extras_type_is_overridden_silently() {
         let out = run(&paragraph("{{note}}@@noteX{.x}"), &MarkerOptions::default());
         assert_eq!(attr(&out, "type").as_deref(), Some("note"));
-        assert_eq!(attr(&out, "specs.class").as_deref(), Some("x"));
+        assert_eq!(attr(&out, "class").as_deref(), Some("x"));
         assert!(warnings(&out).is_empty(), "{:?}", warnings(&out));
 
         // The built-in field is `type` alone: the marker's own text is its

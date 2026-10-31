@@ -9,7 +9,8 @@ head above it would be redundant:
 <section depth="2" id="slug-section" type="sectionA">
 <h1 class="lead" title="Head title" type="headingX">Section A</h1>
 <p>The section id is the first of <code>#sectionID</code> &gt; <code>slug-section</code> &gt; <code>[slug]</code> &gt; extras
-slug &gt; the slug of the title; the heading yields its own id to the section.
+tick &gt; the slug of the title; the heading keeps its own id, so the two never
+stand in for each other.
 </p>
 <section depth="3">
 <p>A <code>&lt;---&gt;</code> marker deepens the outline without waiting for a deeper heading.

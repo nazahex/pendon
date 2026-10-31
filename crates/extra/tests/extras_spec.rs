@@ -178,15 +178,15 @@ fn class_accumulates_and_dedupes() {
     assert_eq!(
         items,
         vec![(
-            "specs.class".to_string(),
+            "class".to_string(),
             ExtrasAttr::Value(AttrValue::Str("a b c".into()))
         )]
     );
     assert!(issues.is_empty(), "{issues:?}");
 }
 
-/// D-12, one case per rule: a repeated `specs.tick` / `specs.quote` /
-/// `specs.id`, a repeated prop and a repeated flag are an `Error` that keeps the
+/// D-12, one case per rule: a repeated `specs.tick` / `specs.quote` / `id`,
+/// a repeated prop and a repeated flag are an `Error` that keeps the
 /// **first** value; a repeated `style:` property is last-wins with no
 /// diagnostic (CSS semantics).
 #[test]
@@ -204,8 +204,8 @@ fn duplicates_are_an_error_and_the_first_value_wins() {
         ),
         (
             "@@type{#one, #two}",
-            vec![("specs.id".to_string(), attr("one"))],
-            vec!["specs.id"],
+            vec![("id".to_string(), attr("one"))],
+            vec!["id"],
         ),
         (
             "@@type{k: \"one\", k: \"two\"}",
@@ -219,12 +219,12 @@ fn duplicates_are_an_error_and_the_first_value_wins() {
         ),
         (
             "@@type{--tone: red, --tone: blue}",
-            vec![("specs.style".to_string(), attr("--tone: blue"))],
+            vec![("style".to_string(), attr("--tone: blue"))],
             vec![],
         ),
         (
             "@@type{style: \"color: red\", style: \"color: blue\"}",
-            vec![("specs.style".to_string(), attr("color: blue"))],
+            vec![("style".to_string(), attr("color: blue"))],
             vec![],
         ),
     ];
@@ -277,7 +277,7 @@ fn positional_names_default_to_slug_then_title() {
         .into_iter()
         .map(|(key, _)| key)
         .collect();
-    assert_eq!(keys, vec!["specs.class", "specs.tick", "specs.quote"]);
+    assert_eq!(keys, vec!["class", "specs.tick", "specs.quote"]);
 }
 
 #[test]
@@ -310,9 +310,9 @@ fn positional_names_resolve_from_field_config() {
     assert_eq!(names.bracket, "bracket.bare");
     assert_eq!(names.tick, "specs.tick");
     assert_eq!(names.quote, "specs.quote");
-    assert_eq!(names.class, "specs.class");
-    assert_eq!(names.id, "specs.id");
-    assert_eq!(names.style, "specs.style");
+    assert_eq!(names.class, "class");
+    assert_eq!(names.id, "id");
+    assert_eq!(names.style, "style");
 
     let mut all = FieldConfig::new();
     all.assign_slot(
@@ -336,9 +336,9 @@ fn positional_names_resolve_from_field_config() {
             paren: "kind".into(),
             tick: "ref".into(),
             quote: "blurb".into(),
-            class: "specs.class".into(),
-            id: "specs.id".into(),
-            style: "specs.style".into(),
+            class: "class".into(),
+            id: "id".into(),
+            style: "style".into(),
         }
     );
 }
@@ -381,9 +381,9 @@ fn every_specs_position_moves_with_field_specs() {
     let items = [
         ("`s`", "specs.tick"),
         ("\"T\"", "specs.quote"),
-        (".c", "specs.class"),
-        ("#i", "specs.id"),
-        ("style: \"color: red\"", "specs.style"),
+        (".c", "class"),
+        ("#i", "id"),
+        ("style: \"color: red\"", "style"),
     ];
     for (position, (item, default)) in positions.into_iter().zip(items) {
         let source = format!("@@type{{{item}}}");
@@ -440,7 +440,7 @@ fn dom_fields_projects_only_default_paths() {
     );
     // …and a pair for a different position leaves the item alone.
     assert_eq!(
-        projected("@@type{\"T\"}", &default, &[(SpecsKey::Id, "cite-id")]),
+        projected("@@type{\"T\"}", &default, &[(SpecsKey::Id, "ref-id")]),
         ["specs.quote"]
     );
     // 2. A position the entry moved keeps the assigned spelling: no DOM rename,
@@ -454,7 +454,7 @@ fn dom_fields_projects_only_default_paths() {
         .unwrap();
     let assigned = Specs::resolve(Some(&config));
     assert_eq!(
-        projected("@@type{.c, #i}", &assigned, &[(SpecsKey::Id, "cite-id")]),
+        projected("@@type{.c, #i}", &assigned, &[(SpecsKey::Id, "ref-id")]),
         ["bar.id", "foo.class"]
     );
     // 3. The positions it left alone still project as usual.
@@ -497,11 +497,11 @@ fn css_vars_and_style_props_merge_into_one_style_attribute() {
         items,
         vec![
             (
-                "specs.class".to_string(),
+                "class".to_string(),
                 ExtrasAttr::Value(AttrValue::Str("a".into()))
             ),
             (
-                "specs.style".to_string(),
+                "style".to_string(),
                 ExtrasAttr::Value(AttrValue::Str(
                     "--tone: red; color: blue; --size: 2rem".into()
                 ))
@@ -536,7 +536,7 @@ fn class_props_accumulate_with_class_items() {
     assert_eq!(
         items,
         vec![(
-            "specs.class".to_string(),
+            "class".to_string(),
             ExtrasAttr::Value(AttrValue::Str("a text-lg b".into()))
         )]
     );
@@ -613,11 +613,11 @@ fn spec_worked_example() {
         items,
         vec![
             (
-                "specs.class".to_string(),
+                "class".to_string(),
                 ExtrasAttr::Value(AttrValue::Str("extra class".into()))
             ),
             (
-                "specs.id".to_string(),
+                "id".to_string(),
                 ExtrasAttr::Value(AttrValue::Str("id".into()))
             ),
             (
@@ -638,7 +638,7 @@ fn spec_worked_example() {
                 ExtrasAttr::Value(AttrValue::Bool(true))
             ),
             (
-                "specs.style".to_string(),
+                "style".to_string(),
                 ExtrasAttr::Value(AttrValue::Str("--style-var: 2rem".into()))
             ),
             ("isBar".to_string(), ExtrasAttr::Flag),
@@ -768,13 +768,7 @@ fn groups_map_through_the_positional_keys() {
     // class, then the groups in order, then the slug item and slug prop (no collision now).
     assert_eq!(
         keys,
-        vec![
-            "specs.class",
-            "bracket.bare",
-            "paren.bare",
-            "specs.tick",
-            "slug"
-        ]
+        vec!["class", "bracket.bare", "paren.bare", "specs.tick", "slug"]
     );
     assert_eq!(
         attrs.value("bracket.bare").map(AttrValue::literal),

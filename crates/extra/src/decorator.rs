@@ -1123,7 +1123,7 @@ mod tests {
         let line = parse_decorator_line("  @@note{.a}", &specs).expect("decorator line");
         assert_eq!(line.indent, 2);
         assert_eq!(line.type_marker.as_deref(), Some("note"));
-        assert!(line.attrs.has("specs.class"));
+        assert!(line.attrs.has("class"));
     }
 
     /// §5/§9.1: a decorator reads the whole head in the one canonical order —
@@ -1136,7 +1136,7 @@ mod tests {
         assert_eq!(line.type_marker.as_deref(), Some("aside"));
         assert!(line.attrs.has("bracket.bare"));
         assert!(line.attrs.has("paren.bare"));
-        assert!(line.attrs.has("specs.class"));
+        assert!(line.attrs.has("class"));
         let number = line.attrs.value("__number").expect("a numbering marker");
         assert_eq!(
             number.literal(),
@@ -1163,7 +1163,7 @@ mod tests {
             line.attrs.value("paren.bare").map(|value| value.literal()),
             Some("T".to_string())
         );
-        assert!(line.attrs.has("specs.class"));
+        assert!(line.attrs.has("class"));
 
         // Groups without a body and the untyped `@@[…]` form.
         let line = parse_decorator_line("@@aside[intro]", &specs).expect("decorator line");
@@ -1194,7 +1194,7 @@ mod tests {
         assert_eq!(bindings.bound.len(), 1, "{:?}", bindings.bound);
         let bound = &bindings.bound[0];
         assert_eq!(bound.type_marker.as_deref(), Some("aside"));
-        assert!(bound.attrs.has("specs.class"));
+        assert!(bound.attrs.has("class"));
         assert!(bound.attrs.has("bracket.bare"));
         assert!(bound.attrs.has("paren.bare"));
         assert!(!texts(&bindings.events).contains("@@aside"));

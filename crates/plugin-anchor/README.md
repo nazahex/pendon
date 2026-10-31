@@ -125,7 +125,7 @@ An extras head may be attached immediately after the closing parenthesis:
 
 The head is a single `{…}` block; the `@@type` prefix is optional and, when
 present, is the §11 routing marker of the instance. `.class` items accumulate in
-the `class` list, `#id` (or a positional `` `slug` ``) sets the element `id`, and
+the `class` list, `#id` sets the element `id` (the universal DOM field, §6.3), and
 `key: "value"` items set arbitrary attributes.
 
 Special handling (§6.2, D-12):
@@ -135,8 +135,8 @@ Special handling (§6.2, D-12):
   `T`)
 - A head item that names a field this element writes itself (`href`) is an
   `Error` naming `field.override.href`
-- `.class` items accumulate; `#id` wins the `id`, and a positional `` `slug` ``
-  is the `id` **fallback** when no `#id` exists
+- `.class` items accumulate, and `#id` is the only source of the `id`; the tick
+  position carries no default meaning, so a `` `slug` `` stays `specs.tick`
 - Keys starting with `--` are passed through as-is (for CSS custom properties)
 - Every other key becomes a regular HTML/Solid attribute — `target` and `rel`
   were never special and are not special now
@@ -171,7 +171,7 @@ the same module are merged into a single `import` statement.
 | `{attrs.href}`  | Link target                                          |
 | `{attrs.title}` | Link title (if provided)                             |
 | `{attrs.class}` | Class list from the extras head (if provided)        |
-| `{attrs.id}`    | `#id`, or the extras slug when no `#id` exists       |
+| `{attrs.id}`    | The extras `#id` (universal, §6.3)                   |
 | `{attrs.type}`  | The `@@type{…}` marker, so an entry can read it back |
 | `{children}`    | `inner_text` — the text the `<a>` wraps              |
 

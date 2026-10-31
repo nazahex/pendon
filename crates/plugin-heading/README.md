@@ -13,9 +13,9 @@ owns `attrs.number` (ADR-0010).
 - Reads the §7.4 head `#[slug]("title")` and the §11 `{…}` / `@@type{…}` extras
   head that follows it, in one pass over the raw heading line
 - Publishes `depth`: the `#` run **minus the one hash the tag spends** (D-11)
-- Publishes `slug` (the head's `[slug]`, else the extras `` `tick` ``, else a slug
-  of `inner_text`), `title` (the head's `("title")`) and `id` (§6.2's chain
-  `#id` > `[slug]` > extras tick > auto slug)
+- Publishes `slug` (the head's `[slug]`, else a slug of the heading text),
+  `title` (the head's `("title")`) and `id` (the universal extras `#id`, §6.3) —
+  the plugin derives no id at all, and the tick carries no default meaning (§6.2)
 - Emits the §11 layer tag `__layer = "heading"` in both modes, so
   `number` and `plugin-extract` can tell the element kind from the stream
 - Strips the head from the visible text in both standard and custom modes; the
@@ -85,10 +85,9 @@ between the head and the text belongs to the head (it is not part of the text).
 ```
 
 `slug="intro"`-style fields come from the preset: `bracket.bare` → `slug`,
-`paren.quote` → `title` (§6.6). The extras tick loses to the head's `[slug]` and
-is reported (§6.2). With no `[slug]`, an extras tick at its default path
-`specs.tick` **is** the fallback slug — §6.2's chain is `#id` > `[slug]` > extras
-tick > a slug of the text:
+`paren.quote` → `title` (§6.6). The extras tick is a plain `specs.tick` field: it
+neither loses to nor fills in for the `[slug]` (§6.2). With no `[slug]`, `slug`
+falls back to a slug of the heading text (`pendon_core::slugify`):
 
 ```md
 ##@@headingX{`slug-extras`, .fancy} Extras tick
@@ -150,8 +149,8 @@ coming from the same module are merged into a single `import` statement.
 | Attribute        | Description                                                           |
 | :--------------- | :-------------------------------------------------------------------- |
 | `{attrs.depth}`  | The depth as a string (`"1"`…`"6"`, §7.4)                             |
-| `{attrs.id}`     | extras `#id` > `[slug]` > extras tick > auto slug (§6.2)              |
-| `{attrs.slug}`   | The same fallback chain, always slug-shaped                           |
+| `{attrs.id}`     | The universal extras `#id` (§6.2, §6.3)                               |
+| `{attrs.slug}`   | The head's `[slug]`, else a slug of the heading text                  |
 | `{attrs.title}`  | The head's `("title")`                                                |
 | `{attrs.number}` | Written by `number` when a `number` block selects the heading (array) |
 | `{attrs.class}`  | Space-separated class list from the extras head                       |
@@ -204,9 +203,11 @@ nothing, and a config-only entry (no `name` / `template`) is enough to define on
 - The head (`[slug]`, `("title")`, `{…}` / `@@type{…}`) is stripped from the visible text in all modes
 - The head must be adjacent: `## Title {.x}` and `{key: val}` written apart are literal text
 - Unquoted values in `{key: val}` are accepted (numbers, booleans stored as strings)
-- Slug generation lowercases and collapses every run of non-alphanumerics into one `-`
-- §9.5: with `section_owns_id = true` no `id`/`slug` is emitted (the section owns it)
-- A heading whose text is empty still gets a slug from the head, never from nothing
+- `slug` is the `[slug]` slot, or `slugify` of the heading text when the head has
+  none (text with no alphanumeric character publishes no slug at all)
+- No id is derived: `id` is the universal extras `#id`, so a `[slug]` is never an id
+- `plugin-section` does not suppress any of this; the section keeps its own id
+  chain and reports a heading extras `#id` instead of consuming it (§9.5)
 
 ## Scope and Limitations
 

@@ -69,23 +69,6 @@ pub const HEAD: ElementHead = ElementHead::new(
 )
 .with_owned(OWNED);
 
-// --- Built-in markup (§7.3) ---
-
-/// The class of the fallback `<sup>` when no component answers the citation.
-///
-/// Not configurable (`citation_class` is gone, §14): a site that wants its own
-/// class names writes a `Cite` component instead — the reason the config key was
-/// removed. The three constants below are what the built-in markup has always
-/// produced by default.
-const CITATION_CLASS: &str = "cite-ref";
-
-/// The `href` prefix of a citation's backlink into the bibliography
-/// (`#citeref-1-book`).
-const REF_HREF_PREFIX: &str = "citeref-";
-
-/// The `id` prefix of a citation's own anchor (`cite-1`).
-const CITATION_ANCHOR_PREFIX: &str = "cite-";
-
 // --- Public Types ---
 
 #[derive(Clone, Debug, Default)]
@@ -567,18 +550,21 @@ fn emit_citation(parts: CiteParts, ctx: &mut CitationContext, out: &mut Vec<Even
     emit_citation_html(out, &parts, citation_number, instance);
 }
 
-/// The built-in markup: `<sup class="cite-ref"><a href="#citeref-1-book"
-/// id="cite-1">[1]</a></sup>` plus the extras the head carries.
+/// The built-in markup: `<sup id="…"><a href="#1-book" id="cite-1">[1]</a></sup>`
+/// plus the extras the head carries.
 ///
-/// The class and the two prefixes are constants (§7.3): a site that wants its own
-/// spelling writes a `Cite` component, which is why `citation_class`,
-/// `ref_id_prefix` and `citation_id_prefix` are gone (§14).
+/// The markup is pure (§7.3): no built-in class and no `href` / `id` prefix — a
+/// site that wants its own spelling writes a `Cite` component, which is why
+/// `citation_class`, `ref_id_prefix` and `citation_id_prefix` are gone (§14).
+/// `class` and `id` are the universal DOM fields (§6.3), so they appear only
+/// when the head supplied them; the `cite-<n>` backlink anchor is the citation's
+/// own, not a field.
 ///
-/// The markup is fixed, but the *fields* are not: every position the head carried
-/// beyond `reference_id` / `locator` (D-7's `bracket.tick`, `paren.bare`, …) is
-/// written under the `data-` prefix — `bracket.tick` becomes
-/// `data-bracket-tick`, the spelling a dotted path gets when it cannot be a prop
-/// (§6.3). A cite head never loses content for want of a component.
+/// Every position the head carried beyond `reference_id` / `locator`
+/// (D-7's `bracket.tick`, `paren.bare`, …) is written under the `data-`
+/// prefix — `bracket.tick` becomes `data-bracket-tick`, the spelling a
+/// dotted path gets when it cannot be a prop (§6.3). A cite head never
+/// loses content for want of a component.
 fn emit_citation_html(
     out: &mut Vec<Event>,
     parts: &CiteParts,
@@ -586,28 +572,25 @@ fn emit_citation_html(
     instance: usize,
 ) {
     let extra = &parts.extra;
-    let target = format!(
-        "{}{}-{}",
-        REF_HREF_PREFIX, citation_number, parts.reference_id
-    );
-    let anchor = format!("{}{}", CITATION_ANCHOR_PREFIX, instance);
+    let target = format!("#{}-{}", citation_number, parts.reference_id);
+    let anchor = format!("cite-{}", instance);
 
-    // Build class list: the built-in class + extra classes
-    let mut classes = vec![CITATION_CLASS.to_string()];
-    classes.extend(extra.classes.iter().cloned());
-    let class_attr = classes.join(" ");
-
-    let mut html = format!(
-        "<sup class=\"{}\"><a href=\"#{}\" id=\"{}\"",
-        escape_html(&class_attr),
+    let mut html = String::from("<sup");
+    // §6.4: `class` accumulates — with no built-in class the attribute appears
+    // only when the head supplied one.
+    let class_attr = extra.classes.join(" ");
+    if !class_attr.is_empty() {
+        html.push_str(&format!(" class=\"{}\"", escape_html(&class_attr)));
+    }
+    // §6.3: `id` is the universal DOM field, so it lands on the citation element.
+    if let Some(id) = &extra.id {
+        html.push_str(&format!(" id=\"{}\"", escape_html(id)));
+    }
+    html.push_str(&format!(
+        "><a href=\"{}\" id=\"{}\"",
         escape_html(&target),
         escape_html(&anchor),
-    );
-
-    // Add extra id if present (appended to anchor id)
-    if let Some(extra_id) = &extra.id {
-        html.push_str(&format!(" data-cite-id=\"{}\"", escape_html(extra_id)));
-    }
+    ));
 
     // §7.3/D-7: every other claimed position is an ordinary field, and this
     // markup has no prop of its own for one — so it writes the field the way the
@@ -628,7 +611,12 @@ fn emit_citation_html(
 
     // Add data attributes
     for (k, v) in &extra.data {
-        html.push_str(&format!(" data-{}=\"{}\"", escape_html(k), escape_html(v)));
+        let attribute = format!("data-{}", k.replace('.', "-"));
+        html.push_str(&format!(
+            " {}=\"{}\"",
+            escape_html(&attribute),
+            escape_html(v)
+        ));
     }
 
     // Add style attributes
@@ -653,12 +641,13 @@ fn emit_citation_html(
 ///
 /// Unlike the default HTML path (which renders arbitrary props as `data-*`
 /// attributes), a custom Solid component receives plain props, so the keys are
-/// passed through verbatim. The extra `#id` is emitted as `cite-id` to keep it
-/// distinguishable from the citation reference `id`.
+/// passed through verbatim. `id` keeps its universal spelling (§6.3): the
+/// citation's backlink anchor is built-in markup, not a field, so there is no
+/// collision to work around.
 fn emit_extra_attrs(out: &mut Vec<Event>, extra: &CiteExtraAttrs) {
     if let Some(id) = &extra.id {
         out.push(Event::Attribute {
-            name: "cite-id".to_string(),
+            name: "id".to_string(),
             value: id.clone(),
         });
     }
@@ -854,27 +843,9 @@ fn merge_cite_extras(
         items.push((key.clone(), value.clone()));
     }
 
-    // §6.2/§6.3: `#id` > extras `slug`; both feed the `cite-id` slot **while the
-    // position keeps its default path** — a `field.specs.*` assignment publishes it
-    // as a field of the author's own, which the citation no longer reads.
-    let id = specs.element_path(SpecsKey::Id);
-    let tick = specs.element_path(SpecsKey::Tick);
-    let extras_id = id
-        .and_then(|path| parsed.value(path))
-        .map(|value| value.literal());
-    let extras_slug = tick
-        .and_then(|path| parsed.value(path))
-        .map(|value| value.literal());
-
-    // §6.3: the citation's own positions — `class` / `style` are the universal
-    // DOM fields, `#id` feeds `cite-id` and an extras `"title"` is the `title`.
-    for (key, value) in specs.dom_fields(
-        &items,
-        &[(SpecsKey::Id, "cite-id"), (SpecsKey::Quote, "title")],
-    ) {
-        if key == "cite-id" || tick == Some(key) {
-            continue;
-        }
+    // §6.3: `class` / `id` / `style` are the universal DOM fields; an extras
+    // `"title"` (the quote position) is the `title`.
+    for (key, value) in specs.dom_fields(&items, &[(SpecsKey::Quote, "title")]) {
         if HEAD.owns(key) {
             // D-12 rule 5: the processor writes `citation_number`, so an extras
             // item that spells it is an `Error`, not a silent overwrite.
@@ -909,6 +880,16 @@ fn merge_cite_extras(
                     }
                     continue;
                 }
+                if key == "id" {
+                    if extra.has_key("id") {
+                        extra.issues.push(ExtrasIssue::warning(
+                            "`id` was dropped because the construct head already sets it",
+                        ));
+                    } else {
+                        extra.id = Some(text);
+                    }
+                    continue;
+                }
                 if extra.has_key(key) {
                     extra.issues.push(ExtrasIssue::warning(format!(
                         "`{key}` was dropped because the construct head already sets it"
@@ -919,15 +900,6 @@ fn merge_cite_extras(
             }
         }
     }
-
-    match extras_id.or(extras_slug) {
-        Some(id) if extra.id.is_none() => extra.id = Some(id),
-        Some(_) => extra.issues.push(ExtrasIssue::warning(
-            "extras `id` was dropped because the citation already has an id (§6.2)",
-        )),
-        None => {}
-    }
-
     // §11 rule 3: the type marker is the routing key of the citation; it is
     // carried as a `type` attribute so a `{attrs.type}` template can read it
     // back. An explicit `type:` prop keeps its own value.
@@ -980,7 +952,6 @@ fn merge_modifiers(extra: &mut CiteExtraAttrs, pair: &SlotPair, config: Option<&
                     .issues
                     .push(ExtrasIssue::modifier_dropped(&field.name));
             }
-            "id" => extra.id = Some(text),
             _ => extra.data.push((field.name, text)),
         }
     }
@@ -1157,14 +1128,8 @@ mod tests {
         );
 
         let html = html_text(&result);
-        assert!(
-            html.contains(r##"href="#citeref-1-book" id="cite-1""##),
-            "{html}"
-        );
-        assert!(
-            html.contains(r##"href="#citeref-1-book" id="cite-2""##),
-            "{html}"
-        );
+        assert!(html.contains(r##"href="#1-book" id="cite-1""##), "{html}");
+        assert!(html.contains(r##"href="#1-book" id="cite-2""##), "{html}");
         assert_eq!(html.matches("[1]</a>").count(), 2, "{html}");
     }
 
@@ -1613,19 +1578,36 @@ mod tests {
         );
 
         let html = html_text(&result);
-        assert!(html.contains("class=\"cite-ref hero\""), "{html}");
+        assert!(html.contains("<sup class=\"hero\""), "{html}");
         assert!(html.contains("style=\"--color: red;\""), "{html}");
         assert!(html.contains(" isFoo>"), "{html}");
     }
 
+    /// §6.3: `#id` is the universal DOM field, so it lands on the citation
+    /// element under its own name — there is no `cite-id` slot any more.
     #[test]
-    fn cites_extras_id_lands_in_the_cite_id_slot() {
+    fn an_extras_id_is_the_citation_elements_id() {
+        let result = process(
+            &events_with_text(r#"[^book]@@cite{#short}"#),
+            &CiteOptions::default(),
+        );
+        let html = html_text(&result);
+        assert!(html.contains("<sup id=\"short\""), "{html}");
+    }
+
+    /// §6.2: the tick position carries no default meaning — an extras
+    /// `` `short-slug` `` stays the `specs.tick` field of the author's own and
+    /// never becomes an id.
+    #[test]
+    fn an_extras_tick_is_not_a_citation_id() {
         let result = process(
             &events_with_text(r#"[^book]@@cite{`short-slug`}"#),
             &CiteOptions::default(),
         );
-        // §6.2: `#id` > extras `slug`.
-        assert!(html_text(&result).contains("data-cite-id=\"short-slug\""));
+        let html = html_text(&result);
+        assert!(!html.contains("id=\"short-slug\""), "{html}");
+        assert!(!html.contains("cite-id"), "{html}");
+        assert!(html.contains("data-specs-tick=\"short-slug\""), "{html}");
     }
 
     /// S2-4.12/D-7: the built-in markup is fixed, but the head is not — every
@@ -1652,7 +1634,7 @@ mod tests {
         }
         // The preset's own positions keep their markup: the reference is the
         // href, and the locator has no attribute of its own (§7.3).
-        assert!(html.contains("href=\"#citeref-1-book\""), "{html}");
+        assert!(html.contains("href=\"#1-book\""), "{html}");
         assert!(!html.contains("locator="), "{html}");
     }
 
@@ -1825,7 +1807,7 @@ mod tests {
     }
 
     #[test]
-    fn extra_id_does_not_replace_citation_id_on_custom_node() {
+    fn an_extras_id_reaches_a_custom_node_as_the_id_prop() {
         let mut options = CiteOptions::default();
         options.custom =
             ComponentSet::from_entries([TypedComponent::default_component(CiteCustomNode {
@@ -1855,7 +1837,10 @@ mod tests {
         )));
         assert!(result.iter().any(|event| matches!(
             event,
-            Event::Attribute { name, value } if name == "cite-id" && value == "short"
+            Event::Attribute { name, value } if name == "id" && value == "short"
         )));
+        assert!(!result
+            .iter()
+            .any(|event| matches!(event, Event::Attribute { name, .. } if name == "cite-id")));
     }
 }

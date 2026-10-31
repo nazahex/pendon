@@ -6,7 +6,8 @@ head above it would be redundant:
 ##[slug-head]("Head title")@@headingX{.lead} Section A
 
 The section id is the first of `#sectionID` > `slug-section` > `[slug]` > extras
-slug > the slug of the title; the heading yields its own id to the section.
+tick > the slug of the title; the heading keeps its own id, so the two never
+stand in for each other.
 
 <--->
 

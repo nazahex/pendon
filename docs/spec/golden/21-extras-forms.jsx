@@ -1,4 +1,4 @@
-export const headings = [{"id":"slug-a","level":3,"text":"A typed heading"}];
+export const headings = [{"id":"a-typed-heading","level":3,"text":"A typed heading"}];
 export default function PendonView() { return (<>
 <p>The bare <code>&#123;…&#125;</code> spelling is the same head as <code>@@&#123;…&#125;</code> (§3); the <code>@@</code> prefix only
 adds the optional type marker (§4.1):
@@ -23,7 +23,7 @@ head at the end of a sentence does not gain a space (§4.1):
 <p>The same heads attach to a heading and to table cells (§7.4, §8) — a column&#39;s
 alignment-row extras stay on its <code>&lt;th&gt;</code>, a body cell keeps only its own head:
 </p>
-<h3 class="fancy" id="slug-a" type="headingX">A typed heading</h3>
+<h3 class="fancy" {...{ "specs.tick": "slug-a" }} type="headingX">A typed heading</h3>
 <table>
   <thead>
     <tr>

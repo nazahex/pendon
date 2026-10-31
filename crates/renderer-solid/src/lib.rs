@@ -244,30 +244,32 @@ mod tests {
         ]
     }
 
-    /// S2-3.4/§6.3: the universal specs positions are **DOM** attributes in the
-    /// JSX output — `specs.class` is written `class`, never the dotted path.
+    /// §6.3: `class`, `id` and `style` are the universal DOM fields, and the
+    /// universal names **are** the DOM names — the field map spells them that way,
+    /// so nothing renames anything on the way out.
     #[test]
-    fn specs_class_renders_as_the_dom_class() {
+    fn the_universal_fields_reach_the_dom_as_themselves() {
+        for (name, value, expected) in [
+            ("class", "lead big", r#"class="lead big""#),
+            ("id", "p1", r#"id="p1""#),
+            ("style", "--tone: red", r#"style="--tone: red""#),
+        ] {
+            let output = render_solid(&paragraph_with_attr(name, value));
+            assert!(
+                output.contains(&format!("<p {expected}>")),
+                "{name}: output = {output}"
+            );
+        }
+    }
+
+    /// §6.3/D-5: a `specs.*` spelling that is not one of the two neutral
+    /// positions is a field of the author's own, so it is **not** folded onto a
+    /// DOM name either — it is a dotted path, emitted as its one-key spread.
+    #[test]
+    fn a_specs_prefixed_author_field_is_not_renamed() {
         let output = render_solid(&paragraph_with_attr("specs.class", "lead big"));
         assert!(
-            output.contains("<p class=\"lead big\">"),
-            "output = {output}"
-        );
-    }
-
-    /// S2-3.4/§6.3: `specs.id` is the DOM `id`.
-    #[test]
-    fn specs_id_renders_as_the_dom_id() {
-        let output = render_solid(&paragraph_with_attr("specs.id", "p1"));
-        assert!(output.contains("<p id=\"p1\">"), "output = {output}");
-    }
-
-    /// S2-3.4/§6.3: `specs.style` is the DOM `style`.
-    #[test]
-    fn specs_style_renders_as_the_dom_style() {
-        let output = render_solid(&paragraph_with_attr("specs.style", "--tone: red"));
-        assert!(
-            output.contains("<p style=\"--tone: red\">"),
+            output.contains(r#"<p {...{ "specs.class": "lead big" }}>"#),
             "output = {output}"
         );
     }
@@ -279,14 +281,14 @@ mod tests {
     fn specs_tick_keeps_its_dotted_name() {
         let output = render_solid(&paragraph_with_attr("specs.tick", "listing-1"));
         assert!(
-            output.contains("<p {...{ \"specs.tick\": \"listing-1\" }}>"),
+            output.contains(r#"<p {...{ "specs.tick": "listing-1" }}>"#),
             "output = {output}"
         );
         assert!(!output.contains("specs.tick=\""), "output = {output}");
     }
 
-    /// S2-3.4: `specs.quote` keeps its dotted path too, and a neighbouring
-    /// universal position is still written as its DOM name.
+    /// S2-3.4: `specs.quote` keeps its dotted path too, beside a universal DOM
+    /// field, which is written as its own name.
     #[test]
     fn specs_quote_keeps_its_dotted_name() {
         let events = vec![
@@ -297,7 +299,7 @@ mod tests {
                 value: "T".to_string(),
             },
             Event::Attribute {
-                name: "specs.class".to_string(),
+                name: "class".to_string(),
                 value: "lead".to_string(),
             },
             Event::EndNode(NodeKind::Paragraph),
@@ -305,7 +307,7 @@ mod tests {
         ];
         let output = render_solid(&events);
         assert!(
-            output.contains("<p class=\"lead\" {...{ \"specs.quote\": \"T\" }}>"),
+            output.contains(r#"<p class="lead" {...{ "specs.quote": "T" }}>"#),
             "output = {output}"
         );
     }

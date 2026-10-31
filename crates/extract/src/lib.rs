@@ -411,6 +411,30 @@ mod tests {
         }
     }
 
+    /// A block with `preset = "all"`, one JSON output — for the tests that
+    /// identify rows by a **universal** field (`id`), which the `pendon` presets
+    /// of every element these tests use leave out (§0; only `section` lists it).
+    fn block_all(
+        element: &str,
+        types: &[&str],
+        output: &[&str],
+        export: Option<&str>,
+    ) -> ExtractBlock {
+        ExtractBlock::build(
+            BlockSpec {
+                element: element.to_string(),
+                types: types.iter().map(|name| name.to_string()).collect(),
+                output: output.iter().map(|path| path.to_string()).collect(),
+                format: vec!["json".to_string()],
+                preset: Some("all".to_string()),
+                export: export.map(str::to_string),
+                ..BlockSpec::default()
+            },
+            0,
+        )
+        .expect("a valid block")
+    }
+
     #[test]
     fn scan_reads_the_layer_and_hides_internal_keys() {
         let nodes = scan::scan(&heading("2", "intro", Some("HeadingA")));
@@ -492,10 +516,11 @@ mod tests {
         assert_eq!(depths, [("outer", 1), ("inner", 2)]);
     }
 
-    /// The default block (no `preset`, no `type`) writes every field the
-    /// element carries, internal keys excluded.
+    /// The default block (no `preset`, no `type`) is `preset = "pendon"`: the
+    /// element's own fields, internal keys excluded — and **not** the universal
+    /// `id` / `class` / `style`, which live outside every preset (§0).
     #[test]
-    fn run_writes_every_carried_field_by_default() {
+    fn run_writes_the_pendon_preset_by_default() {
         let events = heading("2", "intro", Some("HeadingA"));
         let output = run(
             &events,
@@ -515,6 +540,21 @@ mod tests {
             file.rows[0],
             serde_json::json!({
                 "depth": 2,
+                "type": "HeadingA",
+                "inner_text": "Intro",
+            })
+        );
+
+        // `preset = "all"` keeps the universal fields too, which is the only way
+        // a preset-driven block asks for them (§0, §21 rule 4).
+        let output = run(
+            &events,
+            &options(vec![block_all("heading", &[], &["out/all.json"], None)]),
+        );
+        assert_eq!(
+            output.files[0].rows[0],
+            serde_json::json!({
+                "depth": 2,
                 "id": "intro",
                 "type": "HeadingA",
                 "inner_text": "Intro",
@@ -528,11 +568,10 @@ mod tests {
         events.extend(heading("3", "b", Some("HeadingB")));
         let output = run(
             &events,
-            &options(vec![block(
+            &options(vec![block_all(
                 "heading",
                 &["HeadingA"],
                 &["out/a.json"],
-                &["json"],
                 None,
             )]),
         );
@@ -552,14 +591,8 @@ mod tests {
         let output = run(
             &events,
             &options(vec![
-                block(
-                    "heading",
-                    &["HeadingA", "HeadingB"],
-                    &["out/ab.json"],
-                    &["json"],
-                    None,
-                ),
-                block("heading", &[], &["out/rest.json"], &["json"], Some("rest")),
+                block_all("heading", &["HeadingA", "HeadingB"], &["out/ab.json"], None),
+                block_all("heading", &[], &["out/rest.json"], Some("rest")),
             ]),
         );
         let ids = |path: &str| -> Vec<String> {

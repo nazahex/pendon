@@ -13,11 +13,11 @@
 //! element did not read, and `@@` surviving in the output means the head fell
 //! back to literal text (§4.3).
 //!
-//! Element-specific projection is *not* what this test checks (a citation renames
-//! `#id` to `cite-id`, an image carries the quote as `data-title`, a heading lets
-//! its own head win the title): the per-row expectations are the element's
-//! documented output, while the *same* two checks — the positions are accepted,
-//! nothing is literal — run for every row.
+//! Element-specific projection is *not* what this test checks (an image carries
+//! the quote as `data-title`, a heading lets its own head win the title): `#id`
+//! is universal (§6.3), so every element publishes it as `id`, and the per-row
+//! expectations are the element's documented output, while the *same* two
+//! checks — the positions are accepted, nothing is literal — run for every row.
 
 use assert_cmd::cargo::cargo_bin_cmd;
 use std::fs;
@@ -85,11 +85,11 @@ name = "Cite"
 imports = "import { Cite } from '@comp/Cite'"
 template = "<Cite {...attrs} />"
 "#,
-        // §7.3/§6.3: the reference the head assigns, the citation's own id field,
-        // and the quote as its `title`.
+        // §7.3/§6.3: the reference the head assigns, the universal `id` and the
+        // quote as its `title`.
         expect: &[
             r#"reference_id="alpha""#,
-            r#"cite-id="elem-x""#,
+            r#"id="elem-x""#,
             r#"class="cls""#,
             r#"title="Title X""#,
         ],
