@@ -197,7 +197,7 @@ pub fn process_single_file(
 
     // Finalize cite
     if state.cite_ran {
-        let (diagnostics, citations, references, options) = state.context.finalize_citations();
+        let (diagnostics, _citations, references, options) = state.context.finalize_citations();
 
         if !diagnostics.is_empty() {
             let insert_at = events
@@ -210,11 +210,9 @@ pub fn process_single_file(
             }
         }
 
-        state.hints.push(pendon_plugin_cite::solid_hints(
-            &options,
-            &citations,
-            &references,
-        ));
+        state
+            .hints
+            .push(pendon_plugin_cite::solid_hints(&options, &references));
     }
 
     chain::finish(&config, &mut state);

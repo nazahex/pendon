@@ -770,14 +770,6 @@ fn render_cite_scope(frontmatter: bool, scope: &str) -> String {
     std::fs::read_to_string(out_dir.join("chapter.jsx")).expect("read output jsx")
 }
 
-/// The `export const citations = …` line, to prove the scope never touches it.
-fn citations_line(output: &str) -> &str {
-    output
-        .lines()
-        .find(|line| line.starts_with("export const citations"))
-        .unwrap_or_else(|| panic!("no citations export: {output}"))
-}
-
 /// The `export const references = …` line, the only export the scope filters.
 fn references_line(output: &str) -> &str {
     output
@@ -800,14 +792,13 @@ fn run_config_cite_exports_only_cited_external_references_by_default() {
 }
 
 /// §2.6: `references_scope = "all"` forces the whole external catalog into the
-/// export; the `citations` export is byte-identical to the default render.
+/// export.
 #[test]
 fn run_config_cite_scope_all_keeps_uncited_external_references() {
     let default = render_cite_scope(false, "");
     let all = render_cite_scope(false, "references_scope = \"all\"\n");
 
     assert!(references_line(&all).contains("\"paper\""), "{all}");
-    assert_eq!(citations_line(&default), citations_line(&all));
 }
 
 /// §2.6: frontmatter references are authored for this document, so they default
@@ -822,7 +813,6 @@ fn run_config_cite_frontmatter_defaults_to_all_and_honours_cited() {
         !references_line(&cited).contains("paper"),
         "uncited reference leaked: {cited}"
     );
-    assert_eq!(citations_line(&default), citations_line(&cited));
 }
 
 /// §2.6: any spelling other than `cited` / `all` is a hard error that names the

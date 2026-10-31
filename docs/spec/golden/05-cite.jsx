@@ -2,7 +2,6 @@ import { Cite } from '@comp/Cite'
 
 export const frontmatter = {"references":{"book":{"authors":[{"firstName":"John","lastName":"Smith"}],"id":"book","language":"en","title":"A Book","type":"book"}}};
 export const references = {"book":{"authors":[{"firstName":"John","lastName":"Smith"}],"id":"book","language":"en","title":"A Book","type":"book"}};
-export const citations = [{"citation_number":1,"reference_id":"book"},{"citation_number":1,"reference_id":"book"},{"citation_number":1,"reference_id":"book"},{"citation_number":1,"reference_id":"book"},{"citation_number":1,"reference_id":"book"}];
 export default function PendonView() { return (<>
 <p>The citation head is `[^reference_id]`: the caret is the slot tag and the bare
 content is the reference (§7.3). Every other position is an ordinary field of the

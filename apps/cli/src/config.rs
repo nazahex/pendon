@@ -215,9 +215,7 @@ pub struct CiteTaskConfig {
     pub reference_file: Option<String>,
     /// Name of the Solid/JS export holding the reference map.
     pub references_export: Option<String>,
-    /// Name of the Solid/JS export holding the citation list.
-    pub citations_export: Option<String>,
-    /// §2.6 of RFC-0002: which references the export carries — `cited` or
+    /// Name of the Solid/JS export holding the reference map.
     /// `all`. Unset keeps the source-dependent default.
     pub references_scope: Option<String>,
     /// §7.3: the fields whose values make `citation_number` stable, in the order

@@ -2,7 +2,6 @@ import { CiteShort } from '@comp/CiteShort'
 
 export const frontmatter = {"references":{"book":{"id":"book","title":"A Book"},"paper":{"id":"paper","title":"A Paper"}}};
 export const references = {"book":{"id":"book","title":"A Book"},"paper":{"id":"paper","title":"A Paper"}};
-export const citations = [{"citation_number":1,"reference_id":"book"},{"citation_number":2,"reference_id":"paper"},{"citation_number":1,"reference_id":"book"}];
 export default function PendonView() { return (<>
 <p>A <code>field.*</code> block moves a position (§6.1) and can rename a public field (D-4).
 This entry puts <code>reference_id</code> in the tick and the author&#39;s own <code>locator</code> in the

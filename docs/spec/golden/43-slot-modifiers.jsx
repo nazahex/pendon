@@ -1,7 +1,6 @@
 export const frontmatter = {"references":{"book":{"id":"book","title":"A Book","type":"book"}}};
 export const headings = [{"id":"slot-modifiers","level":1,"text":"Slot modifiers"},{"id":"mod-head","level":1,"text":""}];
 export const references = {"book":{"id":"book","title":"A Book","type":"book"}};
-export const citations = [{"citation_number":1,"reference_id":"book"}];
 export default function PendonView() { return (<>
 <h1>Slot modifiers</h1>
 <p>The bracket&#39;s <code>|…</code> run is <strong>pure configuration</strong> (§5.4, D-9): every symbol names

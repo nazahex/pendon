@@ -91,8 +91,6 @@ pub fn primary_layer() -> &'static str {
 pub struct CiteOptions {
     /// Export variable name for references data (Solid/JS output).
     pub references_export: String,
-    /// Export variable name for citations data (Solid/JS output).
-    pub citations_export: String,
     /// Which references the `references` export carries (§2.6 of RFC-0002).
     /// `None` keeps the source-dependent default
     /// ([`ReferencesScope::default_for_source`]).
@@ -130,7 +128,6 @@ impl Default for CiteOptions {
     fn default() -> Self {
         Self {
             references_export: "references".to_string(),
-            citations_export: "citations".to_string(),
             references_scope: None,
             custom: ComponentSet::new(),
             external_references: None,
@@ -404,11 +401,7 @@ pub fn load_references(path: &std::path::Path) -> Result<Value, String> {
 /// the references they point at. They are pushed as `DataExport`s in
 /// **reference-then-citations** order — a citation names a reference, so a
 /// reader must be able to resolve one without a forward reference (ADR-0009).
-pub fn solid_hints(
-    options: &CiteOptions,
-    citations: &Value,
-    references: &Value,
-) -> SolidRenderHints {
+pub fn solid_hints(options: &CiteOptions, references: &Value) -> SolidRenderHints {
     let mut hints = SolidRenderHints {
         templates: layer_templates(CITE_LAYER, &options.custom, |custom| {
             (custom.template.clone(), custom.imports.clone())
@@ -419,11 +412,6 @@ pub fn solid_hints(
         "cite",
         options.references_export.clone(),
         references.clone(),
-    ));
-    hints.exports.push(DataExport::plugin(
-        "cite",
-        options.citations_export.clone(),
-        citations.clone(),
     ));
     hints
 }

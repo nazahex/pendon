@@ -228,16 +228,9 @@ mod tests {
     /// §20: `[A-Za-z_$][A-Za-z0-9_$]*` is accepted unchanged.
     #[test]
     fn export_identifier_accepts_valid_names() {
-        for name in [
-            "citations",
-            "bibliographyData",
-            "_private",
-            "$dollar",
-            "a1",
-            "dataX",
-        ] {
+        for name in ["bibliographyData", "_private", "$dollar", "a1", "dataX"] {
             assert_eq!(
-                validate_export_identifier("cite", "citations_export", name),
+                validate_export_identifier("cite", "references_export", name),
                 Ok(name.to_string()),
                 "{name}"
             );
@@ -249,7 +242,7 @@ mod tests {
     #[test]
     fn export_identifier_rejects_malformed_names() {
         for name in ["1data", "citations-list", "", "with space", "ünicode"] {
-            let err = validate_export_identifier("cite", "citations_export", name)
+            let err = validate_export_identifier("cite", "references_export", name)
                 .expect_err("malformed identifier");
             assert!(err.contains("not a valid JavaScript identifier"), "{err}");
             assert!(err.contains(&format!("'{name}'")), "{err}");

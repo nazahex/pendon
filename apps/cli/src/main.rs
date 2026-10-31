@@ -157,12 +157,11 @@ fn main() -> ExitCode {
     };
 
     let events = if state.cite_ran {
-        let (cite_diagnostics, citations, references, options) = state.context.finalize_citations();
-        state.hints.push(pendon_plugin_cite::solid_hints(
-            &options,
-            &citations,
-            &references,
-        ));
+        let (cite_diagnostics, _citations, references, options) =
+            state.context.finalize_citations();
+        state
+            .hints
+            .push(pendon_plugin_cite::solid_hints(&options, &references));
         let mut events = events;
         events.extend(cite_diagnostics);
         events

@@ -3,7 +3,6 @@ import { CiteY } from '@comp/CiteY'
 
 export const frontmatter = {"references":{"book":{"id":"book","title":"A Book","type":"book"},"paper":{"id":"paper","title":"A Paper","type":"article"}}};
 export const references = {"book":{"id":"book","title":"A Book","type":"book"},"paper":{"id":"paper","title":"A Paper","type":"article"}};
-export const citations = [{"citation_number":1,"reference_id":"book"},{"citation_number":1,"reference_id":"book"},{"citation_number":2,"reference_id":"book"},{"citation_number":3,"reference_id":"book"},{"citation_number":4,"reference_id":"book"},{"citation_number":4,"reference_id":"book"}];
 export default function PendonView() { return (<>
 <p>§7.3: <code>citation_number</code> is stable for a repeated <strong>identity</strong>, and the identity is
 whatever <code>[task.cite] stable_fields</code> lists — public field paths, before

@@ -15,8 +15,7 @@
 `renderer-solid` emits four kinds of `export const` today, each through its own
 path: `frontmatter` and `headings` are computed from the AST inside
 `render_solid_with_hints`, while `references` and `citations` ride two dedicated
-hint fields (`references_export` + `references_export_name`,
-`citations_export` + `citations_export_name`) that `plugin-cite` fills. Two
+hint fields (`references_export`references_export_name`,`references_export`references_export_name`) that `plugin-cite` fills. Two
 consequences:
 
 1. **Every new payload needs a new field pair.** Phase 2's

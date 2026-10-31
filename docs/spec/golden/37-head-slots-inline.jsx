@@ -1,6 +1,5 @@
 export const frontmatter = {"references":{"book":{"id":"book","title":"A Book"}}};
 export const references = {"book":{"id":"book","title":"A Book"}};
-export const citations = [{"citation_number":1,"reference_id":"book"}];
 export default function PendonView() { return (<>
 <p>§6.5/D-7: a claimed head is read <strong>whole</strong>. The preset names some of its
 positions, and every other content becomes a bare field under its slot-qualified

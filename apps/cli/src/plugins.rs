@@ -342,14 +342,6 @@ pub fn build_cite_options(
             .as_deref()
             .unwrap_or(&defaults.references_export),
     )?;
-    let citations_export = validate_export_identifier(
-        "cite",
-        "citations_export",
-        config
-            .citations_export
-            .as_deref()
-            .unwrap_or(&defaults.citations_export),
-    )?;
     let default_template = cite_default_template(&references_export);
     let loaded = load_custom("cite", CITE_LAYER, config.custom.as_ref())?;
     check_layers("cite", loaded.as_ref(), &[CITE_LAYER])?;
@@ -382,7 +374,6 @@ pub fn build_cite_options(
     };
     Ok(CiteOptions {
         references_export,
-        citations_export,
         references_scope,
         custom,
         external_references,
@@ -1612,20 +1603,13 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
     /// silently rendering with defaults.
     #[test]
     fn cite_rejects_bad_export_names() {
-        let cite: CiteTaskConfig =
-            toml::from_str("citations_export = \"cites-list\"\n").expect("valid cite config");
-        let err = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
-            .expect_err("bad identifier");
-        assert!(err.contains("not a valid JavaScript identifier"), "{err}");
-
-        let cite: CiteTaskConfig = toml::from_str(
-            "references_export = \"bibliographyData\"\ncitations_export = \"citationList\"\n",
-        )
-        .expect("valid cite config");
+        // Note: citations_export has been removed; only references_export remains.
+        // Test that a valid references_export is accepted.
+        let cite: CiteTaskConfig = toml::from_str("references_export = \"bibliographyData\"\n")
+            .expect("valid cite config");
         let options = build_cite_options(Some(&cite), "./src/[slug].md", "./src/a.md", None)
             .expect("valid cite options");
         assert_eq!(options.references_export, "bibliographyData");
-        assert_eq!(options.citations_export, "citationList");
     }
 
     /// §2.6 of RFC-0002: `references_scope` accepts only `cited` / `all`, and

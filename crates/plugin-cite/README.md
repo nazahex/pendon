@@ -222,7 +222,6 @@ The `reference_file` path supports the same capture group substitution as `input
 | `reference_source`  | `frontmatter`      | `frontmatter` / `internal` / `external`                      |
 | `reference_file`    | —                  | YAML file read when `reference_source = "external"`          |
 | `references_export` | `references`       | Name of the exported reference map (must be a JS identifier) |
-| `citations_export`  | `citations`        | Name of the exported citation list (must be a JS identifier) |
 | `references_scope`  | see below          | `cited` / `all` — which references the export carries (§2.6) |
 | `stable_fields`     | `["reference_id"]` | Field paths that make `citation_number` stable (§7.3)        |
 
@@ -337,7 +336,7 @@ export const citations = [
 
 - `citations` holds **every physical occurrence** in document order
 - `references` holds the entries selected by `references_scope` (see below)
-- Both names are configurable with `references_export` / `citations_export`
+- Both names are configurable with `references_export`
   (values must be valid JavaScript identifiers); a template that binds the map
   must use the same name, e.g. `<Cite reference={refs_custom_var["{attrs.reference_id}"]} />`
 
