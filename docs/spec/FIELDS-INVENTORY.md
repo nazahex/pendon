@@ -172,6 +172,11 @@ a block renames it to).
 
 ### Rules that hold for all rows
 
+- **A renderable field is a node list** — a `;;…;;` value (§6.7) is resolved
+  before extraction reads the stream, so its row holds
+  `{"$fragment": [<node>, …]}` (the value a bound `mdp` field produces), never
+  the authored `;;…;;` spelling and never a transport sentinel. `type` is
+  therefore `fragment` for such a field, whatever its row says.
 - **Internal keys never ship.** `__layer`, `__plugin_kind`, `__number` and every
   other `__`-prefixed attribute are the event stream's own bookkeeping (D-9);
   `only = ["__layer"]` selects nothing rather than leaking it.
@@ -200,7 +205,7 @@ naming the element.
 D-14) but it is not an element with a field vocabulary: its fields are the
 **author's own keys**, a nested key is a path, and it has no preset — `only` /
 `omit` are the whole selection, and `preset`, `include` and `type` are config
-errors. §21 rule 11 has the rules; the automatic `export const frontmatter` (§20) is
+errors. §21 rule 10 has the rules; the automatic `export const frontmatter` (§20) is
 unchanged, which is why `export = "frontmatter"` in such a block is an error.
 
 ## 2. `anchor` — `__layer = "anchor"` (`NodeKind::Link`)

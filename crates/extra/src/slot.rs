@@ -154,14 +154,33 @@ impl SlotTag {
 }
 
 /// The three contents of one slot (`[…]` or `(…)`), each optional.
+///
+/// A content is a [`SlotValue`] because it may be a **renderable field**
+/// (`;;…;;` / `;;;…;;;`, §6.7): the authored text plus, when the whole content
+/// is one span, the payload's mode and source.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SlotParts {
     /// `[Foo]`
-    pub bare: Option<String>,
+    pub bare: Option<SlotValue>,
     /// `["Foo"]` / `['Foo']`
-    pub quote: Option<String>,
+    pub quote: Option<SlotValue>,
     /// `` [`Foo`] ``
-    pub tick: Option<String>,
+    pub tick: Option<SlotValue>,
+}
+
+/// One slot content: the text a consumer reads, plus how to render it.
+///
+/// `text` is exactly what a pre-renderable slot carried — the unquoted content
+/// with §4.2 escapes resolved (for a bare renderable, the authored `;;…;;`
+/// spelling) — so every existing reader keeps working unchanged. `render` is
+/// `Some` only when the whole content is one span, which is the §6.7 rule: a
+/// value is rendered, prose that happens to contain `;;` is text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlotValue {
+    /// What the slot reads as today.
+    pub text: String,
+    /// The payload, when the whole content is a renderable span.
+    pub render: Option<crate::renderable::Renderable>,
 }
 
 impl SlotParts {
@@ -171,20 +190,42 @@ impl SlotParts {
     }
 
     /// The value of `kind`, if present.
-    pub fn get(&self, kind: SlotKind) -> Option<&str> {
+    pub fn value(&self, kind: SlotKind) -> Option<&SlotValue> {
         match kind {
-            SlotKind::Bare => self.bare.as_deref(),
-            SlotKind::Quote => self.quote.as_deref(),
-            SlotKind::Tick => self.tick.as_deref(),
+            SlotKind::Bare => self.bare.as_ref(),
+            SlotKind::Quote => self.quote.as_ref(),
+            SlotKind::Tick => self.tick.as_ref(),
         }
     }
 
-    /// Sets (or replaces) the value of one content.
+    /// The **text** of `kind`, if present — what every pre-renderable reader
+    /// wants, and what a literal consumer falls back to.
+    pub fn get(&self, kind: SlotKind) -> Option<&str> {
+        self.value(kind).map(|value| value.text.as_str())
+    }
+
+    /// The renderable payload of `kind`, if the whole content is one span.
+    pub fn render(&self, kind: SlotKind) -> Option<&crate::renderable::Renderable> {
+        self.value(kind).and_then(|value| value.render.as_ref())
+    }
+
+    /// Sets (or replaces) the plain text of one content.
     ///
     /// Public because a caller that merges two heads (§6.2: the marker's own
     /// groups beat an extras head's) works one position at a time and has no
     /// other way to write a [`SlotParts`] it did not parse.
     pub fn set(&mut self, kind: SlotKind, value: String) {
+        self.set_value(
+            kind,
+            SlotValue {
+                text: value,
+                render: None,
+            },
+        );
+    }
+
+    /// Sets (or replaces) one content, renderable payload included.
+    pub fn set_value(&mut self, kind: SlotKind, value: SlotValue) {
         match kind {
             SlotKind::Bare => self.bare = Some(value),
             SlotKind::Quote => self.quote = Some(value),
@@ -215,6 +256,17 @@ impl SlotPair {
     /// The value of one position, if the head carried it.
     pub fn get(&self, slot: Slot, kind: SlotKind) -> Option<&str> {
         self.slot(slot).get(kind)
+    }
+
+    /// The whole content of one position, renderable payload included.
+    pub fn value(&self, slot: Slot, kind: SlotKind) -> Option<&SlotValue> {
+        self.slot(slot).value(kind)
+    }
+
+    /// The renderable payload of one position, when the whole content is a
+    /// `;;…;;` / `;;;…;;;` span (§6.7).
+    pub fn render(&self, slot: Slot, kind: SlotKind) -> Option<&crate::renderable::Renderable> {
+        self.slot(slot).render(kind)
     }
 
     /// True when no content is present anywhere (`[]()`, `[|?x]`).
@@ -279,6 +331,12 @@ impl fmt::Display for SlotError {
 }
 
 /// What [`parse_slots`] found at the head of a line.
+///
+/// The pair is much larger than the other two variants; the match is a
+/// short-lived local that the caller immediately destructures, so boxing the
+/// pair would put a pointer between every caller and the very object it asked
+/// for. (Same rationale as ADR-0020's `ExtrasMatch` / `DirectiveMatch`.)
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SlotMatch<'a> {
     /// Nothing slot-shaped: the text is literal, with no diagnostic (§4.3).
@@ -521,12 +579,44 @@ fn scan_content(content: &str, run_allowed: bool) -> Result<Scan<'_>, SlotError>
             }
         }
 
-        parts.set(kind, value);
+        parts.set_value(kind, content_value(&content[cursor..next], value, kind, ch));
         previous = Some(kind);
         cursor = next;
     }
 
     Ok(Scan { parts, run })
+}
+
+/// Builds one content: a whole `;;…;;` / `;;;…;;;` span becomes a renderable,
+/// everything else is the text it always was (§6.7, D-RF-4).
+///
+/// The span is read from the **authored** text — a bare content's source, or the
+/// body between a quote's or tick's delimiters — because escapes belong to the
+/// payload there (`\n` is a line break, not `n`). Only a content that is not a
+/// span keeps the unescaped text §5.2 has always given it.
+fn content_value(raw: &str, text: String, kind: SlotKind, delimiter: char) -> SlotValue {
+    let (render, authored) = match kind {
+        SlotKind::Bare => (crate::renderable::whole(raw), raw.to_string()),
+        SlotKind::Quote | SlotKind::Tick => match delimited_body(raw, delimiter) {
+            Some(body) => (crate::renderable::whole(body), body.to_string()),
+            None => (None, text.clone()),
+        },
+    };
+    match render {
+        Some(render) => SlotValue {
+            text: authored,
+            render: Some(render),
+        },
+        None => SlotValue { text, render: None },
+    }
+}
+
+/// The text between a quote's or tick's delimiters, escapes intact.
+///
+/// `None` when `raw` is not delimited at **both** ends — §5.2 lets a closer run
+/// into a separator and extend the content, which is never a whole span.
+fn delimited_body(raw: &str, delimiter: char) -> Option<&str> {
+    raw.strip_prefix(delimiter)?.strip_suffix(delimiter)
 }
 
 /// A head that starts with a tag sigil and a bracket.
@@ -576,20 +666,27 @@ fn read_paren(rest: &str, open: usize) -> Result<Option<(SlotParts, usize)>, Slo
 fn find_close(text: &str, body: usize, open: char, close: char) -> Option<usize> {
     let mut depth = 1usize;
     let mut escaped = false;
+    let mut cursor = body;
 
-    for (offset, ch) in text[body..].char_indices() {
+    while let Some(ch) = text[cursor..].chars().next() {
         if escaped {
             escaped = false;
         } else if ch == '\\' {
             escaped = true;
+        } else if let Some(span) = crate::renderable::span(text, cursor) {
+            // §6.7: a renderable's interior is opaque, so a `]` or `)` inside the
+            // payload cannot close the slot it was written in.
+            cursor = span.end;
+            continue;
         } else if ch == open {
             depth += 1;
         } else if ch == close {
             depth -= 1;
             if depth == 0 {
-                return Some(body + offset);
+                return Some(cursor);
             }
         }
+        cursor += ch.len_utf8();
     }
 
     None
@@ -621,6 +718,12 @@ fn read_bare(content: &str, start: usize, run_allowed: bool) -> (String, usize) 
     let mut cursor = start;
 
     while let Some(ch) = content[cursor..].chars().next() {
+        // §6.7: a span is one opaque run, so the spaces and delimiters inside it
+        // can never end the bare content.
+        if let Some(span) = crate::renderable::span(content, cursor) {
+            cursor = span.end;
+            continue;
+        }
         if ch.is_whitespace() {
             let after = cursor + ch.len_utf8();
             match content[after..]
@@ -681,6 +784,10 @@ fn read_delimited(
             escaped = false;
         } else if ch == '\\' {
             escaped = true;
+        } else if let Some(span) = crate::renderable::span(content, cursor) {
+            // §6.7: a span inside a quote keeps its own delimiters literal.
+            cursor = span.end;
+            continue;
         } else if ch == delimiter {
             let close_end = cursor + delimiter.len_utf8();
             let at_boundary = content[close_end..]
@@ -734,6 +841,11 @@ mod tests {
         parse_slot_parts(content).expect("expected valid slot content")
     }
 
+    /// The text of one content, the way every consumer reads it.
+    fn text(value: &Option<SlotValue>) -> Option<&str> {
+        value.as_ref().map(|value| value.text.as_str())
+    }
+
     fn slots(source: &str) -> SlotPair {
         match parse_slots(source) {
             SlotMatch::Slots { pair, .. } => pair,
@@ -758,16 +870,16 @@ mod tests {
     #[test]
     fn reads_all_three_contents() {
         let got = parts(r#"bare "quote" `tick`"#);
-        assert_eq!(got.bare.as_deref(), Some("bare"));
-        assert_eq!(got.quote.as_deref(), Some("quote"));
-        assert_eq!(got.tick.as_deref(), Some("tick"));
+        assert_eq!(text(&got.bare), Some("bare"));
+        assert_eq!(text(&got.quote), Some("quote"));
+        assert_eq!(text(&got.tick), Some("tick"));
     }
 
     #[test]
     fn without_a_space_the_rest_is_one_bare_content() {
         // §5.2's own example: no separator, so the quotes and the tick stay bare.
         let got = parts(r#"bare"quote"`tick`"#);
-        assert_eq!(got.bare.as_deref(), Some(r#"bare"quote"`tick`"#));
+        assert_eq!(text(&got.bare), Some(r#"bare"quote"`tick`"#));
         assert_eq!(got.quote, None);
         assert_eq!(got.tick, None);
     }
@@ -776,35 +888,35 @@ mod tests {
     fn an_unseparated_closer_extends_the_content() {
         // §5.2's second example: `"quote"`tick`` is one quote content.
         let got = parts(r#"bare "quote"`tick`"#);
-        assert_eq!(got.bare.as_deref(), Some("bare"));
-        assert_eq!(got.quote.as_deref(), Some(r#"quote"`tick`"#));
+        assert_eq!(text(&got.bare), Some("bare"));
+        assert_eq!(text(&got.quote), Some(r#"quote"`tick`"#));
         assert_eq!(got.tick, None);
     }
 
     #[test]
     fn bare_content_may_contain_spaces() {
         let got = parts("Foo Bar");
-        assert_eq!(got.bare.as_deref(), Some("Foo Bar"));
+        assert_eq!(text(&got.bare), Some("Foo Bar"));
     }
 
     #[test]
     fn escapes_keep_delimiters_inside_bare() {
         // §5.2: `[bare \"bare\" bare "quote"]`.
         let got = parts(r#"bare \"bare\" bare "quote""#);
-        assert_eq!(got.bare.as_deref(), Some(r#"bare "bare" bare"#));
-        assert_eq!(got.quote.as_deref(), Some("quote"));
+        assert_eq!(text(&got.bare), Some(r#"bare "bare" bare"#));
+        assert_eq!(text(&got.quote), Some("quote"));
     }
 
     #[test]
     fn escapes_inside_a_tick() {
         let got = parts(r"`a\`b`");
-        assert_eq!(got.tick.as_deref(), Some("a`b"));
+        assert_eq!(text(&got.tick), Some("a`b"));
     }
 
     #[test]
     fn single_quotes_are_quote_content() {
         let got = parts("'q'");
-        assert_eq!(got.quote.as_deref(), Some("q"));
+        assert_eq!(text(&got.quote), Some("q"));
     }
 
     #[test]
@@ -813,8 +925,8 @@ mod tests {
             assert!(parts(content).is_empty(), "content {content:?}");
         }
         let got = parts("\"\" `tick`");
-        assert_eq!(got.quote.as_deref(), Some(""));
-        assert_eq!(got.tick.as_deref(), Some("tick"));
+        assert_eq!(text(&got.quote), Some(""));
+        assert_eq!(text(&got.tick), Some("tick"));
     }
 
     #[test]
@@ -862,7 +974,7 @@ mod tests {
     #[test]
     fn bare_keeps_an_unescaped_backtick() {
         let got = parts("a`b");
-        assert_eq!(got.bare.as_deref(), Some("a`b"));
+        assert_eq!(text(&got.bare), Some("a`b"));
     }
 
     #[test]

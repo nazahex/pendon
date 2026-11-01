@@ -1,0 +1,27 @@
+---
+references:
+  book:
+    id: book
+    type: book
+    title: A Book
+---
+
+A field's value can be a **document** instead of text (§6.7). `;;…;;` is the
+inline form: the payload is parsed and run through the page's own chain, and the
+field carries the node list that run produced — the same fragment a
+`{{{mdp[…] …}}}` binding writes, so no renderer had to learn a second shape.
+
+A marker's extras head is a field position like any other, and the citation
+inside it is the page's citation — one list, one numbering:
+
+{{note}}@@noteAB{note: ;;lorem *ipsum*, a [[Wiki]] link and [^book];;}
+
+An element's own positions take one too. `note` is preserved verbatim here, so
+the value reaches the built-in `<a>` as a prop:
+
+@[Card](/docs "Docs")@@anchorA{note: ;;Again [^book "p. 2"].;;}
+
+The second citation of `book` keeps the number the first one was given, because
+`citation_number` is an identity ordinal, not a counter of occurrences:
+
+@[Slot](/docs)@@anchorA{body: ;;*value* in a spec position;;}

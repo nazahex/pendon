@@ -37,6 +37,19 @@ pub enum AttrValue {
     /// that must be emitted unquoted as `name={expr}` rather than as a string
     /// literal. Transported through [`pendon_core::JSX_ATTR_PREFIX`].
     JsxExpr(String),
+    /// A **renderable field** (`docs/spec/SYNTAX.md` §6.7): the whole value is
+    /// one `;;…;;` / `;;;…;;;` span whose payload is `mdp`, not text.
+    ///
+    /// Transported through [`pendon_core::MDP_ATTR_PREFIX`] + the mode byte and
+    /// rendered by the chain's resolve stage; [`literal`](Self::literal) keeps
+    /// the authored `;;…;;` text, which is what a consumer that needs a literal
+    /// string (`.class`, `#id`, `isFoo`, `style:`) sees instead of a fragment.
+    Mdp {
+        /// Inline (`;;`) or block (`;;;`).
+        mode: pendon_core::MdpMode,
+        /// The payload, with `\n` already materialised as a newline.
+        source: String,
+    },
     /// `null` — **not authorable**: §6.3 has no null literal, so the extras head
     /// never produces this. It exists so the projection is a total bridge back
     /// to the AST (`crate::project`): `plugin-bind` can resolve a `$var` to
@@ -63,6 +76,13 @@ impl AttrValue {
             Self::JsxExpr(expr) => {
                 format!("{}{}", pendon_core::JSX_ATTR_PREFIX, expr)
             }
+            Self::Mdp { mode, source } => {
+                let opener = match mode {
+                    pendon_core::MdpMode::Inline => ";;",
+                    pendon_core::MdpMode::Block => ";;;",
+                };
+                format!("{opener}{source}{opener}")
+            }
             Self::Null => "null".to_string(),
         }
     }
@@ -85,6 +105,7 @@ impl AttrValue {
                 pendon_core::JSON_ATTR_PREFIX,
                 serde_json::to_string(&self.to_json()).unwrap_or_else(|_| "null".to_string())
             ),
+            Self::Mdp { mode, source } => pendon_core::mdp_attr(*mode, source),
             other => other.literal(),
         }
     }
@@ -129,12 +150,19 @@ impl AttrValue {
             },
             Value::String(text) => Self::Str(text.clone()),
             Value::Array(items) => Self::Array(items.iter().map(Self::from_json).collect()),
-            Value::Object(entries) => Self::Object(
-                entries
-                    .iter()
-                    .map(|(key, item)| (key.clone(), Self::from_json(item)))
-                    .collect(),
-            ),
+            Value::Object(entries) => {
+                // The one object shape that is not authorable data: a renderable
+                // value's encoded form ([`AttrValue::to_json`]).
+                if let Some(value) = Self::mdp_from_json(entries) {
+                    return value;
+                }
+                Self::Object(
+                    entries
+                        .iter()
+                        .map(|(key, item)| (key.clone(), Self::from_json(item)))
+                        .collect(),
+                )
+            }
         }
     }
 
@@ -161,8 +189,45 @@ impl AttrValue {
             }
             Self::Array(items) => Value::Array(items.iter().map(AttrValue::to_json).collect()),
             Self::JsxExpr(expr) => Value::String(expr.clone()),
+            // The encoded form `from_json` reads back: a reserved key, so the
+            // shape can never collide with an authored object (`$` is not a
+            // legal key start, §6.3).
+            Self::Mdp { mode, source } => {
+                let mode = match mode {
+                    pendon_core::MdpMode::Inline => "inline",
+                    pendon_core::MdpMode::Block => "block",
+                };
+                let mut encoded = serde_json::Map::new();
+                encoded.insert("mode".to_string(), Value::String(mode.to_string()));
+                encoded.insert("source".to_string(), Value::String(source.clone()));
+                let mut wrapper = serde_json::Map::new();
+                wrapper.insert("$mdp".to_string(), Value::Object(encoded));
+                Value::Object(wrapper)
+            }
             Self::Null => Value::Null,
         }
+    }
+
+    /// Reads the `{"$mdp": {"mode": …, "source": …}}` form [`to_json`] writes,
+    /// or `None` when `entries` is any other object.
+    ///
+    /// [`to_json`]: AttrValue::to_json
+    fn mdp_from_json(entries: &serde_json::Map<String, serde_json::Value>) -> Option<Self> {
+        use serde_json::Value;
+        let encoded = match (entries.len(), entries.get("$mdp")) {
+            (1, Some(Value::Object(encoded))) => encoded,
+            _ => return None,
+        };
+        let mode = match encoded.get("mode") {
+            Some(Value::String(mode)) if mode == "inline" => pendon_core::MdpMode::Inline,
+            Some(Value::String(mode)) if mode == "block" => pendon_core::MdpMode::Block,
+            _ => return None,
+        };
+        let source = match encoded.get("source") {
+            Some(Value::String(source)) => source.clone(),
+            _ => return None,
+        };
+        Some(Self::Mdp { mode, source })
     }
 }
 
@@ -259,6 +324,64 @@ mod tests {
         assert_eq!(AttrValue::Raw("red".to_string()).literal(), "red");
         assert_eq!(AttrValue::Str("a b".to_string()).literal(), "a b");
         assert_eq!(AttrValue::Null.literal(), "null");
+    }
+
+    fn renderable(mode: pendon_core::MdpMode, source: &str) -> AttrValue {
+        AttrValue::Mdp {
+            mode,
+            source: source.to_string(),
+        }
+    }
+
+    #[test]
+    fn a_renderable_keeps_its_authored_text_and_transports_as_a_sentinel() {
+        let inline = renderable(pendon_core::MdpMode::Inline, "*lorem*");
+        let block = renderable(pendon_core::MdpMode::Block, "## A heading");
+
+        // The literal is what a consumer that needs text sees — never a
+        // sentinel, never a fragment.
+        assert_eq!(inline.literal(), ";;*lorem*;;");
+        assert_eq!(block.literal(), ";;;## A heading;;;");
+
+        // The transport carries the mode byte, so the resolver can tell the two
+        // apart without re-reading the document.
+        let inline_transport = inline.transport();
+        let payload = pendon_core::mdp_attr_payload(&inline_transport).expect("payload");
+        assert_eq!(payload, (pendon_core::MdpMode::Inline, "*lorem*"));
+        let block_transport = block.transport();
+        let payload = pendon_core::mdp_attr_payload(&block_transport).expect("payload");
+        assert_eq!(payload, (pendon_core::MdpMode::Block, "## A heading"));
+        assert!(pendon_core::is_mdp_attr(&block_transport));
+
+        // An internal `__` key keeps the literal (number's marker is parsed
+        // before any renderer runs).
+        assert_eq!(inline.transport_for("__number"), inline.literal());
+        assert!(pendon_core::is_json_attr(
+            &AttrValue::Object(Vec::new()).transport()
+        ));
+    }
+
+    #[test]
+    fn a_renderable_crosses_the_json_bridge() {
+        for value in [
+            renderable(pendon_core::MdpMode::Inline, "*a* `b` \n c"),
+            renderable(pendon_core::MdpMode::Block, "## t\n\n- one\n"),
+        ] {
+            let json = value.to_json();
+            assert_eq!(AttrValue::from_json(&json), value, "{json}");
+        }
+        // A plain object is still an object — only the reserved `$mdp` wrapper
+        // is a renderable.
+        assert_eq!(
+            AttrValue::from_json(&serde_json::json!({ "$mdp": { "mode": "inline" } })),
+            AttrValue::Object(vec![(
+                "$mdp".to_string(),
+                AttrValue::Object(vec![(
+                    "mode".to_string(),
+                    AttrValue::Str("inline".to_string())
+                )])
+            )])
+        );
     }
 
     /// The bridge is the projection's (`S2-2.7`): every AST value it reads must

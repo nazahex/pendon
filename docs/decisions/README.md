@@ -26,6 +26,7 @@ rejected alternatives, and the evidence that pins each decision.
 | [0018](0018-clean-replacement.md)                    | Clean total replacement: no compatibility of any kind   | Accepted / enforced     |
 | [0019](0019-component-props-nest.md)                 | A component's dotted field is a nested prop             | Accepted / complete     |
 | [0020](0020-unattached-heads-share-the-six-slots.md) | Untagged heads share the six slot positions             | Accepted / complete     |
+| [0021](0021-renderable-fields.md)                    | `;;` / `;;;` values are renderable `mdp` fields         | Accepted / building     |
 
 ## Conventions
 

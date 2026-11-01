@@ -1,0 +1,17 @@
+`;;;…;;;` is the block form: the payload is a sub-document, so its block
+structure survives and the field becomes a fragment of block nodes. A slot or
+spec value is **one line** (§6.7), so the block payload writes its breaks as
+`\n` — they are materialised before the payload is parsed:
+
+@[Card](/docs "Docs")@@anchorA{body: ;;;## Payload heading\n\nA paragraph with a [[Wiki]] link.\n\n- one\n- two\n\n> quoted line\n;;;}
+
+The inline form drops the payload's **document** wrapper, so a single paragraph
+contributes its inline nodes; the block form keeps it, so the same paragraph
+arrives inside a `<p>`. That is the only difference between the two spellings —
+both run the page's chain, both carry nodes:
+
+@[Card](/docs)@@anchorA{note: ;;still *inline*: no wrapper;;, body: ;;;one paragraph, wrapper kept;;;}
+
+A payload is not a numbering island either: a citation inside it belongs to the
+page, and one *before* the body text keeps the earlier number (§6.7, D-RF-8) —
+fixture 53 measures that from the other side.

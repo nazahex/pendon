@@ -1,0 +1,27 @@
+A renderable is a **value**, so it reaches every position a value reaches: a
+spec's own object, an array item, and a field whose value is itself an object.
+The value travels as JSON when it is nested, and the field is resolved in place —
+the fragment nests the way a bound `mdp` value does:
+
+@[Card](/docs)@@anchorA{specs: {caption: ;;*nested* in an object;;}, tokens: [;;one;;, "two"]}
+
+Nesting a field inside a field needs escapes, because a bare `;;` closes the
+outer span (`\;` is a semicolon). The inner element's head is read when the
+payload runs, so its field is a field again — the escaped semicolons stay as
+text, which is the price of one escape level and the reason a deep tree is
+better bound than written:
+
+@[Card](/docs)@@anchorA{note: ;;outer \;\;@[In](/u)@@anchorB{v: \;\;inner *i*\;\;} \;\; tail;;}
+
+A `bind` value and a renderable are the same thing written two ways — one names
+a payload the data block authored, the other writes it at the position:
+
+{{{mdp[caption] A **bound** payload}}}
+
+@[Card](/docs)@@anchorA{note: $caption, body: ;;A **written** payload;;}
+
+A position that needs **text** is not reserved (§6.7, D-RF-6): the image wants a
+string for `alt`, so it reads the authored `;;…;;` spelling and behaves exactly
+as it did before renderables existed:
+
+![;;*alt* payload;;](https://example.com/chart.png)

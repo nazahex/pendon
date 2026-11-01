@@ -1,0 +1,6 @@
+[[task]]
+name = "Golden 51"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "frontmatter,anchor,wiki,markdown"
+format = "solid"

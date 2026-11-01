@@ -148,6 +148,27 @@ fn assert_no_dotted_attribute_name(stem: &str, jsx: &str) {
     }
 }
 
+/// Fails when a rendered page still carries the **renderable transport**
+/// (`U+E003`, `pendon_core::MDP_ATTR_PREFIX`).
+///
+/// The sentinel only exists between an element plugin and the chain's resolve
+/// stage (§6.7): a page that shows it froze a value the renderer never resolved,
+/// which is exactly the defect Phase 2 of the rework fixed. Asserting it on every
+/// fixture keeps a new emitter from finding a path around the resolver.
+fn assert_no_renderable_transport(stem: &str, page: &str) {
+    assert!(
+        !page.contains(pendon_core::MDP_ATTR_PREFIX),
+        "{stem}: the renderable transport reached the output — a field was never \
+         resolved (§6.7):\n{page}"
+    );
+    // The JSON spelling of an unresolved field is `{"$mdp": …}`; a renderer that
+    // carries it has stringified the transport instead of reading it.
+    assert!(
+        !page.contains("\"$mdp\""),
+        "{stem}: an unresolved renderable reached the output as `$mdp`:\n{page}"
+    );
+}
+
 /// Renders the fixture and compares it — page and side files — with the
 /// checked-in golden.
 fn assert_fixture(stem: &str) {
@@ -156,6 +177,7 @@ fn assert_fixture(stem: &str) {
         fs::read_to_string(&golden_path).unwrap_or_else(|error| panic!("{stem}.jsx: {error}"));
     let (dir, actual) = render(stem);
     assert_no_dotted_attribute_name(stem, &actual);
+    assert_no_renderable_transport(stem, &actual);
 
     if actual == expected {
         assert_side_outputs(stem, &dir);
@@ -552,7 +574,74 @@ fn golden_49_head_slots_generic() {
     assert_fixture("49-head-slots-generic");
 }
 
-/// §16.3 fixture 48: `[task.cite] stable_fields` (§7.3). `citation_number` is
+/// §16.3 fixture 50: `;;…;;` (§6.7) — a field's value is a **document**.
+///
+/// The inline form: the payload runs through the page's own chain, so a wiki
+/// link, an emphasis and a citation inside it are exactly what they are outside
+/// it. One citation list, one numbering: the citation in the marker's `note` is
+/// `[1]`, the second citation of the same reference keeps that number, and the
+/// message's other position (`body`) is a fragment as well.
+#[test]
+fn golden_50_renderable_inline() {
+    assert_fixture("50-renderable-inline");
+}
+
+/// §16.3 fixture 51: `;;;…;;;` — the block form keeps the payload's **document**
+/// wrapper (`<p>`, and block structure: a heading, a list, a blockquote), while
+/// `;;` drops it, so the same paragraph contributes inline nodes only.
+#[test]
+fn golden_51_renderable_block() {
+    assert_fixture("51-renderable-block");
+}
+
+/// §16.3 fixture 52: a renderable is a **value**, so it reaches a spec's object,
+/// an array item and a nested head — and a position that needs text (the image's
+/// `alt`) reads the authored spelling instead (D-RF-6). The bound `mdp` field
+/// next to the written one is the same fragment, spelled differently.
+#[test]
+fn golden_52_renderable_nested() {
+    assert_fixture("52-renderable-nested");
+}
+
+/// §16.3 fixture 53: `cite` keeps the **page's** scope, and a field's citation
+/// takes the number of its **source** position even though the field renders
+/// after the chain (D-RF-8, option B — reserved where the field is written).
+#[test]
+fn golden_53_renderable_number() {
+    assert_fixture("53-renderable-number");
+}
+
+/// §16.3 fixture 54: everything that is **not** a renderable — `;;` in prose, an
+/// unclosed span (the head is all-or-nothing, §4.3), `;;` in a `.class` / `#id`
+/// (a name grammar, D-RF-6), a quoted value that is not a whole span, and the
+/// `\` escape.
+#[test]
+fn golden_54_renderable_literal() {
+    assert_fixture("54-renderable-literal");
+}
+
+/// The guard above runs on every render; this one runs on the **frozen** files,
+/// so a golden that was hand-edited to contain a sentinel cannot pass either.
+#[test]
+fn no_frozen_page_carries_the_renderable_transport() {
+    let mut checked = 0usize;
+    for entry in fs::read_dir(golden_dir()).expect("golden dir") {
+        let path = entry.expect("golden entry").path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("jsx") {
+            continue;
+        }
+        let stem = path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .expect("a file stem")
+            .to_string();
+        let page = fs::read_to_string(&path).expect("frozen page");
+        assert_no_renderable_transport(&stem, &page);
+        checked += 1;
+    }
+    assert!(checked > 40, "only {checked} frozen pages were checked");
+}
+
 /// stable for the fields the task lists, in comparison order; the plugin has no
 /// `locator` of its own, so the entry decides which positions carry a location
 /// and whether it splits the number. `citeX` produces all four listed names,

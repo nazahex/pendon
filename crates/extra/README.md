@@ -47,6 +47,24 @@ for interpreting the parsed properties.
 - **IR glue** — `scan_extras_chars` / `emit_attrs` / `warning_event` (`src/emit.rs`):
   the shared **emit** pass that turns a parsed head into event attributes. It is
   not data binding — that is `plugin-bind` (§12.2, ADR-0005).
+- **Renderable fields** — `renderable` (`src/renderable.rs`) +
+  `AttrValue::Mdp` (`src/value.rs`): a whole value may be a **document**
+  (`;;…;;` inline / `;;;…;;;` block, §6.7). `whole(text)` answers
+  `Some(Renderable { mode, source })` only when the value _is_ one span — the
+  opener is the longest match, a `;` run ≥ the opener closes it, `\` escapes the
+  next character (`\;` text, `\n` break) and an unclosed span is **not** a span
+  (`None`, so the head stays literal, §4.3). `materialize` turns `\n` back into
+  newlines, because a value is one line. The slot (`slot.rs`) and spec
+  (`typed.rs`) readers treat a span's interior as opaque: `,` `"` `(` `{` `|`
+  and whitespace inside it never split or close anything, which is what makes a
+  renderable legal in all six slot contents and in every spec value. The IR is
+  `AttrValue::Mdp { mode, source }`: `literal()` keeps the authored `;;…;;`
+  spelling (what `.class` / `#id` / `src` / a preset that needs text sees),
+  `transport()` is `MDP_ATTR_PREFIX` + the `MdpMode` byte + source, and
+  `to_json()` is `{"$mdp": {"mode", "source"}}` for a **nested** position (an
+  object key, an array item). Nothing here renders: that is the chain's resolve
+  stage (`apps/cli/src/chain.rs`), which hands the payload to the same
+  `render_mdp` a `{{{mdp[…] …}}}` binding uses.
 - **Decorator binder** — `parse_decorator_line` / `classify_block` /
   `bind_decorators` / `decorator_diagnostics` (`src/decorator.rs`): a standalone
   `@@`-prefixed extras line binds to the _next_ block node, and **which** plugin

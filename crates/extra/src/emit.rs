@@ -36,15 +36,21 @@ pub fn scan_extras_chars(chars: &[char], cursor: usize) -> Option<(ExtrasHead, u
 }
 
 /// Pushes the attribute events of `attrs` onto `out` in canonical order (§6.4):
-/// `Event::Attribute` for values (stringly typed through `AttrValue::literal`,
-/// §6.3) and `Event::AttributeFlag` for bare flags.
+/// `Event::Attribute` for values (transported through
+/// [`AttrValue::transport_for`](crate::AttrValue::transport_for), §6.3) and
+/// `Event::AttributeFlag` for bare flags.
+///
+/// The transport — not the literal — is what keeps a structured or renderable
+/// value a value: emitting `literal()` here would hand a renderer the JSON text
+/// or the authored `;;…;;` spelling and lose the sentinel every downstream stage
+/// decodes.
 pub fn emit_attrs(attrs: &Attrs, out: &mut Vec<Event>) {
     for (name, value) in &attrs.items {
         match value {
             ExtrasAttr::Flag => out.push(Event::AttributeFlag { name: name.clone() }),
             ExtrasAttr::Value(value) => out.push(Event::Attribute {
                 name: name.clone(),
-                value: value.literal(),
+                value: value.transport_for(name),
             }),
         }
     }

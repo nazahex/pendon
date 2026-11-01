@@ -1,0 +1,9 @@
+[[task]]
+name = "Golden 53"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "frontmatter,anchor,cite,markdown"
+format = "solid"
+
+[task.cite]
+reference_source = "internal"

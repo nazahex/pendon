@@ -14,11 +14,11 @@
 
 use std::collections::{HashMap, HashSet};
 
-use pendon_core::{ContextPipeline, Event, NodeKind};
+use pendon_core::{ContextPipeline, Event, MdpMode, NodeKind, Severity};
 use pendon_extract::{ExtractOptions, ExtractOutput};
 use pendon_number::NumberOptions;
 use pendon_plugin_anchor::AnchorOptions;
-use pendon_plugin_bind::{Fragment, MdpMode};
+use pendon_plugin_bind::Fragment;
 use pendon_plugin_blockquote::BlockquoteOptions;
 use pendon_plugin_custom::PluginSpec;
 use pendon_plugin_directive::DirectiveOptions;
@@ -214,6 +214,8 @@ pub struct ChainState {
     pub extract: ExtractOutput,
     /// §13: report each unknown plugin name once per task.
     reported: HashSet<String>,
+    /// How deep the current [`render_mdp`] nesting is (ADR-0021's depth guard).
+    render_depth: usize,
     pipeline: ContextPipeline<DocumentContext>,
 }
 
@@ -233,6 +235,7 @@ impl ChainState {
             cite_ran: false,
             extract: ExtractOutput::default(),
             reported: HashSet::new(),
+            render_depth: 0,
             pipeline,
         }
     }
@@ -365,6 +368,11 @@ fn run_chain(
                 // page itself rendered. The position is validated up front
                 // (`validate_extract_order`): a block that ran before its
                 // element plugin would extract a node without its attributes.
+                //
+                // §6.7: a renderable field's value is resolved first — a block
+                // that read the transport sentinel would extract `U+E003…`
+                // instead of the fragment it stands for.
+                let events = resolve_renderable(events, config, state);
                 state.extract = pendon_extract::run(&events, &config.extract);
                 events
             }
@@ -468,7 +476,162 @@ fn run_chain(
         };
     }
 
-    events
+    // §6.7/ADR-0021: a renderable field's payload is rendered **after** every
+    // plugin has emitted its attributes — the grammar layer only transports it —
+    // and before the caller reads the stream (`extract` does it earlier, at its
+    // own chain position). `render_mdp` runs a payload through this same chain,
+    // so a renderable inside a renderable resolves too.
+    resolve_renderable(events, config, state)
+}
+
+/// How deeply a renderable field may nest before the value degrades to text.
+///
+/// A renderable's payload is a document, and a document may hold renderables, so
+/// the resolve stage recurses through the chain. Nothing in a document can force
+/// depth without writing the nesting out, but a runaway (a very large generated
+/// file, a future `$bind` cycle) must not blow the stack: at the limit the value
+/// degrades to its own text and one `Error` is reported.
+const MAX_RENDER_DEPTH: usize = 32;
+
+/// Renders every **renderable field** in `events` (§6.7, ADR-0021).
+///
+/// A renderable arrives as [`Event::Attribute`] carrying
+/// [`pendon_core::MDP_ATTR_PREFIX`] + mode byte + payload (the grammar layer
+/// never renders). Each one is handed to [`render_mdp`] — the same renderer a
+/// `$bind` `mdp` variable uses — and its value becomes
+/// [`pendon_core::JSON_ATTR_PREFIX`] + the fragment, which is exactly what
+/// `plugin-bind` writes and what every renderer already knows how to carry.
+///
+/// The pass is order-preserving and structural: only attribute *values* change,
+/// and the payload's own diagnostics are appended after the stream, where the
+/// host document reports them once.
+pub fn resolve_renderable(
+    events: Vec<Event>,
+    config: &ChainConfig,
+    state: &mut ChainState,
+) -> Vec<Event> {
+    if !events.iter().any(|event| {
+        matches!(
+            event,
+            Event::Attribute { value, .. }
+                if pendon_core::is_mdp_attr(value) || pendon_core::is_json_attr(value)
+        )
+    }) {
+        return events;
+    }
+
+    let mut out = Vec::with_capacity(events.len() + 4);
+    for event in events {
+        let Event::Attribute { name, value } = event else {
+            out.push(event);
+            continue;
+        };
+        // A nested position (`k: [;;a;;]`, `{deep: ;;b;;}`) travels as JSON, so
+        // the field is a `{"$mdp": …}` wrapper *inside* the value rather than the
+        // value itself. Resolve those in place; the fragment nests the same way
+        // a `$bind` `mdp` value does (`{"$fragment": …}`).
+        if pendon_core::is_json_attr(&value) {
+            let Some(json) = pendon_core::json_attr_payload(&value) else {
+                out.push(Event::Attribute { name, value });
+                continue;
+            };
+            let Ok(mut parsed) = serde_json::from_str::<Value>(json) else {
+                out.push(Event::Attribute { name, value });
+                continue;
+            };
+            let mut diagnostics = Vec::new();
+            if !resolve_nested(&mut parsed, config, state, &mut diagnostics) {
+                out.push(Event::Attribute { name, value });
+                out.extend(diagnostics);
+                continue;
+            }
+            out.push(Event::Attribute {
+                name,
+                value: encode_fragment(&parsed),
+            });
+            out.extend(diagnostics);
+            continue;
+        }
+        let Some((mode, source)) = pendon_core::mdp_attr_payload(&value) else {
+            out.push(Event::Attribute { name, value });
+            continue;
+        };
+        let source = source.to_string();
+        let fragment = render_mdp(&source, mode, config, state);
+        out.push(Event::Attribute {
+            name,
+            value: encode_fragment(&fragment.value),
+        });
+        out.extend(fragment.diagnostics);
+    }
+    out
+}
+
+/// Resolves every `{"$mdp": {"mode": …, "source": …}}` leaf of a nested value,
+/// returning `true` when at least one field was rendered.
+///
+/// The wrapper is `pendon_extra`'s JSON spelling of a renderable
+/// ([`pendon_extra::AttrValue::to_json`]) — a reserved key, so it can never
+/// collide with authored data (`$` is not a legal key start, §6.3).
+fn resolve_nested(
+    value: &mut Value,
+    config: &ChainConfig,
+    state: &mut ChainState,
+    diagnostics: &mut Vec<Event>,
+) -> bool {
+    match value {
+        Value::Array(items) => {
+            let mut changed = false;
+            for item in items.iter_mut() {
+                changed = resolve_nested(item, config, state, diagnostics) || changed;
+            }
+            changed
+        }
+        Value::Object(map) => {
+            if let Some(field) = map.get(MDP_FIELD_KEY).and_then(Value::as_object) {
+                let mode = field.get("mode").and_then(Value::as_str);
+                let source = field.get("source").and_then(Value::as_str);
+                if let (Some(mode), Some(source)) = (mode, source) {
+                    if let Some(mode) = parse_mdp_mode(mode) {
+                        let source = source.to_string();
+                        let fragment = render_mdp(&source, mode, config, state);
+                        diagnostics.extend(fragment.diagnostics);
+                        *value = fragment.value;
+                        return true;
+                    }
+                }
+            }
+            let mut changed = false;
+            for item in map.values_mut() {
+                changed = resolve_nested(item, config, state, diagnostics) || changed;
+            }
+            changed
+        }
+        _ => false,
+    }
+}
+
+/// The reserved key [`pendon_extra::AttrValue::to_json`] writes a renderable
+/// under.
+const MDP_FIELD_KEY: &str = "$mdp";
+
+/// Reads the mode back out of the JSON spelling.
+fn parse_mdp_mode(mode: &str) -> Option<MdpMode> {
+    match mode {
+        "inline" => Some(MdpMode::Inline),
+        "block" => Some(MdpMode::Block),
+        _ => None,
+    }
+}
+
+/// A fragment in the transport every renderer already reads (§6.3): the JSON
+/// sentinel + the node list.
+fn encode_fragment(value: &Value) -> String {
+    format!(
+        "{}{}",
+        pendon_core::JSON_ATTR_PREFIX,
+        serde_json::to_string(value).unwrap_or_else(|_| "null".to_string())
+    )
 }
 
 /// The hints of the plugins that produce them once, for the whole document.
@@ -491,6 +654,34 @@ pub fn finish(config: &ChainConfig, state: &mut ChainState) {
 /// payload's own paragraph wrapper is dropped, so text written on the head line
 /// does not gain a block wrapper it never had.
 pub fn render_mdp(
+    markdown: &str,
+    mode: MdpMode,
+    config: &ChainConfig,
+    state: &mut ChainState,
+) -> Fragment {
+    if state.render_depth >= MAX_RENDER_DEPTH {
+        return Fragment {
+            value: Value::String(markdown.to_string()),
+            diagnostics: vec![Event::Diagnostic {
+                severity: Severity::Error,
+                message: format!(
+                    "[{}] renderable fields nested more than {MAX_RENDER_DEPTH} deep; \
+                     the value stays text (ADR-0021)",
+                    config.task_name
+                ),
+                span: None,
+            }],
+        };
+    }
+
+    state.render_depth += 1;
+    let fragment = render_payload(markdown, mode, config, state);
+    state.render_depth -= 1;
+    fragment
+}
+
+/// The body of [`render_mdp`], with the depth guard already applied.
+fn render_payload(
     markdown: &str,
     mode: MdpMode,
     config: &ChainConfig,

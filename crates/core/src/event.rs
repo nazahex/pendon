@@ -176,6 +176,72 @@ pub fn jsx_attr_payload(value: &str) -> Option<&str> {
     value.strip_prefix(JSX_ATTR_PREFIX)
 }
 
+/// Private-Use-Area sentinel that prefixes an [`Event::Attribute`] value when it
+/// is a **renderable field** — `;;…;;` / `;;;…;;;`, a whole `mdp` payload
+/// authored as a field value (`docs/spec/SYNTAX.md` §6.7).
+///
+/// The payload is `MDP_ATTR_PREFIX` + the [`MdpMode`] byte + the payload source,
+/// not JSON: `pendon_core` has no dependencies, so the encoding is one byte plus
+/// text and the resolver (`crates/extra`) decodes it. Distinct from `U+E000`
+/// (the §12.1 protect sentinel), `U+E001` ([`JSON_ATTR_PREFIX`]) and `U+E002`
+/// ([`JSX_ATTR_PREFIX`]); no other stage may emit `U+E003`.
+pub const MDP_ATTR_PREFIX: &str = "\u{E003}";
+
+/// How a renderable field's payload is parsed — the one mode type shared by the
+/// grammar (`;;` vs `;;;`), `plugin-bind`'s `{{{mdp…}}}` heads and the
+/// resolver. Inline drops the payload's own block wrapper; block keeps it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MdpMode {
+    /// Body on the head line (`;;…;;`, `{{{mdp[var] … }}}`): inline markup, no
+    /// block wrapper.
+    Inline,
+    /// Body on the lines after the head (`;;;…;;;`): a sub-document, block
+    /// elements kept.
+    Block,
+}
+
+impl MdpMode {
+    /// The one-byte tag used inside a [`MDP_ATTR_PREFIX`] payload.
+    pub const fn byte(self) -> u8 {
+        match self {
+            Self::Inline => b'i',
+            Self::Block => b'b',
+        }
+    }
+
+    /// Reads the one-byte tag back, or `None` when it names no mode.
+    pub const fn from_byte(byte: u8) -> Option<Self> {
+        match byte {
+            b'i' => Some(Self::Inline),
+            b'b' => Some(Self::Block),
+            _ => None,
+        }
+    }
+}
+
+/// `true` when `value` carries a renderable field ([`MDP_ATTR_PREFIX`]).
+pub fn is_mdp_attr(value: &str) -> bool {
+    value.starts_with(MDP_ATTR_PREFIX)
+}
+
+/// The `(mode, source)` payload of a renderable field, or `None` when `value`
+/// is not one.
+pub fn mdp_attr_payload(value: &str) -> Option<(MdpMode, &str)> {
+    let rest = value.strip_prefix(MDP_ATTR_PREFIX)?;
+    let (&tag, _) = rest.as_bytes().split_first()?;
+    Some((MdpMode::from_byte(tag)?, &rest[1..]))
+}
+
+/// Encodes a renderable field for [`Event::Attribute`]: sentinel, mode byte,
+/// source.
+pub fn mdp_attr(mode: MdpMode, source: &str) -> String {
+    let mut value = String::with_capacity(MDP_ATTR_PREFIX.len() + 1 + source.len());
+    value.push_str(MDP_ATTR_PREFIX);
+    value.push(mode.byte() as char);
+    value.push_str(source);
+    value
+}
+
 /// Splits an event stream into `(content, diagnostics)`.
 ///
 /// Diagnostics are advisory (`Severity`), never structural: a renderer that

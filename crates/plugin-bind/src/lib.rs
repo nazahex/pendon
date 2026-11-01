@@ -25,20 +25,10 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use pendon_core::{Event, Severity};
+use pendon_core::{Event, MdpMode, Severity};
 use pendon_plugin_markdown::{process as process_markdown, render_inline, MarkdownOptions};
 use pendon_renderer_ast::{events_to_children, fragment};
 use serde_json::Value;
-
-/// The form an `mdp` block was written in (§2.3).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MdpMode {
-    /// Body on the head line (`{{{mdp[var] … }}}`): inline markup, no block
-    /// wrapper.
-    Inline,
-    /// Body on the lines after the head: a sub-document, block elements kept.
-    Block,
-}
 
 /// A rendered `mdp` payload: the node list a renderer consumes, plus every
 /// diagnostic the rendering run produced (warnings from the plugins that ran

@@ -1,0 +1,19 @@
+[[task]]
+name = "Golden 50"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "frontmatter,marker,anchor,cite,wiki,markdown"
+format = "solid"
+
+# The payload's citations join the page's list (D-RF-8), so the fixture needs a
+# reference source like any other citing document.
+[task.cite]
+reference_source = "internal"
+
+# A marker needs an entry to be anything but its built-in `<span>`; this one is a
+# component, so the fixture also proves a fragment travels through `{...attrs}`.
+[[task.marker.custom]]
+type = ["note"]
+name = "Note"
+imports = "import { Note } from '@comp/Marker'"
+template = "<Note {...attrs}>{children}</Note>"

@@ -791,11 +791,22 @@ fn find_group_close(body: &str, close: char) -> Option<usize> {
     let mut depth = 0i32;
     let mut quote: Option<char> = None;
     let mut escaped = false;
+    // §6.7: a renderable is opaque, so its `}`/`]` never close the group.
+    let mut skip_until = 0usize;
 
     for (index, character) in body.char_indices() {
+        if index < skip_until {
+            continue;
+        }
         if escaped {
             escaped = false;
             continue;
+        }
+        if character == ';' {
+            if let Some(span) = crate::renderable::span(body, index) {
+                skip_until = span.end;
+                continue;
+            }
         }
         match character {
             '\\' => escaped = true,
@@ -870,11 +881,22 @@ fn split_items(body: &str) -> Result<Vec<&str>, ExtrasError> {
     // Nesting depth of `{` / `[` opened inside a value; a comma only splits an
     // item when it sits at depth 0.
     let mut depth = 0i32;
+    // §6.7: a renderable is opaque — its commas, quotes and brackets are payload.
+    let mut skip_until = 0usize;
 
     for (index, character) in body.char_indices() {
+        if index < skip_until {
+            continue;
+        }
         if escaped {
             escaped = false;
             continue;
+        }
+        if character == ';' {
+            if let Some(span) = crate::renderable::span(body, index) {
+                skip_until = span.end;
+                continue;
+            }
         }
         match character {
             '\\' => escaped = true,
@@ -951,11 +973,22 @@ fn parse_item(part: &str) -> Result<ExtrasItem, ExtrasError> {
 fn split_key_value(text: &str) -> Option<(&str, &str)> {
     let mut quote: Option<char> = None;
     let mut escaped = false;
+    // §6.7: a renderable's `:` is payload, not the key separator.
+    let mut skip_until = 0usize;
 
     for (index, character) in text.char_indices() {
+        if index < skip_until {
+            continue;
+        }
         if escaped {
             escaped = false;
             continue;
+        }
+        if character == ';' {
+            if let Some(span) = crate::renderable::span(text, index) {
+                skip_until = span.end;
+                continue;
+            }
         }
         match character {
             '\\' => escaped = true,
@@ -972,17 +1005,60 @@ fn split_key_value(text: &str) -> Option<(&str, &str)> {
 }
 
 /// Parses a scalar: quoted text, a backticked literal, or an unquoted literal.
+///
+/// A value whose whole text is one `;;…;;` / `;;;…;;;` span is a **renderable
+/// field** (§6.7) — [`AttrValue::Mdp`] — whether it was quoted or not. The test
+/// runs before the `UnquotedWhitespace` check, because a payload is full `mdp`
+/// and spaces inside it are prose, not a malformed scalar.
 fn parse_scalar(text: &str) -> Result<AttrValue, ExtrasError> {
     let text = text.trim();
     match text.as_bytes().first() {
         None => Err(ExtrasError::EmptyValue),
-        Some(&quote @ (b'"' | b'\'' | b'`')) => Ok(AttrValue::Str(read_quoted(text, quote)?)),
+        Some(&quote @ (b'"' | b'\'' | b'`')) => {
+            // The span is read from the authored text first, so a payload's `\n`
+            // is a line break and not the quote's escape (§6.7). A quoted value
+            // that is not a whole span keeps §6.3's unescaping exactly.
+            let delimiter = quote as char;
+            if let Some(body) = text
+                .strip_prefix(delimiter)
+                .and_then(|rest| rest.strip_suffix(delimiter))
+            {
+                if let Some(render) = crate::renderable::whole(body) {
+                    return Ok(renderable_attr(render));
+                }
+            }
+            let value = read_quoted(text, quote)?;
+            Ok(match crate::renderable::whole(&value) {
+                Some(render) => renderable_attr(render),
+                None => AttrValue::Str(value),
+            })
+        }
         Some(_) => {
+            if let Some(render) = crate::renderable::whole(text) {
+                return Ok(renderable_attr(render));
+            }
             if text.chars().any(char::is_whitespace) {
                 return Err(ExtrasError::UnquotedWhitespace);
             }
             Ok(classify_scalar(text))
         }
+    }
+}
+
+/// The attribute value of a whole-span renderable (§6.7).
+fn renderable_attr(render: crate::renderable::Renderable) -> AttrValue {
+    AttrValue::Mdp {
+        mode: render.mode,
+        source: render.source,
+    }
+}
+
+/// The attribute value of one slot content: a renderable when the whole content
+/// is a span, its text otherwise.
+fn slot_attr(value: &crate::slot::SlotValue) -> AttrValue {
+    match &value.render {
+        Some(render) => renderable_attr(render.clone()),
+        None => AttrValue::Str(value.text.clone()),
     }
 }
 
@@ -1321,14 +1397,11 @@ pub fn to_attributes(head: &ExtrasHead, specs: &Specs) -> Attrs {
     let mut groups: Vec<(String, ExtrasAttr)> = Vec::new();
     for slot in Slot::ALL {
         for kind in SlotKind::ALL {
-            let Some(value) = head.slots.get(slot, kind) else {
+            let Some(value) = head.slots.value(slot, kind) else {
                 continue;
             };
             let path = specs.slot(slot, kind);
-            groups.push((
-                path.to_string(),
-                ExtrasAttr::Value(AttrValue::Str(value.to_string())),
-            ));
+            groups.push((path.to_string(), ExtrasAttr::Value(slot_attr(value))));
             group_keys.push(path);
         }
     }

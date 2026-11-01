@@ -1,0 +1,25 @@
+A renderable is a value, and a value is only a value where the grammar says so.
+`;;` in prose is punctuation — a pair of semicolons, nothing more:
+
+Prose keeps its ;; literal: no field was written here, so no field is read.
+
+A head is all-or-nothing (§4.3), so a span that never closes leaves the whole
+head literal instead of swallowing the rest of the line:
+
+@[Card](/docs)@@anchorA{note: ;;never closed}
+
+`.class` and `#id` have a **name** grammar, not a value grammar (D-RF-6): `;` is
+not a name character, so a head that writes one there is malformed and stays
+text — the field is not silently dropped:
+
+@[Card](/docs)@@anchorA{.c;;x;;, note: text}
+
+Quoting never decides a value's meaning, but a span must be the value's
+**whole body**: `"pre ;;a;; post"` is text, while `";;a *payload*;;"` is a payload:
+
+@[Card](/docs)@@anchorA{note: "pre ;;a;; post", body: ";;a *payload*;;"}
+
+`\` escapes the next character, and one level is all there is — `\;` is a
+semicolon, so two escaped semicolons are payload text, and `\\` is a backslash:
+
+@[Card](/docs)@@anchorA{note: ;;a \; semicolon and a \\ backslash;;}

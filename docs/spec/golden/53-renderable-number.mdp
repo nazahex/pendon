@@ -1,0 +1,33 @@
+---
+references:
+  alpha:
+    id: alpha
+    type: book
+    title: Alpha
+  beta:
+    id: beta
+    type: book
+    title: Beta
+---
+
+`number` and `cite` keep the **page's** scope: a renderable is not a numbering
+island (D-RF-8). But a field is rendered *after* the chain has walked the
+document, so its number cannot simply be the next one handed out — that would
+number by **output** order, and §6.7 requires source order.
+
+So the field's citation identities are reserved **where the field is written**.
+This citation is the first one in the source, even though the field renders last:
+
+@[Card](/docs)@@anchorA{note: ;;first in source: [^alpha];;}
+
+Body text cites [^beta] here, so `beta` is the second identity the document
+introduced — not the first:
+
+The same identity keeps its number, whichever position cites it:
+
+Body text cites [^alpha] again.
+
+`%%number` belongs to the same rule: the marker is the numbering pass's, so a
+head inside a payload is numbered by the pass and not by the renderer. That half
+is not pinned here yet — `number` numbers elements, not identities, so the
+reservation this fixture proves for `cite` does not carry over for free.

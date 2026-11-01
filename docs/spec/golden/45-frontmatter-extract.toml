@@ -5,7 +5,7 @@ output = "./out/[slug].jsx"
 plugin = "frontmatter,extract,markdown"
 format = "solid"
 
-# D-14 / §21 rule 11: the document's own frontmatter is extractable as **one
+# D-14 / §21 rule 10: the document's own frontmatter is extractable as **one
 # record per document** — the author's keys are the fields, a nested key is a
 # path, and there is no preset (`only` / `omit` are the whole selection).
 
@@ -27,7 +27,7 @@ format = "toml"
 omit = ["author.meta.flags"]
 
 # …and the §20 channel, under the block's own name (exporting `frontmatter`
-# itself is an error: the renderer already publishes it, §21 rule 11).
+# itself is an error: the renderer already publishes it, §21 rule 10).
 [[task.frontmatter.extract]]
 export = "meta"
 only = ["author.meta"]

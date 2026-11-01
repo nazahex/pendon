@@ -100,6 +100,7 @@ Implementation units that own this grammar:
 | `.x` `#x` `--x:v` `k:v` `k` | class / id / CSS var / prop / flag                | `crates/extra`      | **current** (§6.1)              |
 | `[…]` / `(…)`               | slot pair (bare, quote, tick; §5.2)               | `crates/extra`      | **current**                     |
 | `\|…`                       | slot modifier run inside a bracket (§5.4)         | `crates/extra`      | **current**                     |
+| `;;…;;` / `;;;…;;;`         | renderable `mdp` value, inline / block (§6.7)     | `crates/extra`      | **current**                     |
 | `@` `!` `#` `^`             | slot tags (anchor, image, heading, citation §5.3) | per plugin          | **current**                     |
 | `%%numberType`              | numbering marker (§10.5)                          | `crates/number`     | **current**                     |
 | `{{type}}`                  | inline & block marker                             | `plugin-marker`     | new (freed from `cite.section`) |
@@ -591,7 +592,7 @@ decorator and the heading it wraps.
 enum AttrValue {
     Str(String), Int(i64), Float(f64), Bool(bool), Raw(String),
     Object(Vec<(String, AttrValue)>), Array(Vec<AttrValue>),
-    JsxExpr(String), Null,
+    JsxExpr(String), Mdp { mode: MdpMode, source: String }, Null,
 }
 ```
 
@@ -813,6 +814,59 @@ The same declaration carries the fields the element writes **itself**
 head item that spells one of them is an `Error`, and `field.override.<k>` (D-4)
 is how that value gets its own public name. An element that declares nothing owns
 nothing, so a construct never inherits a collision rule it did not ask for.
+
+### 6.7 Renderable fields
+
+A field's value can be a **document** instead of text. `;;…;;` (inline) and
+`;;;…;;;` (block) wrap an `mdp` payload (§19) written at the value position; the
+payload is parsed and run through the page's own chain, and the field carries the
+resulting node list ([ADR-0021](../decisions/0021-renderable-fields.md)).
+
+```text
+{{markerX}}[;;lorem *ipsum*, a [[Wiki]] link and [^book];;]
+@@type{note: ;;*Blue* Flower;;}
+@@type{body: ;;;## A heading\n\n- one;;;}
+```
+
+**Positions.** A renderable MAY be the whole value of any slot content
+(`[…]`/`(…)` × bare/quote/tick, §5.2) and of any spec value (§6.1, §6.3),
+including inside a nested object or array. It is **not** a value form for
+`.class`, `#id`, `isFoo`, `--x: …` or a `class:` / `style:` prop: those have a
+name or declaration grammar, so `;;` there stays literal text (or the head is
+malformed as before). No position is _reserved_ for a construct: `field.*` may
+move what `slug` / `src` / `reference_id` mean to another position (§6.1), so a
+renderable in the old one is legal — an element that needs literal text reads the
+authored `;;…;;` spelling and behaves exactly as it did.
+
+**Whole value only.** A renderable is a value, not a sigil: `[pre ;;x;; post]`
+and `k: "pre ;;x;; post"` are text. Quoting does not downgrade a value — with
+`k: ";;x y;;"` the quotes' whole body is one span, so it is renderable (§5.2
+already says quoting never decides a value's meaning).
+
+**Opaque interior.** Between the opener and its closer every character is
+payload: `,` `"` `'` `` ` `` `[` `]` `{` `}` `(` `)` `:` `|` and whitespace
+neither end a slot content, nor split a spec item, nor close a group. Only two
+characters mean anything:
+
+1. the opener is the **longest** match — `;;;` is block, otherwise `;;` is
+   inline;
+2. a run of `;` at least as long as the opener closes the span and is consumed
+   **whole** (a `;;;` run inside a `;;` span leaves no stray `;`), and `\`
+   escapes the next character: `\;` is payload text and cannot close, `\n` is a
+   line break, and `\` before anything else is that character.
+
+An unclosed span is not a span: the value stays literal (§4.3), so a head whose
+value is never closed is malformed **as a whole**, exactly as it was before.
+
+**One line per value.** A slot or spec value is one line, so a block payload
+writes its breaks as `\n`; they are materialised before the payload is parsed.
+
+**IR.** The value is `AttrValue::Mdp { mode, source }` (§6.3) and travels as
+`MDP_ATTR_PREFIX` (`U+E003`) + the `MdpMode` byte + source; `literal()` is the
+authored `;;…;;` spelling, which is what a consumer that needs text sees until
+the chain's resolve stage renders the payload. `number` and `cite` stay
+**page-scoped**: a payload's citations join the page's list, they do not open a
+second one.
 
 ## 7. Construct grammars
 
@@ -2157,6 +2211,16 @@ omit        = [<field>, …]                   # always wins
     already publishes that const from the same record. `frontmatter` is what
     turns the `---` block into the node this reads, so `extract` must follow it
     (rule 1).
+12. **A renderable field is a node list** (§6.7): a `;;…;;` / `;;;…;;;` value is
+    resolved by the chain before `extract` reads the stream, so its row carries
+    `{"$fragment": [<node>, …]}` — the same value a bound `mdp` field produces
+    ([ADR-0021](../decisions/0021-renderable-fields.md)). It is **not** text: the
+    authored `;;…;;` spelling is never frozen into a row, and a consumer that
+    wants the string joins the nodes itself. An author's field is not in the
+    `pendon` preset (rule 4), so reaching one takes `include` or
+    `preset = "all"`, exactly like any other bare field. `extract` runs after the
+    resolve stage by construction — its own arm resolves the fields before it
+    reads — so the row never carries `U+E003` or a `{"$mdp": …}` wrapper.
 
 Executable contracts: goldens [`32-extract-heading`](golden/README.md) (a heading
 block writing a file _and_ `export const outline`, next to the automatic nested

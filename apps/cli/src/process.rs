@@ -190,7 +190,7 @@ pub fn process_single_file(
     // (ADR-0004) and **before** the citation export: an `mdp` payload may cite,
     // and the citation list is the page's, not the payload's.
     if let Some(bind) = bind.as_ref() {
-        let mut render = |markdown: &str, mode: pendon_plugin_bind::MdpMode| {
+        let mut render = |markdown: &str, mode: pendon_core::MdpMode| {
             chain::render_mdp(markdown, mode, &config, &mut state)
         };
         events = pendon_plugin_bind::resolve_with(&events, &bind.registry, &mut render);

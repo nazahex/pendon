@@ -35,11 +35,14 @@ mod emit;
 mod field;
 mod modifier;
 mod preset;
+mod renderable;
 mod slot;
 mod typed;
 mod value;
 
 pub use emit::{emit_attr_issues, emit_attrs, issue_event, scan_extras_chars};
+
+pub use renderable::{end_after, materialize, span, whole, Renderable, Span};
 
 pub use modifier::{
     append_class, contributions as modifier_contributions, Contribution, ModifierConfig,
@@ -55,7 +58,7 @@ pub use preset::{fallback_path, owns_field, ElementHead, Preset};
 
 pub use slot::{
     parse_attached_slots, parse_slot_parts, parse_slots, Slot, SlotContract, SlotError, SlotKind,
-    SlotMatch, SlotPair, SlotParts, SlotPos, SlotTag,
+    SlotMatch, SlotPair, SlotParts, SlotPos, SlotTag, SlotValue,
 };
 
 pub use decorator::{

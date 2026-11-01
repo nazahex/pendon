@@ -293,6 +293,15 @@ impl CitationContext {
                 Event::Text(text) if excluded == 0 && !in_frontmatter => {
                     emit_text(text, self, &mut out);
                 }
+                // §6.7: a renderable field is rendered *after* the chain, but its
+                // citations are numbered **here**, where the attribute sits in the
+                // stream — which is its source position (D-RF-8, option B).
+                Event::Attribute { value, .. } if pendon_core::is_mdp_attr(value) => {
+                    if let Some((_, source)) = pendon_core::mdp_attr_payload(value) {
+                        reserve_payload(source, self);
+                    }
+                    out.push(event.clone());
+                }
                 _ => out.push(event.clone()),
             }
         }
@@ -481,10 +490,8 @@ fn emit_citation(parts: CiteParts, ctx: &mut CitationContext, out: &mut Vec<Even
         Some(identity) => match ctx.identities.get(&identity) {
             Some(&existing) => existing,
             None => {
-                ctx.next_citation_number += 1;
-                let new_number = ctx.next_citation_number;
-                ctx.identities.insert(identity, new_number);
-                new_number
+                reserve_identity(ctx, identity.clone());
+                ctx.identities[&identity]
             }
         },
         None => {
@@ -1029,6 +1036,105 @@ fn reference_exists(references: &Value, id: &str) -> bool {
     references
         .as_object()
         .is_some_and(|map| map.contains_key(id))
+}
+
+// --- Renderable fields (§6.7, D-RF-8 option B) ---
+
+/// Reserves the citation identities a renderable field will need, **at its
+/// source position**.
+///
+/// The field itself is rendered after the chain has run (`chain::resolve_renderable`),
+/// so without this reservation its citations would be numbered *after* every body
+/// citation — output order, not source order, which §6.7 forbids. Reserving only
+/// touches [`CitationContext::identities`]: no `citations` row is recorded and no
+/// node is emitted, so the field's own pass (rendering it) records the physical
+/// occurrence exactly once, under the number it was promised here.
+///
+/// The scan is cite's own head reader over the payload's *source*, with fenced
+/// code and inline code spans skipped — the two places markdown would hand cite a
+/// code node instead of text. Reserving is a numbering hint, so a payload that
+/// hides a head inside a construct this scan cannot see (e.g. an indented fence
+/// inside a list item) costs only the older behaviour for that field; it can
+/// never corrupt a body citation, because a reservation is consumed only by the
+/// identity it names.
+fn reserve_payload(source: &str, ctx: &mut CitationContext) {
+    // No stable field means no identity: every occurrence is numbered on its own
+    // when it renders, so there is nothing to promise here.
+    if ctx.options.stable_fields.is_empty() {
+        return;
+    }
+    // `(marker, length)` of the fence we are inside, if any.
+    let mut fence: Option<(char, usize)> = None;
+    for line in source.lines() {
+        let trimmed = line.trim_start();
+        if let Some((marker, length)) = fence {
+            if fence_closes(trimmed, marker, length) {
+                fence = None;
+            }
+            continue;
+        }
+        if let Some(open) = fence_opens(trimmed) {
+            fence = Some(open);
+            continue;
+        }
+        reserve_line(line, ctx);
+    }
+}
+
+/// `Some((marker, length))` when `line` opens a fenced code block.
+fn fence_opens(line: &str) -> Option<(char, usize)> {
+    let marker = line.chars().next().filter(|c| *c == '`' || *c == '~')?;
+    let length = line.chars().take_while(|c| *c == marker).count();
+    (length >= 3).then_some((marker, length))
+}
+
+/// `true` when `line` closes the fence opened with `marker` × `length`.
+fn fence_closes(line: &str, marker: char, length: usize) -> bool {
+    line.chars().take_while(|c| *c == marker).count() >= length
+}
+
+/// Reserves every citation head in one line of payload source, skipping inline
+/// code spans (`` `…` ``) so a quoted head stays text.
+fn reserve_line(line: &str, ctx: &mut CitationContext) {
+    let mut cursor = 0usize;
+    while cursor < line.len() {
+        let rest = &line[cursor..];
+        if rest.starts_with('`') {
+            let run = rest.chars().take_while(|c| *c == '`').count();
+            cursor += match rest[run..].find(&"`".repeat(run)) {
+                Some(close) => run + close + run,
+                None => run,
+            };
+            continue;
+        }
+        match read_head(rest, ctx) {
+            Read::Cite { parts, consumed } => {
+                // A head whose reference is missing stays text when it renders,
+                // so it must not consume a number here either.
+                if reference_exists(&ctx.references, &parts.reference_id) {
+                    if let Some(identity) = stable_identity(&parts, &ctx.options.stable_fields) {
+                        reserve_identity(ctx, identity);
+                    }
+                }
+                cursor += consumed;
+            }
+            _ => {
+                let ch = rest.chars().next().expect("cursor is in bounds");
+                cursor += ch.len_utf8();
+            }
+        }
+    }
+}
+
+/// Gives `identity` the next display ordinal — the same assignment
+/// [`emit_citation`] makes, split out so both agree.
+fn reserve_identity(ctx: &mut CitationContext, identity: String) {
+    if ctx.identities.contains_key(&identity) {
+        return;
+    }
+    ctx.next_citation_number += 1;
+    let number = ctx.next_citation_number;
+    ctx.identities.insert(identity, number);
 }
 
 fn flush_text(text: &mut String, out: &mut Vec<Event>) {
@@ -1659,6 +1765,69 @@ mod tests {
     /// The catalog every fixture names: the `book` entry its frontmatter shows.
     fn fixture_references() -> Value {
         serde_json::json!({"book": {"title": "Book"}})
+    }
+
+    /// §6.7 / D-RF-8 (option B): a renderable field's citations are numbered at
+    /// the attribute's **source** position, not when the field later renders.
+    /// `paper` is cited inside the field (which renders last) and `book` in the
+    /// body, yet the field's identity takes 1 because it comes first in source.
+    #[test]
+    fn a_renderable_reserves_its_citation_numbers_at_its_source_position() {
+        let references = serde_json::json!({
+            "book": {"title": "Book"},
+            "paper": {"title": "Paper"},
+        });
+        let mut ctx = CitationContext::new(references, CiteOptions::default());
+        let mut events = vec![
+            Event::StartNode(NodeKind::Document),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Attribute {
+                name: "note".into(),
+                value: pendon_core::mdp_attr(pendon_core::MdpMode::Inline, "see [^paper]"),
+            },
+            Event::EndNode(NodeKind::Paragraph),
+            Event::StartNode(NodeKind::Paragraph),
+            Event::Text("body cites [^book]".into()),
+            Event::EndNode(NodeKind::Paragraph),
+            Event::EndNode(NodeKind::Document),
+        ];
+
+        let out = ctx.process_events(&events);
+        // The body's citation is the second identity in source order, so it is 2.
+        let body = out
+            .iter()
+            .find_map(|event| match event {
+                Event::Text(text) if text.contains("-book\"") => Some(text.clone()),
+                _ => None,
+            })
+            .expect("the body citation rendered");
+        assert!(body.contains("#2-book"), "{body}");
+        // Reserving records no physical occurrence: the field's row arrives when
+        // it renders, so the only row so far is the body's.
+        let citations = ctx.get_citations();
+        assert_eq!(citations.as_array().unwrap().len(), 1, "{citations}");
+        assert_eq!(citations[0]["reference_id"], "book");
+        assert_eq!(citations[0]["citation_number"], 2);
+        events.clear();
+    }
+
+    /// The reservation reads the payload's source, so a head inside a fenced
+    /// block or an inline code span is not one — markdown hands cite a code node
+    /// there, and the render never numbers it either.
+    #[test]
+    fn a_renderable_reserves_nothing_from_code() {
+        let mut ctx = CitationContext::new(fixture_references(), CiteOptions::default());
+        let payload = "```\n[^book]\n```\nand `[^book]` inline, plus [^book] real";
+        let _ = ctx.process_events(&[
+            Event::StartNode(NodeKind::Document),
+            Event::Attribute {
+                name: "note".into(),
+                value: pendon_core::mdp_attr(pendon_core::MdpMode::Block, payload),
+            },
+            Event::EndNode(NodeKind::Document),
+        ]);
+        // Only the trailing, real head reserved a number.
+        assert_eq!(ctx.next_citation_number, 1);
     }
 
     /// Runs the public path ([`CitationContext`]) over a fixture and returns the

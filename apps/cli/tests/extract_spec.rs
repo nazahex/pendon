@@ -901,6 +901,76 @@ fn a_frontmatter_block_rejects_element_only_keys() {
     }
 }
 
+/// §6.7 / D-RF-1: a **renderable** field and a `bind` `mdp` field are one value.
+///
+/// Both are `mdp` payloads rendered by the same `render_mdp`, so the page carries
+/// the same fragment for both — the proof that a renderable needs no renderer or
+/// extractor of its own, which is what the issue's second open question asked.
+///
+/// Extraction reads the stream where `extract` sits (§21: it must run last), so
+/// the two fields are *not* both frozen at that point: the renderable is resolved
+/// by the extract arm itself (a field is grammar, not a plugin), while a `$bind`
+/// reference is resolved by `bind`'s post-pass, which `process::render` runs
+/// **after** the chain — the row keeps the reference, exactly as it does for any
+/// other bound field. The assertion below pins both facts so the difference stays
+/// visible instead of surprising.
+#[test]
+fn a_renderable_field_carries_the_same_fragment_a_bound_mdp_field_does() {
+    let dir = project(
+        "renderable-parity",
+        r#"[[task]]
+name = "Extract"
+input = "./src/doc.mdp"
+output = "./out/doc.jsx"
+plugin = "frontmatter,anchor,bind,extract,markdown"
+format = "solid"
+
+[[task.anchor.extract]]
+output = "./out/fields.json"
+format = "json"
+preset = "all"
+"#,
+    );
+    fs::write(
+        dir.join("src/doc.mdp"),
+        "{{{mdp[note-body] lorem *ipsum*}}}
+
+\
+         @[Card](/docs)@@anchorA{note: $note-body, body: ;;lorem *ipsum*;;}
+",
+    )
+    .expect("source");
+    run_in(&dir);
+
+    // A renderable extracts as a node list under the reserved key every renderer
+    // already reads — no `literal()`, no second renderer.
+    let rows: Value = serde_json::from_str(&read(&dir, "out/fields.json")).expect("rows parse");
+    let row = &rows[0];
+    let renderable = &row["body"];
+    assert!(
+        renderable.get("$fragment").is_some(),
+        "renderable = {renderable}"
+    );
+    assert_eq!(
+        row["note"],
+        Value::String("$note-body".to_string()),
+        "`bind` resolves after the chain, so the row keeps its reference"
+    );
+
+    // The page is where the two meet: one fragment, written twice.
+    let out = read(&dir, "out/doc.jsx");
+    assert_eq!(
+        out.matches(r#"note={(<>lorem <em>ipsum</em></>)}"#).count(),
+        1,
+        "out = {out}"
+    );
+    assert_eq!(
+        out.matches(r#"body={(<>lorem <em>ipsum</em></>)}"#).count(),
+        1,
+        "out = {out}"
+    );
+}
+
 /// D-14: a document without frontmatter writes no file and registers no binding
 /// — the block matched nothing, so it is not an empty record either.
 #[test]

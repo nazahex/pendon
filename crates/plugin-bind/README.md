@@ -59,6 +59,13 @@ The CLI enables both whenever `bind` appears in `task.plugin` (or `--plugin`);
 - A `$var` that is the **entire** non-`mdp` extras value is replaced with
   `JSON_ATTR_PREFIX` + compact JSON; `renderer-ast` re-hydrates it, so a renderer
   sees a real value (`name={…}` in Solid, the same structured value in the AST).
+- A **renderable field** is the same fragment without a data block: `;;…;;` /
+  `;;;…;;;` (§6.7, [ADR-0021](../../docs/decisions/0021-renderable-fields.md)) is
+  the grammar-level spelling of `{{{mdp[…] …}}}`, and the chain's resolve stage
+  calls the same `render_mdp` this plugin's renderer callback wraps. So the two
+  spellings are interchangeable — a payload written at the position renders
+  exactly like a bound one, including the citation numbering — and a payload may
+  itself contain a renderable, because the sub-run resolves its own fields.
 - A **path** reaches one leaf: `$config.db.host`, `$rows[0].nama`,
   `$m["a-b"]`. A miss warns and stays literal.
 - A nested extras value (`{rows: $rows, n: 2}`) is walked and each string leaf

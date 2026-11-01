@@ -134,10 +134,28 @@ applied in this order: **`preset` (the starting set) → `include` (adds paths) 
 `false` = `"all"`). It is **gone**; a config that still has it fails to load with
 an error naming `preset = "pendon"` (D-16 — no compatibility shims).
 
+## A renderable field (§6.7)
+
+A `;;…;;` / `;;;…;;;` value is resolved **before** the rows are read: the chain's
+resolve stage renders the payload and the attribute becomes the JSON fragment a
+bound `mdp` field produces, so a row carries a real node list —
+
+```json
+{ "href": "/docs", "note": { "$fragment": [ { "type": "Text", "text": "hi" } ] } }
+```
+
+— and `attribute_value` (`scan.rs`) simply decodes it. Nothing in this crate
+renders: a text form would be a second renderer, so the structured list is the
+value, and a consumer that wants a string joins the nodes itself. An author's
+field is not in the `pendon` preset (the element does not define it), so reaching
+one takes `include` or `preset = "all"` like any other bare field.
+`extract`'s own arm calls the resolve stage before it scans, so a row can never
+carry `U+E003` or a `{"$mdp": …}` wrapper.
+
 ## Frontmatter (`[[task.frontmatter.extract]]`)
 
 The document's own frontmatter is extractable as **one record per document**
-(D-14, §21 rule 11). Its fields are the top-level keys — a nested key is a path,
+(D-14, §21 rule 10). Its fields are the top-level keys — a nested key is a path,
 so `only = ["title", "meta.tags"]` keeps those two and drops the rest of `meta`
 — and it has **no preset**: `preset`, `include` and `type` are load errors there,
 which is also why the block's starting set is `all` by construction and the

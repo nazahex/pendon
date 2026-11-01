@@ -148,7 +148,7 @@ fn main() -> ExitCode {
     // `mdp` payload belongs to the page's citation list.
     let events = match bind.as_ref() {
         Some(bind) => {
-            let mut render = |markdown: &str, mode: pendon_plugin_bind::MdpMode| {
+            let mut render = |markdown: &str, mode: pendon_core::MdpMode| {
                 chain::render_mdp(markdown, mode, &config, &mut state)
             };
             pendon_plugin_bind::resolve_with(&events, &bind.registry, &mut render)
