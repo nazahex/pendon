@@ -9,7 +9,7 @@ bare content, while the node publishes them as <code>ref_id</code> and <code>loc
 as <code>no</code>. <code>stable_fields = [&quot;reference_id&quot;, &quot;locator&quot;]</code> is what keeps the pair
 meaningful: the identity follows the <strong>names</strong>, never the positions:
 </p>
-<p>Minim <CiteShort reference={references["book"]} {...{ "bracket.bare": "p. 1" }} no={1} type="citeShort" /> esse.
+<p>Minim <CiteShort reference={references["book"]} bracket={{ bare: "p. 1" }} no={1} type="citeShort" /> esse.
 </p>
 <p>Second <CiteShort reference={references["paper"]} loc="p. 2" no={2} type="citeShort" />.
 </p>
@@ -22,7 +22,7 @@ stays the author&#39;s own field:
 <p>The same citation seen twice keeps one number, because <code>stable_fields</code> lists
 <code>reference_id</code> and <code>locator</code> and both match:
 </p>
-<p><CiteShort reference={references["book"]} {...{ "bracket.bare": "p. 1" }} no={1} type="citeShort" /> again.
+<p><CiteShort reference={references["book"]} bracket={{ bare: "p. 1" }} no={1} type="citeShort" /> again.
 </p>
 
 </>); }

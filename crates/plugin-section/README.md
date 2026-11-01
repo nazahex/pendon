@@ -24,7 +24,8 @@ then parses the interior of every `Section` this plugin emits.
   the heading already owns its extras on its `#` run. The decorator is bound
   through `pendon-extra` like the other block binders, and may carry positional
   groups (`[…]` / `(…)`) that are resolved through the section type's
-  `field.bracket.bare` / `field.paren.bare` (§6.1).
+  `field.bracket.<kind>` / `field.paren.<kind>` (§6.1) — six positions, so
+  `("title")` is `paren.quote`.
 - **ID priority.** The section id is the first available of `#sectionID`
   (decorator `#id`) > `` `slug-section` `` (decorator slug) > `` `slug-head` ``
   (heading `[slug]`) > `` `slug-head-extras` `` (heading extras slug) > the slug

@@ -73,9 +73,11 @@ fn each_type_resolves_its_own_positional_names() {
         SlotKind::Bare,
         Some(Path::from_dotted("label").unwrap()),
     );
+    // `("B")` is a quote (§5.2), so the paren's **quote** is the position whose
+    // value the entry renames.
     field.assign_slot(
         Slot::Paren,
-        SlotKind::Bare,
+        SlotKind::Quote,
         Some(Path::from_dotted("kind").unwrap()),
     );
     field
@@ -114,7 +116,14 @@ fn each_type_resolves_its_own_positional_names() {
     assert_eq!(attr(&out, "author"), Some("C".to_string()));
     assert_eq!(attr(&out, "summary"), Some("D".to_string()));
     // …and nothing spills onto the built-in slot the key was renamed away from.
-    for unset in ["bracket.bare", "paren.bare", "specs.tick", "specs.quote"] {
+    for unset in [
+        "bracket.bare",
+        "bracket.quote",
+        "paren.bare",
+        "paren.quote",
+        "specs.tick",
+        "specs.quote",
+    ] {
         assert_eq!(attr(&out, unset), None, "{unset} spilled: {out:?}");
     }
 
@@ -122,7 +131,8 @@ fn each_type_resolves_its_own_positional_names() {
     // configures nothing, so the §6.1 default paths apply (head > extras §6.2).
     let out = run("::other[X](\"Y\"){`Z`, \"W\"}Body::");
     assert_eq!(attr(&out, "bracket.bare"), Some("X".to_string()), "{out:?}");
-    assert_eq!(attr(&out, "paren.bare"), Some("Y".to_string()), "{out:?}");
+    assert_eq!(attr(&out, "paren.quote"), Some("Y".to_string()), "{out:?}");
+    assert_eq!(attr(&out, "paren.bare"), None, "{out:?}");
     assert_eq!(attr(&out, "label"), None, "{out:?}");
 }
 

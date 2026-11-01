@@ -1,6 +1,7 @@
 use pendon_core::{Event, NodeKind};
 use pendon_extra::{
-    bind_decorators, decorator_diagnostics, BoundDecorator, Claim, Receiver, ReceiverSet, Specs,
+    bind_decorators, decorator_diagnostics, BoundDecorator, Claim, HeadConfig, Receiver,
+    ReceiverSet,
 };
 
 mod context;
@@ -43,19 +44,10 @@ pub fn process(events: &[Event]) -> Vec<Event> {
     process_with_options(events, MarkdownOptions::default())
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct MarkdownOptions {
     pub allow_html: bool,
     pub strip_comments: bool,
-}
-
-impl Default for MarkdownOptions {
-    fn default() -> Self {
-        Self {
-            allow_html: false,
-            strip_comments: false,
-        }
-    }
 }
 
 /// Renders a string as inline markdown, producing events without any block-level
@@ -89,7 +81,7 @@ pub fn process_with_receivers(
     // and code fences — are bound here. Every other block belongs to the plugin
     // whose receiver `classify_block` names, and `bind_decorators` leaves its
     // decorator in the stream for that pass whatever order the chain runs in.
-    let specs = |_: Option<&str>| Specs::default();
+    let specs = |_: Option<&str>| HeadConfig::default();
     let claim = Claim::sweeping(Receiver::Paragraph, receivers);
     let bindings = bind_decorators(events, &specs, claim);
     let decorators: std::collections::HashMap<usize, &BoundDecorator> = bindings

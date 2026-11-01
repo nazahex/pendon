@@ -5,9 +5,9 @@ pub fn process(events: &[Event]) -> Vec<Event> {
     if events.is_empty() {
         return Vec::new();
     }
-    if !matches!(events.get(0), Some(Event::StartNode(NodeKind::Document))) {
+    let Some(Event::StartNode(NodeKind::Document)) = events.first() else {
         return events.to_vec();
-    }
+    };
 
     match extract_frontmatter(events) {
         Ok(Some((json, resume_idx))) => {

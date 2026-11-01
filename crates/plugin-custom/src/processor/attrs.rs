@@ -73,9 +73,7 @@ pub fn collect_attrs(
     // that were not explicitly declared in [[attrs]]. This enables the
     // dynamic spread operator in the Solid renderer.
     for (k, v) in kv_map {
-        if !out.contains_key(&k) {
-            out.insert(k, strip_quotes(&v));
-        }
+        out.entry(k).or_insert_with(|| strip_quotes(&v));
     }
 
     (out, diags)

@@ -511,6 +511,18 @@ pub fn build_image_options(config: Option<&ImageTaskConfig>) -> Result<ImageOpti
         return Ok(ImageOptions::default());
     };
     check_custom_node_removed("image", config.custom_node.is_some())?;
+    // §11: image has exactly one layer (`img`), addressed directly as
+    // `[[task.image.custom]]`. The layered form `[[task.image.custom.<layer>]]`
+    // is a load error — clean break, no shim, no migration.
+    if let Some(toml::Value::Table(table)) = &config.custom {
+        if crate::components::is_layer_map(table) {
+            return Err(
+                "task.image.custom must be `[[task.image.custom]]` (direct form); \
+                 `[[task.image.custom.<layer>]]` is no longer supported"
+                    .to_string(),
+            );
+        }
+    }
     let wired = pendon_plugin_image::layers();
     let loaded = load_custom("image", IMG_LAYER, config.custom.as_ref())?;
     check_layers("image", loaded.as_ref(), &wired)?;
@@ -1252,7 +1264,7 @@ names = ["TableHead"]
     #[test]
     fn img_and_heading_require_name_and_template() {
         let cfg: ImageTaskConfig =
-            toml::from_str("[custom.img]\nname = \"Thumb\"\n").expect("valid img config");
+            toml::from_str("[[custom]]\nname = \"Thumb\"\n").expect("valid img config");
         let err = build_image_options(Some(&cfg)).expect_err("template is required");
         assert!(err.contains("image.custom.img.template"), "{err}");
 
@@ -1267,7 +1279,7 @@ names = ["TableHead"]
     fn img_and_heading_share_the_import_syntax() {
         let cfg: ImageTaskConfig = toml::from_str(
             r#"
-[custom.img]
+[[custom]]
 name = "Figure"
 template = "<Figure>{children}</Figure>"
 imports = ["import Figure from '@/components/Figure';"]
@@ -1702,7 +1714,7 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
     fn img_reads_the_img_layer() {
         let cfg: ImageTaskConfig = toml::from_str(
             r#"
-[custom.img]
+[[custom]]
 name = "Thumb"
 template = "<img />"
 "#,
@@ -1715,12 +1727,12 @@ template = "<img />"
         );
 
         let cfg: ImageTaskConfig =
-            toml::from_str("[custom.img]\nname = \"Thumb\"\n").expect("valid img config");
+            toml::from_str("[[custom]]\nname = \"Thumb\"\n").expect("valid img config");
         let err = build_image_options(Some(&cfg)).expect_err("template required");
         assert!(err.contains("image.custom.img.template"), "{err}");
 
         // The `figure` container is retired with the marker run, so a config that
-        // still declares it names a layer no plugin wires (§13: load error).
+        // still uses the old layered table form is rejected (§13: load error).
         let cfg: ImageTaskConfig = toml::from_str(
             r#"
 [custom.figure]
@@ -1729,8 +1741,8 @@ template = "<Figure>{children}</Figure>"
 "#,
         )
         .expect("valid img config");
-        let err = build_image_options(Some(&cfg)).expect_err("figure is not a layer");
-        assert!(err.contains("figure"), "{err}");
+        let err = build_image_options(Some(&cfg)).expect_err("direct form required");
+        assert!(err.contains("direct form"), "{err}");
     }
 
     /// `heading` and `cite` read their primary layer; the citation leaf keeps its

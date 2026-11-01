@@ -10,6 +10,7 @@ block names — and takes <code>citationsC</code> away from the block before it,
 <code>export</code> of the same name wins entirely (D-6). <code>references</code> still lists every entry:
 extraction reads the document, it does not cite anything.
 </p>
-<p>A <Cite citation_number={1} reference_id="alpha" type="CiteA" />, B <Cite citation_number={2} reference_id="beta" type="CiteB" />, C <Cite citation_number={3} reference_id="gamma" />.</p>
+<p>A <Cite citation_number={1} reference_id="alpha" type="CiteA" />, B <Cite citation_number={2} reference_id="beta" type="CiteB" />, C <Cite citation_number={3} reference_id="gamma" />.
+</p>
 
 </>); }

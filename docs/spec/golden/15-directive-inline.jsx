@@ -3,7 +3,8 @@ import { Note } from '@comp/Directive'
 
 export default function PendonView() { return (<>
 <p>Inline directives keep their paragraph (§10.2) and their content is inline
-content. The head <code>[bracket]</code> / <code>(&quot;paren&quot;)</code> slots map to <code>id</code> / <code>level</code>, and the
+content. The head&#39;s <code>[bracket]</code> bare maps to <code>id</code>, the paren&#39;s <strong>quote</strong> to
+<code>level</code> (§5.2: a quoted content is a quote, never a bare one), and the
 backticked / quoted extras items map to <code>author</code> / <code>summary</code> (§6.1, §10.2, §10.4):
 </p>
 <p><Note author="Jane Doe" class="box" id="note-1" isOpen={true} level="A level" summary="A summary" type="note"> some <em>inline</em> content</Note> and the

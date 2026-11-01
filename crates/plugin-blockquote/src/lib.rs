@@ -54,7 +54,7 @@ pub struct BlockquoteOptions {
 /// node.
 pub fn process(events: &[Event], options: &BlockquoteOptions) -> Vec<Event> {
     // §9.1: a decorator line directly above the quote decorates it too.
-    let specs = |target: Option<&str>| options.custom.specs_for(target);
+    let specs = |target: Option<&str>| options.custom.head_for(target).unwrap_or_default();
     // D-10 rule 2: a blockquote is this pass's one receiver.
     let bindings = bind_decorators(events, &specs, Claim::only(Receiver::Blockquote));
     let decorators: HashMap<usize, &BoundDecorator> = bindings

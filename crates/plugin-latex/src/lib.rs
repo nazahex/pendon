@@ -168,11 +168,13 @@ fn process_text(text: &str, out: &mut Vec<Event>, options: &LatexOptions) {
 
             if end < len && chars[end] != ' ' && chars[end] != '\n' {
                 while end < len {
-                    if chars[end] == '$' {
-                        if end > start + 1 && chars[end - 1] != ' ' && chars[end - 1] != '\n' {
-                            found_close = true;
-                            break;
-                        }
+                    if chars[end] == '$'
+                        && end > start + 1
+                        && chars[end - 1] != ' '
+                        && chars[end - 1] != '\n'
+                    {
+                        found_close = true;
+                        break;
                     }
                     end += 1;
                 }

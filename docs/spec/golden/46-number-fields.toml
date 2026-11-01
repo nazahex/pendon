@@ -6,7 +6,8 @@ plugin = "frontmatter,heading,anchor,number,markdown"
 format = "solid"
 
 # `{...attrs}` is how a client reads the public numbering fields: three dotted
-# names, each written as the one-key spread a dotted field always uses (§6.3).
+# names, regrouped into one nested `number` prop (§6.5, ADR-0019) —
+# `number={{ depth: 2, raw: ["I", "a"], type: "HeadingB" }}`.
 [[task.heading.custom]]
 name = "Heading"
 imports = "import { Heading } from '@comp/Heading'"

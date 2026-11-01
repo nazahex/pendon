@@ -5,7 +5,7 @@ export default function PendonView() { return (<>
 The entry below assigns all five, so every content lands exactly where it was put
 — no default path (<code>class</code> / <code>id</code> / <code>style</code>, §6.3) survives beside it (§6.1):
 </p>
-<p><MoveA {...{ "bar.id": "john-foo" }} {...{ "foo.class": "price-detail" }} {...{ "foo.style": "--width: 200px" }} href="/pricing" slug="price_slug" title="Price Title" type="moveA">Moved</MoveA>
+<p><MoveA bar={{ id: "john-foo" }} foo={{ class: "price-detail", style: "--width: 200px" }} href="/pricing" slug="price_slug" title="Price Title" type="moveA">Moved</MoveA>
 </p>
 <p>The same item kinds on an entry that assigns nothing keep the default paths:
 <code>class</code> / <code>id</code> / <code>style</code> are the universal DOM fields (§0), the anchor reads the

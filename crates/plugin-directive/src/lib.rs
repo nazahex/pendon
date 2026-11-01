@@ -26,8 +26,8 @@
 
 use pendon_core::{Event, NodeKind};
 use pendon_extra::{
-    issue_event, parse_extras, to_attributes, AttrValue, Attrs, DirectiveHead, ExtrasAttr,
-    ExtrasIssue, ExtrasMatch,
+    apply_modifier_run, issue_event, parse_extras, to_attributes, AttrValue, Attrs, DirectiveHead,
+    ExtrasAttr, ExtrasIssue, ExtrasMatch, Slot, SlotKind, SlotPair,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
@@ -116,21 +116,29 @@ pub(crate) fn resolve_head(
         ..ParsedDirective::default()
     };
 
-    let specs = options.custom.specs_for(head.type_marker.as_deref());
+    let config = options
+        .custom
+        .head_for(head.type_marker.as_deref())
+        .unwrap_or_default();
+    let specs = config.specs;
 
+    // §6.1: the head's own `[…]` / `(…)` groups are the six slot positions, in
+    // head order, each mapped through the entry's `field.*`.
     let mut head_attrs = Attrs::default();
-    if let Some(bracket) = &head.bracket {
-        head_attrs.push(
-            specs.bracket.clone(),
-            ExtrasAttr::Value(AttrValue::Str(bracket.clone())),
-        );
+    for slot in Slot::ALL {
+        for kind in SlotKind::ALL {
+            let Some(value) = head.slots.get(slot, kind) else {
+                continue;
+            };
+            head_attrs.push(
+                specs.slot(slot, kind),
+                ExtrasAttr::Value(AttrValue::Str(value.to_string())),
+            );
+        }
     }
-    if let Some(parentheses) = &head.parentheses {
-        head_attrs.push(
-            specs.paren.clone(),
-            ExtrasAttr::Value(AttrValue::Str(parentheses.clone())),
-        );
-    }
+    // §6.1: an adjacent extras head may carry groups (and a run) of its own, so
+    // its pair is kept for the contributions below.
+    let mut extras_run: Option<SlotPair> = None;
 
     let mut consumed = 0usize;
     let extras = match parse_extras(rest) {
@@ -139,6 +147,7 @@ pub(crate) fn resolve_head(
             rest: after,
         } => {
             consumed = rest.len() - after.len();
+            extras_run = Some(extras_head.slots.clone());
             to_attributes(&extras_head, &specs)
         }
         ExtrasMatch::Malformed { error, .. } => {
@@ -151,7 +160,14 @@ pub(crate) fn resolve_head(
         ExtrasMatch::Absent { .. } => Attrs::default(),
     };
 
-    let merged = head_attrs.merge_with(extras, &[]);
+    let mut merged = head_attrs.merge_with(extras, &[]);
+    // §5.4/D-9: a run contributes **after** everything the head and its extras
+    // wrote — the only order that lets `class` add up (§6.4) while an authored
+    // field still beats configuration.
+    apply_modifier_run(&mut merged, &head.slots, config.modifier.as_ref());
+    if let Some(pair) = &extras_run {
+        apply_modifier_run(&mut merged, pair, config.modifier.as_ref());
+    }
     parsed.attrs = merged.items;
     parsed.issues.extend(merged.issues);
     (parsed, consumed)
@@ -317,13 +333,15 @@ mod tests {
         assert!(!text.contains("::"));
     }
 
-    /// §10.2/§10.4: `[bracket]` → `bracket.bare`, `("title")` → `paren.bare`, and the extras
-    /// head contributes the rest.
+    /// §10.2/§10.4: `[bracket]` → `bracket.bare`, `("title")` → `paren.quote`
+    /// (§5.2: a quoted content is a quote), and the extras head contributes the
+    /// rest.
     #[test]
     fn inline_head_slots_and_extras_map_to_attributes() {
         let out = run("::note[slug-1](\"A title\")@@note{.box, #i, isOpen} body::\n");
         assert_eq!(attr(&out, "bracket.bare").as_deref(), Some("slug-1"));
-        assert_eq!(attr(&out, "paren.bare").as_deref(), Some("A title"));
+        assert_eq!(attr(&out, "paren.quote").as_deref(), Some("A title"));
+        assert_eq!(attr(&out, "paren.bare"), None);
         assert_eq!(attr(&out, "id").as_deref(), Some("i"));
         assert_eq!(attr(&out, "class").as_deref(), Some("box"));
         assert!(out

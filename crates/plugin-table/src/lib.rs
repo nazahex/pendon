@@ -97,7 +97,7 @@ where
         options
             .custom_node
             .as_ref()
-            .and_then(|custom| custom.table.specs_for_opt(target))
+            .and_then(|custom| custom.table.head_for(target))
             .unwrap_or_default()
     };
     // D-10 rule 2: a table is this pass's one receiver.

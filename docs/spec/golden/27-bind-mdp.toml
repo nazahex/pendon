@@ -9,7 +9,7 @@ format = "solid"
 [task.cite]
 reference_source = "internal"
 
-[task.image.custom.img]
+[[task.image.custom]]
 name = "Figure"
 imports = "import Figure from '@comp/Figure'"
 template = "<Figure {...attrs} />"

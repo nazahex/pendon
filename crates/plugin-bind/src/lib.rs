@@ -1077,7 +1077,7 @@ fn bound_value(
     render: &mut MdpRenderer<'_>,
 ) -> Value {
     let mode = if reference.is_bare() {
-        registry.mdp_mode(&reference.root)
+        registry.mdp_mode(reference.root)
     } else {
         None
     };

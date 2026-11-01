@@ -298,10 +298,12 @@ Source: §10.2/§10.3 · `crates/plugin-directive` · goldens `15`/`16`.
 | `type` | string | yes    | `::name` / `==name` — the head's own name, and the only field it writes |
 
 One of §0's two exceptions: the construct spells `type` in its syntax, so it is
-a field here (§10.4) and never extras-derived. A directive contracts no slot:
-its `[bracket]` / `("paren")` groups stay bare (`bracket.bare`, `paren.bare`) and
-so do its extras (`specs.tick`, `specs.quote`, `class`, `id`, `style`), which is
-why §12's `level` / `summary` are author names rather than rows.
+a field here (§10.4) and never extras-derived. A directive contracts no slot, so
+its six group positions keep their qualified names — `bracket.bare` …
+`paren.tick`, read by the §5.2 grammar, so `("A level")` is `paren.quote`
+(ADR-0020) — and so do its extras (`specs.tick`, `specs.quote`, `class`, `id`,
+`style`). That is why §12's `level` / `summary` are author names rather than
+rows: an entry that wants one writes `field.paren.quote = "level"`.
 
 ## 6. `heading` — `__layer = "heading"` (`NodeKind::Heading`)
 
@@ -405,10 +407,11 @@ Source: §10.1 · `crates/plugin-marker` · golden `14-marker`.
 
 The second of §0's exceptions: `{{name}}` spells the field, and it silently wins
 over an extras `@@type` (§10.1). A marker contracts nothing — no slot, no preset
-— so its groups (`bracket.bare`, `paren.bare`) and neutral extras
+— so its six group positions (`bracket.bare` … `paren.tick`) and neutral extras
 (`specs.tick`, `specs.quote`) are bare while `class` / `id` / `style` keep their
 DOM names (§0), and its text is its children, which the plugin never writes as an
-`inner_text` attribute.
+`inner_text` attribute. The groups are the §5.2 slots like every other head's
+(ADR-0020): a quoted paren is `paren.quote`, not `paren.bare`.
 
 ## 10. `section` — `__layer = "section"` (`NodeKind::Section`)
 

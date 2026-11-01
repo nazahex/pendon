@@ -21,8 +21,8 @@
 
 use pendon_core::{element_close, element_open, Event, NodeKind};
 use pendon_extra::{
-    issue_event, read_positional_groups, scan_extras_chars, to_attributes, ExtrasAttr, ExtrasHead,
-    ExtrasIssue,
+    issue_event, parse_attached_slots, scan_extras_chars, to_attributes_with_modifiers, ExtrasAttr,
+    ExtrasHead, ExtrasIssue, Slot, SlotKind, SlotMatch, SlotPair, Specs,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
@@ -64,7 +64,7 @@ pub fn process(events: &[Event], options: &MarkerOptions) -> Vec<Event> {
             // The block form: a paragraph that starts with a marker becomes the
             // marker node itself (no `<p>` wrapper, no absorbed next block).
             Event::StartNode(NodeKind::Paragraph) if excluded == 0 => {
-                if let Some(end) = matching_paragraph_end(&events, index) {
+                if let Some(end) = matching_paragraph_end(events, index) {
                     if let Some((marker, children)) = block_marker(&events[index + 1..end], options)
                     {
                         emit_marker(&marker, true, children.as_deref(), &mut out);
@@ -131,6 +131,37 @@ fn is_verbatim(kind: &NodeKind) -> bool {
     )
 }
 
+/// Merges the marker's own groups with an adjacent extras head's (§6.2).
+///
+/// One position at a time: a position the marker wrote wins and the extras copy
+/// is reported, a position only the extras head wrote is kept, so nothing is
+/// silently lost. The §5.4 run is the marker's own when it has one — its bracket
+/// is the head the reader is looking at — and the extras run otherwise.
+fn merge_slots(
+    own: &SlotPair,
+    extras: &SlotPair,
+    specs: &Specs,
+    issues: &mut Vec<ExtrasIssue>,
+) -> SlotPair {
+    let mut merged = own.clone();
+    for slot in Slot::ALL {
+        for kind in SlotKind::ALL {
+            let Some(value) = extras.get(slot, kind) else {
+                continue;
+            };
+            if merged.get(slot, kind).is_some() {
+                issues.push(ExtrasIssue::overridden(specs.slot(slot, kind)));
+            } else {
+                merged.parts[slot.index()].set(kind, value.to_string());
+            }
+        }
+    }
+    if merged.modifiers.is_empty() {
+        merged.modifiers = extras.modifiers.clone();
+    }
+    merged
+}
+
 /// Scans `{{type}}` and its adjacent extras head at `start`.
 ///
 /// `None` when the text is not a marker, which keeps `{{`, `{{}}`, a missing
@@ -171,57 +202,47 @@ fn scan_marker(
         ..ParsedMarker::default()
     };
 
-    // §6.1/§10.1: the positional groups sit directly after `}}`, before any
-    // extras head (`{{type}}[…](…){…}`). They are optional; a malformed group
-    // is not consumed and stays literal text with the marker (§4.3).
-    let mut group_bracket: Option<String> = None;
-    let mut group_parentheses: Option<String> = None;
+    // §6.1/§10.1: the marker's own groups sit directly after `}}`, before any
+    // extras head (`{{type}}[…](…){…}`). They are the same six positions a
+    // tagged head carries, read by the same §5.2 grammar; a malformed group is
+    // not consumed and stays literal text with the marker (§4.3).
+    let mut own = SlotPair::default();
     if cursor < chars.len() {
         let text: String = chars[cursor..].iter().collect();
-        if let Ok((bracket, parentheses, consumed)) = read_positional_groups(&text) {
-            if bracket.is_some() || parentheses.is_some() {
-                group_bracket = bracket;
-                group_parentheses = parentheses;
-                cursor += text[..consumed].chars().count();
+        if let SlotMatch::Slots { pair, rest } = parse_attached_slots(&text) {
+            if !pair.is_empty() || !pair.modifiers.is_empty() {
+                cursor += text[..text.len() - rest.len()].chars().count();
+                own = pair;
             }
         }
     }
 
-    // §6.1/§11 rule 5: the entry answering this marker `type` names the
-    // extras specs; the groups map through the same specs.
-    let specs = options.custom.specs_for(Some(marker.type_name.as_str()));
+    // §6.1/§5.4/§11 rule 5: the entry answering this marker `type` names both the
+    // extras specs and the modifier table the groups map through.
+    let config = options
+        .custom
+        .head_for(Some(marker.type_name.as_str()))
+        .unwrap_or_default();
+    let specs = config.specs;
 
     // §4.1: the extras head must be adjacent; a malformed one is left alone
     // (the marker still renders, §4.3).
     if let Some((mut head, next)) = scan_extras_chars(chars, cursor) {
         cursor = next;
-        // §6.2 head-wins: the marker's own groups beat the extras head's.
-        if group_bracket.is_some() && head.bracket.is_some() {
-            marker.issues.push(ExtrasIssue::overridden(&specs.bracket));
-        }
-        if group_parentheses.is_some() && head.parentheses.is_some() {
-            marker.issues.push(ExtrasIssue::overridden(&specs.paren));
-        }
-        if group_bracket.is_some() {
-            head.bracket = group_bracket.clone();
-        }
-        if group_parentheses.is_some() {
-            head.parentheses = group_parentheses.clone();
-        }
-        let parsed = to_attributes(&head, &specs);
+        head.slots = merge_slots(&own, &head.slots, &specs, &mut marker.issues);
+        let parsed = to_attributes_with_modifiers(&head, &specs, config.modifier.as_ref());
         marker.issues.extend(parsed.issues);
         // §10.1: `{{type}}` silently overrides an extras `@@type` — one node has
         // one routing key, and the marker's own is the one it was written with.
         // No diagnostic: the extras type is not a mistake, just redundant.
         marker.attrs = parsed.items;
-    } else if group_bracket.is_some() || group_parentheses.is_some() {
+    } else if !own.is_empty() || !own.modifiers.is_empty() {
         // Groups without an extras head still resolve to attributes (§6.1).
         let head = ExtrasHead {
-            bracket: group_bracket,
-            parentheses: group_parentheses,
+            slots: own,
             ..ExtrasHead::default()
         };
-        let parsed = to_attributes(&head, &specs);
+        let parsed = to_attributes_with_modifiers(&head, &specs, config.modifier.as_ref());
         marker.issues.extend(parsed.issues);
         marker.attrs = parsed.items;
     }
@@ -527,7 +548,9 @@ mod tests {
         );
         assert_eq!(attr(&out, "type").as_deref(), Some("note"));
         assert_eq!(attr(&out, "bracket.bare").as_deref(), Some("intro"));
-        assert_eq!(attr(&out, "paren.bare").as_deref(), Some("A title"));
+        // §5.2: a quoted content is a quote, so the paren fills `paren.quote`.
+        assert_eq!(attr(&out, "paren.quote").as_deref(), Some("A title"));
+        assert_eq!(attr(&out, "paren.bare"), None);
         assert!(text_of(&out).contains("trailing"));
 
         // The groups precede the extras head: {{type}}[…] (…)@@head{…}.
@@ -536,7 +559,7 @@ mod tests {
             &MarkerOptions::default(),
         );
         assert_eq!(attr(&out, "bracket.bare").as_deref(), Some("intro"));
-        assert_eq!(attr(&out, "paren.bare").as_deref(), Some("T"));
+        assert_eq!(attr(&out, "paren.quote").as_deref(), Some("T"));
         assert_eq!(attr(&out, "class").as_deref(), Some("hero"));
 
         // Adjacency: a space before `[` keeps the rest literal.

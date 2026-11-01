@@ -1,0 +1,20 @@
+The `[bracket]` / `(paren)` groups of a `::` or `==` head are the **same two slots**
+a tagged head carries (§5.2, §6.1): each holds a bare, a quoted and a ticked
+content, and nothing is read as "one string per group". With no `field.*`
+assignment every content keeps its qualified name, which a built-in element
+writes as a dotted spread (§6.5):
+
+::plain[bare "quoted" `ticked`](pbare "pquoted" `pticked`) the whole head is text::
+
+A component entry sees the same six positions. A `field.*` assignment renames
+exactly one of them (D-7), and the bracket's `|…` run contributes **last**, so a
+field the head wrote itself wins (§5.4, D-9):
+
+::card[bare "quoted" `ticked` |?](pbare "pquoted" `pticked`)@@card{.base} body::
+
+The block form reads its head the same way (§10.3), and a position the entry does
+not rename keeps its qualified name:
+
+==card[bare "quoted" `ticked`](pbare "pquoted" `pticked`)
+block body
+==

@@ -9,10 +9,10 @@
 
 use pendon_core::{element_close, element_open, raw_inline, Event, NodeKind, Severity};
 use pendon_extra::{
-    append_class, issue_event, modifier_contributions, parse_extras, parse_slots, to_attributes,
-    ElementHead, ExtrasAttr, ExtrasHead, ExtrasIssue, ExtrasMatch, FieldConfig, FieldName,
-    ModifierConfig, Preset, Slot, SlotContract, SlotError, SlotKind, SlotMatch, SlotPair, SlotPos,
-    SlotTag, SpecsKey,
+    append_class, issue_event, modifier_contributions, parse_extras, parse_slots,
+    to_attributes_with_modifiers, ElementHead, ExtrasAttr, ExtrasHead, ExtrasIssue, ExtrasMatch,
+    FieldConfig, FieldName, ModifierConfig, Preset, Slot, SlotContract, SlotError, SlotKind,
+    SlotMatch, SlotPair, SlotPos, SlotTag, SpecsKey,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 
@@ -397,7 +397,11 @@ fn merge_modifiers(parts: &mut ImageParts, pair: &SlotPair, config: Option<&Modi
 fn merge_extras(parts: &mut ImageParts, extras: &ExtrasHead, options: &ImageOptions) {
     // §6.1/§11 rule 5: the entry answering this marker names the extras specs.
     let specs = options.img.specs_for(extras.type_marker.as_deref());
-    let parsed = to_attributes(extras, &specs);
+    let parsed = to_attributes_with_modifiers(
+        extras,
+        &specs,
+        options.img.modifier_for(extras.type_marker.as_deref()),
+    );
     parts.issues.extend(parsed.issues.iter().cloned());
 
     // §6.3: the image's own positions — an extras `"quote"` is the `<img>`'s

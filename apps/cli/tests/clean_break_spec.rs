@@ -75,7 +75,7 @@ const CASES: &[Case] = &[
         name: "figure-layer",
         header: "plugin = \"image\"\nformat = \"solid\"",
         stale: "[task.image.custom.figure]\nname = \"Fig\"\ntemplate = \"<F />\"",
-        expect: "unsupported layer for `image`",
+        expect: "task.image.custom must be `[[task.image.custom]]` (direct form)",
     },
 ];
 

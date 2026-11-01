@@ -161,7 +161,8 @@ pub struct ImageTaskConfig {
     /// `[[task.image.number]]` — numbering blocks (ADR-0010).
     #[serde(default)]
     pub number: Vec<NumberRule>,
-    /// §11 layer component sets: `[task.img.custom.figure]`.
+    /// §11 layer component sets: `[[task.image.custom]]` (direct form; image
+    /// has exactly one layer, `img`).
     pub custom: Option<toml::Value>,
     /// Removed pre-§11 key (`[task.img.custom_node]`, §14). The table is still
     /// parsed so a stale config fails with an error naming the new key instead of

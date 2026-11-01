@@ -16,17 +16,21 @@
 //!   symbol stays literal text.
 
 use crate::field::{FieldConfig, Path};
+use crate::modifier::ModifierConfig;
 use crate::preset::fallback_path;
-use crate::slot::{Slot, SlotKind};
+use crate::slot::{parse_attached_slots, Slot, SlotError, SlotKind, SlotMatch, SlotPair};
 use crate::value::{classify_scalar, AttrValue, SPREAD_KEY};
 
 /// Why a head was rejected.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExtrasError {
     /// `@@` is not followed by a type name or `{`.
     InvalidHead,
     /// `{` opened but never closed (or the type name runs to the end).
     UnterminatedHead,
+    /// A `[…]` / `(…)` group attached to the head is malformed or never closed
+    /// (§5.2, §4.3).
+    InvalidSlot(SlotError),
     /// An item is neither a class, an id, a positional value, a prop, a CSS var
     /// nor a well-formed bare flag.
     InvalidItem,
@@ -108,46 +112,57 @@ pub fn read_number_mark(input: &str) -> Option<(NumberMark, usize)> {
     ))
 }
 
-/// A parsed `@@type{…}` / `@@{…}` head.
+/// A parsed `@@type[…]("T"){…}` / `@@{…}` head.
 ///
 /// The positional groups of §6.1 may sit between the type and the body:
-/// `@@type[…](…){…}` (and `@@[…](…)` without a type or a body).
+/// `@@type[…](…){…}` (and `@@[…](…)` without a type or a body). They are the
+/// same six positions a `@[…]()` head carries — two slots of three contents
+/// each, read by [`parse_attached_slots`] — so a group holds `"quote"` and
+/// `` `tick` `` exactly like a tagged head, and the bracket may carry a §5.4
+/// modifier run.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ExtrasHead {
     /// `type` of `@@type{…}`; `None` for `@@{…}`.
     pub type_marker: Option<String>,
-    /// Raw contents of the optional `[…]` group (name = `bracket`).
-    pub bracket: Option<String>,
-    /// Raw contents of the optional `(\u2026)` group, unquoted
-    /// (name = `paren`).
-    pub parentheses: Option<String>,
+    /// The head's `[…]` / `(…)` groups — untagged, i.e. `SlotTag::None`.
+    pub slots: SlotPair,
     pub items: Vec<ExtrasItem>,
 }
 
 /// The **specs** of an extras head: the public field each of its positional
 /// contents lands in (§5, §6.1).
 ///
-/// A head carries at most seven positional contents — the `[...]` / `(...)` **slot
-/// groups**, the `` `...` `` / `"..."` **specs items**, and the `.class` / `#id` /
-/// `style:` items — and each lands in exactly one field. The vocabularies are
-/// named together here because [`to_attributes`] maps a whole head in one pass,
-/// and because all of them answer the same question: *where does this content
-/// go?* The five rows whose key is `field.specs.*` are the [`SpecsKey`]
-/// positions.
+/// A head carries at most twelve positional contents — the `[...]` / `(...)`
+/// **slot groups**, each of which has three contents (§5.2), the `` `...` `` /
+/// `"..."` **specs items**, and the `.class` / `#id` / `style:` items — and each
+/// lands in exactly one field. The vocabularies are named together here because
+/// [`to_attributes`] maps a whole head in one pass, and because all of them
+/// answer the same question: *where does this content go?* The five rows whose
+/// key is `field.specs.*` are the [`SpecsKey`] positions.
 ///
-/// | content        | field (`field.*` key)                | default      | meaning                                            |
-/// | -------------- | ------------------------------------ | ------------ | -------------------------------------------------- |
-/// | `` `x` `` tick | `field.specs.tick`                   | `specs.tick` | none — the position carries no default meaning     |
-/// | `"x"` quote    | `field.specs.quote`                  | `specs.quote`| none — the position carries no default meaning     |
-/// | `[x]` bracket  | `field.bracket.bare`                 | `bracket.bare`| the content of the bracket slot                     |
-/// | `("x")` paren  | `field.paren.bare`                   | `paren.bare` | the content of the parentheses slot                 |
-/// | `.class`       | `field.specs.class`                  | `class`      | CSS class list (universal)                          |
-/// | `#id`          | `field.specs.id`                     | `id`         | element ID (universal)                              |
-/// | `style:`       | `field.specs.style`                  | `style`      | inline style declarations (universal)               |
+/// | content                | field (`field.*` key) | default         |
+/// | ---------------------- | --------------------- | --------------- |
+/// | `` `x` `` tick         | `field.specs.tick`    | `specs.tick`    |
+/// | `"x"` quote            | `field.specs.quote`   | `specs.quote`   |
+/// | `[x]` bracket bare     | `field.bracket.bare`  | `bracket.bare`  |
+/// | `["x"]` bracket quote  | `field.bracket.quote` | `bracket.quote` |
+/// | ``[`x`]`` bracket tick | `field.bracket.tick`  | `bracket.tick`  |
+/// | `(x)` paren bare       | `field.paren.bare`    | `paren.bare`    |
+/// | `("x")` paren quote    | `field.paren.quote`   | `paren.quote`   |
+/// | ``(`x`)`` paren tick   | `field.paren.tick`    | `paren.tick`    |
+/// | `.class`               | `field.specs.class`   | `class`         |
+/// | `#id`                  | `field.specs.id`      | `id`            |
+/// | `style:`               | `field.specs.style`   | `style`         |
 ///
-/// The `meaning` column is the one piece of this table that exists **only**
-/// here: an assigned field carries no semantics of its own, so a rename never
-/// changes what the content *is*. The `default` column is
+/// The six slot rows are one table, not two special cases: a group an extras
+/// head writes is read by the §5.2 grammar a tagged head uses, so `("A title")`
+/// is a *quote* here exactly as it is in `@[x]("A title")`. Their `default`
+/// column is [`fallback_path`] — the qualified name a position keeps when the
+/// entry leaves it alone (D-7).
+///
+/// The **meaning** half of this table (`href`, `title`, the preset names of
+/// §6.6) belongs to the elements, not to the grammar: an untagged head publishes
+/// the positions and nothing else. The specs rows' `default` column is
 /// [`SpecsKey::default_path`] — the paths a construct keeps when its `custom`
 /// entry configures nothing (D-7).
 ///
@@ -166,10 +181,9 @@ pub struct ExtrasHead {
 /// [`resolve`](Self::resolve) is the only place that reads them for naming.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Specs {
-    /// `[...]` — `field.bracket.bare`.
-    pub bracket: String,
-    /// `(...)` — `field.paren.bare`.
-    pub paren: String,
+    /// One public path per slot position, indexed by [`Slot::index`] and then
+    /// [`SlotKind::order`].
+    slots: [[String; SlotKind::ALL.len()]; Slot::COUNT],
     /// `` `...` `` — `field.specs.tick`.
     pub tick: String,
     /// `"..."` — `field.specs.quote`.
@@ -184,9 +198,14 @@ pub struct Specs {
 
 impl Default for Specs {
     fn default() -> Self {
+        let mut slots: [[String; SlotKind::ALL.len()]; Slot::COUNT] = Default::default();
+        for slot in Slot::ALL {
+            for kind in SlotKind::ALL {
+                slots[slot.index()][kind.order() as usize] = fallback_path(slot, kind).dotted();
+            }
+        }
         Self {
-            bracket: "bracket.bare".to_string(),
-            paren: "paren.bare".to_string(),
+            slots,
             tick: specs_path(SpecsKey::Tick).dotted(),
             quote: specs_path(SpecsKey::Quote).dotted(),
             class: specs_path(SpecsKey::Class).dotted(),
@@ -206,28 +225,42 @@ impl Specs {
         }
     }
 
+    /// The public path of one slot position — `bracket.bare`, `paren.quote`, or
+    /// whatever the entry assigned (§6.1).
+    pub fn slot(&self, slot: Slot, kind: SlotKind) -> &str {
+        &self.slots[slot.index()][kind.order() as usize]
+    }
+
+    /// Renames one slot position.
+    pub fn set_slot(&mut self, slot: Slot, kind: SlotKind, path: impl Into<String>) {
+        self.slots[slot.index()][kind.order() as usize] = path.into();
+    }
+
     /// The specs the matched `custom` entry configures (D-5, D-7).
     ///
     /// `None` — no entry, or an entry that configured no `field.*` key — keeps
     /// every built-in name, which is the D-7 "preset is alive" case. Otherwise
     /// each name is the entry's assignment, and a position it left **unassigned**
-    /// falls back to its own qualified spelling: `bracket.bare` / `paren.bare` for
-    /// the slot groups (D-7) and `specs.<k>` for the five specs positions (§6.1).
-    /// A name the user chose is therefore never silently reused for an unnamed
-    /// position, and an unnamed value is never lost.
+    /// falls back to its own qualified spelling: `bracket.bare` … `paren.tick`
+    /// for the slot groups (D-7) and `specs.<k>` for the five specs positions
+    /// (§6.1). A name the user chose is therefore never silently reused for an
+    /// unnamed position, and an unnamed value is never lost.
     pub fn resolve(config: Option<&FieldConfig>) -> Self {
         let Some(config) = config.filter(|config| !config.is_empty()) else {
             return Self::default();
         };
-        Self {
-            bracket: slot_name(config, Slot::Bracket, SlotKind::Bare),
-            paren: slot_name(config, Slot::Paren, SlotKind::Bare),
-            tick: specs_name(config, SpecsKey::Tick),
-            quote: specs_name(config, SpecsKey::Quote),
-            class: specs_name(config, SpecsKey::Class),
-            id: specs_name(config, SpecsKey::Id),
-            style: specs_name(config, SpecsKey::Style),
+        let mut specs = Self::default();
+        for slot in Slot::ALL {
+            for kind in SlotKind::ALL {
+                specs.set_slot(slot, kind, slot_name(config, slot, kind));
+            }
         }
+        specs.tick = specs_name(config, SpecsKey::Tick);
+        specs.quote = specs_name(config, SpecsKey::Quote);
+        specs.class = specs_name(config, SpecsKey::Class);
+        specs.id = specs_name(config, SpecsKey::Id);
+        specs.style = specs_name(config, SpecsKey::Style);
+        specs
     }
 }
 
@@ -380,6 +413,13 @@ fn specs_path(key: SpecsKey) -> Path {
 }
 
 /// Outcome of scanning extras off the front of some text.
+///
+/// The `Head` variant owns a whole [`ExtrasHead`] — a type marker, the six slot
+/// positions and the body items — which makes it much larger than the other two.
+/// Boxing it would put a pointer between every caller and the head it just
+/// parsed, so the size asymmetry is deliberate: a match is a short-lived local,
+/// never something that is stored.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExtrasMatch<'a> {
     /// Not a head at all: the text is literal (nothing consumed).
@@ -408,6 +448,11 @@ impl DirectiveSigil {
 }
 
 /// The head of a directive: `::type[slug]("title")` / `==type[slug]("title")`.
+///
+/// The groups after the type are §6.1 slot groups, read by the same grammar a
+/// tagged head uses ([`parse_attached_slots`]): `[slug]` is a bare content,
+/// `("title")` a quote, and the bracket may carry a §5.4 modifier run. An
+/// entry's `field.*` names where each content lands (§10.1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DirectiveHead {
     pub sigil: DirectiveSigil,
@@ -415,13 +460,16 @@ pub struct DirectiveHead {
     pub count: usize,
     /// `None` for a bare fence, which only closes an open directive (§10.3).
     pub type_marker: Option<String>,
-    /// Raw contents of `[…]` (name = `bracket`).
-    pub bracket: Option<String>,
-    /// Raw contents of `(…)` (name = `paren`), unquoted.
-    pub parentheses: Option<String>,
+    /// The head's `[…]` / `(…)` groups — untagged, i.e. `SlotTag::None`.
+    pub slots: SlotPair,
 }
 
 /// Outcome of scanning a directive head off the front of some text.
+///
+/// Like [`ExtrasMatch`], `Head` owns the whole parsed head (its six positions
+/// included) while the other two hold a slice: the asymmetry is the price of an
+/// owned head and the match never outlives the line it reads.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DirectiveMatch<'a> {
     /// Not a directive head (nothing consumed).
@@ -646,42 +694,12 @@ pub fn parse_extras(input: &str) -> ExtrasMatch<'_> {
     ExtrasMatch::Absent { rest: input }
 }
 
-/// Reads the optional positional groups of a head: an immediate `[…]` followed
-/// by an immediate `(\u2026)` (§6.1), returning them and the bytes consumed.
+/// Reads the type name, the optional positional groups and the optional `{…}`
+/// body of a `@@` head, returning the bytes consumed **after** the `@@`.
 ///
-/// Adjacency is strict — a space before `[` means no group — and a group that
-/// opens without its closer is [`ExtrasError::UnterminatedHead`] (§4.3: the
-/// caller keeps the whole head literal). The `[…]` contents stay raw, the
-/// `(\u2026)` contents are trimmed and unquoted, exactly like a directive head.
-pub fn read_positional_groups(
-    after: &str,
-) -> Result<(Option<String>, Option<String>, usize), ExtrasError> {
-    let mut cursor = 0usize;
-    let mut bracket = None;
-    if let Some(remainder) = after[cursor..].strip_prefix('[') {
-        let Some(close) = remainder.find(']') else {
-            return Err(ExtrasError::UnterminatedHead);
-        };
-        bracket = Some(remainder[..close].to_string());
-        cursor = after.len() - remainder[close + 1..].len();
-    }
-    let mut parentheses = None;
-    if let Some(remainder) = after[cursor..].strip_prefix('(') {
-        let Some(close) = remainder.find(')') else {
-            return Err(ExtrasError::UnterminatedHead);
-        };
-        parentheses = Some(unquote_wrapping(remainder[..close].trim()));
-        cursor = after.len() - remainder[close + 1..].len();
-    }
-    Ok((bracket, parentheses, cursor))
-}
-
-/// Reads the type name and optional positional groups / `{…}` body of a `@@`
-/// head, returning the bytes consumed **after** the `@@`.
-///
-/// The grammar is `@@` type? `[…]`? `(\u2026)`? `{…}?` — each part must touch
-/// the previous one (§4.1). A head without a `{` stands alone when it carries a
-/// type or at least one positional group; a bare `@@` is still not a head.
+/// The grammar is `@@` type? `[…]`? `(…)?` `{…}?` — each part must touch the
+/// previous one (§4.1). A head without a `{` stands alone when it carries a
+/// type, a group or a number marker; a bare `@@` is still not a head.
 fn read_head(after: &str) -> Result<(ExtrasHead, usize), ExtrasError> {
     let bytes = after.as_bytes();
     let mut cursor = 0;
@@ -693,7 +711,13 @@ fn read_head(after: &str) -> Result<(ExtrasHead, usize), ExtrasError> {
     }
     let type_marker = (cursor > 0).then(|| after[..cursor].to_string());
 
-    let (bracket, parentheses, groups) = read_positional_groups(&after[cursor..])?;
+    // §6.1: the attached `[…]` / `(…)` groups, read by the same §5.2 grammar a
+    // tagged head uses — six positions, no tag, optional bracket.
+    let (slots, groups) = match parse_attached_slots(&after[cursor..]) {
+        SlotMatch::Absent { .. } => (SlotPair::default(), 0),
+        SlotMatch::Slots { pair, rest } => (pair, after.len() - cursor - rest.len()),
+        SlotMatch::Malformed { error, .. } => return Err(ExtrasError::InvalidSlot(error)),
+    };
     cursor += groups;
 
     if bytes.get(cursor) == Some(&b'{') {
@@ -706,8 +730,7 @@ fn read_head(after: &str) -> Result<(ExtrasHead, usize), ExtrasError> {
             total += used;
         }
         head.type_marker = type_marker;
-        head.bracket = bracket;
-        head.parentheses = parentheses;
+        head.slots = slots;
         return Ok((head, total));
     }
 
@@ -721,7 +744,7 @@ fn read_head(after: &str) -> Result<(ExtrasHead, usize), ExtrasError> {
 
     // A type, a positional group or a number marker can carry the head on its
     // own (§4.1/§6.1); a bare `@@` cannot.
-    if type_marker.is_none() && bracket.is_none() && parentheses.is_none() && number.is_none() {
+    if type_marker.is_none() && slots.is_empty() && slots.modifiers.is_empty() && number.is_none() {
         return Err(ExtrasError::InvalidHead);
     }
     // §4.1: `@@type {…}` is not a head — the `{` must touch the type.
@@ -737,8 +760,7 @@ fn read_head(after: &str) -> Result<(ExtrasHead, usize), ExtrasError> {
     Ok((
         ExtrasHead {
             type_marker,
-            bracket,
-            parentheses,
+            slots,
             items: number.into_iter().map(ExtrasItem::Number).collect(),
         },
         cursor,
@@ -832,10 +854,8 @@ pub fn parse_extras_body(body: &str) -> Result<ExtrasHead, ExtrasError> {
         items.push(parse_item(part)?);
     }
     Ok(ExtrasHead {
-        type_marker: None,
-        bracket: None,
-        parentheses: None,
         items,
+        ..ExtrasHead::default()
     })
 }
 
@@ -1211,6 +1231,78 @@ fn is_key(text: &str) -> bool {
 /// [`Attrs::merge_with`] answers it for the keys a construct passes as `owned`,
 /// and an element that owns a key outright reports
 /// [`ExtrasIssue::owned_key`] itself; both are `Error`s.
+///
+/// The order also fixes where a §5.4 modifier contribution lands: after every
+/// item the head itself wrote.
+/// [`to_attributes`], plus the §5.4 modifier run of the head's bracket.
+///
+/// `modifier` is the `bracket.modifier."<symbol>"` table of the entry that
+/// answers the head's `type` marker (D-9); `None` — no entry, or one that
+/// defines no symbol — contributes nothing. A contribution lands **after**
+/// every item the head itself wrote (§6.2), so a field the head set is never
+/// overwritten: `class` accumulates (§6.4) and anything else is dropped with a
+/// warning.
+pub fn to_attributes_with_modifiers(
+    head: &ExtrasHead,
+    specs: &Specs,
+    modifier: Option<&ModifierConfig>,
+) -> Attrs {
+    let mut attrs = to_attributes(head, specs);
+    apply_modifier_run(&mut attrs, &head.slots, modifier);
+    attrs
+}
+
+/// Applies a §5.4 modifier run to attributes a head already published (D-9).
+///
+/// `pair` supplies the run — a head's own bracket, or the bracket of the group
+/// pair a directive or marker read — and `modifier` is the table of the entry
+/// that answers it. A run is configuration on an optional bracket, so a pair
+/// without a run and an entry with no table both do nothing. A run whose
+/// contributions cannot be merged at all (the `merge` of `crate::modifier`) is
+/// dropped **whole** — half a run is not a merge — and reported as an `Error`.
+///
+/// Contributions are applied **after** everything `attrs` already holds (§6.2:
+/// authored content wins): `class` accumulates (§6.4) and any other field is
+/// dropped with a warning.
+pub fn apply_modifier_run(attrs: &mut Attrs, pair: &SlotPair, modifier: Option<&ModifierConfig>) {
+    let contributions = match crate::modifier::merge(modifier, &pair.modifiers) {
+        Ok(contributions) => contributions,
+        Err(error) => {
+            attrs.issues.push(ExtrasIssue::error(format!(
+                "the modifier run cannot be merged ({error}); it contributes nothing"
+            )));
+            return;
+        }
+    };
+
+    for contribution in contributions {
+        let name = contribution.name;
+        let Some(index) = attrs.items.iter().position(|(key, _)| *key == name) else {
+            attrs.items.push((name, contribution.attr));
+            continue;
+        };
+        // §6.4: `class` is a list, so one more contribution merges into it.
+        if name == SpecsKey::Class.default_path() {
+            if let (ExtrasAttr::Value(AttrValue::Str(existing)), ExtrasAttr::Value(value)) =
+                (&mut attrs.items[index].1, &contribution.attr)
+            {
+                let names = value.literal();
+                for class in names.split_whitespace() {
+                    let already = existing.split_whitespace().any(|known| known == class);
+                    if !already {
+                        existing.push(' ');
+                        existing.push_str(class);
+                    }
+                }
+            }
+            continue;
+        }
+        attrs.issues.push(ExtrasIssue::modifier_dropped(&name));
+    }
+}
+
+/// Maps a head onto attributes in the deterministic §6.4 order, with no
+/// modifier run — see [`to_attributes_with_modifiers`] for the §5.4 form.
 pub fn to_attributes(head: &ExtrasHead, specs: &Specs) -> Attrs {
     let mut classes: Vec<String> = Vec::new();
     let mut id: Option<String> = None;
@@ -1223,22 +1315,22 @@ pub fn to_attributes(head: &ExtrasHead, specs: &Specs) -> Attrs {
 
     // §6.1: the positional groups of the head itself, mapped through their
     // specs. They occupy the §6.4 slot before the body's positional items and
-    // win every key collision with them.
+    // win every key collision with them. Head order is the grammar's: the
+    // bracket's bare → quote → tick, then the paren's (§5.2).
     let mut group_keys: Vec<&str> = Vec::new();
     let mut groups: Vec<(String, ExtrasAttr)> = Vec::new();
-    if let Some(bracket) = &head.bracket {
-        groups.push((
-            specs.bracket.clone(),
-            ExtrasAttr::Value(AttrValue::Str(bracket.clone())),
-        ));
-        group_keys.push(&specs.bracket);
-    }
-    if let Some(parentheses) = &head.parentheses {
-        groups.push((
-            specs.paren.clone(),
-            ExtrasAttr::Value(AttrValue::Str(parentheses.clone())),
-        ));
-        group_keys.push(&specs.paren);
+    for slot in Slot::ALL {
+        for kind in SlotKind::ALL {
+            let Some(value) = head.slots.get(slot, kind) else {
+                continue;
+            };
+            let path = specs.slot(slot, kind);
+            groups.push((
+                path.to_string(),
+                ExtrasAttr::Value(AttrValue::Str(value.to_string())),
+            ));
+            group_keys.push(path);
+        }
     }
 
     for item in &head.items {
@@ -1458,13 +1550,19 @@ pub fn parse_directive_head(input: &str) -> DirectiveMatch<'_> {
     let type_marker = (cursor > 0).then(|| rest[..cursor].to_string());
     rest = &rest[cursor..];
 
-    let (bracket, parentheses, groups) = match read_positional_groups(rest) {
-        Ok(groups) => groups,
-        Err(error) => return DirectiveMatch::Malformed { error, rest: input },
+    let (slots, groups) = match parse_attached_slots(rest) {
+        SlotMatch::Absent { .. } => (SlotPair::default(), 0),
+        SlotMatch::Slots { pair, rest: after } => (pair, rest.len() - after.len()),
+        SlotMatch::Malformed { error, .. } => {
+            return DirectiveMatch::Malformed {
+                error: ExtrasError::InvalidSlot(error),
+                rest: input,
+            }
+        }
     };
     rest = &rest[groups..];
 
-    if type_marker.is_none() && bracket.is_none() && parentheses.is_none() && !rest.is_empty() {
+    if type_marker.is_none() && slots.is_empty() && slots.modifiers.is_empty() && !rest.is_empty() {
         // `==5` / `::= x`: an opening fence needs a type name (§10.1).
         return DirectiveMatch::Malformed {
             error: ExtrasError::InvalidHead,
@@ -1477,23 +1575,10 @@ pub fn parse_directive_head(input: &str) -> DirectiveMatch<'_> {
             sigil,
             count,
             type_marker,
-            bracket,
-            parentheses,
+            slots,
         },
         rest,
     }
-}
-
-/// Removes one wrapping pair of quotes or backticks, if present.
-fn unquote_wrapping(text: &str) -> String {
-    let bytes = text.as_bytes();
-    if bytes.len() >= 2 {
-        let first = bytes[0];
-        if (first == b'"' || first == b'\'' || first == b'`') && bytes[bytes.len() - 1] == first {
-            return text[1..text.len() - 1].to_string();
-        }
-    }
-    text.to_string()
 }
 
 #[cfg(test)]

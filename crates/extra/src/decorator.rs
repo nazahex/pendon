@@ -29,8 +29,8 @@
 
 use pendon_core::{Event, NodeKind, Severity};
 
-use crate::typed::{parse_extras, to_attributes, Attrs, ExtrasMatch, Specs};
-use crate::SpecsResolver;
+use crate::typed::{parse_extras, to_attributes_with_modifiers, Attrs, ExtrasMatch, Specs};
+use crate::HeadResolver;
 
 /// Nodes whose text is copied verbatim (§4.3): a decorator-looking line inside
 /// a code fence or raw HTML is literal text.
@@ -278,7 +278,7 @@ pub struct Bindings {
 /// space is stray prose on a decorator line: the head still decorates and the
 /// text comes back as [`DecoratorLine::trailing`] for the binder to drop with a
 /// `Severity::Warning` (D-10 rule 3).
-pub fn parse_decorator_line(line: &str, specs: SpecsResolver) -> Option<DecoratorLine> {
+pub fn parse_decorator_line(line: &str, resolve: HeadResolver) -> Option<DecoratorLine> {
     let trimmed = line.trim();
     if !trimmed.starts_with("@@") {
         return None;
@@ -293,12 +293,14 @@ pub fn parse_decorator_line(line: &str, specs: SpecsResolver) -> Option<Decorato
     } else {
         return None;
     };
-    let specs = specs(head.type_marker.as_deref());
+    // §6.1/§5.4: one lookup for the entry's `field.*` and its modifier table.
+    let config = resolve(head.type_marker.as_deref());
+    let attrs = to_attributes_with_modifiers(&head, &config.specs, config.modifier.as_ref());
     Some(DecoratorLine {
         indent: line.len() - line.trim_start_matches(' ').len(),
         type_marker: head.type_marker.clone(),
-        attrs: to_attributes(&head, &specs),
-        specs,
+        attrs,
+        specs: config.specs,
         trailing,
     })
 }
@@ -341,7 +343,7 @@ fn decorator_paragraph(events: &[Event], line: usize) -> Option<(usize, usize)> 
 /// The decorator lines of `events`, each with the paragraph it owns.
 fn decorator_lines(
     events: &[Event],
-    specs: SpecsResolver,
+    specs: HeadResolver,
 ) -> Vec<(usize, DecoratorLine, (usize, usize))> {
     let mut excluded = 0usize;
     let mut raw: Vec<(usize, DecoratorLine)> = Vec::new();
@@ -395,7 +397,7 @@ fn mark_removed(removed: &mut [bool], (start, end): (usize, usize)) {
 /// such a paragraph into two. A paragraph that is *only* decorator lines (the
 /// blank-line spelling) or that has no non-blank content after the run is left
 /// untouched, so the transform is idempotent.
-fn split_leading_decorator_paragraphs(events: &[Event], specs: SpecsResolver) -> Vec<Event> {
+fn split_leading_decorator_paragraphs(events: &[Event], specs: HeadResolver) -> Vec<Event> {
     let mut out: Vec<Event> = Vec::with_capacity(events.len() + 4);
     let mut i = 0;
     while i < events.len() {
@@ -430,7 +432,7 @@ fn split_leading_decorator_paragraphs(events: &[Event], specs: SpecsResolver) ->
 /// The offset inside a paragraph's inner events where a leading run of decorator
 /// lines ends and the decorated block begins. `None` when the paragraph does not
 /// start with a decorator run or has no non-blank content after it.
-fn leading_decorator_split(inner: &[Event], specs: SpecsResolver) -> Option<usize> {
+fn leading_decorator_split(inner: &[Event], specs: HeadResolver) -> Option<usize> {
     let mut k = 0;
     let mut run_end = None;
     while k < inner.len() {
@@ -623,7 +625,7 @@ fn warning(context: &str, message: String) -> Event {
 /// dropped as [`DecoratorDrop::Overridden`]. When any line of the run is
 /// indented deeper than the block, the whole run stays literal text (§9.1) and
 /// nothing is bound.
-pub fn bind_decorators(events: &[Event], specs: SpecsResolver, claim: Claim) -> Bindings {
+pub fn bind_decorators(events: &[Event], specs: HeadResolver, claim: Claim) -> Bindings {
     // §9.1: the canonical spelling puts the decorator line *touching* its block
     // (`@@{.u}` immediately above `- one`), and the core wraps that whole run in
     // ONE `Paragraph`. Split the paragraph's leading decorator lines off so the
@@ -779,7 +781,6 @@ pub fn bind_decorators(events: &[Event], specs: SpecsResolver, claim: Claim) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Specs;
     use pendon_core::{parse, Options};
 
     fn document(src: &str) -> Vec<Event> {
@@ -808,7 +809,11 @@ mod tests {
 
     fn bind_with(src: &str, claim: Claim) -> Bindings {
         let events = document(src);
-        bind_decorators(&events, &|_: Option<&str>| Specs::default(), claim)
+        bind_decorators(
+            &events,
+            &|_: Option<&str>| crate::HeadConfig::default(),
+            claim,
+        )
     }
 
     /// The type marker the claim-order fixture writes above `receiver`'s block.
@@ -830,7 +835,7 @@ mod tests {
         for receiver in order {
             let bindings = bind_decorators(
                 &events,
-                &|_: Option<&str>| Specs::default(),
+                &|_: Option<&str>| crate::HeadConfig::default(),
                 Claim::only(*receiver),
             );
             assert!(
@@ -1107,7 +1112,7 @@ mod tests {
 
     #[test]
     fn parse_decorator_line_rejects_non_heads() {
-        let specs = |_: Option<&str>| Specs::default();
+        let specs = |_: Option<&str>| crate::HeadConfig::default();
         assert!(parse_decorator_line("", &specs).is_none());
         assert!(parse_decorator_line("   ", &specs).is_none());
         assert!(parse_decorator_line("plain text", &specs).is_none());
@@ -1130,12 +1135,12 @@ mod tests {
     /// `@@type` → slot → `{specs}` → `%%numbering` — and every part survives.
     #[test]
     fn a_decorator_reads_the_head_in_canonical_order() {
-        let specs = |_: Option<&str>| Specs::default();
+        let specs = |_: Option<&str>| crate::HeadConfig::default();
         let line = parse_decorator_line("@@aside[intro](\"T\"){.box}%%%numberA", &specs)
             .expect("decorator line");
         assert_eq!(line.type_marker.as_deref(), Some("aside"));
         assert!(line.attrs.has("bracket.bare"));
-        assert!(line.attrs.has("paren.bare"));
+        assert!(line.attrs.has("paren.quote"));
         assert!(line.attrs.has("class"));
         let number = line.attrs.value("__number").expect("a numbering marker");
         assert_eq!(
@@ -1148,7 +1153,7 @@ mod tests {
     /// lines; a plain `[x](y)` line is not (omitting `@@` means link, §4.1).
     #[test]
     fn positional_groups_make_a_decorator_line() {
-        let specs = |_: Option<&str>| Specs::default();
+        let specs = |_: Option<&str>| crate::HeadConfig::default();
 
         let line =
             parse_decorator_line("@@aside[intro](\"T\"){.box}", &specs).expect("decorator line");
@@ -1160,7 +1165,7 @@ mod tests {
             Some("intro".to_string())
         );
         assert_eq!(
-            line.attrs.value("paren.bare").map(|value| value.literal()),
+            line.attrs.value("paren.quote").map(|value| value.literal()),
             Some("T".to_string())
         );
         assert!(line.attrs.has("class"));
@@ -1173,7 +1178,7 @@ mod tests {
         let line = parse_decorator_line("@@[intro](\"T\")", &specs).expect("decorator line");
         assert_eq!(line.type_marker, None);
         assert!(line.attrs.has("bracket.bare"));
-        assert!(line.attrs.has("paren.bare"));
+        assert!(line.attrs.has("paren.quote"));
 
         // A link paragraph is never a decorator line (§4.1: no `@@`, no head).
         assert!(parse_decorator_line("[intro](url)", &specs).is_none());
@@ -1196,7 +1201,7 @@ mod tests {
         assert_eq!(bound.type_marker.as_deref(), Some("aside"));
         assert!(bound.attrs.has("class"));
         assert!(bound.attrs.has("bracket.bare"));
-        assert!(bound.attrs.has("paren.bare"));
+        assert!(bound.attrs.has("paren.quote"));
         assert!(!texts(&bindings.events).contains("@@aside"));
     }
 

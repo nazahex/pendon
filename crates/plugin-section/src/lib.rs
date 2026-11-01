@@ -28,12 +28,13 @@
 //! # ID priority
 //!
 //! The section id is the first available of `#sectionID` (the decorator's `#id`)
-//! > `` `slug-section` `` (the decorator's slug) > `` `slug-head` `` (the
-//! heading's `[slug]`) > `` `slug-head-extras` `` (the heading's extras slug) >
-//! the slug of the heading title. A heading's own extras `#id` is **not** part of
-//! the chain (the RFC lists only the two above): the heading keeps it as its own
-//! universal `id` (§6.3), the section reports it and derives its own, and the two
-//! never stand in for each other.
+//! > `` `slug-section` `` (the decorator's slug)
+//! > `` `slug-head` `` (the heading's `[slug]`)
+//! > `` `slug-head-extras` `` (the heading's extras slug)
+//! > the slug of the heading title. A heading's own extras `#id` is **not** part
+//! > of the chain (the RFC lists only the two above): the heading keeps it as its
+//! > own universal `id` (§6.3), the section reports it and derives its own, and
+//! > the two never stand in for each other.
 //!
 //! # Level markers
 //!
@@ -46,8 +47,9 @@ use std::collections::HashMap;
 
 use pendon_core::{ensure_unique, slugify, Event, NodeKind, Severity};
 use pendon_extra::{
-    bind_decorators, decorator_diagnostics, issue_event, scan_extras_chars, to_attributes, Attrs,
-    BoundDecorator, Claim, ExtrasAttr, Receiver, Specs, SpecsKey,
+    bind_decorators, decorator_diagnostics, issue_event, scan_extras_chars,
+    to_attributes_with_modifiers, Attrs, BoundDecorator, Claim, ExtrasAttr, Receiver, Specs,
+    SpecsKey,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
@@ -117,7 +119,7 @@ enum Marker {
 }
 
 pub fn process(events: &[Event], options: &SectionOptions) -> Vec<Event> {
-    let specs = |target: Option<&str>| options.section.specs_for(target);
+    let specs = |target: Option<&str>| options.section.head_for(target).unwrap_or_default();
     // D-10 rule 2: a heading is the one receiver this pass owns, so a
     // decorator above a list, quote, table or plain paragraph is left in the
     // stream for the plugin that owns it.
@@ -212,11 +214,11 @@ pub fn process(events: &[Event], options: &SectionOptions) -> Vec<Event> {
 /// The index of a `StartNode(Heading)` that is the first content of the
 /// paragraph that spans `start..end`. `None` for an ordinary paragraph.
 fn heading_within(events: &[Event], start: usize, end: usize) -> Option<usize> {
-    for index in (start + 1)..end {
-        match &events[index] {
+    for (offset, event) in events[(start + 1)..end].iter().enumerate() {
+        match event {
             Event::Text(text) if text.trim().is_empty() => {}
             Event::Attribute { .. } | Event::AttributeFlag { .. } | Event::Diagnostic { .. } => {}
-            Event::StartNode(NodeKind::Heading) => return Some(index),
+            Event::StartNode(NodeKind::Heading) => return Some(start + 1 + offset),
             _ => return None,
         }
     }
@@ -474,7 +476,11 @@ fn heading_chain(raw: &str, level: usize, options: &SectionOptions) -> HeadInfo 
     let mut extras_id = None;
     if let Some((head, next)) = scan_extras_chars(&chars, cursor) {
         let specs = options.section.specs_for(head.type_marker.as_deref());
-        let parsed = to_attributes(&head, &specs);
+        let parsed = to_attributes_with_modifiers(
+            &head,
+            &specs,
+            options.section.modifier_for(head.type_marker.as_deref()),
+        );
         // §6.2/§6.3: both feed the id chain at their **default** paths only.
         extras_id = specs
             .element_path(SpecsKey::Id)

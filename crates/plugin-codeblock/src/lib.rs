@@ -6,10 +6,13 @@ mod inline;
 mod mappers;
 mod wrap;
 
+use highlight::highlight_output;
+use info::parse_info_string;
+
+#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod tests {
-    use super::highlight::highlight_output;
-    use super::info::parse_info_string;
+    use super::{highlight_output, parse_info_string};
 
     #[test]
     fn line_wrappers_ignore_pre_classes() {
@@ -22,9 +25,6 @@ mod tests {
         assert!(!out.contains("<p class=\"wrap"));
     }
 }
-
-use highlight::highlight_output;
-use info::parse_info_string;
 
 pub fn process(events: &[Event]) -> Vec<Event> {
     let mut out: Vec<Event> = Vec::with_capacity(events.len());

@@ -234,9 +234,8 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
         let mut list_kind = NodeKind::Paragraph;
         let mut start_attr = None;
 
-        let mut chars = stripped_for_marker.chars();
         let mut num_str = String::new();
-        while let Some(c) = chars.next() {
+        for c in stripped_for_marker.chars() {
             if c.is_ascii_digit() {
                 num_str.push(c);
             } else {
@@ -257,15 +256,14 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             }
         }
 
-        if !is_list_marker {
-            if stripped_for_marker.starts_with("- ")
+        if !is_list_marker
+            && (stripped_for_marker.starts_with("- ")
                 || stripped_for_marker.starts_with("* ")
-                || stripped_for_marker.starts_with("+ ")
-            {
-                is_list_marker = true;
-                marker_width = 2;
-                list_kind = NodeKind::BulletList;
-            }
+                || stripped_for_marker.starts_with("+ "))
+        {
+            is_list_marker = true;
+            marker_width = 2;
+            list_kind = NodeKind::BulletList;
         }
 
         let content_indent = leading_spaces + marker_width;
@@ -329,6 +327,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
             }
 
             let mut need_new_list = true;
+            #[allow(clippy::manual_pop_if)]
             if let Some(frame) = ctx.list_frames.last() {
                 if leading_spaces == frame.indent {
                     if frame.kind == list_kind {
@@ -461,7 +460,7 @@ pub fn handle(ctx: &mut ParseContext, s: &str) {
 
         if trimmed_for_block.starts_with('#') {
             let hashes = trimmed_for_block.chars().take_while(|&c| c == '#').count();
-            if hashes >= 1 && hashes <= 6 {
+            if (1..=6).contains(&hashes) {
                 let after_hashes = trimmed_for_block.chars().nth(hashes);
                 if after_hashes == Some(' ') || after_hashes.is_none() {
                     if matches!(ctx.stack.last(), Some(NodeKind::Paragraph)) {

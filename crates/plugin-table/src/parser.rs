@@ -372,7 +372,7 @@ fn is_table_row(line: &str) -> bool {
     if !(trimmed.starts_with('|') || trimmed.contains(" | ")) {
         return false;
     }
-    split_table_cells(trimmed).len() >= 1
+    !split_table_cells(trimmed).is_empty()
 }
 
 fn split_table_cells(line: &str) -> Vec<String> {

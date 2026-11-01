@@ -313,7 +313,7 @@ pub fn load(
 /// A table is a *layer map* when none of its keys is a component-entry key
 /// (`[task.table.custom.thead]`), and a *single entry* otherwise
 /// (`[task.anchor.custom]` with `name`/`template`).
-fn is_layer_map(table: &toml::Table) -> bool {
+pub(crate) fn is_layer_map(table: &toml::Table) -> bool {
     !table.is_empty() && !table.keys().any(|key| ENTRY_KEYS.contains(&key.as_str()))
 }
 

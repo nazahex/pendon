@@ -6,7 +6,7 @@ fn crlf_normalizes_to_single_newline_token() {
     let kinds: Vec<_> = toks
         .iter()
         .map(|t| match t {
-            Token::Text(s) => (&"T"[..], s.len()),
+            Token::Text(s) => ("T", s.len()),
             Token::Newline => ("N", 0),
             Token::FenceBackticks(n) => ("F", *n),
             Token::Hashes(n) => ("H", *n),
@@ -24,8 +24,8 @@ fn detects_hashes_and_backticks_at_line_start() {
     let mut has_fence = 0;
     for t in toks {
         match t {
-            Token::Hashes(n) if n == 3 => has_hashes = true,
-            Token::FenceBackticks(n) if n == 3 => has_fence += 1,
+            Token::Hashes(3) => has_hashes = true,
+            Token::FenceBackticks(3) => has_fence += 1,
             _ => {}
         }
     }

@@ -795,7 +795,7 @@ fn run_config_cite_exports_only_cited_external_references_by_default() {
 /// export.
 #[test]
 fn run_config_cite_scope_all_keeps_uncited_external_references() {
-    let default = render_cite_scope(false, "");
+    let _default = render_cite_scope(false, "");
     let all = render_cite_scope(false, "references_scope = \"all\"\n");
 
     assert!(references_line(&all).contains("\"paper\""), "{all}");

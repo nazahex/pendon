@@ -29,9 +29,10 @@ overrides an extras `@@type` — no error, no warning — and its built-in field
 `aside`.
 
 §6.1/§10.1: the groups sit between `}}` and an adjacent extras head. Each position
-lands in its own public field (the groups in `bracket.bare` / `paren.bare`, the
-items in `specs.tick` / `specs.quote`, D-7), so nothing collides; a malformed group
-is not consumed — the marker still renders and the group stays literal text (§4.3):
+lands in its own public field (the groups in `bracket.bare` / `paren.quote` — a
+quoted paren is a *quote*, §5.2 — the items in `specs.tick` / `specs.quote`, D-7),
+so nothing collides; a malformed group is not consumed — the marker still renders
+and the group stays literal text (§4.3):
 
 {{bibliography}}[refs]("Cited sources"){`slug-body`, "title-body", .box} Every reference cited above.
 

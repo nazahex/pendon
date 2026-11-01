@@ -26,9 +26,10 @@ overrides an extras <code>@@type</code> — no error, no warning — and its bui
 <code>type</code> alone (its text is its children, never an <code>inner_text</code> attribute):
 </p>
 <NoteAside class="marked" isOpen={true} type="aside" /><p>§6.1/§10.1: the groups sit between <code>&#125;&#125;</code> and an adjacent extras head. Each position
-lands in its own public field (the groups in <code>bracket.bare</code> / <code>paren.bare</code>, the
-items in <code>specs.tick</code> / <code>specs.quote</code>, D-7), so nothing collides; a malformed group
-is not consumed — the marker still renders and the group stays literal text (§4.3):
+lands in its own public field (the groups in <code>bracket.bare</code> / <code>paren.quote</code> — a
+quoted paren is a <em>quote</em>, §5.2 — the items in <code>specs.tick</code> / <code>specs.quote</code>, D-7),
+so nothing collides; a malformed group is not consumed — the marker still renders
+and the group stays literal text (§4.3):
 </p>
-<Bibliography {...{ "bracket.bare": "refs" }} class="box" {...{ "paren.bare": "Cited sources" }} {...{ "specs.quote": "title-body" }} {...{ "specs.tick": "slug-body" }} type="bibliography">Every reference cited above.</Bibliography><Bibliography type="bibliography">[unclosed(&quot;Cited&quot;) still a caption.</Bibliography>
+<Bibliography bracket={{ bare: "refs" }} class="box" paren={{ quote: "Cited sources" }} specs={{ quote: "title-body", tick: "slug-body" }} type="bibliography">Every reference cited above.</Bibliography><Bibliography type="bibliography">[unclosed(&quot;Cited&quot;) still a caption.</Bibliography>
 </>); }

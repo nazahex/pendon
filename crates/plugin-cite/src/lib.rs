@@ -3,9 +3,9 @@ use std::fs;
 
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
-    issue_event, modifier_contributions, parse_extras, parse_slots, to_attributes, ElementHead,
-    ExtrasAttr, ExtrasHead, ExtrasIssue, ExtrasMatch, FieldName, ModifierConfig, Path, Preset,
-    Slot, SlotContract, SlotKind, SlotMatch, SlotPair, SlotPos, SlotTag,
+    issue_event, modifier_contributions, parse_extras, parse_slots, to_attributes_with_modifiers,
+    ElementHead, ExtrasAttr, ExtrasHead, ExtrasIssue, ExtrasMatch, FieldName, ModifierConfig, Path,
+    Preset, Slot, SlotContract, SlotKind, SlotMatch, SlotPair, SlotPos, SlotTag,
 };
 use pendon_renderer_solid::{
     layer_templates, ComponentSet, DataExport, ImportEntry, SolidRenderHints,
@@ -891,7 +891,11 @@ fn merge_cite_extras(
 ) {
     // §6.1/§11 rule 5: the entry answering this marker names the extras specs.
     let specs = options.custom.specs_for(head.type_marker.as_deref());
-    let parsed = to_attributes(head, &specs);
+    let parsed = to_attributes_with_modifiers(
+        head,
+        &specs,
+        options.custom.modifier_for(head.type_marker.as_deref()),
+    );
     extra.issues.extend(parsed.issues.iter().cloned());
 
     // §6.2: an extras item that spells a name the citation's own head produced
@@ -1068,6 +1072,7 @@ fn yaml_to_json(value: &serde_yaml::Value) -> Result<Value, String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
     use pendon_extra::{AttrValue, Path};

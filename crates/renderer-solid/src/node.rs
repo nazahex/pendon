@@ -441,18 +441,21 @@ pub(crate) fn is_jsx_attr_name(name: &str) -> bool {
             .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | ':'))
 }
 
-/// Emits one dotted public field as a one-key spread: `{...{ "specs.tick": "…" }}`.
+/// Emits one dotted public field of a **built-in element** as a one-key spread:
+/// `{...{ "specs.tick": "…" }}`.
 ///
 /// `specs.tick="x"` is not valid JSX — `a.b=` parses as a member expression — but
 /// the field map's spelling is the contract (ADR-0014 rule 1), so the name is
 /// kept verbatim as a computed key instead of being rewritten. Solid's spread
 /// sets it as an attribute, so the compiled output and `renderer-html`'s
-/// `specs.tick="x"` agree, and JSON/AST keep the path untouched.
+/// `specs.tick="x"` agree, and JSON/AST keep the path untouched. A DOM element
+/// takes attributes, not props, so this path is the only correct one there: a
+/// nested object would set `[object Object]`
+/// ([ADR-0019](../../../docs/decisions/0019-component-props-nest.md)).
 ///
-/// One helper for **both** paths (§6.3): the built-in elements in
-/// [`render_attrs`] and a component template's `{...attrs}` spread
-/// (`template::generate_spread_attrs`), so a field is spelled the same way
-/// whether a component claims the node or the fallback element renders it.
+/// A **custom component** is the other case: `{...attrs}` reshapes its dotted
+/// fields into nested props (`template::generate_spread_attrs`), because a
+/// component takes JS values.
 ///
 /// Emits no leading whitespace — the caller puts the spread where it belongs.
 pub(crate) fn render_dotted_attr(name: &str, value: &Value, out: &mut String, ctx: &Ctx) {
@@ -465,7 +468,10 @@ pub(crate) fn render_dotted_attr(name: &str, value: &Value, out: &mut String, ct
 
 /// One field value as a JS expression — the form a spread key needs, where no
 /// JSX attribute shorthand exists (no bare flag, no quoted text).
-fn js_value(value: &Value, ctx: &Ctx) -> String {
+///
+/// Shared with a component template's nested prop (`template::nested_prop`),
+/// so a leaf inside `bracket={{ quote: … }}` is spelled exactly like a flat one.
+pub(crate) fn js_value(value: &Value, ctx: &Ctx) -> String {
     if let Value::String(text) = value {
         if let Some(payload) = pendon_core::jsx_attr_payload(text) {
             return if is_jsx_expression_token(payload) {
@@ -609,7 +615,9 @@ pub(crate) fn to_js_literal(value: &Value, ctx: &Ctx) -> String {
 
 /// `true` when `s` is a valid JavaScript identifier that can be used as an
 /// unquoted object key.
-fn is_js_identifier(s: &str) -> bool {
+/// Whether `s` can be written as a bare object key (`label: …`). A field segment
+/// that cannot is quoted instead, so a nested prop is always valid JS.
+pub(crate) fn is_js_identifier(s: &str) -> bool {
     let mut chars = s.chars();
     match chars.next() {
         Some(c) if c.is_ascii_alphabetic() || c == '_' || c == '$' => {}

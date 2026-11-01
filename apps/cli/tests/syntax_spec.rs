@@ -118,11 +118,11 @@ fn assert_side_outputs(stem: &str, dir: &Path) {
 /// Fails when a rendered `.jsx` spells a **dotted attribute name** (`specs.tick="…"`),
 /// which is not JSX: `a.b=` parses as a member expression.
 ///
-/// §6.3 fixes how a dotted path is written — the one-key spread
-/// `{...{ "specs.tick": "…" }}` — for the built-in element path and the component
-/// `{...attrs}` path alike (S2-3.6), so a regression in either one is caught here
-/// on **every** fixture rather than only where a dotted field happens to be
-/// asserted.
+/// §6.5 fixes how a dotted path is written — the one-key spread
+/// `{...{ "specs.tick": "…" }}` on a built-in element and a nested prop
+/// (`specs={{ tick: "…" }}`) on a component (ADR-0019) — so a regression in
+/// either emitter is caught here on **every** fixture rather than only where a
+/// dotted field happens to be asserted.
 fn assert_no_dotted_attribute_name(stem: &str, jsx: &str) {
     // An attribute position is whitespace (or `<`) followed by a name and `=`.
     for (index, line) in jsx.lines().enumerate() {
@@ -541,6 +541,15 @@ fn golden_46_number_fields() {
 #[test]
 fn golden_47_number_overrides() {
     assert_fixture("47-number-overrides");
+}
+
+/// §16.3 fixture 49: the `[…]` / `(…)` groups of a head `pendon-extra` does not
+/// own are the same six slot positions a tagged head carries (§5.2, §6.1) — two
+/// slots of three contents, never "one string per group" — and the bracket's
+/// `|…` run contributes last (§5.4).
+#[test]
+fn golden_49_head_slots_generic() {
+    assert_fixture("49-head-slots-generic");
 }
 
 /// §16.3 fixture 48: `[task.cite] stable_fields` (§7.3). `citation_number` is

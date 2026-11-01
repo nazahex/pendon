@@ -18,6 +18,12 @@
 //! position**: the caller passes the remaining line, so `foo#[bar]` is not a
 //! slot head (§5.3, D-11).
 //!
+//! The same groups also attach to heads this crate does not own —
+//! `::type[…]`, `==type[…]`, `{{type}}[…]`, `@@type[…]` (§6.1). Those carry no
+//! tag and their bracket may be missing ([`parse_attached_slots`]), but their
+//! contents are the same six positions: what a head *is* differs, what a slot
+//! *holds* never does.
+//!
 //! This module is pure: it never looks at Markdown, never decides whether a slot
 //! is wanted (that is a plugin's [`SlotContract`]), and never falls back to
 //! literal text — that is the caller's §4.3 duty, and both
@@ -173,7 +179,12 @@ impl SlotParts {
         }
     }
 
-    fn set(&mut self, kind: SlotKind, value: String) {
+    /// Sets (or replaces) the value of one content.
+    ///
+    /// Public because a caller that merges two heads (§6.2: the marker's own
+    /// groups beat an extras head's) works one position at a time and has no
+    /// other way to write a [`SlotParts`] it did not parse.
+    pub fn set(&mut self, kind: SlotKind, value: String) {
         match kind {
             SlotKind::Bare => self.bare = Some(value),
             SlotKind::Quote => self.quote = Some(value),
@@ -232,6 +243,13 @@ pub enum SlotError {
         /// The kind that came second, out of order.
         after: SlotKind,
     },
+    /// The `[` or `(` of a group opened and never closed (`@@type[slug`).
+    ///
+    /// Only [`parse_attached_slots`] reports this. A standalone `[slug` is not
+    /// slot-shaped at all (§4.3) and stays literal text through
+    /// [`SlotMatch::Absent`], but a group attached to a head the caller already
+    /// owns cannot simply stop being one.
+    Unclosed(Slot),
 }
 
 impl fmt::Display for SlotError {
@@ -253,6 +271,9 @@ impl fmt::Display for SlotError {
                 after.name(),
                 before.name()
             ),
+            Self::Unclosed(slot) => {
+                write!(f, "the {} slot is opened and never closed", slot.name())
+            }
         }
     }
 }
@@ -361,6 +382,78 @@ pub fn parse_slots(rest: &str) -> SlotMatch<'_> {
             tag: head.tag,
             parts,
             modifiers: collect_modifiers(scan.run),
+        },
+        rest: &rest[consumed..],
+    }
+}
+
+/// Reads the slot groups **attached** to a head the caller already owns —
+/// `::type[…]`, `==type[…]`, `{{type}}[…]`, `@@type[…]` — with no tag sigil of
+/// its own (§6.1).
+///
+/// The bracket is optional and so is the paren, and a paren-only group is legal
+/// (`@@aside("T")`, §6.1); `[[…]]` stays `plugin-wiki`'s opener (§7.5) and is
+/// [`SlotMatch::Absent`]. Contents follow §5.2 exactly as in [`parse_slots`] —
+/// the **first character** decides the kind, so `("A title")` is a quote and not
+/// a bare content — and the bracket may carry a modifier run
+/// ([`SlotPair::modifiers`], §5.4).
+///
+/// The differences to [`parse_slots`] are the head's own, not the contents':
+/// there is never a tag, and a group that opens without its closer is
+/// [`SlotError::Unclosed`] rather than `Absent`, because a head the caller has
+/// already committed to cannot end inside an open group (§4.3 keeps the whole
+/// head literal).
+pub fn parse_attached_slots(rest: &str) -> SlotMatch<'_> {
+    // `[[…]]` is `plugin-wiki`'s opener (§7.5), not a group.
+    if rest.starts_with("[[") {
+        return SlotMatch::Absent { rest };
+    }
+
+    let mut parts: [SlotParts; Slot::COUNT] = Default::default();
+    let mut modifiers: Vec<char> = Vec::new();
+    let mut consumed = 0usize;
+
+    if rest.starts_with('[') {
+        let Some(close) = find_close(rest, 1, '[', ']') else {
+            return SlotMatch::Malformed {
+                error: SlotError::Unclosed(Slot::Bracket),
+                rest,
+            };
+        };
+        let scan = match scan_content(&rest[1..close], true) {
+            Ok(scan) => scan,
+            Err(error) => return SlotMatch::Malformed { error, rest },
+        };
+        parts[Slot::Bracket.index()] = scan.parts;
+        modifiers = collect_modifiers(scan.run);
+        consumed = close + 1;
+    }
+
+    if rest[consumed..].starts_with('(') {
+        match read_paren(rest, consumed) {
+            Ok(Some((paren, paren_end))) => {
+                parts[Slot::Paren.index()] = paren;
+                consumed = paren_end;
+            }
+            Ok(None) => {
+                return SlotMatch::Malformed {
+                    error: SlotError::Unclosed(Slot::Paren),
+                    rest,
+                }
+            }
+            Err(error) => return SlotMatch::Malformed { error, rest },
+        }
+    }
+
+    if consumed == 0 {
+        return SlotMatch::Absent { rest };
+    }
+
+    SlotMatch::Slots {
+        pair: SlotPair {
+            tag: SlotTag::None,
+            parts,
+            modifiers,
         },
         rest: &rest[consumed..],
     }
@@ -963,6 +1056,119 @@ mod tests {
         let got = slots("[Foo](bar |?x)");
         assert_eq!(got.get(Slot::Paren, SlotKind::Bare), Some("bar |?x"));
         assert!(got.modifiers.is_empty());
+    }
+
+    // ---- groups attached to a head the caller owns (`::`, `==`, `{{…}}`, `@@`) ----
+
+    fn attached(source: &str) -> (SlotPair, &str) {
+        match parse_attached_slots(source) {
+            SlotMatch::Slots { pair, rest } => (pair, rest),
+            other => panic!("expected attached slots for {source:?}, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn attaches_six_positions_with_no_tag() {
+        let (pair, rest) = attached(r#"[bare "quote" `tick`](plain 'q' `t`) tail"#);
+        assert_eq!(pair.tag, SlotTag::None);
+        assert_eq!(pair.get(Slot::Bracket, SlotKind::Bare), Some("bare"));
+        assert_eq!(pair.get(Slot::Bracket, SlotKind::Quote), Some("quote"));
+        assert_eq!(pair.get(Slot::Bracket, SlotKind::Tick), Some("tick"));
+        assert_eq!(pair.get(Slot::Paren, SlotKind::Bare), Some("plain"));
+        // §5.2: the paren's contents follow the same first-character rule, so an
+        // `("A title")` group is a quote, exactly like a bracket's.
+        assert_eq!(pair.get(Slot::Paren, SlotKind::Quote), Some("q"));
+        assert_eq!(pair.get(Slot::Paren, SlotKind::Tick), Some("t"));
+        assert_eq!(rest, " tail");
+    }
+
+    #[test]
+    fn a_quoted_paren_is_a_quote_not_a_bare_content() {
+        let (pair, rest) = attached(r#"("A level")"#);
+        assert_eq!(pair.get(Slot::Paren, SlotKind::Quote), Some("A level"));
+        assert_eq!(pair.get(Slot::Paren, SlotKind::Bare), None);
+        assert_eq!(rest, "");
+    }
+
+    #[test]
+    fn the_bracket_is_optional_and_so_is_the_paren() {
+        let (pair, _) = attached(r#"("T")"#);
+        assert!(pair.slot(Slot::Bracket).is_empty());
+        assert_eq!(pair.get(Slot::Paren, SlotKind::Quote), Some("T"));
+
+        let (pair, rest) = attached("[slug] tail");
+        assert_eq!(pair.get(Slot::Bracket, SlotKind::Bare), Some("slug"));
+        assert!(pair.slot(Slot::Paren).is_empty());
+        assert_eq!(rest, " tail");
+
+        // `[]()` is a group pair with nothing in it — not a group at all.
+        let (pair, rest) = attached("[]()");
+        assert!(pair.is_empty());
+        assert!(pair.modifiers.is_empty());
+        assert_eq!(rest, "");
+    }
+
+    #[test]
+    fn nothing_attached_is_absent() {
+        for source in ["", " tail", "{.x}", "@@type"] {
+            assert_eq!(
+                parse_attached_slots(source),
+                SlotMatch::Absent { rest: source },
+                "{source:?}"
+            );
+        }
+        // `[[…]]` belongs to `plugin-wiki` (§7.5), never to a head's groups.
+        assert!(matches!(
+            parse_attached_slots("[[wiki]]"),
+            SlotMatch::Absent { .. }
+        ));
+    }
+
+    #[test]
+    fn an_unclosed_group_is_unclosed_not_absent() {
+        // Unlike a standalone `[x` (§4.3 keeps that literal), a head the caller
+        // owns cannot end inside an open group.
+        assert_eq!(
+            parse_attached_slots("[slug"),
+            SlotMatch::Malformed {
+                error: SlotError::Unclosed(Slot::Bracket),
+                rest: "[slug",
+            }
+        );
+        assert_eq!(
+            parse_attached_slots("[slug](\"T\""),
+            SlotMatch::Malformed {
+                error: SlotError::Unclosed(Slot::Paren),
+                rest: "[slug](\"T\"",
+            }
+        );
+    }
+
+    #[test]
+    fn malformed_contents_are_malformed_and_consume_nothing() {
+        assert_eq!(
+            parse_attached_slots(r#"["a" "b"]"#),
+            SlotMatch::Malformed {
+                error: SlotError::Duplicate(SlotKind::Quote),
+                rest: r#"["a" "b"]"#,
+            }
+        );
+        assert_eq!(
+            parse_attached_slots(r#"(`a` `b`)"#),
+            SlotMatch::Malformed {
+                error: SlotError::Duplicate(SlotKind::Tick),
+                rest: r#"(`a` `b`)"#,
+            }
+        );
+    }
+
+    #[test]
+    fn an_attached_bracket_carries_its_modifier_run() {
+        let (pair, rest) = attached("[slug |?x](\"T\") tail");
+        assert_eq!(pair.get(Slot::Bracket, SlotKind::Bare), Some("slug"));
+        assert_eq!(pair.modifiers, vec!['?', 'x']);
+        assert_eq!(pair.get(Slot::Paren, SlotKind::Quote), Some("T"));
+        assert_eq!(rest, " tail");
     }
 
     // ---- S2-1.6: slot contracts (§6.1) ----

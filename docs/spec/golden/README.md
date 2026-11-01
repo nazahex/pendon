@@ -38,11 +38,13 @@ cover config loading and the full CLI path, not just the parsers.
 Every render is also checked for **well-formedness before comparison**
 (`assert_no_dotted_attribute_name`): a `.jsx` may not spell a dotted field as an
 attribute name (`specs.tick="x"`), because `a.b=` is a member expression in JSX.
-The one-key spread `{...{ "specs.tick": "x" }}` is the only spelling (§6.3), so a
-fixture cannot freeze invalid output and pass.
+A built-in element writes the path as the one-key spread
+`{...{ "specs.tick": "x" }}` and a component as a nested prop
+`specs={{ tick: "x" }}` (§6.5, [ADR-0019](../../decisions/0019-component-props-nest.md)),
+so a fixture cannot freeze invalid output and pass.
 
 ```bash
-cargo test -p pendon --test syntax_spec      # 39 fixtures, none #[ignore]d
+cargo test -p pendon --test syntax_spec      # 49 fixtures, none #[ignore]d
 ```
 
 ## Re-freezing (when output intentionally changes)
@@ -106,6 +108,7 @@ frozen. A phase is not complete while its fixtures are still ignored.
 | 46 | `number-fields`    | S2-9.2 — the numbering pass publishes `number.raw`, `number.depth` and `number.type` across three levels (ADR-0016): `number.type` is the element's own type for `[[task.heading.number]]` and the marker's for a `%%numberType`, an untyped element publishes none, and `__number` never reaches the page (§10.5, FIELDS-INVENTORY §0) |
 | 47 | `number-overrides` | S2-9.3/S2-9.4 — `field.override.number.{raw,depth,type}` on a numbering block renames what **that** counter publishes, for `[[task.<element>.number]]` and `[[task.number.custom]]` alike; a second counter that renames nothing keeps the canonical names, so one page carries both spellings, and the heading outline is unchanged — an override names the write, it never feeds back into the pass (ADR-0016 rule 2, D-4). `.out/` freezes the same fields through `extract`: the `HeadingA` rows carry `counter`, the `HeadingB` row `number.raw`, and the marker group's anchors `num` / `num_depth` — a renamed field is extracted under its configured name |
 | 48 | `cite-stable-fields` | S2-4.4/§7.3 — `[task.cite] stable_fields`: `citation_number` is stable for the listed fields, in comparison order, and the plugin owns no `locator` — `citeX` names a location (`locator_type` + `locator_value`) and the author separately, while `citeY` produces only two of the four names, so an absent field still matches itself and never a value |
+| 49 | `head-slots-generic` | §5.2/§6.1 — the `[…]` / `(…)` groups of a head `pendon-extra` does not own (`::` / `==` / `{{…}}` / `@@…`) hold the **same six positions** a tagged head does: a bare, a quoted and a ticked content per slot. With no `field.*` the built-in `<span>` spreads all six dotted names; a component entry renames three of them (`title` / `subtitle` / `slug`) and leaves the other three qualified; the bracket's `\\|…` run contributes **last** (D-9), so its `class` accumulates after the head's own and `data-mark` is added — while a position the head wrote can never be overwritten |
 
 Fixtures 17–20 are covered by unit tests in the renderer/CLI crates rather than as
 golden files.
@@ -129,7 +132,8 @@ golden files.
 - An element whose output is **raw markup** rather than a node cannot spread a
   dotted key, so §6.3's dotted field is spelled `data-<slot>-<kind>` there — the
   built-in citation is the only such element today (fixture 37). Node-emitting
-  elements keep the attribute and the renderer turns it into the one-key spread.
+  elements keep the attribute and the renderer turns it into the one-key spread;
+  a **component** gets a nested prop instead (§6.5, ADR-0019).
 - The `@@` sigil is what makes a **standalone** head a decorator, so a bare
   `{…}` line is only ever literal text (fixture 40). The bare spelling stays
   canonical where the head *touches* its construct (a table cell, a caption), and

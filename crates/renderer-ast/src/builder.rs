@@ -238,11 +238,8 @@ impl AstBuilder {
         if matches!(kind, NodeKind::Document) {
             return None;
         }
-        if let Some(top) = self.kind_stack.last() {
-            if top != kind {
-                return None;
-            }
-        } else {
+        let top = self.kind_stack.last()?;
+        if top != kind {
             return None;
         }
         self.flush_text_child();

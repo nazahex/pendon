@@ -60,13 +60,21 @@ template = "<DirectiveDefault {...attrs}>{children}</DirectiveDefault>"
 
 ### Specs (§6.1, D-5)
 
-A directive head uses all four: `field.bracket.bare` (default path
-`bracket.bare`) for `[….]`, `field.paren.bare` (default path `paren.bare`) for
-`(…)`, and `field.specs.tick` / `field.specs.quote` (default paths
-`specs.tick` / `specs.quote`) for the `{…}` items. An entry that configures none
+A directive head uses all four: `field.bracket.<kind>` (default paths
+`bracket.bare`, `bracket.quote`, `bracket.tick`) for `[…]`, `field.paren.<kind>`
+(default paths `paren.bare`, `paren.quote`, `paren.tick`) for `(…)`, and
+`field.specs.tick` / `field.specs.quote` (default paths
+`specs.tick` / `specs.quote`) for the `{…}` items. Each group holds three
+contents (§5.2), so `("A level")` is `paren.quote` and an entry that wants it in
+`level` writes `field.paren.quote = "level"`. An entry that configures none
 keeps every default path (D-7). A `field.specs.<k>` assignment moves the position
 out of the element's reach: the assigned path is the author's public field, never
 read as a slug / title and never renamed to a DOM field (§6.1).
+
+The head's bracket and an adjacent extras head's bracket may each carry a `|…`
+run (§5.4): contributions land after everything both heads wrote, `class`
+accumulates (§6.4) and any other field either head already set is dropped with a
+warning (D-9).
 
 ## Rust API
 

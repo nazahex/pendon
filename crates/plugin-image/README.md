@@ -150,7 +150,7 @@ The head must touch the closing `)` (no space, and no space before its own `{`):
 Replace the `<img>` with a custom Solid component:
 
 ```toml
-[task.image.custom.img]
+[[task.image.custom]]
 name = "AdvancedImage"
 imports = "import AdvancedImage from '@comp/AdvancedImage'"
 template = "<AdvancedImage {...attrs} />"
@@ -162,7 +162,7 @@ from the same module are merged into a single `import` statement. Several entrie
 address one `type` each:
 
 ```toml
-[[task.image.custom.img]]
+[[task.image.custom]]
 type = ["imageX", "thumb"]
 name = "ImageThumb"
 template = "<ImageThumb {...attrs} />"
@@ -179,8 +179,10 @@ template = "<ImageThumb {...attrs} />"
 | `{attrs.type}`  | The `@@type{…}` marker, so an entry can read it back |
 
 Every other extras key reaches the template as a prop of the same name; a dotted
-field (`bracket.quote`) arrives as the §6.3 one-key spread. The element has no
-children, so a template needs no `{children}` token.
+field (`bracket.quote`) arrives as a nested prop of its own
+(`bracket={{ quote: "…" }}`, §6.5 / ADR-0019 — a component takes JS values, unlike
+the built-in element's one-key spread). The element has no children, so a template
+needs no `{children}` token.
 
 ### Default HTML Output (No Custom Node)
 

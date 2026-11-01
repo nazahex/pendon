@@ -5,7 +5,8 @@
 use pendon_extra::{
     parse_directive_head, parse_extras, parse_type_marker, to_attributes, AttrValue, Attrs,
     DirectiveMatch, DirectiveSigil, ExtrasAttr, ExtrasError, ExtrasHead, ExtrasIssue, ExtrasMatch,
-    FieldConfig, IssueSeverity, Path, Slot, SlotKind, Specs, SpecsKey, SPECS_KEYS, SPREAD_KEY,
+    FieldConfig, IssueSeverity, Path, Slot, SlotError, SlotKind, Specs, SpecsKey, SPECS_KEYS,
+    SPREAD_KEY,
 };
 
 /// Parses `input` as a complete head and maps it to attributes.
@@ -191,7 +192,8 @@ fn class_accumulates_and_dedupes() {
 /// diagnostic (CSS semantics).
 #[test]
 fn duplicates_are_an_error_and_the_first_value_wins() {
-    let cases: Vec<(&str, Vec<(String, ExtrasAttr)>, Vec<&str>)> = vec![
+    type Case<'a> = (&'a str, Vec<(String, ExtrasAttr)>, Vec<&'a str>);
+    let cases: Vec<Case> = vec![
         (
             "@@type{`one`, `two`}",
             vec![("specs.tick".to_string(), attr("one"))],
@@ -251,11 +253,8 @@ fn duplicates_are_an_error_and_the_first_value_wins() {
 #[test]
 fn colliding_assigned_names_are_an_error() {
     let head = head_of("@@type{`slug-a`, .a}");
-    let specs = Specs {
-        class: "class".to_string(),
-        tick: "class".to_string(),
-        ..Specs::default()
-    };
+    let mut specs = Specs::default();
+    specs.tick = "class".to_string();
     let attrs = to_attributes(&head, &specs);
     assert_eq!(attrs.items, vec![("class".to_string(), attr("a"))]);
     assert_eq!(attrs.issues.len(), 1, "{:?}", attrs.issues);
@@ -304,10 +303,14 @@ fn positional_names_resolve_from_field_config() {
         Some(Path::from_dotted("level").unwrap()),
     );
     let names = Specs::resolve(Some(&partial));
-    assert_eq!(names.paren, "level");
+    assert_eq!(names.slot(Slot::Paren, SlotKind::Bare), "level");
     // D-7: the positions the entry left alone fall back to their own qualified
     // spelling, never to a name the user chose.
-    assert_eq!(names.bracket, "bracket.bare");
+    assert_eq!(names.slot(Slot::Bracket, SlotKind::Bare), "bracket.bare");
+    assert_eq!(names.slot(Slot::Bracket, SlotKind::Quote), "bracket.quote");
+    assert_eq!(names.slot(Slot::Bracket, SlotKind::Tick), "bracket.tick");
+    assert_eq!(names.slot(Slot::Paren, SlotKind::Quote), "paren.quote");
+    assert_eq!(names.slot(Slot::Paren, SlotKind::Tick), "paren.tick");
     assert_eq!(names.tick, "specs.tick");
     assert_eq!(names.quote, "specs.quote");
     assert_eq!(names.class, "class");
@@ -329,18 +332,14 @@ fn positional_names_resolve_from_field_config() {
         .unwrap();
     all.assign_specs("quote", Some(Path::from_dotted("blurb").unwrap()))
         .unwrap();
-    assert_eq!(
-        Specs::resolve(Some(&all)),
-        Specs {
-            bracket: "label".into(),
-            paren: "kind".into(),
-            tick: "ref".into(),
-            quote: "blurb".into(),
-            class: "class".into(),
-            id: "id".into(),
-            style: "style".into(),
-        }
-    );
+    assert_eq!(Specs::resolve(Some(&all)), {
+        let mut expected = Specs::default();
+        expected.set_slot(Slot::Bracket, SlotKind::Bare, "label");
+        expected.set_slot(Slot::Paren, SlotKind::Bare, "kind");
+        expected.tick = "ref".into();
+        expected.quote = "blurb".into();
+        expected
+    });
 }
 
 /// `SpecsKey` is the one place a position's default path is spelled (§6.3): it
@@ -656,8 +655,13 @@ fn parses_directive_heads() {
     assert_eq!(head.sigil, DirectiveSigil::Colon);
     assert_eq!(head.count, 2);
     assert_eq!(head.type_marker.as_deref(), Some("note"));
-    assert_eq!(head.bracket.as_deref(), Some("slug-a"));
-    assert_eq!(head.parentheses.as_deref(), Some("Title"));
+    assert_eq!(
+        head.slots.get(Slot::Bracket, SlotKind::Bare),
+        Some("slug-a")
+    );
+    // §5.2: the first character decides the kind, so a quoted paren is a quote.
+    assert_eq!(head.slots.get(Slot::Paren, SlotKind::Quote), Some("Title"));
+    assert_eq!(head.slots.get(Slot::Paren, SlotKind::Bare), None);
     assert_eq!(rest, " body");
 
     // A bare fence is the close form (§10.3).
@@ -711,29 +715,32 @@ fn scans_the_type_marker_without_parsing_the_body() {
 fn heads_carry_positional_groups() {
     let head = head_of("@@aside[intro](\"A title\"){.box, #a1}");
     assert_eq!(head.type_marker.as_deref(), Some("aside"));
-    assert_eq!(head.bracket.as_deref(), Some("intro"));
-    assert_eq!(head.parentheses.as_deref(), Some("A title"));
+    assert_eq!(head.slots.get(Slot::Bracket, SlotKind::Bare), Some("intro"));
+    assert_eq!(
+        head.slots.get(Slot::Paren, SlotKind::Quote),
+        Some("A title")
+    );
     assert_eq!(head.items.len(), 2);
 
     // Each group is optional, in either combination, with or without a body.
     let head = head_of("@@aside[intro]{.box}");
-    assert_eq!(head.bracket.as_deref(), Some("intro"));
-    assert_eq!(head.parentheses, None);
+    assert_eq!(head.slots.get(Slot::Bracket, SlotKind::Bare), Some("intro"));
+    assert!(head.slots.slot(Slot::Paren).is_empty());
 
     let head = head_of("@@aside(\"T\")");
-    assert_eq!(head.bracket, None);
-    assert_eq!(head.parentheses.as_deref(), Some("T"));
+    assert!(head.slots.slot(Slot::Bracket).is_empty());
+    assert_eq!(head.slots.get(Slot::Paren, SlotKind::Quote), Some("T"));
     assert!(head.items.is_empty());
 
     // §9.1: the untyped decorator `@@[…]` — the groups alone carry the head.
     let head = head_of("@@[intro](\"T\"){.box}");
     assert_eq!(head.type_marker, None);
-    assert_eq!(head.bracket.as_deref(), Some("intro"));
-    assert_eq!(head.parentheses.as_deref(), Some("T"));
+    assert_eq!(head.slots.get(Slot::Bracket, SlotKind::Bare), Some("intro"));
+    assert_eq!(head.slots.get(Slot::Paren, SlotKind::Quote), Some("T"));
 
     // Groups without a type or body are still a head (`@@[…]` / `@@(…)`).
     let head = head_of("@@[intro]");
-    assert_eq!(head.bracket.as_deref(), Some("intro"));
+    assert_eq!(head.slots.get(Slot::Bracket, SlotKind::Bare), Some("intro"));
     assert!(head.items.is_empty());
 }
 
@@ -745,15 +752,22 @@ fn groups_must_be_adjacent() {
         panic!("expected a type-only head");
     };
     assert_eq!(head.type_marker.as_deref(), Some("aside"));
-    assert_eq!(head.bracket, None);
+    assert!(head.slots.is_empty());
     assert_eq!(rest, " [intro]");
 
     // `@@type {…}` is still not a head, groups or not.
     use ExtrasError::*;
     assert_eq!(literal_error("@@aside[intro] {.box}"), InvalidHead);
-    // An unterminated group falls back to literal text (§4.3).
-    assert_eq!(literal_error("@@aside[unclosed{.box}"), UnterminatedHead);
-    assert_eq!(literal_error("@@aside(\"unclosed{.box}"), UnterminatedHead);
+    // An unterminated group falls back to literal text (§4.3); the group is the
+    // slot grammar's error, wrapped so the head reader can report it.
+    assert_eq!(
+        literal_error("@@aside[unclosed{.box}"),
+        InvalidSlot(SlotError::Unclosed(Slot::Bracket))
+    );
+    assert_eq!(
+        literal_error("@@aside(\"unclosed{.box}"),
+        InvalidSlot(SlotError::Unclosed(Slot::Paren))
+    );
     // A bare `@@` is still not a head.
     assert_eq!(literal_error("@@ plain"), InvalidHead);
 }
@@ -768,25 +782,23 @@ fn groups_map_through_the_positional_keys() {
     // class, then the groups in order, then the slug item and slug prop (no collision now).
     assert_eq!(
         keys,
-        vec!["class", "bracket.bare", "paren.bare", "specs.tick", "slug"]
+        vec!["class", "bracket.bare", "paren.quote", "specs.tick", "slug"]
     );
     assert_eq!(
         attrs.value("bracket.bare").map(AttrValue::literal),
         Some("intro".to_string())
     );
     assert_eq!(
-        attrs.value("paren.bare").map(AttrValue::literal),
+        attrs.value("paren.quote").map(AttrValue::literal),
         Some("T".to_string())
     );
     assert_eq!(attrs.issues.len(), 0, "{:?}", attrs.issues);
 
     // The names follow the entry's `field.*` config like every other positional.
     let head = head_of("@@note[n](\"T\")");
-    let names = Specs {
-        bracket: "level".into(),
-        paren: "summary".into(),
-        ..Specs::default()
-    };
+    let mut names = Specs::default();
+    names.set_slot(Slot::Bracket, SlotKind::Bare, "level");
+    names.set_slot(Slot::Paren, SlotKind::Quote, "summary");
     let attrs = to_attributes(&head, &names);
     assert_eq!(
         attrs.value("level").map(AttrValue::literal),
@@ -801,7 +813,7 @@ fn groups_map_through_the_positional_keys() {
     let head = head_of("@@[s](\"t\")");
     let attrs = to_attributes(&head, &Specs::default());
     let keys: Vec<String> = attrs.items.iter().map(|(key, _)| key.clone()).collect();
-    assert_eq!(keys, vec!["bracket.bare", "paren.bare"]);
+    assert_eq!(keys, vec!["bracket.bare", "paren.quote"]);
 }
 
 /// Nested `{ … }` / `[ … ]` prop values — the shared-syntax foundation the

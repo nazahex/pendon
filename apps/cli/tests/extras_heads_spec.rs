@@ -86,12 +86,14 @@ imports = "import { Cite } from '@comp/Cite'"
 template = "<Cite {...attrs} />"
 "#,
         // §7.3/§6.3: the reference the head assigns, the universal `id`, and the
-        // quote staying where it lands (no element reads it, §6.2).
+        // quote staying where it lands (no element reads it, §6.2). The row is a
+        // **component**, so its two specs items arrive as one nested `specs` prop
+        // (ADR-0019) rather than the one-key spreads a built-in element emits.
         expect: &[
             r#"reference_id="alpha""#,
             r#"id="elem-x""#,
             r#"class="cls""#,
-            r#"specs.quote": "Title X""#,
+            r#"specs={{ quote: "Title X", tick: "slug-x" }}"#,
         ],
     },
     Case {
@@ -245,6 +247,153 @@ style = "decimal"
 
 /// A reference file in the shape the cite plugin reads: `id: { … }`, not a list.
 const REFERENCES: &str = "alpha:\n  type: book\n  title: Alpha\n  authors:\n    - family: A\n      given: A\n  issuedDate:\n    year: 2020\n";
+
+// `REFERENCES` above is the payload every cite row needs; `SLOT_CASES` below
+// audits the other half of §6.1 — the `[…]` / `(…)` groups of a head
+// `pendon-extra` does not own (`::`, `==`, `{{…}}`, `@@…`).
+
+/// The shared head of [`SLOT_CASES`]: all six slot positions, no tag (§5.2).
+const SLOTS: &str = r#"[b "q" `t`](pb "pq" `pt`)"#;
+
+/// The six public paths the head must publish, in no particular order — a
+/// fixture asserts presence, the goldens freeze the order (§6.4).
+const SIX: &[&str] = &[
+    r#""bracket.bare": "b""#,
+    r#""bracket.quote": "q""#,
+    r#""bracket.tick": "t""#,
+    r#""paren.bare": "pb""#,
+    r#""paren.quote": "pq""#,
+    r#""paren.tick": "pt""#,
+];
+
+/// One untagged head (or decorator) under audit.
+struct SlotCase {
+    /// File stem, also the label of the row.
+    name: &'static str,
+    plugins: &'static str,
+    /// The fixture source; `{SLOTS}` is replaced by [`SLOTS`].
+    source: &'static str,
+    /// Extra TOML placed after this task's header.
+    extra: &'static str,
+    /// The six positions it must publish, plus anything the row adds.
+    expect: &'static [&'static str],
+}
+
+const SLOT_CASES: &[SlotCase] = &[
+    // The `::` head: its groups are the same six positions (§6.1, §10.1).
+    SlotCase {
+        name: "slots-directive-inline",
+        plugins: "directive,markdown",
+        source: "::directiveZ{SLOTS} body::\n",
+        extra: "",
+        expect: SIX,
+    },
+    SlotCase {
+        name: "slots-directive-block",
+        plugins: "directive,markdown",
+        source: "==directiveW{SLOTS}\nblock body\n==\n",
+        extra: "",
+        expect: SIX,
+    },
+    // A marker keeps its own groups and an adjacent extras head's, position by
+    // position (§10.1).
+    SlotCase {
+        name: "slots-marker",
+        plugins: "marker,markdown",
+        source: "{{markerZ}}{SLOTS}\n",
+        extra: "",
+        expect: SIX,
+    },
+    // A decorator line is a head too, so its groups reach the decorated block
+    // (§9.1).
+    SlotCase {
+        name: "slots-decorator",
+        plugins: "markdown",
+        source: "@@paraZ{SLOTS}\nA decorated paragraph.\n",
+        extra: "",
+        expect: SIX,
+    },
+    // §8: the `<table>` layer's head is the decorator above it.
+    SlotCase {
+        name: "slots-table",
+        plugins: "table,markdown",
+        source: "@@tableZ{SLOTS}\n| A | B |\n| :--- | :--- |\n| a | c |\n",
+        extra: "",
+        expect: SIX,
+    },
+    // §5.4/D-9: the bracket's `|…` run contributes after the head's own items, so
+    // `class` accumulates (§6.4) and a field the head wrote wins.
+    SlotCase {
+        name: "slots-run",
+        plugins: "directive,markdown",
+        source: "::runZ[b \"q\" `t` |?](pb \"pq\" `pt`){.base} body::\n",
+        extra: r#"
+[[task.directive.custom]]
+type = ["runZ"]
+name = "Run"
+bracket.modifier."?" = { class = "run", "data-mark" = "yes" }
+imports = "import { Run } from '@comp/Directive'"
+template = "<Run {...attrs}>{children}</Run>"
+"#,
+        expect: &[r#"class="base run""#, r#"data-mark="yes""#],
+    },
+];
+
+/// Writes [`SLOT_CASES`] as one project (§16.1) and returns its directory.
+fn slot_project() -> PathBuf {
+    let dir = std::env::temp_dir().join("pendon-head-slots");
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(dir.join("src")).expect("src dir");
+
+    let mut config = String::new();
+    for case in SLOT_CASES {
+        config.push_str(&format!(
+            "[[task]]\nname = \"{name}\"\ninput = \"./src/{name}.mdp\"\n\
+             output = \"./out/{name}.jsx\"\nplugin = \"{plugins}\"\nformat = \"solid\"\n{extra}\n",
+            name = case.name,
+            plugins = case.plugins,
+            extra = case.extra,
+        ));
+        fs::write(
+            dir.join("src").join(format!("{}.mdp", case.name)),
+            case.source.replace("{SLOTS}", SLOTS),
+        )
+        .expect("fixture source");
+    }
+    fs::write(dir.join("pendon.toml"), config).expect("config");
+    dir
+}
+
+/// §5.2/§6.1: the `[…]` / `(…)` groups attached to a head this crate does not
+/// own hold the **same six positions** a tagged head does — a bare, a quoted and
+/// a ticked content per slot, each landing in its own public field — and the
+/// bracket's `|…` run applies to them last (§5.4, D-9).
+#[test]
+fn slot_groups_reach_the_untagged_heads() {
+    let dir = slot_project();
+    cargo_bin_cmd!("pendon")
+        .current_dir(&dir)
+        .arg("run")
+        .assert()
+        .success();
+
+    for case in SLOT_CASES {
+        let out = read(&dir, &format!("out/{}.jsx", case.name));
+        for expect in case.expect {
+            assert!(
+                out.contains(expect),
+                "{}: expected `{expect}` in\n{out}",
+                case.name
+            );
+        }
+        // Nothing the head wrote may survive as literal text (§4.3).
+        assert!(
+            !out.contains("b \"q\""),
+            "{}: a group stayed literal:\n{out}",
+            case.name
+        );
+    }
+}
 
 /// Writes every row as its own task in one project (§16.1) and returns it.
 fn project() -> PathBuf {

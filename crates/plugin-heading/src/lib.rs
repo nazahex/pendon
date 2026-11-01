@@ -1,8 +1,9 @@
 use pendon_core::{slugify, Event, NodeKind};
 use pendon_extra::{
-    append_class, issue_event, modifier_contributions, parse_extras, parse_slots, to_attributes,
-    ElementHead, ExtrasAttr, ExtrasHead, ExtrasIssue, ExtrasMatch, FieldName, ModifierConfig,
-    Preset, Slot, SlotContract, SlotKind, SlotMatch, SlotPair, SlotPos, SlotTag,
+    append_class, issue_event, modifier_contributions, parse_extras, parse_slots,
+    to_attributes_with_modifiers, ElementHead, ExtrasAttr, ExtrasHead, ExtrasIssue, ExtrasMatch,
+    FieldName, ModifierConfig, Preset, Slot, SlotContract, SlotKind, SlotMatch, SlotPair, SlotPos,
+    SlotTag,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 use serde::{Deserialize, Serialize};
@@ -257,7 +258,11 @@ fn merge_heading_extras(
 ) {
     // §6.1/§11 rule 5: the entry answering this marker names the extras specs.
     let specs = options.custom.specs_for(extras.type_marker.as_deref());
-    let parsed = to_attributes(extras, &specs);
+    let parsed = to_attributes_with_modifiers(
+        extras,
+        &specs,
+        options.custom.modifier_for(extras.type_marker.as_deref()),
+    );
     head.issues.extend(parsed.issues.iter().cloned());
 
     // §6.2: an extras item that spells a name the heading's own head produced

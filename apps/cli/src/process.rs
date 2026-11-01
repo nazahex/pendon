@@ -53,6 +53,7 @@ macro_rules! plugin_options {
     };
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn process_single_file(
     task: &ConfigTask,
     task_name: &str,
@@ -330,21 +331,21 @@ pub fn process_single_file(
             )
             .ok();
 
-            return ProcessResult {
+            ProcessResult {
                 success: true,
                 bytes_written,
                 cache_entry,
                 skipped_write,
-            };
+            }
         }
         Err(e) => {
             eprintln!("Error: render failed: {}", e);
-            return ProcessResult {
+            ProcessResult {
                 success: false,
                 bytes_written: 0,
                 cache_entry: None,
                 skipped_write: false,
-            };
+            }
         }
     }
 }

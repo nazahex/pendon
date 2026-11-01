@@ -69,7 +69,7 @@ fn render_node(v: &Value, out: &mut String) {
                     out.push(' ');
                     out.push_str("id=\"");
                     escape_html(id, out);
-                    out.push_str("\"");
+                    out.push('"');
                 }
                 out.push_str(">\n");
                 render_children(v, out);
@@ -85,7 +85,7 @@ fn render_node(v: &Value, out: &mut String) {
                     out.push(' ');
                     out.push_str("class=\"");
                     escape_html(class, out);
-                    out.push_str("\"");
+                    out.push('"');
                 }
                 out.push_str("><code>");
                 let raw = attr_str(v, "raw_html");
@@ -116,7 +116,7 @@ fn render_node(v: &Value, out: &mut String) {
                     out.push(' ');
                     out.push_str("start=\"");
                     out.push_str(start);
-                    out.push_str("\"");
+                    out.push('"');
                 }
                 render_attrs_except(v, out, &["start"]);
                 out.push_str(">\n");
@@ -192,13 +192,13 @@ fn render_node(v: &Value, out: &mut String) {
                     out.push(' ');
                     out.push_str("href=\"");
                     escape_html(href, out);
-                    out.push_str("\"");
+                    out.push('"');
                 }
                 if let Some(title) = attr_str(v, "title") {
                     out.push(' ');
                     out.push_str("title=\"");
                     escape_html(title, out);
-                    out.push_str("\"");
+                    out.push('"');
                 }
                 // `href`/`title` are written above; every other public field
                 // comes from the projection (internals were dropped there, §11
@@ -219,13 +219,13 @@ fn render_node(v: &Value, out: &mut String) {
                 out.push(' ');
                 out.push_str("alt=\"");
                 escape_html(alt, out);
-                out.push_str("\"");
+                out.push('"');
 
                 if let Some(src) = attr_str(v, "src") {
                     out.push(' ');
                     out.push_str("src=\"");
                     escape_html(src, out);
-                    out.push_str("\"");
+                    out.push('"');
                 }
 
                 out.push_str(" />");

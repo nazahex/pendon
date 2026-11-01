@@ -1,0 +1,20 @@
+[[task]]
+name = "Golden 49"
+input = "./src/[slug].mdp"
+output = "./out/[slug].jsx"
+plugin = "frontmatter,directive,markdown"
+format = "solid"
+
+# §6.1/D-7: an entry renames one position per `field.*` key; a position it leaves
+# alone keeps its qualified spelling (`bracket.quote`, `paren.bare`, …).
+# §5.4/D-9: `?` is one symbol of the bracket's run and adds `class` (which
+# accumulates, §6.4) plus a field the head never wrote.
+[[task.directive.custom]]
+type = ["card"]
+name = "Card"
+field.bracket.bare = "title"
+field.paren.quote = "subtitle"
+field.paren.tick = "slug"
+bracket.modifier."?" = { class = "run", "data-mark" = "yes" }
+imports = "import { Card } from '@comp/Directive'"
+template = "<Card {...attrs}>{children}</Card>"

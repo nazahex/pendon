@@ -1,5 +1,5 @@
 /// Math delimiter scanning — rules match plugin-latex.
-
+///
 /// Toggle `open` for each unescaped `$$` pair found on `line`.
 pub fn toggle_display_math_on_line(line: &str, open: &mut bool) {
     let chars: Vec<char> = line.chars().collect();
@@ -46,10 +46,12 @@ pub fn math_region_end(chars: &[char], cursor: usize) -> Option<usize> {
         let mut end = cursor + 1;
         if end < len && chars[end] != ' ' && chars[end] != '\n' {
             while end < len {
-                if chars[end] == '$' {
-                    if end > start + 1 && chars[end - 1] != ' ' && chars[end - 1] != '\n' {
-                        return Some(end + 1);
-                    }
+                if chars[end] == '$'
+                    && end > start + 1
+                    && chars[end - 1] != ' '
+                    && chars[end - 1] != '\n'
+                {
+                    return Some(end + 1);
                 }
                 end += 1;
             }

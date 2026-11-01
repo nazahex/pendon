@@ -88,18 +88,29 @@ so a payload's `~?!!…` figure still contributes its `Figure` import.
 The fields come from the projection, so a name is a **path**, not automatically a
 JSX attribute name. `class`/`id`/`style` are the universal DOM fields and their
 path _is_ the attribute name (§6.5), and a dotted path
-(`specs.tick`, `bracket.bare`, an assigned `heading.anchor`) is emitted as a
-one-key spread — `<p {...{ "specs.tick": "x" }}>` — because `a.b=` would parse as a
-member expression. The path survives verbatim into the DOM, matching what
-`renderer-html` prints and what JSON/AST keep.
+(`specs.tick`, `bracket.bare`, an assigned `heading.anchor`) cannot be written
+verbatim anywhere, because `a.b=` parses as a member expression. What is written
+instead depends on the **target** ([ADR-0019](../../docs/decisions/0019-component-props-nest.md)):
 
-One helper covers both paths: `render_attrs` for the built-in elements and
-`generate_spread_attrs` for a component template's `{...attrs}` (§6.3, `S2-3.6`),
-so a component receives `<Bibliography {...{ "bracket.bare": "refs" }} …>`, never
-the invalid `<Bibliography bracket.bare="refs">`. A dotted field is never
-regrouped into a nested prop ([D-18](../../docs/workflows/unified-syntax-stage-2/DECISIONS.md));
-the golden harness rejects any rendered `.jsx` that spells one as a plain
-attribute name.
+- **a built-in element** gets the one-key spread — `<p {...{ "specs.tick": "x" }}>` —
+  so the path survives verbatim into the DOM, matching what `renderer-html` prints
+  and what JSON/AST keep. A DOM element takes attributes, so a nested object would
+  set `[object Object]`;
+- **a component template's `{...attrs}`** regroups the path into a nested prop —
+  `<Cite bracket={{ quote: "hlm. 45" }} locator={{ label: "page", value: "110-112" }} />` —
+  because a component takes JS values. Sibling paths under one prefix share the
+  prop, a deeper path nests one level per segment, the prop sits where its first
+  leaf sat in the projection's order, and a segment that is not a bare JS
+  identifier is quoted.
+
+So the two emitters are deliberate: `node::render_dotted_attr` for `render_attrs`
+(built-in elements) and `template::nested_prop` for `generate_spread_attrs`
+(components), sharing `node::js_value` so a leaf is typed the same inside a prop
+and outside it. Only the shape changes — `{attrs.locator.label}` still reads the
+flat path, and a leaf the template binds itself is left out of the spread, which
+shrinks the prop instead of falling back. The golden harness rejects any rendered
+`.jsx` that spells a path as a plain attribute name, so the invalid spelling
+cannot be frozen again.
 
 `field.override.<path>` is applied by the same projection, so it needs the
 config of the entry that answers the node: `ComponentTemplate::field` carries it,

@@ -151,9 +151,8 @@ pub fn process(events: &[Event], spec: &PluginSpec) -> Vec<Event> {
                             list_kind = Some(NodeKind::BulletList);
                             marker_width = 2;
                         } else {
-                            let mut chars = trimmed.chars();
                             let mut num_str = String::new();
-                            while let Some(c) = chars.next() {
+                            for c in trimmed.chars() {
                                 if c.is_ascii_digit() {
                                     num_str.push(c);
                                 } else {

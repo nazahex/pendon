@@ -121,8 +121,7 @@ fn process_row_group(
     let mut result = Vec::new();
     for (row_idx, row_spec) in rows.iter().enumerate() {
         let mut cells = Vec::new();
-        for col_idx in 0..num_cols {
-            let cell = &grid[row_idx][col_idx];
+        for cell in &grid[row_idx] {
             if !cell.is_hidden {
                 cells.push(cell.clone());
             }

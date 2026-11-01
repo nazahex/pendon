@@ -2,7 +2,10 @@ use serde_json::Value;
 use std::collections::BTreeSet;
 
 use crate::imports::ComponentTemplate;
-use crate::node::{is_jsx_attr_name, is_jsx_expression_token, render_dotted_attr, to_js_literal};
+use crate::node::{
+    is_js_identifier, is_jsx_attr_name, is_jsx_expression_token, js_value, render_dotted_attr,
+    to_js_literal,
+};
 use crate::resolve::Ctx;
 use pendon_core::{json_attr_payload, jsx_attr_payload};
 
@@ -163,38 +166,49 @@ fn get_attr_value(attrs: &[(String, Value)], key: &str) -> String {
 
 /// Generates JSX attributes using curly brace expressions for all values.
 /// Automatically infers type from string values (boolean, number, or string).
+///
+/// A dotted public field (`locator.label`, `bracket.quote`) is **regrouped into a
+/// nested prop** — `locator={{ label: "page", value: "110-112" }}` — because a
+/// component takes JS values, not DOM attribute names ([ADR-0019]). Sibling paths
+/// share one prop, deeper paths nest recursively, and the prop sits where its
+/// first leaf sat in the field map. A prefix that also exists as a scalar field
+/// keeps the flat one-key spread ([`render_dotted_attr`]) instead, so no prop is
+/// ever written twice.
+///
+/// [ADR-0019]: ../../../docs/decisions/0019-component-props-nest.md
 fn generate_spread_attrs(
     attrs: &[(String, Value)],
     used_keys: &BTreeSet<String>,
     ctx: &Ctx,
 ) -> String {
+    let nested = nested_prefixes(attrs, used_keys);
+    let mut emitted: BTreeSet<&str> = BTreeSet::new();
     let mut parts = Vec::new();
     for (key, val) in attrs {
-        // `name` is the AST node name, not an attribute (internals never reach
-        // the projection, so there is no `__` prefix to check here).
-        if key == "name" {
+        if !is_spread(key, val, used_keys) {
             continue;
         }
-        // Skip keys that are already explicitly bound via {attrs.X} in the template
-        if used_keys.contains(key) {
-            continue;
-        }
-        // §6.3: an attribute whose value is the empty string is not spread, so a
-        // component that leaves a slot unset does not emit `k=""`. `alt` is the
-        // one exception — an empty `alt=""` marks a decorative image.
-        if key != "alt" && matches!(val, Value::String(s) if s.is_empty()) {
-            continue;
-        }
-
         // §6.5: a public field is a **path** (`specs.tick`, `bracket.bare`), and
         // JSX reads `a.b=` as a member expression rather than an attribute name,
-        // so a dotted field reaches a component exactly as it reaches a built-in
-        // element — as the one-key spread that keeps the path as the computed key
-        // ([`render_dotted_attr`]). Writing the name verbatim would emit
-        // `<X specs.tick="…">`, which is not JSX at all.
+        // so a dotted field cannot be written verbatim — `<X specs.tick="…">` is
+        // not JSX at all.
         if !is_jsx_attr_name(key) {
+            let prefix = key.split('.').next().unwrap_or(key);
+            if !nested.contains(prefix) {
+                let mut part = String::new();
+                render_dotted_attr(key, val, &mut part, ctx);
+                parts.push(part);
+                continue;
+            }
+            // One prop per prefix, written where its first leaf belongs.
+            if !emitted.insert(prefix) {
+                continue;
+            }
             let mut part = String::new();
-            render_dotted_attr(key, val, &mut part, ctx);
+            part.push_str(prefix);
+            part.push_str("={");
+            part.push_str(&nested_prop(prefix, attrs, used_keys, ctx));
+            part.push('}');
             parts.push(part);
             continue;
         }
@@ -306,6 +320,128 @@ fn generate_spread_attrs(
         parts.push(part);
     }
     parts.join(" ")
+}
+
+/// Whether an `attrs` entry takes part in the `{...attrs}` spread.
+///
+/// Three exclusions, all §6.3: `name` is the AST node name (internals never reach
+/// the projection, so there is no `__` prefix to test here), a key the template
+/// already binds explicitly (`{attrs.k}`) is not spread twice, and an empty value
+/// is dropped rather than written as `k=""` — `alt` excepted, because an empty
+/// `alt=""` marks a decorative image.
+fn is_spread(key: &str, val: &Value, used_keys: &BTreeSet<String>) -> bool {
+    if key == "name" || used_keys.contains(key) {
+        return false;
+    }
+    key == "alt" || !matches!(val, Value::String(s) if s.is_empty())
+}
+
+/// The first segments of the dotted paths the spread writes as a nested prop.
+///
+/// A prefix only nests when nothing flat claims the same name — nesting over a
+/// scalar prop would write `locator` twice. `FieldMap` already refuses a parent
+/// and its child in one map, so this is a guard, not a live case.
+fn nested_prefixes(attrs: &[(String, Value)], used_keys: &BTreeSet<String>) -> BTreeSet<String> {
+    let flat: BTreeSet<&str> = attrs
+        .iter()
+        .filter(|(key, val)| is_jsx_attr_name(key) && is_spread(key, val, used_keys))
+        .map(|(key, _)| key.as_str())
+        .collect();
+    attrs
+        .iter()
+        .filter(|(key, val)| !is_jsx_attr_name(key) && is_spread(key, val, used_keys))
+        .filter_map(|(key, _)| key.split('.').next())
+        .filter(|prefix| is_jsx_attr_name(prefix) && !flat.contains(prefix))
+        .map(str::to_string)
+        .collect()
+}
+
+/// One node of a nested prop: a field value, or the segments below it.
+enum PropTree<'a> {
+    Leaf(&'a Value),
+    Branch(Vec<(String, PropTree<'a>)>),
+}
+
+/// Writes every spread-able field under `prefix` as one object literal, in field
+/// map order: `{ label: "page", value: "110-112" }`.
+fn nested_prop(
+    prefix: &str,
+    attrs: &[(String, Value)],
+    used_keys: &BTreeSet<String>,
+    ctx: &Ctx,
+) -> String {
+    let mut tree: Vec<(String, PropTree<'_>)> = Vec::new();
+    for (key, val) in attrs {
+        if !is_jsx_attr_name(key) && is_spread(key, val, used_keys) {
+            let mut segments: Vec<&str> = key.split('.').collect();
+            if segments.first() == Some(&prefix) {
+                segments.remove(0);
+                nest(&mut tree, &segments, val);
+            }
+        }
+    }
+    render_prop_tree(&tree, ctx)
+}
+
+/// Inserts `value` at `segments` (`["label"]`, `["detail", "amount"]`) inside
+/// `tree`, creating a branch per missing segment. A branch's position is its
+/// first appearance, so the object keeps the field map's order.
+fn nest<'a>(tree: &mut Vec<(String, PropTree<'a>)>, segments: &[&str], value: &'a Value) {
+    let Some((head, rest)) = segments.split_first() else {
+        return;
+    };
+    if rest.is_empty() {
+        tree.push(((*head).to_string(), PropTree::Leaf(value)));
+        return;
+    }
+    if let Some((_, PropTree::Branch(children))) = tree
+        .iter_mut()
+        .find(|(name, node)| name == head && matches!(node, PropTree::Branch(_)))
+    {
+        nest(children, rest, value);
+        return;
+    }
+    // A leaf already sits where a branch has to go. `FieldMap` forbids that, so
+    // the map cannot produce it; keep the deeper field out rather than write a
+    // duplicate key into the object.
+    if tree.iter().any(|(name, _)| name == head) {
+        debug_assert!(false, "`{head}` is both a field and a nested prefix");
+        return;
+    }
+    let mut children = Vec::new();
+    nest(&mut children, rest, value);
+    tree.push(((*head).to_string(), PropTree::Branch(children)));
+}
+
+/// Renders a nested prop's tree as one JS object literal. A segment that is not
+/// a bare JS identifier is quoted, so the object is always valid JS.
+fn render_prop_tree(tree: &[(String, PropTree<'_>)], ctx: &Ctx) -> String {
+    let mut out = String::from("{ ");
+    for (index, (name, node)) in tree.iter().enumerate() {
+        if index > 0 {
+            out.push_str(", ");
+        }
+        if is_js_identifier(name) {
+            out.push_str(name);
+        } else {
+            out.push('"');
+            for ch in name.chars() {
+                match ch {
+                    '"' => out.push_str("\\\""),
+                    '\\' => out.push_str("\\\\"),
+                    c => out.push(c),
+                }
+            }
+            out.push('"');
+        }
+        out.push_str(": ");
+        match node {
+            PropTree::Leaf(value) => out.push_str(&js_value(value, ctx)),
+            PropTree::Branch(children) => out.push_str(&render_prop_tree(children, ctx)),
+        }
+    }
+    out.push_str(" }");
+    out
 }
 
 /// Escapes a string for use inside a JavaScript string literal (inside JSX {}).

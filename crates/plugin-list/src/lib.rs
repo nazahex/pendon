@@ -93,9 +93,9 @@ pub fn process(events: &[Event], options: &ListOptions) -> Vec<Event> {
     let specs = |target: Option<&str>| {
         options
             .unordered
-            .specs_for_opt(target)
-            .or_else(|| options.ordered.specs_for_opt(target))
-            .or_else(|| options.list.specs_for_opt(target))
+            .head_for(target)
+            .or_else(|| options.ordered.head_for(target))
+            .or_else(|| options.list.head_for(target))
             .unwrap_or_default()
     };
     // D-10 rule 2: a list container is this pass's one receiver.
@@ -187,7 +187,7 @@ fn list_kind(events: &[Event], index: usize) -> Option<NodeKind> {
 
 /// The first line of the paragraph at `index`, when the paragraph is the node at
 /// `index`.
-fn first_line<'a>(events: &'a [Event], index: usize) -> Option<&'a str> {
+fn first_line(events: &[Event], index: usize) -> Option<&str> {
     if !matches!(
         events.get(index),
         Some(Event::StartNode(NodeKind::Paragraph))

@@ -195,7 +195,7 @@ extras-head = type-only | typed | untyped
 type-only   = "@@" type slots?                # ends at the first non-alphanumeric
 typed       = "@@" type slots? "{" body "}"
 untyped     = "@@" slots | ( ( "@@" )? "{" body "}" )
-slots       = "[" bracket "]" [ "(" paren ")" ]   # each part adjacent, §5.2
+slots       = [ "[" bracket "]" ] [ "(" paren ")" ]   # each part adjacent, §5.2
 ```
 
 ASCII only, case-insensitive in effect (`@@Type` and `@@TYPE` are both types),
@@ -465,17 +465,21 @@ bracket. It is a shortcut for specs, configured per element, and Pendon ships
 Every content of a head lands in exactly one **public field**, and the
 entry names it with a `field.*` key (§7, §11, D-5). The five `specs.*` rows are
 the **positions** a construct can attach meaning to (`SPECS_KEYS` in
-`crates/extra::field`); the two slot rows carry the bracket and the paren:
+`crates/extra::field`); the six slot rows carry the two slots' three contents:
 
-| content                 | config key           | default path   | meaning                            |
-| ----------------------- | -------------------- | -------------- | ---------------------------------- |
-| `` `x` `` (tick)        | `field.specs.tick`   | `specs.tick`   | none — element's business (§6.2)   |
-| `"x"` (quote)           | `field.specs.quote`  | `specs.quote`  | none — element's business (§6.2)   |
-| `.x` / `class: "x"`     | `field.specs.class`  | `class`        | the class list (accumulates, D-12) |
-| `#x`                    | `field.specs.id`     | `id`           | the element id                     |
-| `--x: v` / `style: "…"` | `field.specs.style`  | `style`        | inline style declarations          |
-| `[x]` (bracket)         | `field.bracket.bare` | `bracket.bare` | the bracket's bare content         |
-| `("x")` (paren)         | `field.paren.bare`   | `paren.bare`   | the paren's bare content           |
+| content                  | config key            | default path    | meaning                            |
+| ------------------------ | --------------------- | --------------- | ---------------------------------- |
+| `` `x` `` (tick)         | `field.specs.tick`    | `specs.tick`    | none — element's business (§6.2)   |
+| `"x"` (quote)            | `field.specs.quote`   | `specs.quote`   | none — element's business (§6.2)   |
+| `.x` / `class: "x"`      | `field.specs.class`   | `class`         | the class list (accumulates, D-12) |
+| `#x`                     | `field.specs.id`      | `id`            | the element id                     |
+| `--x: v` / `style: "…"`  | `field.specs.style`   | `style`         | inline style declarations          |
+| `[x]` (bracket bare)     | `field.bracket.bare`  | `bracket.bare`  | the bracket's bare content         |
+| `["x"]` (bracket quote)  | `field.bracket.quote` | `bracket.quote` | the bracket's quoted content       |
+| ``[`x`]`` (bracket tick) | `field.bracket.tick`  | `bracket.tick`  | the bracket's ticked content       |
+| `(x)` (paren bare)       | `field.paren.bare`    | `paren.bare`    | the paren's bare content           |
+| `("x")` (paren quote)    | `field.paren.quote`   | `paren.quote`   | the paren's quoted content         |
+| ``(`x`)`` (paren tick)   | `field.paren.tick`    | `paren.tick`    | the paren's ticked content         |
 
 The `meaning` column is the one piece of this table that exists **only** here: an
 assigned field carries no semantics of its own, so a rename never changes what
@@ -483,28 +487,33 @@ the content _is_. The `default path` column is what the map carries when the
 entry configures nothing — it is the machine-readable
 `SpecsKey::default_path` (asserted by
 `crates/extra/tests/extras_spec.rs::specs_keys_cover_the_specs_vocabulary`), and
-the same seven rows are the doc of `Specs` in `crates/extra/src/typed.rs`.
+the same eleven rows are the doc of `Specs` in `crates/extra/src/typed.rs`.
 
-Three of the seven are the **universal DOM fields**: `class`, `id` and `style` are
+Three of the eleven are the **universal DOM fields**: `class`, `id` and `style` are
 published under the attribute's own name, so no renderer has a rename to do and no
-element prefixes them (§6.5). The other four are positions, not fields: the slot
-groups (`bracket.bare` / `paren.bare`) and the two **neutral** specs positions. No
-element reads the tick as a slug or the quote as a title, and nothing derives an id
-from either, so both stay in the map under their dotted spellings (`specs.tick` /
-`specs.quote`) unless an element explicitly names one — a `title` is a slot preset
-(`paren.quote → title`, §6.6, §7.x), never the extras quote.
+element prefixes them (§6.5). The other eight are positions, not fields: the six
+slot positions (`bracket.bare` … `paren.tick`) and the two **neutral** specs
+positions. No element reads the tick as a slug or the quote as a title, and
+nothing derives an id from either, so both stay in the map under their dotted
+spellings (`specs.tick` / `specs.quote`) unless an element explicitly names one —
+a `title` is a slot preset (`paren.quote → title`, §6.6, §7.x), never the extras
+quote.
 
 Each slot has all three contents as positions — `bracket.bare`,
 `bracket.quote`, `bracket.tick`, `paren.bare`, `paren.quote`, `paren.tick` — and
-the `meaning` column above states the two a head usually fills. Only a preset
-(§6.6) gives a position a meaning for an element; a position no preset names is
-an ordinary field under its slot-qualified spelling (D-7).
+the `meaning` column above states the two a head usually fills. **The same six
+positions are what a group holds on a head this crate does not own**: `::type[…]`,
+`==type[…]`, `{{type}}[…]` and `@@type[…]` (§10.1) read their groups with the
+§5.2 grammar, so `("A title")` there is a _quote_ and lands in `paren.quote`, not
+in `paren.bare` (fixture 49). Only a preset (§6.6) gives a position a meaning for
+an element; a position no preset names is an ordinary field under its
+slot-qualified spelling (D-7).
 
 An entry that configures **no** `field.<slot>.<kind>` key keeps every default path
 above and its element keeps its preset (§6.6, D-7). Once it configures one, the
 preset is void as a whole (D-7): a position it leaves unassigned falls back to its
-own qualified name (`bracket.bare`, `paren.bare`, `specs.tick`, `class`, …), never
-to a name the author chose for another position. A `field.specs.*` or
+own qualified name (`bracket.bare` … `paren.tick`, `specs.tick`, `class`, …),
+never to a name the author chose for another position. A `field.specs.*` or
 `field.override.*` key does not void anything — it names an extras item or a
 public path, not a slot's home. There is no separate naming key (§14).
 
@@ -530,12 +539,23 @@ Fixture [`34-specs-assignment`](golden/34-specs-assignment.mdp) is the
 executable form of both halves: one entry assigns all five positions and an
 unclaimed type in the same document keeps every default.
 
-Every `@@` head may carry a slot pair between its type and its `{…}` body (`@@type[x]("y"){…}`, `@@type[x]("y")`, `@@[x]("y")`), each part
+Every `@@` head may carry a slot pair between its type and its `{…}` body (`@@type[x]("y"){…}`, `@@type[x]("y")`, `@@[x]("y")`, `@@type("y")`), each part
 adjacent (§4.1). Markers place them directly after `}}`, before any adjacent
 extras head: `{{type}}[x]("y"){…}` / `{{type}}[x]("y")@@head{…}` (§10.1).
-Their contents behave exactly like a directive head's: `[x]`
-stays raw, `("x")` is trimmed and unquoted. The keys are resolved per `type`
-like every other slot key (§11 rules 3 and 5).
+Their contents are read by the §5.2 grammar, exactly like a tagged head's: each
+group holds a bare, a quoted and a ticked content, so `("x")` is a **quote** and
+`[x]` a bare content — there is no "one string per group" reading, no trimming and
+no unquoting:
+
+```text
+@@type[x "q" `t`]("p" "pq" `t`)   →  bracket.bare   = x     paren.bare  = p
+                                     bracket.quote  = q     paren.quote = pq
+                                     bracket.tick   = t     paren.tick  = t
+```
+
+All six positions are therefore available on a head this crate does not own, and
+the bracket may carry a §5.4 `|…` run. The keys are resolved per `type` like every
+other slot key (§11 rules 3 and 5).
 
 The slots belong to the head they touch. Since a tagged head is claimed by its
 tag (§5.3), nothing else competes for them: `{{type}}[x]("y")` is a marker with
@@ -661,14 +681,17 @@ so the map — and with it every golden fixture — is stable:
 1. the class position (a single joined value, head classes then `.x` items in
    source order);
 2. the id position;
-3. the remaining positions — the slots first (`bracket`, then
-   `paren`), then `tick` and `quote` (§6.1);
+3. the remaining positions — the six slot positions in head order (`bracket.bare`,
+   `bracket.quote`, `bracket.tick`, `paren.bare`, `paren.quote`, `paren.tick`),
+   then `tick` and `quote` (§6.1);
 4. all remaining props and flags in source order, with the style position where
-   the first `style:` prop or `--var` item appeared.
+   the first `style:` prop or `--var` item appeared;
+5. the §5.4 modifier run, when the head is a slot pair with a configured run: it
+   is **configuration**, so it lands after everything the document wrote.
 
 Each step names a **position**, and the step writes it at the path the entry
 resolved for it: the default ones are `class` / `id` / `style` (the universal DOM
-fields), `specs.tick` / `specs.quote` and `bracket.bare` / `paren.bare` (§6.1); a
+fields), `specs.tick` / `specs.quote` and `bracket.bare` … `paren.tick` (§6.1); a
 moved one is written at the assigned path and never at the default.
 
 Duplicates are [D-12](../workflows/unified-syntax-stage-2/DECISIONS.md)'s rule,
@@ -678,7 +701,9 @@ position **and** the value of the first occurrence win. `class` accumulates
 repeated `style:` property is CSS, so its last value wins with no diagnostic. A
 specs item and a same-named prop are such a duplicate. One exception: a
 **slot** (`[…]` / `(…)`, §6.1) beats a same-key body item outright —
-the body value is dropped with an §13 `Warning` (§6.2 head-wins style).
+the body value is dropped with an §13 `Warning` (§6.2 head-wins style), and a
+modifier contribution loses the same way, except for `class`, which joins
+(§5.4, D-9).
 Whitespace-only differences MUST NOT change the output.
 
 The list above is the order a head's items are **assigned** in. The DOM renderers
@@ -706,29 +731,47 @@ The other paths keep their spelling:
    `plugin-heading` and `plugin-cite` project before the node is built; the
    position only matches while it sits on its default path, so a moved one falls
    through untouched.
-2. **`bracket.bare` / `paren.bare`**, and any path an author assigned
-   (`field.specs.id = "foo.id"` → `foo.id`). A cross-element position has no DOM
-   meaning (§6.1), and the path is the field's public identity.
+2. **`bracket.bare` … `paren.tick`** — the six slot positions the entry did not
+   name, and any path an author assigned (`field.specs.id = "foo.id"` → `foo.id`).
+   A cross-element position has no DOM meaning (§6.1), and the path is the
+   field's public identity.
 
-| Renderer                 | `class`     | `specs.tick`                                       |
-| ------------------------ | ----------- | -------------------------------------------------- |
-| `renderer-html`          | `class="…"` | `specs.tick="…"` (verbatim; HTML allows that name) |
-| `renderer-solid`         | `class="…"` | `{...{ "specs.tick": "…" }}` (JSX has no `a.b=`)   |
-| `renderer-json` / `-ast` | `class`     | `specs.tick` (the path)                            |
+| Renderer                 | Target           | `class`     | `specs.tick`                        |
+| ------------------------ | ---------------- | ----------- | ----------------------------------- |
+| `renderer-html`          | any element      | `class="…"` | `specs.tick="…"` (HTML allows that) |
+| `renderer-solid`         | built-in element | `class="…"` | `{...{ "specs.tick": "…" }}`        |
+| `renderer-solid`         | custom component | `class="…"` | `specs={{ tick: "…" }}`             |
+| `renderer-json` / `-ast` | —                | `class`     | `specs.tick` (the path)             |
 
 JSX reads `a.b=` as a member expression, not as an attribute name, so
-`renderer-solid` emits a dotted field as a one-key spread and keeps the path as
-the computed key. The compiled JSX sets the attribute the HTML renderer prints,
-so both DOM targets agree and the JSON/AST keep the path untouched.
+`renderer-solid` cannot write the path verbatim anywhere. What it writes instead
+depends on **what the node becomes**, not on the field:
 
-The rule is the same for a **custom component**: `{...attrs}` in a `template`
-spells a dotted field as that one-key spread too
-(`<Bibliography {...{ "bracket.bare": "refs" }} …>`), so a field is written
-identically whether a component claims the node or the fallback element renders
-it. It is never regrouped into a nested prop — `specs={{ tick: … }}` would make
-Solid the only renderer that reshapes the path and would set `[object Object]` on
-a built-in element; a template that wants nesting spells it itself
-(`{attrs.specs.tick}` reads the flat path).
+- A **built-in element** takes attributes, so the path is emitted as a one-key
+  spread that keeps it as the computed key (`{...{ "specs.tick": "…" }}`). The
+  compiled JSX then sets exactly the attribute `renderer-html` prints, and a
+  nested object would set `[object Object]`. JSON/AST keep the path untouched.
+- A **custom component** takes JS values, so `{...attrs}` in a `template`
+  **regroups** the path into a nested prop: sibling fields under one prefix share
+  it, a deeper path nests one level per segment, and the prop is written where its
+  first leaf sat in the projection's order
+  ([ADR-0019](../decisions/0019-component-props-nest.md)):
+
+  ```jsx
+  <Cite reference={references["book"]} bracket={{ quote: "hlm. 45" }} locator={{ label: "page", value: "110-112" }} />
+  ```
+
+  Only the emission shape changes: `{attrs.locator.label}` still reads the **flat**
+  path, and a leaf the template binds itself is left out of the spread
+  (`locator={{ value: … }}`), which shrinks the prop rather than falling back to a
+  one-key spread. Leaves keep their order and their typing, an empty value is
+  dropped exactly as it is from a flat spread (§6.3), and a segment that is not a
+  bare JS identifier is quoted (`cross-ref={{ "b-c": … }}`).
+
+The same field is therefore spelled two ways on one page when a built-in element
+and a component claim two nodes — that is correct: one is an HTML attribute, the
+other a JS prop, and no template can observe the difference (`{attrs.k}` reads the
+map, which is flat for both).
 
 ### 6.6 Preset assignment and voiding
 
@@ -813,7 +856,7 @@ extras    = §5 extras-head                         # the shared {…} / @@type{
 - Everything the retired marker run used to do is an ordinary extras key (§14,
   D-16): `loading: "lazy"`, `decoding: "async"`, `width: "400"`,
   `height: "300"`. A wrapper (`<figure>`, `<div>`, `<p>`, a caption element) is a
-  component's own business: configure `[task.image.custom.img]` (§11) and render
+  component's own business: configure `[[task.image.custom]]` (§11) and render
   whatever the site needs.
 - §11 has exactly one layer, `img`. `[task.image.custom.figure]` no longer loads
   (§13): the two-node figure is gone with the marker that produced it.
@@ -1303,10 +1346,15 @@ marker-block  = "{{" type "}}" slots? extras?    # own line (block context)
   attribute.
 - Extras are optional but must be adjacent.
 - The slot pair (§6.1) sits directly after `}}`, **before** any extras
-  head: `{{type}}[x]("y"){…}` and `{{type}}[x]("y")@@head{…}`. They map through
-  the marker type's `field.bracket.bare` / `field.paren.bare`. A marker-level slot
-  beats a same-key item of the extras head (§6.2, dropped with a §13 Warning);
-  a malformed slot stays literal text while the marker still renders (§4.3).
+  head: `{{type}}[x]("y"){…}` and `{{type}}[x]("y")@@head{…}`. The groups are the
+  §5.2 slots — three contents each, so `[x "q"]("p" "pq")` fills the two bare and
+  the two quoted positions — and each maps through the marker type's
+  `field.bracket.<kind>` / `field.paren.<kind>` (default paths `bracket.bare` …
+  `paren.tick`). A marker-level position beats a same-key position of the extras
+  head (§6.2, dropped with a §13 Warning), while a position only the extras head
+  wrote is kept; the bracket's §5.4 run is the marker's own when it has one and
+  the extras bracket's otherwise. A malformed slot stays literal text while the
+  marker still renders (§4.3).
   The slots belong to the head they touch: an anchor is `@[x]("y")` (§7.2), so
   no other element competes for a marker's slots.
 - Inline form emits an inline node; block form emits a block node.
@@ -1324,8 +1372,13 @@ inline-directive = colons type [ "[" bracket "]" ] [ "(" paren ")" ] extras? tex
 colons           = "::" up to ":::::::" (2..7)
 ```
 
-- `[bracket]`'s field = `field.bracket.bare` (default path `bracket.bare`),
-  `("paren")`'s = `field.paren.bare` (default path `paren.bare`) (§6.1).
+- `[bracket]`'s positions = `field.bracket.<kind>` (default paths `bracket.bare`,
+  `bracket.quote`, `bracket.tick`) and `(paren)`'s = `field.paren.<kind>`
+  (`paren.bare`, `paren.quote`, `paren.tick`) (§6.1). The paren is an ordinary
+  slot, so **`("A title")` is `paren.quote`**: a quoted content is a quote by its
+  first character (§5.2), never a bare one. Both groups are optional and the
+  bracket may be omitted (`::note("T")`), and the bracket may carry a §5.4 `|…`
+  run, which contributes after the head's own items (D-9).
 - The closing run MUST be `>=` the opening run (nesting depth = colon count).
   An inner directive with fewer colons closes implicitly at the outer's close.
 - Content is parsed as inline content.
@@ -1490,7 +1543,7 @@ template = "<AnchorDefault {...attrs}>{children}</AnchorDefault>"
 [task.list.custom.unordered] # <ul> container
 [task.list.custom.ordered] # <ol> container
 
-[task.image.custom.img] # <img>
+[task.image.custom] # <img>
 [task.wiki.custom.anchor] # <a> produced by plugin-wiki
 [task.wiki.custom.infobox] # infobox (deleted in the next workflow)
 ```

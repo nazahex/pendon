@@ -320,6 +320,20 @@ impl<C> ComponentSet<C> {
         Some(matched.modifier.unwrap_or(matched.matched.1))
     }
 
+    /// §6.1 / §5.4: the specs of the entry that answers `type_marker`, together
+    /// with its modifier table — the pair a decorator or extras head needs, so
+    /// the two lookups can never answer with different entries.
+    ///
+    /// `None` when this set has neither an exact-`type` entry nor a layer
+    /// default, exactly like [`specs_for_opt`](Self::specs_for_opt).
+    pub fn head_for(&self, type_marker: Option<&str>) -> Option<pendon_extra::HeadConfig> {
+        self.specs_for_opt(type_marker)
+            .map(|specs| pendon_extra::HeadConfig {
+                specs,
+                modifier: self.modifier_for(type_marker).cloned(),
+            })
+    }
+
     /// Like [`specs_for`](Self::specs_for) but `None` when this set has neither an
     /// exact-`type` entry nor a layer default — so a plugin that owns several
     /// layers (`plugin-list`) can try each in turn before falling back.

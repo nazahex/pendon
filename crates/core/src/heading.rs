@@ -8,11 +8,9 @@ pub fn slugify(input: &str) -> String {
         if lower.is_ascii_alphanumeric() {
             out.push(lower);
             last_dash = false;
-        } else if matches!(lower, ' ' | '-' | '_' | '.') {
-            if !last_dash && !out.is_empty() {
-                out.push('-');
-                last_dash = true;
-            }
+        } else if matches!(lower, ' ' | '-' | '_' | '.') && !last_dash && !out.is_empty() {
+            out.push('-');
+            last_dash = true;
         }
     }
     if out.ends_with('-') {

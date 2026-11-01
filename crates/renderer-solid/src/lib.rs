@@ -312,26 +312,21 @@ mod tests {
         );
     }
 
-    /// §6.3 / S2-3.6: a **component** receives a dotted field exactly the way a
-    /// built-in element does. The `{...attrs}` spread used to write the path
-    /// verbatim — `<NoteAside specs.tick="…">` — which is not JSX at all, because
-    /// `a.b=` parses as a member expression.
-    #[test]
-    fn a_component_receives_a_dotted_field_as_a_one_key_spread() {
+    /// A marker span claimed by a component whose template is `template`, so the
+    /// `{...attrs}` spread can be checked on the component path.
+    fn render_marker_component(attrs: &[(&str, &str)], template: &str) -> String {
         let mut events = vec![Event::StartNode(NodeKind::Document)];
         events.extend(pendon_core::element_open("span"));
         events.push(Event::Attribute {
             name: "__layer".to_string(),
             value: "marker".to_string(),
         });
-        events.push(Event::Attribute {
-            name: "type".to_string(),
-            value: "aside".to_string(),
-        });
-        events.push(Event::Attribute {
-            name: "specs.tick".to_string(),
-            value: "listing-1".to_string(),
-        });
+        for (name, value) in attrs {
+            events.push(Event::Attribute {
+                name: (*name).to_string(),
+                value: (*value).to_string(),
+            });
+        }
         events.push(pendon_core::element_close("span"));
         events.push(Event::EndNode(NodeKind::Document));
 
@@ -339,17 +334,97 @@ mod tests {
             templates: vec![ComponentTemplate::new_layer(
                 "marker",
                 Vec::new(),
-                "<NoteAside {...attrs} />",
+                template,
                 Vec::new(),
             )],
             ..SolidRenderHints::default()
         };
-        let output = render_solid_with_hints(&events, Some(&hints));
+        render_solid_with_hints(&events, Some(&hints))
+    }
+
+    /// §6.3 / ADR-0019: a **component** receives a dotted field as a nested prop,
+    /// not as the one-key spread a built-in element needs. A DOM element takes
+    /// attributes — `<p specs.tick="…">` is not even JSX, and a nested object
+    /// would set `[object Object]` — while a component takes JS values, so the
+    /// path becomes the shape the author reads: `locator={{ label, value }}`.
+    #[test]
+    fn a_component_receives_a_dotted_field_as_a_nested_prop() {
+        let output = render_marker_component(
+            &[
+                ("type", "aside"),
+                ("locator.label", "page"),
+                ("locator.value", "110-112"),
+            ],
+            "<NoteAside {...attrs} />",
+        );
         assert!(
-            output.contains("<NoteAside {...{ \"specs.tick\": \"listing-1\" }} type=\"aside\" />"),
+            output.contains(
+                "<NoteAside locator={{ label: \"page\", value: \"110-112\" }} type=\"aside\" />"
+            ),
             "output = {output}"
         );
-        assert!(!output.contains("specs.tick=\""), "output = {output}");
+        assert!(!output.contains("{...{ \"locator"), "output = {output}");
+        assert!(!output.contains("locator.label=\""), "output = {output}");
+    }
+
+    /// Sibling paths share one prop (written where the first leaf sat), and a
+    /// deeper path nests one more level — `a.b.c` is `a={{ b: { c: … } }}`.
+    #[test]
+    fn a_deeper_dotted_path_nests_one_level_further() {
+        let output = render_marker_component(
+            &[
+                ("price.details.amount", "12"),
+                ("price.details.currency", "EUR"),
+                ("price.kind", "gross"),
+            ],
+            "<Price {...attrs} />",
+        );
+        assert!(
+            output.contains(
+                "<Price price={{ details: { amount: \"12\", currency: \"EUR\" }, kind: \"gross\" }} />"
+            ),
+            "output = {output}"
+        );
+    }
+
+    /// A leaf the template binds itself (`{attrs.locator.label}`) is not spread
+    /// again, and what is left still nests — the prop shrinks, it does not fall
+    /// back to a one-key spread.
+    #[test]
+    fn an_explicitly_bound_leaf_leaves_the_rest_of_the_prop() {
+        let output = render_marker_component(
+            &[("locator.label", "page"), ("locator.value", "110-112")],
+            "<Cite reference=\"{attrs.locator.label}\" {...attrs} />",
+        );
+        assert!(
+            output.contains("<Cite reference=\"page\" locator={{ value: \"110-112\" }} />"),
+            "output = {output}"
+        );
+    }
+
+    /// A segment that is not a bare JS identifier (a kebab-case field, which
+    /// `check_segment` allows) is quoted, so the prop is always valid JS.
+    #[test]
+    fn a_kebab_case_segment_is_quoted_in_the_prop() {
+        let output = render_marker_component(&[("cross-ref.b-c", "see")], "<Ref {...attrs} />");
+        assert!(
+            output.contains("<Ref cross-ref={{ \"b-c\": \"see\" }} />"),
+            "output = {output}"
+        );
+    }
+
+    /// An empty value is dropped from the prop for the same reason it is dropped
+    /// from a flat spread (§6.3): a slot the component left unset is not `""`.
+    #[test]
+    fn an_empty_leaf_is_dropped_from_the_prop() {
+        let output = render_marker_component(
+            &[("locator.label", ""), ("locator.value", "110-112")],
+            "<Cite {...attrs} />",
+        );
+        assert!(
+            output.contains("<Cite locator={{ value: \"110-112\" }} />"),
+            "output = {output}"
+        );
     }
 
     /// §6.1 / D-4: `field.override.<path>` renames an attribute **as it is

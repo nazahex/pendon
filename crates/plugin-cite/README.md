@@ -240,11 +240,12 @@ template = "<Citation reference={references[\"{attrs.reference_id}\"]} {...attrs
 
 The `reference` prop binds the _resolved_ entry from the module-level reference
 export (§2.3), so the component never has to look the id up itself; `{...attrs}`
-spreads the remaining props typed (`citation_number={1}`, plus the extras and
-any other slot field as the one-key spread
-`{...{ "bracket.tick": "…" }}`, §6.3). Omit the `template` key and the same shape is
-used as a fallback, with the configured `references_export` name in place of
-`references`.
+spreads the remaining props typed (`citation_number={1}`, plus the extras and any
+other slot field — a dotted path arrives as a **nested prop**
+(`bracket={{ quote: "…" }}`, `locator={{ label: … }}`), §6.5,
+[ADR-0019](../../docs/decisions/0019-component-props-nest.md)). Omit the `template`
+key and the same shape is used as a fallback, with the configured
+`references_export` name in place of `references`.
 
 Only `{children}`, `{text}`, `{attrs.<key>}` and `{...attrs}` are interpreted
 (§6.3) — a template is a string substitution, never an expression evaluator.

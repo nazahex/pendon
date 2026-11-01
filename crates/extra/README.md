@@ -27,6 +27,16 @@ for interpreting the parsed properties.
   itself (§5.2–§5.4, ADR-0012, ADR-0017). `Slot::name` / `SlotKind::name` and
   their `from_name` inverses are the `field.<slot>.<kind>` config vocabulary, so
   a typo can never be read as a position.
+- **The same groups on an untagged head** — `parse_attached_slots` reads the
+  `[…]` / `(…)` of a head the caller already owns (`::type[…]`, `==type[…]`,
+  `{{type}}[…]`, `@@type[…]`): no tag, the bracket optional (a paren-only pair is
+  legal), `[[…]]` left to `plugin-wiki`, contents by the same §5.2 rules — so
+  `("A title")` is a **quote**, never a trimmed bare string — and the bracket's
+  run collected as usual. It differs from `parse_slots` in what a _head_ is, not
+  in what a slot holds: an unclosed group is `SlotError::Unclosed` there, because
+  a head the caller committed to cannot end inside an open group
+  (`ExtrasError::InvalidSlot`, §4.3). `read_positional_groups` no longer exists
+  ([ADR-0020](../../docs/decisions/0020-unattached-heads-share-the-six-slots.md)).
 - **Slot modifiers** — `ModifierConfig` / `merge` / `contributions`
   (`src/modifier.rs`): one entry's `bracket.modifier."<symbol>"` tables, turned
   into the **public fields** a parsed run contributes (§5.4, D-9,
@@ -112,20 +122,23 @@ for interpreting the parsed properties.
   `owns_field(&owned, key)`
   is the same rule for an element with no contract (`plugin-wiki`'s link); the
   collision itself is reported by the element as `ExtrasIssue::owned_key`.
-- **Specs** — `Specs` / `SpecsResolver`: _where_ each of the head's contents
-  lands — the slot groups `bracket` / `paren` and the five specs positions
-  [`SpecsKey`]: `tick` / `quote` (both neutral — no element reads them) and the universal
+- **Specs** — `Specs` / `HeadConfig` / `HeadResolver`: _where_ each of the head's
+  contents lands — one path per slot position (`bracket.bare` … `paren.tick`, six
+  of them, `Specs::slot(slot, kind)`) and the five specs positions [`SpecsKey`]:
+  `tick` / `quote` (both neutral — no element reads them) and the universal
   `class` / `id` / `style`. [`Specs::resolve`] is the only read side of the
-  entry's `field.*` naming (`field.bracket.bare` / `field.paren.bare` /
+  entry's `field.*` naming (`field.bracket.<kind>` / `field.paren.<kind>` /
   `field.specs.<k>` — §6.1, D-5); an entry that configures nothing keeps the
   built-in default paths (`specs.tick` / `specs.quote`, the DOM names `class` /
-  `id` / `style` and `bracket.bare` / `paren.bare`).
+  `id` / `style` and the six qualified slot names). A `HeadConfig` pairs those
+  names with the **same entry's** `bracket.modifier.*` table, so a
+  `HeadResolver` answers both halves of a head at once (§5.4, §11 rule 3).
   [`Specs::path`] says where a position is _published_; [`Specs::element_path`]
   is the only view an element
   may use — it answers the default path while the position is unassigned and
   `None` once `field.specs.<k>` moved it, because the assigned path is the
   author's own public field (§6.1). The type's doc carries the
-  **`default path` / `meaning`** table, because only a default path has semantics.
+  **`default path`** table, because only a default path has semantics.
 - **The DOM projection** (`Specs::dom_fields(items, element)`, `src/typed.rs`)
   — the §6.3 boundary: the three universal positions (`class` / `id` / `style`)
   already carry the DOM field's own name as their default path, so nothing is

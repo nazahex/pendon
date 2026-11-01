@@ -11,11 +11,11 @@ stays literal text (§4.3), only the line above it decorates:
 </code></pre>
 <p>§9.1/§6.1: a decorator line carries the positional groups too — the typed form and
 the untyped <code>@@[…]</code> spelling, whose slots land in their own public fields
-(<code>bracket.bare</code> / <code>paren.bare</code>, D-7):
+(<code>bracket.bare</code> / <code>paren.quote</code> — a quoted paren is a quote, D-7):
 </p>
-<p {...{ "bracket.bare": "intro" }} class="lead" {...{ "paren.bare": "Aside title" }} type="aside">A paragraph decorated by a typed group head.
+<p {...{ "bracket.bare": "intro" }} class="lead" {...{ "paren.quote": "Aside title" }} type="aside">A paragraph decorated by a typed group head.
 </p>
-<p {...{ "bracket.bare": "intro2" }} {...{ "paren.bare": "Another title" }}>A paragraph decorated by the <code>@@</code>-only spelling.
+<p {...{ "bracket.bare": "intro2" }} {...{ "paren.quote": "Another title" }}>A paragraph decorated by the <code>@@</code>-only spelling.
 </p>
 
 </>); }

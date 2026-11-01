@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 
 use pendon_core::{Event, NodeKind, Severity};
 use pendon_extra::{
-    append_class, issue_event, modifier_contributions, parse_extras, parse_slots, to_attributes,
-    ElementHead, ExtrasAttr, ExtrasHead, ExtrasIssue, ExtrasMatch, FieldConfig, FieldName,
-    ModifierConfig, Preset, Slot, SlotContract, SlotError, SlotKind, SlotMatch, SlotPair, SlotPos,
-    SlotTag, SpecsResolver,
+    append_class, issue_event, modifier_contributions, parse_extras, parse_slots,
+    to_attributes_with_modifiers, ElementHead, ExtrasAttr, ExtrasHead, ExtrasIssue, ExtrasMatch,
+    FieldConfig, FieldName, HeadResolver, ModifierConfig, Preset, Slot, SlotContract, SlotError,
+    SlotKind, SlotMatch, SlotPair, SlotPos, SlotTag,
 };
 use pendon_renderer_solid::{layer_templates, ComponentSet, ImportEntry, SolidRenderHints};
 
@@ -216,7 +216,7 @@ fn read_head(rest: &str, options: &AnchorOptions) -> Read {
         ExtrasMatch::Absent { .. } | ExtrasMatch::Malformed { .. } => None,
     };
 
-    let specs = |target: Option<&str>| options.custom.specs_for(target);
+    let specs = |target: Option<&str>| options.custom.head_for(target).unwrap_or_default();
     // §6.6 / D-7: the preset is voided by the **matched** entry, never by another
     // entry's `field.*`.
     let marker = extras.as_ref().and_then(|head| head.type_marker.as_deref());
@@ -261,7 +261,7 @@ struct AnchorParts {
 fn build_attributes(
     pair: &SlotPair,
     extras: Option<&ExtrasHead>,
-    specs: SpecsResolver,
+    resolve: HeadResolver,
     field: Option<&FieldConfig>,
     modifier: Option<&ModifierConfig>,
 ) -> AnchorParts {
@@ -292,8 +292,9 @@ fn build_attributes(
     }
 
     if let Some(head) = extras {
-        let specs = specs(head.type_marker.as_deref());
-        let parsed = to_attributes(head, &specs);
+        let config = resolve(head.type_marker.as_deref());
+        let specs = config.specs;
+        let parsed = to_attributes_with_modifiers(head, &specs, config.modifier.as_ref());
         issues.extend(parsed.issues.iter().cloned());
         // §6.3: `class` / `id` / `style` are the universal DOM fields; the quote is
         // a neutral position, so an extras `"…"` stays `specs.quote` (D-7).
@@ -370,10 +371,15 @@ fn merge_modifiers(
         if field.name == "class" {
             let classes = append_class(parts.values.get("class").map(String::as_str), &text);
             parts.values.insert("class".to_string(), classes);
-        } else if parts.values.contains_key(&field.name) {
-            issues.push(ExtrasIssue::modifier_dropped(&field.name));
         } else {
-            parts.values.insert(field.name, text);
+            match parts.values.entry(field.name.clone()) {
+                std::collections::btree_map::Entry::Occupied(_) => {
+                    issues.push(ExtrasIssue::modifier_dropped(&field.name));
+                }
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert(text);
+                }
+            }
         }
     }
 }
